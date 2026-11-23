@@ -575,10 +575,29 @@ sealed class CharacterAudio(GameHost host)
         if (_characterAudioFor is not { } audio) return;
 
         var posts = _modPosts ??= new ModSoundPosts(audio.Player);
+        if (posted.Loose)
+        {
+            PlayLooseSound(sounds, in e, posted, subject, eye, posts);
+            return;
+        }
         if (e.Kind == SoundKind.PostedInterface) posts.OnInterface(name, group, value);
         else if (e.Subject.IsNone) posts.At(e.Position, eye, name, group, value);
         else if (group is null) sounds.Job(subject, name, CharacterSounds.EventLimit);
         else if (sounds.TryPlace(subject, out var at)) posts.At(at, eye, name, group, value);
+    }
+
+    /// <summary>
+    /// A code mod's loose sound file (docs/modding.md "Sounds"): on the mods' interface object, or on a mods' pooled object at the character's place
+    /// or the point. A file that cannot be read as a short 16-bit PCM WAV is logged once and plays nothing.
+    /// </summary>
+    void PlayLooseSound(CharacterSounds sounds, in SoundEvent e, PostedSound posted, ulong subject, Vector3 eye, ModSoundPosts posts)
+    {
+        if (posts.Loose(posted.Event) is not { } pcm) return;
+
+        float db = 20 * MathF.Log10(Math.Clamp(posted.Volume, 1e-4f, 4));
+        if (e.Kind == SoundKind.PostedInterface) posts.LooseOnInterface(posted.Event, pcm, db);
+        else if (e.Subject.IsNone) posts.LooseAt(e.Position, eye, posted.Event, pcm, db);
+        else if (sounds.TryPlace(subject, out var at)) posts.LooseAt(at, eye, posted.Event, pcm, db);
     }
 
 

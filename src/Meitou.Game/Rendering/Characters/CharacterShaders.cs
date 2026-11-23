@@ -232,7 +232,7 @@ static class CharacterShaders
         out vec3 vLocal;        // the vertex in the mesh's own space (a weapon's blade position)
         flat out vec4 vGear;    // a weapon's blood (WeaponBlood): rgb its colour, a its amount
         flat out float vGearFresh;  // how wet it still is (1 just struck, 0 dry)
-        flat out vec4 vGlow;        // a mod's glow (Glow): rgb its colour, a its level, negative for the blade mask
+        flat out vec4 vGlow;        // a mod's glow (Glow): rgb its colour, a its level (a tint's: 100 + its share), negative for the blade mask
         //ROW_OUT
 
         void main()
@@ -296,7 +296,11 @@ static class CharacterShaders
             if ((aInstanceData.z & {{Glow}}u) != 0u)
             {
                 uvec4 high = (uvec4(uint(aInstance0.w + 0.5), uint(aInstance1.w + 0.5), uint(aInstance2.w + 0.5), uint(aInstance3.w + 0.5)) >> 16u) & 255u;
-                vGlow = vec4(vec3(high.xyz) / 255.0, float(high.w & 127u) / 8.0 * ((high.w & 128u) != 0u ? -1.0 : 1.0));
+                float glowSide = (high.w & 128u) != 0u ? -1.0 : 1.0;
+                // A tint (CharacterGlow.PackTint) has no byte at 255: its colour over 254, its share over 127, carried as 100 + share.
+                bool tinted = high.x < 255u && high.y < 255u && high.z < 255u;
+                if (tinted) vGlow = vec4(vec3(high.xyz) / 254.0, (100.0 + float(high.w & 127u) / 127.0) * glowSide);
+                else vGlow = vec4(vec3(high.xyz) / 255.0, float(high.w & 127u) / 8.0 * glowSide);
             }
             // The water's mark (skin.hlsl waterLine): wet below its height on the mesh as it is modelled (not as it is posed), by its strength.
             uint soak = (aInstanceData.z >> 1) & 2047u;
@@ -778,6 +782,12 @@ static class CharacterShaders
             }
             PROBE_END
             {{ShowMetalCode}}
+            // A mod's tint (docs/modding.md "Glow"): the albedo blended towards its colour before it is lit, with the blade mask only over the blade.
+            if (abs(vGlow.a) >= 100.0)
+            {
+                float tintMask = vGlow.a < 0.0 ? smoothstep(0.25, 0.4, (dot(vLocal, m.hairAlpha.xyz) - m.hairMult.x) * m.hairMult.y) : 1.0;
+                albedo = mix(albedo, vGlow.rgb, (abs(vGlow.a) - 100.0) * tintMask);
+            }
             if (flag(f, {{Wound}}u)) { metal = woundMetal; gloss = woundGloss; }   // not what the metal estimate made of it: a pale bone is no bare metal
             if ((surfaceParts & 8u) != 0u)
             {
@@ -879,7 +889,7 @@ static class CharacterShaders
             }
             // A mod's glow (docs/modding.md "Glow"): light of its own, brighter at the silhouette so the edge burns; with the blade mask only over the blood's blade
             // (the far 70% of a held weapon mesh's long axis).
-            if (vGlow.a != 0.0)
+            if (vGlow.a != 0.0 && abs(vGlow.a) < 100.0)
             {
                 float glowMask = vGlow.a < 0.0 ? smoothstep(0.25, 0.4, (dot(vLocal, m.hairAlpha.xyz) - m.hairMult.x) * m.hairMult.y) : 1.0;
                 float glowRim = 1.0 - max(dot(n, v), 0.0);

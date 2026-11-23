@@ -48,13 +48,18 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink, IEffectFrameSource
     public bool Exists(string id) => host.Gpu?.Particles is { Enabled: true } && Resolve(id) is not null;
 
     /// <summary>
+    /// Where <paramref name="anchor"/> is drawn now (its frame's origin), for a mod's sound; null when it is not there.
+    /// </summary>
+    public System.Numerics.Vector3? Place(EffectAnchor anchor) => EffectFrames.Locate(anchor, this)?.At;
+
+    /// <summary>
     /// Fires the request's system as a burst at its anchor's frame, its particles kept in that frame on a bone or weapon (they move and turn with
     /// it); null when the anchor is not there or there are no particles.
     /// </summary>
     public object? Start(in ModEffectRequest request)
     {
-        if (host.Gpu?.Particles is not { } particles || EffectFrames.Locate(request.Anchor, this) is not { } frame) return null;
-        bool keepLocal = request.Anchor.Kind is EffectAnchorKind.Bone or EffectAnchorKind.Weapon;
+        if (host.Gpu?.Particles is not { } particles || EffectFrames.Locate(request.Anchor, this, request.Age) is not { } frame) return null;
+        bool keepLocal = request.Anchor.Kind is EffectAnchorKind.Bone or EffectAnchorKind.Weapon or EffectAnchorKind.Projectile;
         return particles.Burst(request.System, frame.At, frame.Turn, request.Seconds, recolour: request.Tint, stretch: frame.Stretch,
             keepLocal: keepLocal);
     }
@@ -65,7 +70,7 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink, IEffectFrameSource
     public bool Follow(object playing, in ModEffectRequest request)
     {
         if (host.Gpu?.Particles is not { } particles || playing is not EffectUnit { Stopped: false } unit) return false;
-        if (EffectFrames.Locate(request.Anchor, this) is not { } frame) return false;
+        if (EffectFrames.Locate(request.Anchor, this, request.Age) is not { } frame) return false;
 
         particles.MoveBurst(unit, frame.At, frame.Turn);
         unit.Stretch = frame.Stretch;
@@ -91,6 +96,23 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink, IEffectFrameSource
     /// </summary>
     public EffectFrame? Weapon(CharacterId on) =>
         host.Gpu?.Characters?.HeldBladeFrame(host.DrawKey(on)) is { } blade ? new EffectFrame(blade.Base, blade.Turn, blade.Stretch) : null;
+
+    /// <summary>
+    /// A bolt where it is drawn this frame (<see cref="Debris.DrawnBolt"/>), else where the snapshot has it: its nose, +Y along its flight.
+    /// </summary>
+    public EffectFrame? Projectile(int id)
+    {
+        if (host.Session?.CurrentSnapshot is not { } snapshot) return null;
+
+        foreach (var p in snapshot.Projectiles)
+        {
+            if (p.Id != id) continue;
+
+            var at = host.Debris?.DrawnBolt(id) ?? p.Position;
+            return new EffectFrame(at, EffectFrames.AlongY(p.Direction), 1);
+        }
+        return null;
+    }
 
     /// <summary>
     /// A player-built or nest building of the world's snapshot by id.

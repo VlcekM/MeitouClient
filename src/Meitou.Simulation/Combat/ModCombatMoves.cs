@@ -2,9 +2,9 @@ namespace Meitou.Simulation.Combat;
 
 /// <summary>
 /// The code mods' combat moves in one world (docs/modding.md "Combat moves"), asked in the animation's parallel step. A source that throws, or
-/// answers a move without a technique or with a progress that is not a finite number, faults at that tick: it still answers the rest of that tick
-/// and answers nothing from the next tick on, so the cut falls on a tick boundary whatever the threads did. The faults are kept per world and
-/// hashed; the first is logged with the mod's id.
+/// answers a move without a technique or animation or with a progress that is not a finite number, faults at that tick: it still answers the
+/// rest of that tick and answers nothing from the next tick on, so the cut falls on a tick boundary whatever the threads did. The faults are
+/// kept per world and hashed; the first is logged with the mod's id.
 /// </summary>
 sealed class ModCombatMoves(IReadOnlyList<ModCombatMove> sources)
 {
@@ -34,9 +34,9 @@ sealed class ModCombatMoves(IReadOnlyList<ModCombatMove> sources)
             }
 
             if (move is not { } m) continue;
-            if (m.Technique is null || !float.IsFinite(m.Progress))
+            if (m.Technique is null && string.IsNullOrEmpty(m.Animation) || !float.IsFinite(m.Progress))
             {
-                Fault(i, tick, new InvalidOperationException("A combat move needs a technique and a finite progress."));
+                Fault(i, tick, new InvalidOperationException("A combat move needs a technique or an animation, and a finite progress."));
                 continue;
             }
 

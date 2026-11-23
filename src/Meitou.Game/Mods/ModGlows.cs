@@ -4,9 +4,10 @@ using Meitou.Simulation;
 namespace Meitou.Modding;
 
 /// <summary>
-/// A glow as drawn now (<see cref="ModGlows.Current"/>): the colour (rgb, 1 the full channel) and the strength after the fade in and out.
+/// A glow as drawn now (<see cref="ModGlows.Current"/>): the colour (rgb, 1 the full channel) and the strength after the fade in and out (a
+/// tint's share), how it shows, and whether the character is drawn through what hides it.
 /// </summary>
-internal readonly record struct GlowNow(Vector3 Colour, float Strength);
+internal readonly record struct GlowNow(Vector3 Colour, float Strength, GlowMode Mode = GlowMode.Light, bool ThroughWalls = false);
 
 /// <summary>
 /// The code mods' display-only glows (docs/modding.md "Glow"): at most one a target, the newest request replacing the one before, fading in and
@@ -18,7 +19,7 @@ internal sealed class ModGlows
     /// <summary>
     /// Why a request was dropped; each is logged once per mod.
     /// </summary>
-    internal enum Problem { BadTarget, BadColour, BadSeconds, BadStrength, Full, OffThread }
+    internal enum Problem { BadTarget, BadColour, BadSeconds, BadStrength, Full, OffThread, BadThroughWalls }
 
     /// <summary>
     /// The longest lifetime a request may ask for, in seconds.
@@ -40,12 +41,24 @@ internal sealed class ModGlows
     /// The seconds a glow takes to come up and to die down.
     /// </summary>
     public const float FadeSeconds = 0.25f;
+    /// <summary>
+    /// The characters drawn through walls at once (<see cref="ModContext.Tint"/>); a request for another is rejected.
+    /// </summary>
+    public const int MaxThroughWalls = 64;
 
     /// <summary>
     /// One target's glow: who set it, its colour and strength, and the seconds it has shown and those it has left.
     /// </summary>
-    sealed class Glow(string owner, Vector3 colour, float strength, float shown, float left)
+    sealed class Glow(string owner, Vector3 colour, float strength, float shown, float left, GlowMode mode = GlowMode.Light, bool through = false)
     {
+        /// <summary>
+        /// How it shows.
+        /// </summary>
+        public GlowMode Mode { get; } = mode;
+        /// <summary>
+        /// The character is drawn through what hides it.
+        /// </summary>
+        public bool ThroughWalls { get; } = through;
         /// <summary>
         /// The mod that set it.
         /// </summary>
@@ -111,6 +124,40 @@ internal sealed class ModGlows
 
         Tell(owner, problem.Value);
         return false;
+    }
+
+    /// <summary>
+    /// Tints <paramref name="target"/> towards <paramref name="colour"/> (each channel 0 to 1) by <paramref name="amount"/> (0 to 1), drawing the
+    /// character through walls when <paramref name="throughWalls"/> (a whole-character target only); it replaces the target's glow as
+    /// <see cref="Start"/> does. False when rejected (logged once per mod and problem).
+    /// </summary>
+    public bool Tint(string owner, in GlowTarget target, Vector3 colour, float seconds, float amount, bool throughWalls)
+    {
+        var problem = Check(target, colour, seconds, amount) ?? TintProblem(target, colour, amount, throughWalls)
+            ?? Set(target, new Glow(owner, colour, amount, 0, seconds, GlowMode.Tint, throughWalls));
+        if (problem is null) return true;
+
+        Tell(owner, problem.Value);
+        return false;
+    }
+
+    /// <summary>
+    /// A tint's own problem: a colour channel or amount above 1, through walls on a target that is not a whole character or past
+    /// <see cref="MaxThroughWalls"/> characters.
+    /// </summary>
+    Problem? TintProblem(in GlowTarget target, Vector3 colour, float amount, bool throughWalls)
+    {
+        if (colour.X > 1 || colour.Y > 1 || colour.Z > 1) return Problem.BadColour;
+        if (amount > 1) return Problem.BadStrength;
+        if (!throughWalls) return null;
+        if (target.Kind != GlowTargetKind.Character) return Problem.BadThroughWalls;
+
+        var key = target;
+        lock (_lock)
+        {
+            int through = _glows.Count(g => g.Value.ThroughWalls && g.Key != key);
+            return through >= MaxThroughWalls ? Problem.Full : null;
+        }
     }
 
     /// <summary>
@@ -193,11 +240,12 @@ internal sealed class ModGlows
         switch (problem)
         {
             case Problem.BadTarget: return "no character, or an unknown target kind";
-            case Problem.BadColour: return $"its colour is not finite in [0, {MaxColour}]";
+            case Problem.BadColour: return $"its colour is not finite in [0, {MaxColour}] (a tint's in [0, 1])";
             case Problem.BadSeconds: return $"its lifetime is not in (0, {MaxSeconds}] seconds";
-            case Problem.BadStrength: return $"its strength is not in [0, {MaxStrength}]";
-            case Problem.Full: return $"{MaxGlowing} targets already glow";
+            case Problem.BadStrength: return $"its strength is not in [0, {MaxStrength}] (a tint's in [0, 1])";
+            case Problem.Full: return $"{MaxGlowing} targets already glow, or {MaxThroughWalls} characters show through walls";
             case Problem.OffThread: return "set off the host's thread (from a tick system?)";
+            case Problem.BadThroughWalls: return "through walls is only for a whole character";
             default: throw new ArgumentOutOfRangeException(nameof(problem));
         }
     }
@@ -230,7 +278,7 @@ internal sealed class ModGlows
             foreach (var (target, glow) in _glows)
             {
                 float strength = glow.Strength * glow.Envelope;
-                if (strength > 0) into.Add((target, new GlowNow(glow.Colour, strength)));
+                if (strength > 0) into.Add((target, new GlowNow(glow.Colour, strength, glow.Mode, glow.ThroughWalls)));
             }
         }
     }

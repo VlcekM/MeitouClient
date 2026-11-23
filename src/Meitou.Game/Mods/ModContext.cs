@@ -145,11 +145,14 @@ public sealed class ModContext
 
     /// <summary>
     /// Plays a named sound event on a character, from any thread (docs/modding.md "Sounds"): <see cref="World.PostSound(string, CharacterId,
-    /// string?, string?)"/> on the running world; nothing before the first world or without audio.
+    /// string?, string?)"/> on the running world; nothing before the first world or without audio. A name ending in <c>.wav</c> is a loose file
+    /// under the mod's folder (<see cref="PostSound(string, EffectAnchor, float)"/>), here and in the other two calls.
     /// </summary>
     public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null)
     {
         CheckSound(eventName, default);
+        if (PostLoose(eventName, on, default, false)) return;
+
         _world()?.PostSound(eventName, on, switchGroup, switchValue);
     }
 
@@ -160,6 +163,8 @@ public sealed class ModContext
     public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null)
     {
         CheckSound(eventName, at);
+        if (PostLoose(eventName, CharacterId.None, at, false)) return;
+
         _world()?.PostSound(eventName, at, switchGroup, switchValue);
     }
 
@@ -170,8 +175,82 @@ public sealed class ModContext
     public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null)
     {
         CheckSound(eventName, default);
+        if (PostLoose(eventName, CharacterId.None, default, true)) return;
+
         _world()?.PostInterfaceSound(eventName, switchGroup, switchValue);
     }
+
+    /// <summary>
+    /// Posts <paramref name="sound"/> as a loose file when it names a <c>.wav</c> (true: handled, whether it was found or not); false for a bank
+    /// event.
+    /// </summary>
+    bool PostLoose(string sound, CharacterId on, System.Numerics.Vector3 at, bool onInterface)
+    {
+        if (!sound.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)) return false;
+
+        if (ResolveSound(sound) is { } path) _world()?.PostSound(new Simulation.PostedSound(path), on, at, onInterface);
+        return true;
+    }
+
+    /// <summary>
+    /// Plays <paramref name="sound"/> once at <paramref name="at"/> (docs/modding.md "Sounds"): a bank event's name, or a 16-bit PCM <c>.wav</c>
+    /// file under this mod's folder (a relative path), played at <paramref name="volume"/> (0 to 4; a bank event keeps its own level). A point
+    /// plays there, a bone or weapon on its character; a building or bolt where it is drawn now, which needs the host's thread. False when nothing
+    /// was queued: no such file (logged once), a volume out of range, an anchor not there or one that needs the host's thread off it.
+    /// </summary>
+    public bool PostSound(string sound, EffectAnchor at, float volume = 1)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(sound);
+        if (!float.IsFinite(volume) || volume < 0 || volume > 4 || ResolveSound(sound) is not { } name) return false;
+        if (SoundPlace(at) is not var (on, point)) return false;
+
+        _world()?.PostSound(new Simulation.PostedSound(name) { Volume = volume }, on, point);
+        return true;
+    }
+
+    /// <summary>
+    /// The character or point a sound on <paramref name="at"/> plays on; null when it is not there (or off the host's thread for a building or
+    /// bolt).
+    /// </summary>
+    (CharacterId On, System.Numerics.Vector3 At)? SoundPlace(in EffectAnchor at)
+    {
+        switch (at.Kind)
+        {
+            case EffectAnchorKind.Point:
+                return float.IsFinite(at.Offset.X + at.Offset.Y + at.Offset.Z) ? (CharacterId.None, at.Offset) : null;
+            case EffectAnchorKind.Bone or EffectAnchorKind.Weapon:
+                return at.Character.IsNone ? null : (at.Character, default);
+            default:
+                if (!_registry.Effects.OnHostThread || _registry.Effects.Locate?.Invoke(at) is not { } place) return null;
+                return (CharacterId.None, place);
+        }
+    }
+
+    /// <summary>
+    /// A bank event's name as it is, or a <c>.wav</c> under the mod's folder as its full path; null (logged once) for a file that is not there or
+    /// lies outside the folder.
+    /// </summary>
+    string? ResolveSound(string sound)
+    {
+        if (!sound.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)) return sound;
+
+        string folder = Path.GetFullPath(Folder);
+        string full = Path.GetFullPath(Path.Combine(folder, sound));
+        bool inside = full.StartsWith(folder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        if (inside && File.Exists(full)) return full;
+
+        lock (_missingSounds)
+        {
+            if (_missingSounds.Add(sound))
+                Console.Error.WriteLine($"mod       {Id}: sound '{sound}' is not a file under the mod's folder; it plays nothing");
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The loose sound files already logged as missing.
+    /// </summary>
+    readonly HashSet<string> _missingSounds = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Throws, as the world's calls do, for an empty event name or a point that is not finite, also before the first world.
@@ -543,6 +622,44 @@ public sealed class ModContext
     /// Fades out early the glow this mod set on <paramref name="target"/>; false when it set none there.
     /// </summary>
     public bool StopGlow(GlowTarget target) => _registry.Glows.Stop(Id, target);
+
+    /// <summary>
+    /// Tints <paramref name="target"/> (docs/modding.md "Glow"), display only: its surface's own colour blended towards <paramref name="colour"/>
+    /// (each channel 0 to 1) by <paramref name="amount"/> (0 to 1) before it is lit, for <paramref name="seconds"/> on the game clock, fading in and
+    /// out as a glow does. With <paramref name="throughWalls"/> (a whole-character target only, at most <see cref="ModGlows.MaxThroughWalls"/>)
+    /// the character is also drawn, tinted, where walls and the ground hide it. One glow or tint a target: each replaces the other;
+    /// <see cref="StopGlow"/> ends either. On the host's thread; false when rejected (logged once per mod and problem).
+    /// </summary>
+    public bool Tint(GlowTarget target, System.Numerics.Vector3 colour, float seconds, float amount = 1, bool throughWalls = false) =>
+        _registry.Glows.Tint(Id, target, colour, seconds, amount, throughWalls);
+
+    /// <summary>
+    /// Keeps a display-only ribbon trail on <paramref name="anchor"/> (docs/modding.md "Trails"): every frame the anchor is drawn the trail takes its
+    /// place (a point ribbon) or its +Y span (a swept band, as a blade's), each place fading over <see cref="TrailStyle.Seconds"/>, for
+    /// <paramref name="seconds"/> from now (up to <see cref="ModTrails.MaxSeconds"/>). Called again before it ends with the same anchor (its scale
+    /// aside) it is renewed in place, taking the new style and scale, so a mod keeps a trail up while a character attacks. On the host's thread;
+    /// false when rejected (logged once per mod and problem).
+    /// </summary>
+    public bool KeepTrail(EffectAnchor anchor, TrailStyle style, float seconds) => _registry.Trails.Keep(Id, anchor, style, seconds);
+
+    /// <summary>
+    /// Stops this mod's trail on <paramref name="anchor"/> taking new places (<see cref="KeepTrail"/>); what it drew fades out. False when it
+    /// keeps none there.
+    /// </summary>
+    public bool StopTrail(EffectAnchor anchor) => _registry.Trails.Stop(Id, anchor);
+
+    /// <summary>
+    /// The bolts' changes for display (docs/modding.md "Projectile feed"): once a frame on the host's thread, the bolts shot, landed and gone since
+    /// the last shown snapshot, read from it (display only, never the simulation); not called for a frame without any. The ids anchor effects,
+    /// trails and sounds (<see cref="EffectAnchor.Projectile"/>). The list is reused: copy what you keep. A throw is logged and the feed gets no
+    /// more changes.
+    /// </summary>
+    public void AddProjectileFeed(Action<IReadOnlyList<ProjectileEvent>> view)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(view);
+        Pending.ProjectileFeeds.Add(new ModProjectileFeed(Id, view));
+    }
 
     /// <summary>
     /// Whether <paramref name="effect"/> (an EFFECT record's string id or a particle system name) names a particle system the game has now, so a

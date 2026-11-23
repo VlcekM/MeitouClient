@@ -231,7 +231,11 @@ holds refuses the second mod.
   - `Building(id, offset = default, turn = null)`: a player-built or nest building of the snapshot (`WorldSnapshot.Buildings`,
     `NestBuildings`, by `BuildingSnapshot.Id`), its origin and turn. Town buildings of the level data and furniture are not covered (no
     host-side lookup by id); worn items are skinned to the skeleton and have no frame of their own: use a `Bone` (e.g. `Bip01 Spine2`).
-  - `.Scaled(stretch)` on any anchor overrides its stretch, in (0, 100].
+  - `Projectile(id, offset = default, turn = null)`: a bolt (`ProjectileSnapshot.Id`, from the projectile feed below) where it is drawn,
+    in flight or stuck in the ground: origin at its nose, +Y along its flight. Gone once the bolt leaves the snapshot.
+  - `.Scaled(stretch)` on any anchor overrides its stretch, in (0, 100]; `.Sized(factor)` multiplies the stretch (the anchor's own, a
+    blade's, or `Scaled`'s), in (0, 100], so an effect grows with a level while keeping the blade fit; `.Pulsing(amount, seconds)` swings
+    that size by `amount` in [0, 1) either way once every `seconds` in [0.05, 60], from the effect's start.
   The system's origin is at the anchor, its axes turned to the anchor's frame; the stretch is a uniform system scale, as Particle Universe's
   (`ParticleSimulation.Stretch`: it multiplies the system's `scale` and `scale_velocity`, so every place, shape, particle size, speed and
   affector reach, and the technique's position; 1 changes nothing). A blade system authored along its +Y with its origin at the
@@ -242,17 +246,44 @@ holds refuses the second mod.
   the world; while the anchor cannot be located (character not drawn, weapon sheathed, building
   gone, unknown bone) it pauses (its emission stops) and starts again where the anchor is, for the seconds left. `PlayEffect(effect, point,
   ...)` and `PlayEffect(effect, characterId, bone = null, ...)` are `At` and `Bone` (null: `Bip01 Spine2`). Each `PlayEffect` is a new
-  burst; `KeepEffect(effect, anchor, seconds, tint = null)` is the mod's one for that effect and anchor: called again before it ends it is
-  renewed to `seconds` from then, not restarted (another tint restarts it), so a mod keeps an aura up by re-calling within 30 s;
+  burst; `KeepEffect(effect, anchor, seconds, tint = null)` is the mod's one for that effect and anchor (its scale, `Scaled` / `Sized` /
+  `Pulsing`, aside): called again before it ends it is renewed to `seconds` from then, not restarted, taking the new scale in place (another
+  tint restarts it), so a mod keeps an aura up by re-calling within 30 s and makes it flare after a hit by re-calling with a larger size;
   `StopEffect(effect, anchor)` ends it (its particles live out). Requests queue and start at the next frame, after the hit feed, through the
   renderer's own bursts (`ParticleRenderer.Burst`, as the blood and dust do): at most 16 started a frame, 64 alive (playing or paused) and
-  128 waiting. A bad request (unknown id; anchor kind, point, offset or turn not usable; no character or bone; no building id; stretch,
-  lifetime or tint out of range; full queue; a call off the host's thread) returns false and is dropped, logged once per mod and reason.
+  128 waiting. A bad request (unknown id; anchor kind, point, offset or turn not usable; no character or bone; no building id; a negative
+  bolt id; stretch, size, pulse, lifetime or tint out of range; full queue; a call off the host's thread) returns false and is dropped,
+  logged once per mod and reason.
   Call it only on the host's thread (host-side callbacks: hit feed, UI, key actions, debug rows), never from a tick system. The simulation
   never reads it, so the state hash is untouched; without code mods the frame skips it; a new world drops all effects, and a mod that fails
   its `Initialize` loses its own. **Verified** by `ModVisualEffectsTests` (order, tint, lifetime, caps, rejection logging, a dropped mod's
   effects; each anchor kind's frame; pause and resume; keep, renew and stop; the old overloads; kept-local particles following the burst; the
-  stretch scaling places, sizes and speeds) against a recording sink and frame source.
+  stretch scaling places, sizes and speeds) against a recording sink and frame source. The bolt anchor, `Sized`, `Pulsing` and the renewal in
+  place are **Observed** by a scratch program against a recording sink (2026-11-23), not in the game.
+- **Trails:** `KeepTrail(EffectAnchor anchor, TrailStyle style, seconds)` on `ModContext` keeps a display-only ribbon trail (as Ogre's
+  `RibbonTrail`) on any anchor above, sampled each frame where the anchor is drawn. `TrailStyle`: `Span` 0 (default) is a ribbon through the
+  anchor's point facing the camera, `Width` (default 2) wide at the head and `EndWidth` (null: the same) at the tail; `Span` above 0 is a
+  band swept by the anchor's +Y from its origin that far times its stretch (on `Weapon`, 8.5 reaches the tip: a blade trail); `Seconds`
+  (default 0.3, up to 5) is how long a place stays; `Colour` (rgb up to 4, alpha 0 to 1) at the head fades to `EndColour` (null: the same,
+  alpha 0) at the tail; `Material` names a particle material (an Ogre `.material` of the particles, base game or a mod's) for its texture,
+  blend and colour, null for Meitou's soft additive streak. The texture's v runs across the trail and u along it (0 head, 1 tail, one value
+  per piece); a name the particles do not have draws Meitou's streak. `seconds` (up to 30) is how long it keeps taking places; renewed by
+  the same mod and anchor (scale aside) it takes the new style and scale in place; `StopTrail(anchor)` stops it taking places (what it drew
+  fades out). While the anchor is not drawn the trail takes nothing and starts a new run when it is back (no piece across the gap). At most
+  64 trails at once and 64 places each; drawn after the bolt tracers in the particles' pass (`ParticleRenderer.Ribbons`, a quad on its own
+  axes per piece), depth tested, unlit, Vulkan only (the Metal loop draws no mod effects). Host thread only, validated and logged once per
+  mod and reason (anchor problems as `PlayEffect`'s, a style out of range, lifetime, more than 64, off the host's thread); the simulation
+  never reads it; a new world drops all trails, a mod that fails its `Initialize` loses its own; nothing runs without code mods. Engine API,
+  not in the original. **Observed** by a scratch program against a stand-in frame source (pieces per sample, band span, fade, gaps, stop,
+  caps, rejection logging; the drawn quad's size and facing), not in the game.
+- **Projectile feed:** `AddProjectileFeed(view)` on `ModContext`: once a frame on the host's thread, `view` gets the bolts' changes
+  between the shown snapshots (`ProjectileEvent`: id, `ProjectileChange` `Fired` / `Landed` / `Gone`, shooter, position, direction, speed,
+  `live ammo` mesh), in the snapshot's order, then the gone ones by id; a bolt first seen stuck is `Fired` then `Landed`; `Gone` covers a
+  bolt that struck a body (the hit feed has the hit), ran out or was cleared, with its last seen place. Read from the published snapshot, so
+  the simulation never sees it and nothing is hashed; frames that show the same snapshot get nothing, and a bolt shot and gone between two
+  shown snapshots is never told. A new world (load, new game) is taken as it is, telling nothing of its bolts already there. The list is
+  reused: copy what you keep. A throw is logged with the mod id and that feed gets no more. Without a feed the host does not compare
+  snapshots. Engine API, not in the original; **Observed** by a scratch program over hand-made snapshot lists.
 - **Glow:** `Glow(GlowTarget target, colour, seconds, strength = 1)` on `ModContext` makes a target give off light of its own (display
   only). Targets (`GlowTarget`): `Character(characterId)`, the whole drawn character (body, worn items, what it holds); `Weapon(characterId)`,
   the blade of the melee weapon it holds drawn (from 0.3 of the weapon mesh to the tip, the gear blood's mapping, docs/game/blood-decals.md
@@ -269,6 +300,17 @@ holds refuses the second mod.
   an unknown kind, colour, lifetime or strength out of range, more than 256 targets, off the host's thread); host thread only; never read by
   the simulation; a new world clears all glows, a mod that fails its `Initialize` loses its own. **Verified** by `ModGlowsTests` (fade,
   replace, stop, expiry, rejection logging, drop, clear; which parts each target lights; the packing).
+- **Tint:** `Tint(GlowTarget target, colour, seconds, amount = 1, throughWalls = false)` on `ModContext` blends the target's own surface colour
+  (its albedo) towards `colour` (each channel 0 to 1) by `amount` (0 to 1) before it is lit, as the original Vital Sense's `coloroverride`
+  (**Observed** from its shipped shaders). It shares the glow's store: one glow or tint a target, each replacing the other, the same fade,
+  lifetime, caps, `StopGlow` and rules. Packed in the same bytes: a tint's colour bytes stay at most 254 (a glow's brightest channel is
+  always 255), its share in the level byte's low 7 bits, the blade mask as for a glow. `throughWalls` (a whole-character target only, at
+  most 64 characters) also draws the character, tinted, where the scene hides it (the original's `overrideDepth`, which drew the skin at
+  depth 0): it is drawn alone into a mask as the hover outline's characters are (`CharacterRenderer.DrawHoverMasks`), and where the
+  scene's depth is nearer, the mask's colour half-blended towards the tint at the tint's share is laid over the finished picture; no outline,
+  nothing where it is seen. One mask per tint colour, at most 8 colours a frame (later ones are left out); Vulkan only. Rejected (logged
+  once): a colour or amount above 1, through walls on another target or past 64 characters. **Observed**: the packing, validation and
+  shader compilation by a scratch program; not seen drawn in the game.
 - Drawing **Observed** in `--duel` through forced glows and effects, not a mod's call: `Character` lit one duellist whole in cyan (body and
   armour; at strength 1 it washes out the texture) while `Weapon` lit only the other's drawn katana blade, its hilt and back scabbard not;
   `kenshi_fire1_small` kept on `Bone(..., "Bip01 Head")` and on `Weapon` burned over the heads and at the hands, following both duellists.
@@ -467,16 +509,18 @@ holds refuses the second mod.
   for example to group factions under another. It runs on the host's thread whenever the tab is drawn, so it must not touch the world; mods chain in
   load order. A throw or a null is logged and that arranger is not called again.
 - **Combat moves:** `AddCombatMove(source)`: `source(world, id, tick)` answers a `CombatMove` (a `CombatTechnique` and its progress, 0 to
-  1) or null, and the animation plays the first answer, in load order, as the character's technique (`CombatSystem.ModMove`). It is asked
+  1) or null, and the animation plays the first answer, in load order, as the character's technique (`CombatSystem.ModMove`);
+  `CombatMove.Clip(animation, progress)` plays any ANIMATION clip instead, by record name (else string id), e.g. `medic` (the first-aid
+  kneel) or `squat T` (the crouch), its time the progress times its length, as the crossbow's poses are. It is asked
   only when the game plays nothing of its own: not while the character attacks, blocks or dodges, is stunned or stumbling, holds a crossbow
   pose, is down, carried or getting up (as of the last finished tick). The move is animation only: it lands no blow, nobody blocks it, and
   the combat system may start its own swing over it at any tick. A technique the animation library has no clip for plays nothing. The
   source runs in the animation's parallel step for every stepping character, and the move enters the world: its layers are hashed and a
   relocating clip's root motion moves the character. So it must be cheap, thread-safe, read-only and deterministic: answer from state the
   tick has already settled (its own system's serial step, the last finished tick), never from call order or caches that change the answer,
-  and never call `ModMove` itself. A throw, a move without a technique or a progress that is not finite is a fault: logged once with the mod
-  id; the source still answers for the rest of that tick and answers nothing in that world from the next tick on, and the fault enters the
-  state hash.
+  and never call `ModMove` itself. A throw, a move without a technique or animation, or a progress that is not finite is a fault: logged
+  once with the mod id; the source still answers for the rest of that tick and answers nothing in that world from the next tick on, and the
+  fault enters the state hash. The clip path is **Observed** by a scratch program (answer, clamp, fault, hash), not seen in the game.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
@@ -945,6 +989,14 @@ holds refuses the second mod.
   set the switch on every post that needs one. Post one-shot events: a looping one is never stopped, and on a pooled object it can be moved
   by a later post. An unknown name plays nothing (the player gives up on it after ten seconds). Several mods post freely. An empty name or a
   point that is not finite throws, also before the first world; an empty character id plays nothing. Engine API, not in the original.
+  On `ModContext` a name ending in `.wav` is a loose file under the mod's folder (a relative path; one outside it or missing plays nothing,
+  logged once), a 16-bit PCM WAV of at most 20 s, read once by the host: it plays as one Wwise sound made for it, on the mods' interface
+  object or on a pooled object at the point or the character's place (it does not follow), through the SFX bus `59927CD0` when placed (the
+  SFX slider and the pause ducking take it) with Meitou's attenuation (linear from full at the object to silence at 1000 units), on the
+  master bus on the interface (no slider). `PostSound(sound, EffectAnchor at, volume = 1)` plays an event or loose file on an anchor: a
+  point there, a bone or weapon on its character, a building or bolt where it is drawn now (host thread only); `volume` (0 to 4) scales a
+  loose file, a bank event keeps its level; false when nothing was queued. **Observed** by a scratch program mixing a synthetic WAV offline
+  (heard at the listener, distance attenuation, volume), not heard in the game.
 - **Status effects:** `AddStatusEffect(new StatusEffect(id, name) { Description, Tone, Stacking, MaxStacks, Modifiers })` (`StatusEffects`,
   `src/Meitou.Simulation/Bodies`) adds a named effect (a poison, a drug, a blessing) the mod's systems put on a character with `effect.Apply(world,
   character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(world, character)` or `On(stats)`

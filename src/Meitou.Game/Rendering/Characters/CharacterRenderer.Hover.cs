@@ -31,14 +31,19 @@ internal sealed unsafe partial class CharacterRenderer
     /// (it writes alpha 1), one <paramref name="width"/> × <paramref name="height"/> mask per colour, seen from <paramref name="eye"/> along
     /// <paramref name="view"/> (unjittered). Each mask's planes hug its characters, so their depth stays precise. Nothing for a character not drawn
     /// in the world (beyond the draw distance, or hidden by the interior view) or off screen. Called after <see cref="Update"/> and before the
-    /// world's colour pass, whose statistics then stand.
+    /// world's colour pass, whose statistics then stand. The <paramref name="through"/> characters (a mod's tint through walls, docs/modding.md
+    /// "Glow") get masks of their own, at most <see cref="MaxThroughMasks"/> colours (later colours are left out), drawn where the scene hides them.
     /// </summary>
     public void DrawHoverMasks(IReadOnlyList<(long Key, Vector4 Colour)> wanted, int width, int height, Matrix4x4 view, float fieldOfView,
-        Vector3 eye)
+        Vector3 eye, IReadOnlyList<(long Key, Vector4 Colour)>? through = null)
     {
         _hoverMasks.Clear();
-        if (wanted.Count == 0 || width <= 0 || height <= 0) return;
+        through ??= [];
+        if (wanted.Count + through.Count == 0 || width <= 0 || height <= 0) return;
         var groups = HoverGroups(wanted, width, height, view, fieldOfView);
+        int hovered = groups.Count;
+        var behind = HoverGroups(through, width, height, view, fieldOfView);
+        groups.AddRange(behind.Take(MaxThroughMasks));
         for (int g = 0; g < groups.Count; g++)
         {
             var (colourTarget, depthTarget) = HoverTarget(g, width, height);
@@ -58,9 +63,14 @@ internal sealed unsafe partial class CharacterRenderer
 
             var target = PassTargets.Of(colourTarget, depthTarget);
             for (int m = 0; m < members.Count; m++) DrawHoverMember(target, members[m], m == 0, view * projection, eye);
-            _hoverMasks.Add(new HoverMask(colourTarget, depthTarget, near, far, groups[g].Colour, spheres));
+            _hoverMasks.Add(new HoverMask(colourTarget, depthTarget, near, far, groups[g].Colour, spheres, Through: g >= hovered));
         }
     }
+
+    /// <summary>
+    /// The most colours of characters drawn through walls in a frame (each is a mask the size of the picture).
+    /// </summary>
+    public const int MaxThroughMasks = 8;
 
     /// <summary>
     /// The wanted characters drawn in the world and on screen, grouped by colour (their live indices).
