@@ -378,6 +378,7 @@ sealed class BuildingSync(GameHost host)
             water.Walls = (centre, radius) => footprints.PlaneCut(centre, radius, Data.World.WorldWater.Height);
 
         var parts = new Dictionary<string, IReadOnlyList<PlacedMesh>>(StringComparer.Ordinal);
+        var markers = new Dictionary<string, IReadOnlyList<PlacedMesh>>(StringComparer.Ordinal);
         var icons = new BuildingIcons(Path.Combine(host.Install.DataDirectory, "icons", "buildings"));
         IReadOnlyList<PlacementTown>? towns = null;
         return new Building.BuildServices
@@ -392,6 +393,8 @@ sealed class BuildingSync(GameHost host)
                     ? WorldObjectLayout.Building(db, record, "ghost:" + id, Vector3.Zero, Quaternion.Identity, new BuildingState())
                     : [];
             },
+            UseNodeMarkers = id => markers.TryGetValue(id, out var cached) ? cached
+                : markers[id] = db.Find(id) is { } record ? UseNodeMarkerLayout.Markers(db, record) : [],
             IconFile = icons.Find,
             Placement = MakePlacementServices(db, footprints),
             WorldInfo = MakeWorldInfo(db),

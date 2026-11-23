@@ -139,6 +139,10 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     bool _blueNodesDrawn;
     /// <summary>
+    /// The usage node markers of the ghosts (the queued ghosts' judged once per change of the queue).
+    /// </summary>
+    readonly UseNodeMarkers _useNodeMarkers = new();
+    /// <summary>
     /// The buildable buildings by record id, made on first use.
     /// </summary>
     Dictionary<string, BuildingBuildData>? _buildIndex;
@@ -913,28 +917,39 @@ sealed class BuildMode(PlayerInterface player)
         if (Active)
         {
             foreach (var queued in BuildQueue)
-            {
-                var queuedWorld = Matrix4x4.CreateFromQuaternion(queued.Rotation) * Matrix4x4.CreateTranslation(queued.Position);
-                draws.Add(new(host.Parts(queued.Building.Id), queuedWorld, WorldObjectRenderer.GhostState.Queued));
-            }
+                draws.Add(new(host.Parts(queued.Building.Id), World(queued.Position, queued.Rotation), WorldObjectRenderer.GhostState.Queued));
+            _useNodeMarkers.AddQueued(host, BuildQueue, player.Session.CurrentSnapshot.Buildings, draws);
 
             if (Ghost is { } g)
             {
-                var ghostWorld = Matrix4x4.CreateFromQuaternion(g.Rotation) * Matrix4x4.CreateTranslation(g.Position);
+                var ghostWorld = World(g.Position, g.Rotation);
                 draws.Add(new(host.Parts(g.Building.Id), ghostWorld,
                     g.Failure == PlacementFailure.None ? WorldObjectRenderer.GhostState.Valid : WorldObjectRenderer.GhostState.Invalid));
+                UseNodeMarkers.AddHeld(host, g.Building.Id, ghostWorld, draws);
             }
 
             foreach (var (piece, failure, _) in WallPieces)
             {
-                var pieceWorld = Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position);
+                var pieceWorld = World(piece.Position, piece.Rotation);
                 draws.Add(new(host.Parts(piece.Data.Id), pieceWorld,
                     failure == PlacementFailure.None ? WorldObjectRenderer.GhostState.Valid : WorldObjectRenderer.GhostState.Invalid));
+                UseNodeMarkers.AddHeld(host, piece.Data.Id, pieceWorld, draws);
             }
         }
+        else
+        {
+            _useNodeMarkers.Clear();
+        }
+
         host.DrawGhosts(draws);
         _ghostsDrawn = draws.Count > 0;
     }
+
+    /// <summary>
+    /// A ghost's transform: its rotation, then its position.
+    /// </summary>
+    internal static Matrix4x4 World(Vector3 position, Quaternion rotation) =>
+        Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(position);
 
     #endregion
 

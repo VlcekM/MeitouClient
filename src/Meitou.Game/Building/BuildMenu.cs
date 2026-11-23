@@ -117,6 +117,11 @@ public sealed class BuildServices
     /// </summary>
     public required Func<string, IReadOnlyList<PlacedMesh>> Parts { get; init; }
     /// <summary>
+    /// A BUILDING's usage node markers laid out at the origin with no rotation (<see cref="UseNodeMarkerLayout"/>; the same list for the same
+    /// record).
+    /// </summary>
+    public Func<string, IReadOnlyList<PlacedMesh>> UseNodeMarkers { get; init; } = _ => [];
+    /// <summary>
     /// The game's saved picture of a BUILDING (<c>data/icons/buildings</c>), null when none: the window then shows the renderer's drawing.
     /// </summary>
     public Func<string, string?> IconFile { get; init; } = _ => null;
