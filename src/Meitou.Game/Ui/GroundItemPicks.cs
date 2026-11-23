@@ -178,12 +178,23 @@ sealed class GroundItemPicks(PlayerInterface player)
     readonly List<(int Id, UiRect Rect)> _itemLabels = [];
 
     /// <summary>
-    /// Each item name's text width in the label's font at a window height and minimum text size, measured once (the names are the records' and the
-    /// translations', so the set stays small).
+    /// Each item name's text width as its label draws it, measured once for the text settings in <see cref="_labelWidthsFor"/>.
     /// </summary>
-    readonly Dictionary<(string Name, int Height, float Minimum), float> _labelWidths = [];
+    readonly Dictionary<string, float> _labelWidths = [];
 
+    /// <summary>
+    /// The interface mode, minimum text pixels and font size option <see cref="_labelWidths"/> was measured at; a change empties it.
+    /// </summary>
+    (UiMode Mode, float Minimum, float FontSize) _labelWidthsFor;
+
+    /// <summary>
+    /// The font resource a ground item's name is drawn in.
+    /// </summary>
     const string ItemLabelFont = "Kenshi_StandardFont_Medium";
+
+    /// <summary>
+    /// The name's text scale: fixed, as the font resource sizes it (the window's height does not scale it).
+    /// </summary>
     const float ItemLabelTextScale = 1;
 
     /// <summary>
@@ -238,13 +249,7 @@ sealed class GroundItemPicks(PlayerInterface player)
         var placed = new List<(int Id, UiRect Rect)>();
         foreach (var (g, _, at) in near)
         {
-            // Measured as the name is drawn (its font at TextScale 1): the locale can map the font to a face other than the standard one
-            // (Chinese names in a face with full-width characters were cut to a few characters and "...", #1288).
-            var key = (g.Name, player.Height, player.StandardPixels);
-            if (!_labelWidths.TryGetValue(key, out float text))
-                _labelWidths[key] = text = painter.MeasureText(ItemLabelFont, g.Name, player.Height, 0, player.StandardPixels,
-                    ItemLabelTextScale).Width;
-            float width = MathF.Ceiling(text) + em;
+            float width = MathF.Ceiling(LabelTextWidth(painter, g.Name)) + em;
             var rect = new UiRect(at.X - width / 2, at.Y - 6 * scale - height, width, height);
             for (bool moved = true; moved;)
             {
@@ -264,6 +269,28 @@ sealed class GroundItemPicks(PlayerInterface player)
 
         _itemLabels.AddRange(placed);
         AddLabelControls(controls, near, placed);
+    }
+
+    /// <summary>
+    /// <paramref name="name"/>'s width as its label draws it: <see cref="ItemLabelFont"/> at <see cref="ItemLabelTextScale"/>, which a locale can map
+    /// to a face other than the standard one (Chinese names measured in the standard face were cut to a few characters and "...", #1288).
+    /// </summary>
+    float LabelTextWidth(Rendering.Ui.UiPainter painter, string name)
+    {
+        var settings = (painter.Mode, player.StandardPixels, painter.FontSizeSetting);
+        if (_labelWidthsFor != settings || _labelWidths.Count > 256)
+        {
+            _labelWidths.Clear();
+            _labelWidthsFor = settings;
+        }
+
+        if (!_labelWidths.TryGetValue(name, out float width))
+        {
+            width = painter.MeasureText(ItemLabelFont, name, player.Height, 0, player.StandardPixels, ItemLabelTextScale).Width;
+            _labelWidths[name] = width;
+        }
+
+        return width;
     }
 
     /// <summary>
