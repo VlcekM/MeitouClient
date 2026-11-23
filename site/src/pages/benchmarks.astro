@@ -1,0 +1,199 @@
+---
+// Benchmarks: the launcher's benchmark sessions, inside the site's header and footer. Nothing is read at build time:
+// src/scripts/bench.js fetches the sessions from the Reports service (GET /bench/data, /bench/targets) in the browser and draws
+// everything, so the page builds without data and shows a message when the service is down or empty.
+import '@fontsource/exo-2/700.css';
+import Base from '../layouts/Base.astro';
+
+const backgrounds = [1, 2, 3, 4].map((i) => `/roadmap-bg/bg-${i}.jpg`);
+const service = 'https://gear-pastry-chorus.cloudovna.app';
+const groups = [
+  ['camera', 'idle, orbit, zoom, pan'],
+  ['streaming', 'travel, return'],
+  ['simulation', 'speed-x2, speed-x5, talk, trade, container, doors, pick-up, paths, walk, fight, fight-on, loot'],
+  ['ui', 'panels, panels-warm'],
+  ['views', 'horizon, overview, flights'],
+  ['all', 'every segment except settle'],
+];
+---
+<Base title="Benchmarks - Meitou" description="Performance benchmarks of Meitou builds on players' machines, taken with the Meitou launcher." kofiTop>
+  <span slot="center">Benchmark page by <a href="https://github.com/Demitrix2k">@DemitriX</a></span>
+  <div class="backdrop" aria-hidden="true" data-bgs={JSON.stringify(backgrounds)}><div></div><div></div></div>
+  <div class="bn" id="bench-root" data-service={service}>
+    <header>
+      <h1>Meitou benchmarks</h1>
+      <p>Meitou releases and daily builds benchmarked on players' machines. Lower is better, except fps.</p>
+    </header>
+
+    <section id="charts-sec">
+      <h2>Over builds</h2>
+      <div id="controls" class="controls"></div>
+      <div id="caveat"></div>
+      <div id="status" class="box" role="status">Loading benchmark results...</div>
+      <div id="chart"></div>
+    </section>
+
+    <section class="minor" id="machines-sec">
+      <h2>Machines</h2>
+      <div id="machines"></div>
+    </section>
+
+    <section class="minor" id="contribute-sec">
+      <h2>How to take part</h2>
+      <p>Open the <strong>Benchmark</strong> page in the <a href="/">Meitou launcher</a>, pick a build and the tiers, start it and
+      submit the results when it is done. It downloads the build and the save on its own; don't use the computer while it runs.</p>
+    </section>
+
+    <details class="plain method" id="method">
+      <summary>How this is measured</summary>
+      <dl class="setup">
+        <div><dt>Builds</dt><dd>Every release and each scheduled daily build (16:00 UTC); other builds can be benchmarked but not submitted</dd></div>
+        <div><dt>Scenarios</dt><dd><strong>Bases</strong>: a frozen save (<code>bench-bases-2026-10-27</code>, two player bases), checked by hash.
+          <strong>Shark flyby</strong>: a new game's default start, the camera flown round the town Shark on a fixed path</dd></div>
+        <div><dt>Graphics</dt><dd>A quality tier from default settings, Vulkan, windowed 1920x1080, no frame limit or vsync, no upscaler</dd></div>
+        <div><dt>Runs</dt><dd>Two launches per scenario and tier; run 1 may be cache-cold, so the chart shows run 2 and run 1 dimmed, never an average</dd></div>
+      </dl>
+      <h3>Segments of the Bases scenario</h3>
+      <p class="muted">The game's play benchmark script, grouped by segment; <code>settle</code> runs first and is never counted in any
+      scenario. Shark flyby has the groups <code>flight</code> and <code>all</code>.</p>
+      <table class="groups">
+        <tbody>{groups.map(([id, segs]) => <tr><td>{id}</td><td>{segs}</td></tr>)}</tbody>
+      </table>
+      <h3>Benchmark versions</h3>
+      <p>The benchmark version changes whenever the workload does (tiers, settings, segments, save, metric definitions); numbers of
+      different versions are never compared. Each build also records a fingerprint of each scenario's workload, and the page warns
+      when one version of a scenario has more than one. <strong>Legacy kit</strong> (version 0) is the earlier Python kit: the play benchmark (idle, orbit,
+      zoom, pan) and the base switch, at the old baseline settings and each machine's own resolution, over commits.</p>
+    </details>
+
+    <p class="muted small">Raw data: <a href={`${service}/bench/data`}>/bench/data</a></p>
+    <div id="tip" role="tooltip" hidden></div>
+    <noscript><p>This page needs JavaScript to fetch and draw the results.</p></noscript>
+  </div>
+</Base>
+
+<script>
+  import '../scripts/bench.js';
+</script>
+
+<script is:inline>
+  // Backdrop: a random screenshot at load, then a different one every 20 s, cross-faded (not while the tab is hidden).
+  (() => {
+    const box = document.querySelector('.backdrop'), bgs = JSON.parse(box.dataset.bgs), layers = box.children;
+    let cur = Math.floor(Math.random() * bgs.length), front = 0;
+    layers[0].style.backgroundImage = `url(${bgs[cur]})`;
+    layers[0].classList.add('on');
+    setInterval(() => {
+      if (document.hidden) return;
+      let next = Math.floor(Math.random() * (bgs.length - 1)); if (next >= cur) next++;
+      const img = new Image();
+      img.onload = () => {
+        const back = layers[1 - front];
+        back.style.backgroundImage = `url(${bgs[next]})`;
+        back.classList.add('on'); layers[front].classList.remove('on');
+        front = 1 - front; cur = next;
+      };
+      img.src = bgs[next];
+    }, 20000);
+  })();
+</script>
+
+<style is:global>
+  /* The body and the site frame are transparent on this page so the backdrop shows behind them (html keeps the ground colour). */
+  body:has(.bn), .mt-scene:has(.bn) { background: transparent; }
+  .mt-scene:has(.bn) .top { padding-top: 16px; padding-bottom: 32px; }
+
+  .backdrop, .bn {
+    --bg: #1c1613; --panel: #2a201b; --text: #eadfcb; --muted: #a8977f; --line: #3d312a; --grid: #33281f; --accent: #e07b45;
+    --m0: #6ea0ff; --m1: #f0a53c; --m2: #4ade80; --m3: #c084fc; --m4: #f472b6; --m5: #22d3ee; --m6: #a3e635; --m7: #a8a29e;
+    --good: #7fd09c; --bad: #f08b82; --panel-a: 94%;
+  }
+  .backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--bg); }
+  .backdrop div { position: absolute; inset: -32px; background-size: cover; background-position: center; filter: blur(3px) saturate(.9); opacity: 0; }
+  .backdrop div.on { opacity: 1; }
+  .backdrop::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 92%, transparent); }
+  @media (prefers-reduced-motion: no-preference) { .backdrop div { transition: opacity 1.5s ease; } }
+
+  /* Everything the script draws sits under .bn (nested rules), so nothing leaks to other pages. */
+  .bn { max-width: 90%; margin: 0 auto; padding: 8px 0 64px; color: var(--text); font: 15px/1.5 var(--font-exo); min-width: 0; }
+  .bn h1 { margin: 0 0 .5rem; font-size: 2.3rem; font-weight: 700; line-height: 1.1; letter-spacing: .01em; color: var(--text); }
+  .bn > header { text-align: center; text-wrap: balance; }
+  .bn > header p { margin: 0; color: var(--text); font-size: 1.05rem; }
+  .bn :is(h2, h3) { color: var(--text); }
+  .bn {
+  h2{font-size:1.45rem;font-weight:600;margin:1.6rem 0 .5rem;letter-spacing:.01em}
+  h3{font-size:1.1rem;font-weight:600;margin:0}
+  a{color:var(--accent)}
+  code{font:.9em ui-monospace,Menlo,Consolas,monospace;background:var(--grid);padding:.05em .3em;border-radius:4px}
+  .muted{color:var(--muted)}
+  .small{font-size:.9rem;margin:.4rem 0 .2rem}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px 18px;margin:16px 0}
+  & > section > h2{margin-top:2rem}
+  .setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px;margin:.6rem 0}
+  .setup dt{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .setup dd{margin:0}
+  summary{cursor:pointer;font-weight:600}
+  select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .legend{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:.9rem;color:var(--muted);margin:.5rem 0}
+  .legend svg{vertical-align:-3px}
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:10px 10px 4px;min-width:0}
+  .chart h3{font-size:.95rem;padding:0 4px}
+  .chart svg{display:block;overflow:visible;max-width:100%;height:auto}
+  .chart text{fill:var(--muted);font-size:12.5px;font-family:inherit}
+  .chart .grid{stroke:var(--grid);stroke-width:1}
+  .chart .hit{fill:transparent;cursor:pointer}
+  .chart .ml{fill:none;stroke-width:1.6}
+  .chart .p1{stroke:var(--panel);stroke-width:1.5;opacity:.35}
+  .chart .p1.only{opacity:1}
+  .chart .p2{fill:var(--panel);stroke-width:2}
+  .chart .guide{stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3;opacity:0;pointer-events:none}
+  .chart .guide.on{opacity:.7}
+  .chart .hit:focus-visible{outline:none;fill:color-mix(in srgb,var(--accent) 25%,transparent);stroke:var(--accent);stroke-width:2.5}
+  table{border-collapse:collapse;width:100%;font-size:.92rem}
+  th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;white-space:normal}
+  th{color:var(--muted);font-weight:600;font-size:.8rem}
+  td.l,th.l{text-align:left}
+  .tablewrap{overflow-x:auto}
+  .mtable td:first-child{min-width:12rem}
+  .mtable td.l{white-space:normal}
+  .groups td{text-align:left;white-space:normal}
+  .groups td:first-child{width:8rem;color:var(--muted)}
+  #tip{position:fixed;z-index:10;pointer-events:none;background:var(--panel)!important;color:var(--text);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;font-size:.85rem;box-shadow:0 4px 14px rgba(0,0,0,.2);max-width:300px}
+  .dot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.35em;vertical-align:baseline}
+  .controls{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:12px 0}
+  .ctl{display:inline-flex;align-items:center;gap:8px;font-size:.9rem;color:var(--muted)}
+  .caveat{border:1px solid var(--bad);border-radius:20px;padding:8px 14px;background:var(--panel);margin:8px 0}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .seg button{font:inherit;font-size:.88rem;color:var(--muted);background:transparent;border:0;padding:3px 14px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:var(--bg);font-weight:600}
+  .mpick{display:inline-flex;flex-wrap:wrap;gap:4px 14px}
+  .mchip{display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:.88rem}
+  .mchip input{margin:0 4px 0 0}
+  .method h3{margin:1.2rem 0 .3rem}
+  .method > summary{font-size:1.05rem;padding:2px 0}
+  .plain{margin:18px 0;padding:8px 0 0;border-top:1px solid var(--line)}
+  .plain > summary{font-size:1.05rem;font-weight:600;color:var(--muted)}
+  .minor{margin:18px 0}
+  .minor h2{font-size:1.05rem;color:var(--muted);margin:.4rem 0 .4rem}
+  @media (max-width:700px){.box{padding:12px 14px}}
+
+  /* Panels are semi-opaque while a backdrop shows. */
+  .box,.chart,.caveat,select{background:color-mix(in srgb,var(--panel) var(--panel-a),transparent)}
+  .box{backdrop-filter:blur(2px)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  tbody tr:focus-within{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+  @media (hover:hover){
+    tbody tr:hover>*{background:color-mix(in srgb,var(--accent) 20%,transparent)}
+    summary:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px}
+    .chart .hit:hover{fill:color-mix(in srgb,var(--accent) 25%,transparent);stroke:var(--accent);stroke-width:2.5}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    tbody tr>*,summary{transition:background-color .12s ease}
+    .chart .guide{transition:opacity .1s ease}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  }
+  @media (max-width: 700px) { .bn h1 { font-size: 1.8rem; } }
+</style>
