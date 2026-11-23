@@ -889,7 +889,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   which the host sets from its clock, is inactive: no demand, efficiency 0; indoors = `is interior furniture` and a parent building). Mines and rocks get the header Output full / No workers /
   Working (plus the power words) and no `Output:` line; other machines keep Meitou's status words and `Output:` line.
 - **Window.** Selecting a complete building of the player's faction opens its window (Building slot 38 → `FUN_1406e6640`; one window per
-  building, made on first use by slot 48). Classes from RTTI vtable names, layouts **Verified** (each layout string is referenced only by
+  building, made on first use by slot 48). **Verified** (decompile): `FUN_1405504a0` and `FUN_140729c80` open it only when slot 0x228 (complete)
+  is set and the owner faction (slot 0x58) has `+0x250`, so another faction's machine or farm shows its window only through an order (Loot, #1155). Classes from RTTI vtable names, layouts **Verified** (each layout string is referenced only by
   the base constructor listed):
 
 | Building classes | Window class | Layout |
