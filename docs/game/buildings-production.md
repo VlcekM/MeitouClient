@@ -1251,7 +1251,7 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   `production amount` > 0, [resources](#resources)).
 - **Meitou** (`ProductionSystem.TownWork` / `TownMachines`, `AiSystem.WorkAtMachine`): a town building's machine is a virtual complete site `townwork:<building key>` of the town's
   faction (like a rock or a training dummy: no registry site, not drawn or built). Every standing farm and producer (`MachineData.IsProducer`: mine, well, refinery, rain collector) of a town
-  gets it when the town registers (a ruin once it stands); any other building when the first worker arrives or the player's first order names it (a turret's, [ui-input](ui-input.md#building-picking-and-selection)):
+  gets it when the town registers (a ruin once it stands); any other building when the first worker arrives, the player selects it while the player's faction owns it (its window opens, [ui-input](ui-input.md#building-picking-and-selection)) or the player's first order names it (a turret's, [ui-input](ui-input.md#building-picking-and-selection)):
   a research bench counts for the player's research alone, a crafting bench has no queue, a town's generators are the power frame's ([NPC generator state](#npc-generator-state)) and its storages are container fixtures.
   Its state is the original's: the production keys of the building's GAMESTATE_BUILDING and its items in the INVENTORY_STATE the building lists ([town machines](../formats/save.md)), read when the machine is made, so an
   original save's NPC mines keep their progress and output. A worker whose plan starts with

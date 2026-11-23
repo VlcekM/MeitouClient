@@ -375,6 +375,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             switch (command)
             {
+                case InspectBuildingCommand inspect:
+                    InspectTownWork(world, inspect.Instance);
+                    break;
                 case OperateOrder order:
                     {
                         var site = Site(world, order.Site) ?? TownMachineSite(world, order.Site);

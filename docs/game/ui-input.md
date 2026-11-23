@@ -524,7 +524,9 @@ The selected characters stay selected and keep taking orders. A building with do
 list +0x1c0), except in the editor. The focus handle `DAT_1421345d0` becomes that object and `FUN_1406e91e0` points the HUD panels at it.
 Selecting calls slot 38 (`FUN_1405504a0`): the BUILDING's `select sound` (BuildingSound) as switch `Buildings_Click` with event
 `Building_Click`; when the building is complete and the player's faction's, its window opens (`FUN_1406e6640`; window by class in
-[ui-screens](ui-screens.md#selected-building)). Clicking the selected building again reopens its inventory window if it was closed. No
+[ui-screens](ui-screens.md#selected-building)); Meitou: a player site's, and a town building's or layout object's `townwork:` machine when the
+player's faction owns it (`ProductionSystem.InspectTownWork` makes it on selection, `WorldSnapshot.InspectedOwnMachine`, `ProductionWindows.MachineSiteOf`).
+Clicking the selected building again reopens its inventory window if it was closed. No
 highlight or outline call was found for a selected building.
 
 The object stays selected until something replaces or clears it: a left click on another building or another faction's character replaces it.
