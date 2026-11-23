@@ -548,33 +548,44 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     Meitou.Data.World.TurretPost? TurretPostOf(BuildSite site) => PlacedTurrets.PostOf(_db, site);
 
     /// <summary>
-    /// Where an operator walks to: a turret's gunner spot (<see cref="Ai.AiSystem.TurretSpot"/>), else the floor point at or next to the building's
-    /// place, a rock's middle (furniture cuts a hole in the floor's navmesh; <see cref="MovementSystem.GoToFloor"/>).
+    /// Where a character at <paramref name="from"/> walks to for a machine, and the height of the floor it walks on: a turret's gunner spot
+    /// (<see cref="Ai.AiSystem.TurretSpot"/>); a rock's middle (<see cref="RockGoal"/>); else the spot on the machine's floor within its use range
+    /// nearest the walker (<see cref="SiteReach.WorkSpot"/>), which <see cref="AtSite"/> then passes: furniture cuts a hole in the floor's navmesh,
+    /// and a walk to the place itself could end on a stair beside it, short of the height test.
     /// </summary>
-    Vector2 GoalOf(World world, BuildSite site, Machine m)
+    Vector3 GoalOf(World world, BuildSite site, Machine m, Vector3 from)
     {
         if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && TurretPostOf(site) is { } post)
         {
             var spot = AiSystem.TurretSpot(world, post);
             _turretSpots[site.Id] = (spot, post.UseRange);
-            return new Vector2(spot.X, spot.Z);
+            return spot;
         }
 
-        // A rock is walked to at its bounds' middle, which its footprint holds (its origin can lie off its pile).
-        var to = _naturalBounds.TryGetValue(site.Id, out var rock) ? rock.Centre : site.Position;
-        var at = world.Walkability.FloorNear(to.X, to.Z, to.Y, MovementSystem.FloorSlack) ?? to;
-        return new Vector2(at.X, at.Z);
+        if (_naturalBounds.TryGetValue(site.Id, out var rock)) return RockGoal(world, site, rock.Centre);
+
+        float limit = SiteReach.HeightLimit(world.Fixtures.DoorsByBuilding[site.Id].Any(), SiteReach.InBuilding(site));
+        return SiteReach.WorkSpot(world.Walkability, Settings.EdgeGap, site, site.Position.Y, limit, m.Data.UseRange, from);
     }
 
     /// <summary>
-    /// Sends an operator towards <paramref name="goal"/> (<see cref="GoalOf"/>) on the site's own floor (or a turret's gunner spot floor).
+    /// A rock is walked to at its bounds' middle, which its footprint holds (its origin can lie off its pile): the floor point at or next to it
+    /// (<see cref="MovementSystem.GoToFloor"/>), on the rock's own height.
     /// </summary>
-    void WalkToSite(ref CharacterHot n, CharacterCold cold, BuildSite site, Vector2 goal)
+    static Vector3 RockGoal(World world, BuildSite site, Vector3 centre)
     {
-        n.Goal = goal;
+        var at = world.Walkability.FloorNear(centre.X, centre.Z, centre.Y, MovementSystem.FloorSlack) ?? centre;
+        return new Vector3(at.X, site.Position.Y, at.Z);
+    }
+
+    /// <summary>
+    /// Sends an operator towards <paramref name="goal"/> (<see cref="GoalOf"/>) on the goal's floor (a turret's gunner spot's own).
+    /// </summary>
+    void WalkToSite(ref CharacterHot n, CharacterCold cold, BuildSite site, Vector3 goal)
+    {
+        n.Goal = new Vector2(goal.X, goal.Z);
         n.Flags |= (ushort)MoveFlags.NeedPath;
-        float y = _turretSpots.TryGetValue(site.Id, out var turret) ? turret.Spot.Y : site.Position.Y;
-        (cold.GoalHeight, cold.GoalHeightAt) = (y, n.Goal);
+        (cold.GoalHeight, cold.GoalHeightAt) = (goal.Y, n.Goal);
     }
 
     /// <summary>
@@ -809,7 +820,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.HaulFetch = null;
         cold.Operating = false;
         cold.HaulTo = null;
-        var goal = GoalOf(world, site, m);
+        var goal = GoalOf(world, site, m, n.Position);
         if (!AtSite(world, n, site, m)) WalkToSite(ref n, cold, site, goal);
         _sweep = true;
     }
@@ -900,7 +911,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     void Approach(World world, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt)
     {
         const ushort path = (ushort)MoveFlags.AnyPath;
-        if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !_turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m);
+        if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !_turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m, n.Position);
         if (AtSite(world, n, site, m))
         {
             if ((n.Flags & path) != 0)
@@ -917,7 +928,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if ((n.Flags & path) != 0) return;
         n.TaskTime -= dt;
         if (n.TaskTime > 0) return;
-        WalkToSite(ref n, cold, site, GoalOf(world, site, m));
+        WalkToSite(ref n, cold, site, GoalOf(world, site, m, n.Position));
         n.Mode = SpeedMode.Free;
         n.TaskTime = PursuitSystem.RepathSeconds;
     }
