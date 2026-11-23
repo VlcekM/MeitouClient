@@ -387,19 +387,27 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     }
 
     /// <summary>
-    /// A character lying in a bed whose task is no longer <see cref="CharacterTask.Sleep"/> (an order replaced it) gets up.
+    /// A character lying in a bed whose task is no longer <see cref="CharacterTask.Sleep"/> (an order replaced it) gets up; one knocked out stays
+    /// in (<see cref="GetsUp"/>).
     /// </summary>
     void GetUp(World world)
     {
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
         {
-            // An animal has no row that gets it out (docs/game/ai-tasks.md "Animals in beds").
-            if (table.Next[i].Alive && table.Next[i].Task != (byte)CharacterTask.Sleep && table.Cold(i) is { InSomething: HeldState.Bed } sleeper
-                    && !Ai.Repertoire.StuckInBed(world, sleeper))
-                world.Fixtures.GetOutOfBed(world, table.IdOf(i));
+            if (GetsUp(world, table, i)) world.Fixtures.GetOutOfBed(world, table.IdOf(i));
         }
     }
+
+    /// <summary>
+    /// Whether the character in slot <paramref name="i"/> lies in a bed on another task than <see cref="CharacterTask.Sleep"/> and can get out:
+    /// not an animal (no row gets it out, docs/game/ai-tasks.md "Animals in beds") and not one knocked out (docs/game/locks.md "Beds", "Out
+    /// cold in a bed": a knock-out only sets its time, and no task or AI runs while down).
+    /// </summary>
+    static bool GetsUp(World world, CharacterTable table, int i) =>
+        table.Next[i].Alive && table.Next[i].Task != (byte)CharacterTask.Sleep
+        && table.Cold(i) is { InSomething: HeldState.Bed, Medical.Incapacitated: not true } sleeper
+        && !Ai.Repertoire.StuckInBed(world, sleeper);
 
     /// <summary>
     /// One tick of a trip; false when it is over (in bed, laid in, refused, given up, or another order).
