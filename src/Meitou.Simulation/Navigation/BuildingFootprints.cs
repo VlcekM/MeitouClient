@@ -223,7 +223,6 @@ public sealed class BuildingFootprints
     /// </summary>
     public IReadOnlyList<Vector2[]> FeatureObstacles(Func<double, double, float> terrainHeight)
     {
-        if (!System.IO.File.Exists(MapFeatureFile.PathOf(_install))) return [];
         var features = MapFeatureFile.Open(_install).All().Select(t => t.Feature).ToList();
         float agentHeight = new NavBuildSettings().AgentHeight;
         var result = new ConcurrentBag<Vector2[]>();

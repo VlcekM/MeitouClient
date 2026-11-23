@@ -43,9 +43,14 @@ public sealed class MapFeatureFile
     public static string PathOf(GameInstall install) => Ogre.GameResources.Resolve(install, "features.dat", "Landscape", RelativePath);
 
     /// <summary>
-    /// Reads the file the game reads (<see cref="PathOf"/>).
+    /// Reads the file the game reads (<see cref="PathOf"/>); no map features when there is none, since the game opens it only after Ogre's
+    /// <c>resourceExists</c> finds it (<c>FUN_14039a4d0</c>). A file an enabled mod's <c>RE_Kenshi.json</c> hides reads as missing.
     /// </summary>
-    public static MapFeatureFile Open(GameInstall install) => Read(File.ReadAllBytes(PathOf(install)));
+    public static MapFeatureFile Open(GameInstall install)
+    {
+        string path = PathOf(install);
+        return File.Exists(path) ? Read(File.ReadAllBytes(path)) : new MapFeatureFile();
+    }
 
     /// <summary>
     /// Parses a map feature file as the original reads it (<c>FUN_14039a4d0</c>, <c>FUN_14039a820</c>): the magic, the zone count, a table of

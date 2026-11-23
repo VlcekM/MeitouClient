@@ -239,7 +239,9 @@ block:  int32 count, count ×
           float32 qw, qx, qy, qz                 rotation, w first
 ```
 
-**Verified** (decompiled, `FUN_14039a4d0` and `FUN_14039a820`): the game reads the magic, the count and the table once (another magic or a count
+**Verified** (decompiled, `FUN_14039a4d0` and `FUN_14039a820`): a missing file gives no map features (the game opens it only after `resourceExists`
+finds it, [overview](overview.md#resource-lookup-and-mod-overrides)); Meitou reads one an enabled mod's `RE_Kenshi.json` hides as missing. The game
+reads the magic, the count and the table once (another magic or a count
 other than 4096: no map features at all), then each zone's block when the zone loads, by seeking to its offset (0: none). The size is never
 read, so blocks may lie anywhere in the file, in any order, and bytes after a block are ignored. Each placement read is compared with the last entry of
 the zone's feature list before its record is looked up: one at exactly the same position (`Vector3 ==`) is skipped. A record the data lacks is logged
