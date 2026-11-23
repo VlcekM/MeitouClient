@@ -88,17 +88,65 @@ public static partial class GameInstallSources
     public static IEnumerable<string> Launchers(string home, string? appData = null, Func<string, string?>? env = null)
     {
         var xdg = Xdg.From(home, env ?? (_ => null));
-        var configs = new List<string> { xdg.ConfigHome, Path.Combine(home, ".var", "app", "com.heroicgameslauncher.hgl", "config") };
-        if (!string.IsNullOrEmpty(appData)) configs.Add(appData);
-        foreach (var config in configs)
+        foreach (var config in HeroicConfigs(home, xdg, appData))
             foreach (var path in HeroicInstalls(Path.Combine(config, "heroic", "gog_store", "installed.json"))) yield return path;
-        string[] lutris = [Path.Combine(xdg.ConfigHome, "lutris", "games"), Path.Combine(home, ".var", "app", "net.lutris.Lutris", "config", "lutris",
-                "games")];
-        foreach (var games in lutris)
+        foreach (var games in LutrisGames(home, xdg))
             foreach (var path in LutrisInstalls(games)) yield return path;
         foreach (var directory in xdg.DataDirs.Prepend(xdg.DataHome).Select(d => Path.Combine(d, "applications")).Distinct())
             foreach (var path in DesktopEntries(directory)) yield return path;
         yield return Path.Combine(home, "Games", "Heroic", "Kenshi");
+        var prefixes = WinePrefixes(home, xdg, appData);
+        foreach (var prefix in prefixes.SelectMany(PrefixAndSiblings).Distinct())
+            foreach (var path in WinePrefixInstalls(prefix)) yield return path;
+        foreach (var prefix in prefixes)
+            foreach (var path in InPrefix(Path.Combine(prefix, "drive_c"))) yield return path;
+    }
+
+    /// <summary>
+    /// The Wine prefixes that hold the install at <paramref name="root"/> (#1200): the one it sits in (<c>&lt;prefix&gt;/drive_c/...</c>), and every
+    /// prefix of <see cref="WinePrefixes"/> whose registry names it (<see cref="WinePrefixInstalls"/>; Heroic keeps a GOG game outside its prefix).
+    /// None on Windows.
+    /// </summary>
+    public static IEnumerable<string> PrefixesOf(string root, string home, Func<string, string?>? env = null)
+    {
+        if (OperatingSystem.IsWindows()) yield break;
+
+        root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        int driveC = root.IndexOf("/drive_c/", StringComparison.Ordinal);
+        if (driveC > 0) yield return root[..driveC];
+
+        var xdg = Xdg.From(home, env ?? (_ => null));
+        foreach (var prefix in WinePrefixes(home, xdg, null).SelectMany(PrefixAndSiblings).Distinct())
+            if (WinePrefixInstalls(prefix).Any(path => SamePath(path, root))) yield return prefix;
+    }
+
+    /// <summary>
+    /// Whether two absolute paths name the same folder, a trailing separator aside.
+    /// </summary>
+    static bool SamePath(string a, string b) => Path.TrimEndingDirectorySeparator(a) == Path.TrimEndingDirectorySeparator(b);
+
+    /// <summary>
+    /// The folders Heroic keeps its config in: XDG_CONFIG_HOME, the Flatpak's, and <paramref name="appData"/> on Windows.
+    /// </summary>
+    static List<string> HeroicConfigs(string home, Xdg xdg, string? appData)
+    {
+        var configs = new List<string> { xdg.ConfigHome, Path.Combine(home, ".var", "app", "com.heroicgameslauncher.hgl", "config") };
+        if (!string.IsNullOrEmpty(appData)) configs.Add(appData);
+        return configs;
+    }
+
+    /// <summary>
+    /// Lutris's game file folders: XDG_CONFIG_HOME's and the Flatpak's.
+    /// </summary>
+    static string[] LutrisGames(string home, Xdg xdg) =>
+        [Path.Combine(xdg.ConfigHome, "lutris", "games"), Path.Combine(home, ".var", "app", "net.lutris.Lutris", "config", "lutris", "games")];
+
+    /// <summary>
+    /// Every Wine prefix we know of: the default <c>~/.wine</c>, the Bottles (and on macOS the CrossOver and Whisky) bottles, Heroic's games'
+    /// <c>winePrefix</c> and the Lutris Kenshi games' <c>prefix</c>.
+    /// </summary>
+    static List<string> WinePrefixes(string home, Xdg xdg, string? appData)
+    {
         var prefixes = new List<string> { Path.Combine(home, ".wine") };
         foreach (var bottles in new[] { Path.Combine(xdg.DataHome, "bottles", "bottles"), Path.Combine(home, ".var", "app", "com.usebottles.bottles",
                 "data", "bottles", "bottles") })
@@ -112,15 +160,13 @@ public static partial class GameInstallSources
                         "Bottles"),
             })
                 if (Directory.Exists(bottles)) prefixes.AddRange(Safe(() => Directory.EnumerateDirectories(bottles)));
+
         // The registry of every Wine prefix we know of: what a GOG installer wrote there says where it installed Kenshi.
-        foreach (var heroic in configs)
-            foreach (var prefix in HeroicPrefixes(Path.Combine(heroic, "heroic", "GamesConfig"))) prefixes.Add(prefix);
-        foreach (var games in lutris)
-            foreach (var prefix in LutrisPrefixes(games)) prefixes.Add(prefix);
-        foreach (var prefix in prefixes.SelectMany(PrefixAndSiblings).Distinct())
-            foreach (var path in WinePrefixInstalls(prefix)) yield return path;
-        foreach (var prefix in prefixes)
-            foreach (var path in InPrefix(Path.Combine(prefix, "drive_c"))) yield return path;
+        foreach (var heroic in HeroicConfigs(home, xdg, appData))
+            prefixes.AddRange(HeroicPrefixes(Path.Combine(heroic, "heroic", "GamesConfig")));
+        foreach (var games in LutrisGames(home, xdg))
+            prefixes.AddRange(LutrisPrefixes(games));
+        return prefixes;
     }
 
     /// <summary>
