@@ -424,27 +424,28 @@ sealed class BuildMode(PlayerInterface player)
 
     /// <summary>
     /// The ghost of the chosen building under the cursor: on a building's floor when one is under the ray, else on a raised walkway (a wall top),
-    /// else on the terrain, tilted to the ground, settled and judged; a wall ghost snaps to its link points first, a <c>snaps to</c> ghost to its
-    /// target.
+    /// else on the terrain, its bounds centre over the cursor (<see cref="GhostCentre"/>), tilted to the ground, settled and judged; a wall ghost
+    /// snaps to its link points first, a <c>snaps to</c> ghost to its target.
     /// </summary>
     void PlaceGhost(BuildServices host, BuildingBuildData building, (Vector3 Origin, Vector3 Direction) ray, Vector3 terrainHit)
     {
         var (hit, on, surface) = GhostStand(host, building, ray, terrainHit);
+        var origin = hit - Vector3.Transform(GhostCentre(host, building), Quaternion.CreateFromAxisAngle(Vector3.UnitY, _ghostYaw));
         var footprint = host.Placement.Footprint(building.Id);
         var box = footprint?.Bounds ?? (new Vector2(-4), new Vector2(4));
-        var rotation = GhostTilt(host, building, on is not null || surface is not null, new Vector2(hit.X, hit.Z), box);
+        var rotation = GhostTilt(host, building, on is not null || surface is not null, new Vector2(origin.X, origin.Z), box);
 
         // A ceiling light hangs CeilingHang below the ceiling over the floor point (its mesh hangs below its origin, so on the floor it was buried
         // under it).
         float y = building.CeilingPlacement && on?.Ceiling is { } ceiling ? ceiling - CeilingHang : hit.Y;
-        var position = new Vector3(hit.X, y + _ghostLift, hit.Z);
+        var position = new Vector3(origin.X, y + _ghostLift, origin.Z);
 
         // On a raised walkway the walls under the ghost carry it (engine choice).
         var snapshot = player.Session.CurrentSnapshot;
         var query = new PlacementQuery(building, position, rotation, _ghostYaw, on?.Floor ?? 0, host.Parts(building.Id),
             BuildQueue, snapshot.Characters, snapshot.Buildings, host.Towns(), host.PlayerFactionId(), host.Placement)
         { On = on, Surface = surface, Lift = _ghostLift, PassThrough = surface is null ? null : IsWall };
-        query = SnapToWall(query) ?? SnapToTarget(host, query, footprint, ray) ?? Settled(query);
+        query = SnapToWall(query) ?? SnapToTarget(host, query, hit, ray) ?? Settled(query);
         _ghostSnappedOn = query.SnappedOn;
 
         var failure = player.LevelEditorPanel.LevelBuild ? PlacementFailure.None
@@ -512,17 +513,15 @@ sealed class BuildMode(PlayerInterface player)
     /// node-snapping ghost without a <c>gun turret</c> marks <see cref="PlacementQuery.NeedsSnap"/> so unsnapped placement fails with
     /// <see cref="PlacementFailure.NeedsSnapNode"/> (<c>0x1404d0ff0</c>).
     /// </summary>
-    PlacementQuery? SnapToTarget(BuildServices host, PlacementQuery q, Simulation.Navigation.BuildingFootprint? footprint,
-        (Vector3 Origin, Vector3 Direction) ray)
+    PlacementQuery? SnapToTarget(BuildServices host, PlacementQuery q, Vector3 cursor, (Vector3 Origin, Vector3 Direction) ray)
     {
         var building = q.Building;
         var nodeType = SnapNodeType(host, building);
         if (nodeType is null && building.SnapsTo.Count == 0) return null;
 
         bool needsSnap = nodeType is not null && !building.HasGunTurret;
-        var (min, max) = footprint?.Bounds ?? (Vector2.Zero, Vector2.Zero);
-        var candidates = nodeType is null ? StandaloneSnapTargets(host, building, q.Position) : _nodeTargets;
-        if (GhostSnap.Find(building, (min + max) / 2, q.Position, candidates, ray) is not { } target)
+        var candidates = nodeType is null ? StandaloneSnapTargets(host, building, cursor) : _nodeTargets;
+        if (GhostSnap.Find(building, cursor, candidates, ray) is not { } target)
             return needsSnap ? q with { NeedsSnap = true } : null;
 
         if (target.Host is { } hostBuilding) return SnapToNode(q, target, hostBuilding, needsSnap);
@@ -588,9 +587,32 @@ sealed class BuildMode(PlayerInterface player)
         var known = sites.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
         var level = host.Placement.PlacedAround(new Vector2(near.X, near.Z), GhostSnap.Reach + LevelWallReach, building.SnapsTo.Contains)
             .Where(b => !known.Contains(b.Key));
-        return BuildQueue.Select(g => new SnapTarget(g.Building.Id, g.Position, g.Rotation))
-            .Concat(sites.Select(s => new SnapTarget(s.Record, s.Position, s.Rotation)))
-            .Concat(level.Select(b => new SnapTarget(b.Record, b.Position, b.Rotation)));
+        return BuildQueue.Select(g => BuildingTarget(host, g.Building.Id, g.Position, g.Rotation))
+            .Concat(sites.Select(s => BuildingTarget(host, s.Record, s.Position, s.Rotation)))
+            .Concat(level.Select(b => BuildingTarget(host, b.Record, b.Position, b.Rotation)));
+    }
+
+    /// <summary>
+    /// A standalone snap target with its world bounding box: the merge of its parts' mesh bounds times its <c>scale</c>, turned and moved to its
+    /// place, axis aligned.
+    /// </summary>
+    SnapTarget BuildingTarget(BuildServices host, string record, Vector3 position, Quaternion rotation)
+    {
+        if (MeshBounds(host, record) is not { } local) return new SnapTarget(record, position, rotation);
+
+        float scale = BuildData(record)?.Scale ?? 1;
+        var min = new Vector3(float.PositiveInfinity);
+        var max = new Vector3(float.NegativeInfinity);
+        for (int corner = 0; corner < 8; corner++)
+        {
+            var at = new Vector3((corner & 1) == 0 ? local.Min.X : local.Max.X, (corner & 2) == 0 ? local.Min.Y : local.Max.Y,
+                (corner & 4) == 0 ? local.Min.Z : local.Max.Z);
+            var world = Vector3.Transform(at * scale, rotation) + position;
+            min = Vector3.Min(min, world);
+            max = Vector3.Max(max, world);
+        }
+
+        return new SnapTarget(record, position, rotation, Box: (min, max));
     }
 
     /// <summary>
@@ -981,14 +1003,36 @@ sealed class BuildMode(PlayerInterface player)
     Vector3 GhostBoundsSize(BuildingBuildData building)
     {
         if (Services is not { } host) return default;
+        return MeshBounds(host, building.Id) is { } box ? box.Max - box.Min : default;
+    }
+
+    /// <summary>
+    /// The centre of a ghost's bounds in its own space, level (Y 0): the merge of its parts' mesh bounds times its <c>scale</c> (<b>Verified</b>,
+    /// <c>0x1404d3cd0</c>: <c>getLocalAabb</c> of the ghost's entities, scaled, its centre kept at ghost <c>+0xc4</c> with Y cleared). The ghost
+    /// stands with this point over the cursor (<c>0x1404d54d4</c>: position = cursor point - yaw x centre). Zero for a wall (its own ghost class)
+    /// or without readable mesh bounds.
+    /// </summary>
+    Vector3 GhostCentre(BuildServices host, BuildingBuildData building)
+    {
+        if (building.LinksTogether || MeshBounds(host, building.Id) is not { } box) return Vector3.Zero;
+
+        var centre = (box.Min + box.Max) / 2 * building.Scale;
+        return centre with { Y = 0 };
+    }
+
+    /// <summary>
+    /// The merge of a building's parts' mesh bounds in their own space (unscaled); null without readable mesh bounds.
+    /// </summary>
+    static (Vector3 Min, Vector3 Max)? MeshBounds(BuildServices host, string record)
+    {
         Vector3? min = null, max = null;
-        foreach (var part in host.Parts(building.Id))
+        foreach (var part in host.Parts(record))
         {
             if (host.Placement.PartBounds(part.MeshPath) is not { } box) continue;
             min = min is { } lo ? Vector3.Min(lo, box.Min) : box.Min;
             max = max is { } hi ? Vector3.Max(hi, box.Max) : box.Max;
         }
-        return min is { } a && max is { } b ? b - a : default;
+        return min is { } a && max is { } b ? (a, b) : null;
     }
 
     /// <summary>
