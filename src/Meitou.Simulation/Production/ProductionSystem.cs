@@ -417,11 +417,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 case PutInMachine put: Put(world, put); break;
                 case TakeFromMachine take: Take(world, take); break;
                 case ArrangeMachine arrange when world.Machines.Find(arrange.Site) is { Storage: { } grid, Closed: false }:
-                    if (InventoryCommands.Arrange(grid)) world.Machines.Touch();
+                    if (InventoryCommands.Arrange(world, grid, ItemOwner.AtSite(arrange.Site), InventoryArrangeReason.Button)) world.Machines.Touch();
                     break;
                 case ArrangeMachine arrange when world.Player.OpenContainer == arrange.Site
                     && world.Fixtures.Find(arrange.Site) is { Contents: { } contents } fixture:
-                    if (InventoryCommands.Arrange(contents)) world.Fixtures.Touch(fixture);
+                    if (InventoryCommands.Arrange(world, contents, ItemOwner.AtSite(arrange.Site), InventoryArrangeReason.Button))
+                    {
+                        world.Fixtures.Touch(fixture);
+                    }
                     break;
                 case FocusCommand look: _focus = look.Position; break;
                 case QueueResearch queue: Queue(world, queue.Research); break;

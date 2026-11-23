@@ -2345,7 +2345,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
         // No player range clamp: only the in-fight chooser sets the clamp flag of FUN_14059e300 (param_7), every goal finder and the look pass 0
         // (Verified), so the attack-on-sight look reaches beyond 400.
-        return TargetScore.Score(candidate, false, s.Hold, s.Prone, s.Animal, s.Cold?.Manoeuvre ?? ManoeuvreMode.RoamFar);
+        float? score = TargetScore.Score(candidate, false, s.Hold, s.Prone, s.Animal, s.Cold?.Manoeuvre ?? ManoeuvreMode.RoamFar);
+        return s.World.TargetScoreFilters.Pass(s.World, s.Self, slot, TargetChoiceKind.Look, candidate, score);
     }
 
     /// <summary>

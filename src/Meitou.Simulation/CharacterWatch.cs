@@ -1,11 +1,12 @@
 namespace Meitou.Simulation;
 
 /// <summary>
-/// The world's watch on characters entering and leaving its table (<see cref="CharacterTable.Watch"/>), made only while a code mod's death observer
-/// or experience filter needs it. A character removed with its death not yet reported is reported first (<see cref="Bodies.DeathObservers"/>), so
+/// The world's watch on characters entering and leaving its table (<see cref="CharacterTable.Watch"/>), made only while a code mod's death observer,
+/// experience filter or health change observer needs it. A character leaving has its health changes told first (<see
+/// cref="Bodies.HealthObservers"/>). A character removed with its death not yet reported is reported first (<see cref="Bodies.DeathObservers"/>), so
 /// a death in the commit or the slow world followed by the character's removal in the same tick (a squad unloaded or despawned) is never lost. A
-/// character's stats are bound to the world and its id as it enters and cleared as it leaves (<see cref="Bodies.ExperienceFilters"/>), so its
-/// gains are filtered from its first step, and stats that left the world keep no reference to it.
+/// character's stats are bound to the world and its id as it enters and cleared as it leaves (<see cref="Bodies.ExperienceFilters"/>), so its gains
+/// are filtered from its first step, and stats that left the world keep no reference to it.
 /// </summary>
 sealed class CharacterWatch(World world)
 {
@@ -28,6 +29,7 @@ sealed class CharacterWatch(World world)
     internal void Removing(int slot, CharacterCold cold)
     {
         Bodies.DeathObservers.Report(world, slot, CharacterId.None, Bodies.DeathSite.Other);
+        Bodies.HealthObservers.Leaving(world, slot, cold);
         cold.Stats?.UnbindExperience();
     }
 }

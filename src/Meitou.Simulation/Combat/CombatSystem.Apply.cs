@@ -239,10 +239,12 @@ public sealed partial class CombatSystem
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !medical.Dead, wasIncapacitated = observe && medical.Incapacitated;
         bool intended = observe && d == aSlot.TargetSlot && prev[d].Generation == aSlot.TargetGeneration;
+        Bodies.HealthObservers.Before(world, d);
         var (part, damage, absorbed) = world.Player.OnePunch && ac.IsPlayer
             ? HitResolver.LandLethal(medical, ctx, DebugCheats.OnePunchDamage, tech.LowStrike, direction == 6, events)
             : HitResolver.LandDetailed(medical, ctx, packet, world.ArmourFilters.Pieces(world, CombatHitSource.Melee, table.IdOf(d), target), cover,
                 toughness, tech.LowStrike, direction == 6, _combat, events);
+        Bodies.HealthObservers.After(world, d, Bodies.HealthChangeKind.Hit);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
         aSlot.Landed++;
         dSlot.Taken++;
@@ -258,7 +260,7 @@ public sealed partial class CombatSystem
         var (knockout, death) = HitEvents(world, d, dc, medical, dc.Race!, events);
         if (ShackledKnockOut(world, a, seq, blow, d, dc, medical, ctx)) knockout = true;
 
-        BlowReaction(world, ref dSlot, d, dc, medical, damage, toughness, now, CombatRolls.BlowCounter(a, seq, blow, 0));
+        BlowReaction(world, ref dSlot, d, dc, medical, damage, toughness, now, table.IdOf(a), seq, blow);
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
 
         // An unarmed one (stat-set kind 5) hit trains dodge in place of melee defence (FUN_1408c6980 event 4 -> FUN_1408c6360), against the
@@ -356,10 +358,11 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The defender's reaction to a hit: down (its swing and reaction cut off), else a stagger, heavy past the stumble threshold.
+    /// The defender's reaction to a hit: down (its swing and reaction cut off), else a stagger, heavy past the stumble threshold, as the reaction
+    /// filters leave it (<see cref="ReactionOf"/>).
     /// </summary>
     void BlowReaction(World world, ref CombatSlot dSlot, int d, CharacterCold dc, MedicalState medical, in HitDamage damage, float toughness, int now,
-        ulong counter)
+        CharacterId attacker, int seq, int blow)
     {
         if (medical.Incapacitated)
         {
@@ -368,13 +371,24 @@ public sealed partial class CombatSystem
             dSlot.CancelTick = now;
             dSlot.NextBlow = 0;
             dSlot.ReactTech = -1;
+            return;
         }
-        else
-        {
-            bool heavy = damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat);
-            Stagger(world, ref dSlot, d, dc, heavy, now, counter);
-        }
+
+        float stagger = damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun;
+        float threshold = DamageFormulas.StumbleThreshold(toughness, _combat);
+        var kind = stagger > threshold ? BlowReactionKind.Heavy : BlowReactionKind.Light;
+        var victim = world.Characters.IdOf(d);
+        var ask = new BlowReactionAsk(world.Tick, CombatHitSource.Melee, attacker, victim, seq, blow, damage, stagger, threshold, kind);
+        kind = ReactionOf(world, ask);
+        if (kind != BlowReactionKind.None)
+            Stagger(world, ref dSlot, d, dc, kind == BlowReactionKind.Heavy, now, CombatRolls.BlowCounter(attacker.Slot, seq, blow, 0));
     }
+
+    /// <summary>
+    /// A hit's reaction after the reaction filters (<see cref="IBlowReactionFilter"/>); the game's without one.
+    /// </summary>
+    static BlowReactionKind ReactionOf(World world, in BlowReactionAsk ask) =>
+        world.BlowReactionFilters.Active ? world.BlowReactionFilters.Pass(world, ask) : ask.Kind;
 
     /// <summary>
     /// What a hit means beyond the fighters: the police-hit rule first (the game's hit outcome runs before the damage), then the victim's alarm and
@@ -421,7 +435,10 @@ public sealed partial class CombatSystem
         var (cut, blunt) = material switch { 1 => (2f, 2f), 5 => (5f, 1f), 6 => (1f, 1f), _ => (0f, 1f) };
         var stats = ac.Stats!;
         float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats.ScaledToughness) * 0.01f) * _options.GlobalDamageMultiplier * f.FistInjury;
-        if (ac.Medical!.PunchDamage(limb, cut * k, blunt * k, _constants)) _xp.ToughnessFromDamage(stats, ac.Race, material);
+        Bodies.HealthObservers.Before(world, a);
+        bool hurt = ac.Medical!.PunchDamage(limb, cut * k, blunt * k, _constants);
+        Bodies.HealthObservers.After(world, a, Bodies.HealthChangeKind.Hit);
+        if (hurt) _xp.ToughnessFromDamage(stats, ac.Race, material);
     }
 
     /// <summary>

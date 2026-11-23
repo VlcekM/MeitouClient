@@ -164,6 +164,11 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     public bool HasWindows => _open.Count > 0;
 
     /// <summary>
+    /// The open screens' ids, the front one last.
+    /// </summary>
+    public IReadOnlyList<string> OpenIds => _open;
+
+    /// <summary>
     /// A modal screen is open.
     /// </summary>
     public bool HasModal => _open.Any(id => _screens[id].Modal);
@@ -313,6 +318,16 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     /// Selects tab <paramref name="index"/> (at least 0) of tab control <paramref name="widget"/>.
     /// </summary>
     public void SetTab(string id, string widget, int index) => _screens[id].Tabs[widget] = Math.Max(0, index);
+
+    /// <summary>
+    /// Where open screen <paramref name="id"/> was last placed, in pixels; null while it is closed or before it was first placed.
+    /// </summary>
+    public UiRect? PlacedBounds(string id)
+    {
+        if (!IsOpen(id) || !_screens.TryGetValue(id, out var s) || s.PlacedSize == Vector2.Zero) return null;
+
+        return new UiRect(s.Placed.X, s.Placed.Y, s.PlacedSize.X, s.PlacedSize.Y);
+    }
 
     /// <summary>
     /// Where a screen has been moved from its layout position (a dragged window keeps its offset; the host may place a window beside another).
@@ -512,6 +527,7 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
             return true;
         }
 
+        if (PressOverlayEdit(c, p)) return true;   // a code mod's text box placed in the screen (UiHost screen controls)
         if (c.Type == "EditBox" && c.Properties.GetValueOrDefault("Static") != "true")
         {
             PressEdit(id, c, p);

@@ -125,7 +125,7 @@ sealed class NewGameLaunch(GameHost host)
                     throw new GameHost.SceneLoadFailed($"New game failed: {e.Message}");
                 }
 
-                host.Session.World.TellReady(fromSave: false);   // after the swap, as a load's (GameSaves.SwapInSave)
+                host.Session.World.TellReady(new Simulation.WorldStart(Simulation.WorldStartKind.NewGame));   // after the swap, as a load's (GameSaves.SwapInSave)
 
                 host.PopData = nextData;
                 host.Saves.Difficulty = nextDifficulty;

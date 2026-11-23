@@ -531,6 +531,12 @@ sealed class Debris(GameHost host)
     }
 
     /// <summary>
+    /// Where the bolt <paramref name="id"/> in flight was drawn this frame (<see cref="AddBolts"/>); null for one not drawn in flight (a mod's
+    /// effect on EffectAnchor.Projectile, ModEffectPlayer).
+    /// </summary>
+    internal Vector3? DrawnBolt(int id) => _boltHeads.TryGetValue(id, out var head) ? head.At : null;
+
+    /// <summary>
     /// The Meitou <c>tracers</c> switch (docs/game/combat.md "Bolt visuals"): a semi-transparent streak behind each drawn bolt in flight, <see
     /// cref="TracerSeconds"/> of its flight long but never reaching back past the muzzle, so it grows out of the crossbow. When the bolt sticks or
     /// goes, the tail flies on into where it stopped and the streak shrinks away; timed by the shown game time, so a paused game keeps its tracers.

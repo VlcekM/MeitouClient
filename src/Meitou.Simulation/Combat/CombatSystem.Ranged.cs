@@ -519,7 +519,7 @@ public sealed partial class CombatSystem : IProjectileSource
         cold.RangedCombatMode = true;
         if (s.Loaded <= 0)
         {
-            Reload(i, ref s, cold, effects, dt);
+            Reload(world, i, ref s, cold, effects, dt);
             return;
         }
 
@@ -556,7 +556,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// counts it down with crossbows and dexterity XP and at its end holds <c>num shots</c>, the aim steadied again; a reload cut off resumes where
     /// it stopped.
     /// </summary>
-    void Reload(int i, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, float dt)
+    void Reload(World world, int i, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, float dt)
     {
         var fighter = cold.Fighter!;
         var x = fighter.Crossbow!;
@@ -571,7 +571,8 @@ public sealed partial class CombatSystem : IProjectileSource
 
             float skill = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Crossbows),
                 Eff(cold, StatsEnumerated.Dexterity), fighter.DexterityMult);
-            s.ReloadTime = RangedFormulas.ReloadTime(skill, x.Stats.ReloadMin, x.Stats.ReloadMax);
+            float rate = Filtered(world, i, CombatSpeedKind.Reload, 1);
+            s.ReloadTime = RangedFormulas.ReloadTime(skill, x.Stats.ReloadMin, x.Stats.ReloadMax) / rate;
             s.ReloadLeft = s.ReloadTime;
         }
 
@@ -679,6 +680,7 @@ public sealed partial class CombatSystem : IProjectileSource
         }
 
         var (range, speed) = Flight(x, s.LoadedKind);
+        speed = Filtered(world, i, CombatSpeedKind.Projectile, speed);
         var aim = AimPoint(barrel, world.Characters.Previous[t], world.Characters.Cold(t), speed);
         switch (LineOfFire(world, i, t, barrel, aim, cold.Faction, range))
         {
@@ -733,6 +735,7 @@ public sealed partial class CombatSystem : IProjectileSource
         // Meitou: the loaded ammunition (this tick's slot, the shot's own); null for a base-game crossbow.
         var ammo = _write[a].LoadedKind;
         var (_, leadSpeed) = Flight(x, ammo);
+        leadSpeed = Filtered(world, a, CombatSpeedKind.Projectile, leadSpeed);
         var barrel = Barrel(prev[a]);
         var aim = AimPoint(barrel, prev[t], table.Cold(t), leadSpeed);
         var to = aim - barrel;
@@ -755,6 +758,7 @@ public sealed partial class CombatSystem : IProjectileSource
             speed *= ammo.SpeedMult;
         }
 
+        speed = Filtered(world, a, CombatSpeedKind.Projectile, speed);
         _projectiles.Add(new Projectile
         {
             Id = _projectiles.NextId(),
@@ -839,9 +843,11 @@ public sealed partial class CombatSystem : IProjectileSource
         var cover = new BoltCover(world.Seed, Rng.Key(table.IdOf(v)), p.Id);
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
+        Bodies.HealthObservers.Before(world, v);
         var (part, damage, absorbed) = world.Player.OnePunch && p.ShooterIsPlayer
             ? HitResolver.LandLethal(dc.Medical, ctx, DebugCheats.OnePunchDamage, false, true, events)
             : HitResolver.LandDetailed(dc.Medical, ctx, packet, armour, cover, toughness, false, true, _combat, events);
+        Bodies.HealthObservers.After(world, v, Bodies.HealthChangeKind.Hit);
         FloatHit(world, v, dc, p.ShooterIsPlayer, part, damage, absorbed);
         Sound(world, SoundKind.BoltHit, v, p.Shooter, prev[v].Position, armoured: absorbed.Cut + absorbed.Blunt + absorbed.Pierce > 0, robot: false);
         Splash(world, v, dc, new Vector2(p.Direction.X, p.Direction.Z), damage.Cut + damage.Blunt + damage.Pierce);
@@ -902,10 +908,15 @@ public sealed partial class CombatSystem : IProjectileSource
             d.ReactTech = -1;
             Sound(world, SoundKind.Down, v, p.Shooter, world.Characters.Previous[v].Position, fatal: death);
         }
-        else if (damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat))
+        else
         {
-            // Only a heavy bolt staggers (engine choice: the original's reaction to a bolt was not traced).
-            Stagger(world, ref d, v, dc, true, now, (ulong)(uint)p.Id ^ 0x424F4C54UL, bolt: true);
+            // Only a heavy bolt staggers (engine choice: the original's reaction to a bolt was not traced), unless a reaction filter says otherwise.
+            float stagger = damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun;
+            float threshold = DamageFormulas.StumbleThreshold(toughness, _combat);
+            var kind = ReactionOf(world, new BlowReactionAsk(world.Tick, CombatHitSource.Projectile, new CharacterId(p.Shooter, p.ShooterGeneration),
+                world.Characters.IdOf(v), p.Id, -1, damage, stagger, threshold, stagger > threshold ? BlowReactionKind.Heavy : BlowReactionKind.None));
+            if (kind != BlowReactionKind.None)
+                Stagger(world, ref d, v, dc, kind == BlowReactionKind.Heavy, now, (ulong)(uint)p.Id ^ 0x424F4C54UL, bolt: true);
         }
     }
 

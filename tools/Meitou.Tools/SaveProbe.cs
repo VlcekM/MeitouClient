@@ -1505,7 +1505,7 @@ static class SaveProbe
             boxes.Add(new Meitou.Simulation.Trading.StockBox(f, Meitou.Data.Gameplay.Construction.MachineData.From(probe.Db, r)));
         }
 
-        shop.View.Build(shop, boxes);
+        shop.View.Build(probe.World, shop, boxes);
         Console.WriteLine($"  window {shop.Stock.Width}x{shop.Stock.Height}:");
         foreach (var it in shop.Stock.Items.OrderBy(i => i.Y).ThenBy(i => i.X))
             Console.WriteLine($"    row {it.Y} col {it.X} {it.Name} x{it.Quantity} ({it.Width}x{it.Height})");
@@ -1548,7 +1548,7 @@ static class SaveProbe
             .Where(f => f?.Contents is not null)
             .Select(f => new Meitou.Simulation.Trading.StockBox(f!, null))
             .ToList();
-        shop.View.Build(shop, boxes);
+        shop.View.Build(world, shop, boxes);
 
         var grid = shop.Stock;
         Console.WriteLine($"squad {q.Id} '{q.Name}' window starts {shop.ViewSize.Columns}x{shop.ViewSize.Rows}, built {grid.Width}x{grid.Height}, "

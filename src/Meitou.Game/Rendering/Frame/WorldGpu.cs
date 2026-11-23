@@ -138,6 +138,12 @@ internal sealed class WorldGpu : IDisposable
     public IReadOnlyList<(long Key, Vector4 Colour)> HoverKeys = [];
 
     /// <summary>
+    /// The characters the code mods draw through walls (docs/modding.md "Glow"), by draw-list key, each with its tint (alpha: its share; empty:
+    /// none), set by the host each frame.
+    /// </summary>
+    public List<(long Key, Vector4 Colour)> ThroughKeys = [];
+
+    /// <summary>
     /// The buildings <see cref="HoverOutline"/> outlines too (the selected and the hovered one), by placement key, above its floor height, in its
     /// colour (empty: none;
     /// nothing for one the interior view shows).

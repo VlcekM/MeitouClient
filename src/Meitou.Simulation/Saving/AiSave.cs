@@ -104,6 +104,18 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
     public bool Phase { get; init; }
 
     /// <summary>
+    /// The PLATOON string of a code mod's packages by slot (<see cref="Blackboard.Replacements"/>; engine key, written only when set, which the
+    /// original ignores): <c>slot:package id</c> entries joined by <c>|</c>, the board's order. <see cref="ReplacementKey"/> then names the first,
+    /// so the original runs that one alone.
+    /// </summary>
+    public const string PackagesKey = "meitou packages";
+
+    /// <summary>
+    /// A code mod's packages by slot (<see cref="Blackboard.Replacements"/>); null: none.
+    /// </summary>
+    public IReadOnlyList<SquadPackage>? Packages { get; init; }
+
+    /// <summary>
     /// Whether a contract of package signal <paramref name="signal"/> is loaded as a campaign's phase package even without
     /// <see cref="PhaseKey"/>: the classes only a campaign runs as an override in the base data (the retreats 1 and 25, the war classes 19, 20 and 32,
     /// the defence 31; no dialogue <c>AI contract</c> names one, by record dump), so a save the original wrote while such a retreat outlived its
@@ -129,6 +141,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
             TargetIsTown = b.Contract?.Signal is AiSystem.DefendBaseSignal or AiSystem.CampaignDefendSignal,
             AnyRange = b.MissionAnyRange,
             Phase = b.PhaseContract,
+            Packages = b.Replacements is { } slots ? [.. slots.Select(p => new SquadPackage(p.Slot, p.Package.Id))] : null,
         };
     }
 
@@ -148,6 +161,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         else platoon.Bools.Remove(AnyRangeKey);
         if (ai is { Contract: not null, Phase: true }) platoon.Bools[PhaseKey] = true;
         else platoon.Bools.Remove(PhaseKey);
+        WritePackages(platoon, ai?.Packages);
 
         WriteMissionTarget(platoon, ai, townHand, held);
         if (ai?.Contract is null) return;
@@ -155,6 +169,41 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         // The employer only once known; the target town while the contract runs (the null handle for a bodyguard's).
         if (!ai.EmployerHand.IsNull) ai.EmployerHand.Write(platoon, EmployerKey);
         WriteHand(platoon, TargetTownKey, TownHand(ai.TargetTown, ai.TargetTownHand, townHand));
+    }
+
+    /// <summary>
+    /// Writes <see cref="PackagesKey"/> while a mod's packages are set, else removes it.
+    /// </summary>
+    static void WritePackages(FcsRecord platoon, IReadOnlyList<SquadPackage>? packages)
+    {
+        if (packages is not { Count: > 0 })
+        {
+            platoon.Strings.Remove(PackagesKey);
+            return;
+        }
+
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        platoon.Strings[PackagesKey] = string.Join('|', packages.Select(p => $"{p.Slot.ToString(invariant)}:{p.PackageId}"));
+    }
+
+    /// <summary>
+    /// The packages <see cref="PackagesKey"/> holds; null without the key or with an entry that does not read (the replacement alone is then
+    /// loaded).
+    /// </summary>
+    static List<SquadPackage>? ReadPackages(FcsRecord platoon)
+    {
+        if (platoon.Strings.GetValueOrDefault(PackagesKey) is not { Length: > 0 } text) return null;
+
+        var packages = new List<SquadPackage>();
+        foreach (var entry in text.Split('|'))
+        {
+            int colon = entry.IndexOf(':');
+            if (colon <= 0 || !int.TryParse(entry.AsSpan(0, colon), System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out int slot)) return null;
+            packages.Add(new SquadPackage(slot, entry[(colon + 1)..]));
+        }
+
+        return packages;
     }
 
     /// <summary>
@@ -219,6 +268,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
             TargetTownHand = HandOf(TargetTownKey),
             AnyRange = anyRange,
             Phase = phase,
+            Packages = replacement is null ? null : ReadPackages(platoon),
         };
     }
 
@@ -230,7 +280,8 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
     public void Apply(Blackboard board, AiDatabase ai, IPackageRules rules, Func<Hand, CharacterId?>? characterOf = null,
         Func<Hand, CampaignTown>? townOf = null)
     {
-        if (Replacement is not null && ai.Package(Replacement) is { } replacement) board.Replace(replacement, rules);
+        if (PackagesOf(ai) is { } packages) board.ReplaceAll(packages, rules);
+        else if (Replacement is not null && ai.Package(Replacement) is { } replacement) board.Replace(replacement, rules);
         if (Contract is null || ai.Package(Contract) is not { } contract) return;
 
         var target = Target.IsNone ? characterOf?.Invoke(TargetHand) ?? CharacterId.None : Target;
@@ -238,5 +289,22 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         var town = MissionTown.IsNone ? townOf?.Invoke(MissionTownHand) ?? CampaignTown.None : MissionTown;
         var targetTown = TargetTown.IsNone ? townOf?.Invoke(TargetTownHand) ?? CampaignTown.None : TargetTown;
         board.ResumeContract(contract, ContractEnd, rules, target, AnyRange, employer, town, targetTown, Phase || CampaignOnly(contract.Signal));
+    }
+
+    /// <summary>
+    /// The saved mod packages as the data has them; null without any, or when one is unknown now (the replacement alone is then loaded).
+    /// </summary>
+    List<SlottedPackage>? PackagesOf(AiDatabase ai)
+    {
+        if (Packages is not { Count: > 0 } saved) return null;
+
+        var packages = new List<SlottedPackage>(saved.Count);
+        foreach (var (slot, id) in saved)
+        {
+            if (ai.Package(id) is not { } package) return null;
+            packages.Add(new SlottedPackage(slot, package));
+        }
+
+        return packages;
     }
 }

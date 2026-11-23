@@ -48,6 +48,18 @@ internal sealed class RowDesires(AiSystem ai)
     /// </summary>
     public float Of(World world, IPlanWorld? plan, in RowAsk ask)
     {
+        float desire = GameOf(world, plan, ask);
+        var filters = world.Decisions.DesireFilters;
+        if (!filters.Active) return desire;
+
+        return filters.Pass(world, world.Characters.IdOf(ask.Slot), ask.Row, GoalDesireKind.PlanStep, desire);
+    }
+
+    /// <summary>
+    /// <see cref="Of"/> as the game weighs it, before the code mods' desire filters.
+    /// </summary>
+    float GameOf(World world, IPlanWorld? plan, in RowAsk ask)
+    {
         if (TaskDesires.Of(ask.Row) is not { } desire) return 0;
 
         return desire.Kind switch
@@ -164,7 +176,7 @@ internal sealed class RowDesires(AiSystem ai)
             : PlanTarget.OfCharacter(order.Target, at);
         var cold = world.Characters.Cold(slot)!;
         var squad = world.Squads.Find(cold.SquadId);
-        return Of(world, null, new RowAsk(slot, cold, cold.Ai, squad, squad?.Ai, order.Row, target));
+        return GameOf(world, null, new RowAsk(slot, cold, cold.Ai, squad, squad?.Ai, order.Row, target));   // the order step filters it
     }
 
     /// <summary>

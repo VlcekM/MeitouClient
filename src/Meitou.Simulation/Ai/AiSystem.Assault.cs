@@ -83,9 +83,9 @@ public sealed partial class AiSystem
             };
 
             // The first of equal scores keeps it.
-            if (TargetScore.Score(candidate, false, false, medical.Prone, me.Fighter?.IsAnimal == true, me.Manoeuvre) is { } score
-                && score > bestScore)
-                (best, bestScore) = (m, score);
+            float? score = TargetScore.Score(candidate, false, false, medical.Prone, me.Fighter?.IsAnimal == true, me.Manoeuvre);
+            if (world.TargetScoreFilters.Pass(world, slot, m.Slot, TargetChoiceKind.Assault, candidate, score) is { } kept && kept > bestScore)
+                (best, bestScore) = (m, kept);
         }
 
         return best;

@@ -13,3 +13,42 @@ public interface IWorldReady : ITickSystem
     /// </summary>
     void Ready(World world, bool fromSave);
 }
+
+/// <summary>
+/// How a world came to be (<see cref="World.Start"/>).
+/// </summary>
+public enum WorldStartKind
+{
+    /// <summary>
+    /// Not told: a world the game host did not start (a test, a tool), or before <see cref="World.TellReady(WorldStart)"/>.
+    /// </summary>
+    Unknown,
+
+    /// <summary>
+    /// A new game.
+    /// </summary>
+    NewGame,
+
+    /// <summary>
+    /// A save loaded (the menu's Load, the quickload, Continue, <c>--load</c>).
+    /// </summary>
+    Load,
+
+    /// <summary>
+    /// A save imported into a new world (docs/formats/save.md "Importing a game").
+    /// </summary>
+    Import,
+}
+
+/// <summary>
+/// How a world came to be and the save folder it came from (docs/modding.md "World ready"): read in <see cref="IWorldReady.Ready"/>, so a mod
+/// finds a file of its own (or the original mod's) beside the save. <paramref name="SaveFolder"/> is the folder's full path, null for a new game
+/// or an unknown start. Not saved, not hashed: the simulation never reads it.
+/// </summary>
+public readonly record struct WorldStart(WorldStartKind Kind, string? SaveFolder = null)
+{
+    /// <summary>
+    /// Whether the world came from a save (loaded or imported).
+    /// </summary>
+    public bool FromSave => Kind is WorldStartKind.Load or WorldStartKind.Import;
+}

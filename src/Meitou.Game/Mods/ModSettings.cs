@@ -6,7 +6,8 @@ namespace Meitou.Modding;
 /// <summary>
 /// Marks a public property of an object a mod registers with <see cref="ModContext.AddSettings"/> (docs/modding.md "Settings") as a setting on the
 /// Settings screen's Mods page: a <c>bool</c> is an Off | On switch, an <c>int</c>, <c>float</c> or <c>double</c> a slider over
-/// <see cref="Min"/> to <see cref="Max"/>, an enum or a <c>string</c> with <see cref="Options"/> a list.
+/// <see cref="Min"/> to <see cref="Max"/>, an enum or a <c>string</c> with <see cref="Options"/> a list, a <c>string</c> without options a free text
+/// (at most <see cref="MaxLength"/> characters, one line).
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class SettingAttribute(string label) : Attribute
@@ -42,6 +43,11 @@ public sealed class SettingAttribute(string label) : Attribute
     public string[] Options { get; init; } = [];
 
     /// <summary>
+    /// A free text's longest length, 1 to <see cref="ModSetting.MaxTextLength"/>; 0 means <see cref="ModSetting.DefaultTextLength"/>.
+    /// </summary>
+    public int MaxLength { get; init; }
+
+    /// <summary>
     /// The sub-group the setting is shown under on the Mods page: a header row with the setting's rows under it (empty: the mod's group itself).
     /// </summary>
     public string SubGroup { get; init; } = "";
@@ -68,7 +74,11 @@ public enum ModSettingKind
     /// <summary>
     /// An enum, or a <c>string</c> with options: a list of choices.
     /// </summary>
-    List
+    List,
+    /// <summary>
+    /// A <c>string</c> without options: one line of free text, typed in a box.
+    /// </summary>
+    Text,
 }
 
 /// <summary>
@@ -77,6 +87,16 @@ public enum ModSettingKind
 /// </summary>
 public sealed class ModSetting
 {
+    /// <summary>
+    /// A free text's length when <see cref="SettingAttribute.MaxLength"/> is 0.
+    /// </summary>
+    public const int DefaultTextLength = 256;
+
+    /// <summary>
+    /// The longest <see cref="SettingAttribute.MaxLength"/> a free text may have.
+    /// </summary>
+    public const int MaxTextLength = 4096;
+
     /// <summary>
     /// The object the mod registered, whose property this is.
     /// </summary>
@@ -115,6 +135,7 @@ public sealed class ModSetting
         Kind = KindOf(property, type, about);
         _options = type.IsEnum ? Enum.GetNames(type) : about.Options;
         if (Kind == ModSettingKind.Slider) (Min, Max, Step) = Range(property, type, about);
+        if (Kind == ModSettingKind.Text) MaxLength = TextLength(property, about);
         if (VisibleWhen.Length > 0) _visibleWhen = VisibleProperty(target, property, VisibleWhen);
         Default = Get();
         if (Kind == ModSettingKind.List && Choice < 0)
@@ -199,6 +220,11 @@ public sealed class ModSetting
     public object? Default { get; }
 
     /// <summary>
+    /// A free text's longest length (0 for the other kinds).
+    /// </summary>
+    public int MaxLength { get; }
+
+    /// <summary>
     /// True for an <c>int</c> slider.
     /// </summary>
     public bool Whole => _property.PropertyType == typeof(int);
@@ -263,8 +289,18 @@ public sealed class ModSetting
         if (type == typeof(bool)) return ModSettingKind.Switch;
         if (type == typeof(int) || type == typeof(float) || type == typeof(double)) return ModSettingKind.Slider;
         if (type.IsEnum || type == typeof(string) && about.Options.Length > 0) return ModSettingKind.List;
-        string reason = $"a {type.Name} can't be a setting (bool, int, float, double, an enum, or a string with Options).";
-        throw new ArgumentException($"Setting '{property.Name}': {reason}");
+        if (type == typeof(string)) return ModSettingKind.Text;
+        throw new ArgumentException($"Setting '{property.Name}': a {type.Name} can't be a setting (bool, int, float, double, an enum or a string).");
+    }
+
+    /// <summary>
+    /// A free text's longest length from the attribute; throws for one outside 0 to <see cref="MaxTextLength"/>.
+    /// </summary>
+    static int TextLength(PropertyInfo property, SettingAttribute about)
+    {
+        if (about.MaxLength is < 0 or > MaxTextLength)
+            throw new ArgumentException($"Setting '{property.Name}': MaxLength must be 0 to {MaxTextLength}.");
+        return about.MaxLength == 0 ? DefaultTextLength : about.MaxLength;
     }
 
     /// <summary>
@@ -300,6 +336,7 @@ public sealed class ModSetting
         ModSettingKind.Switch => bool.TryParse(text, out bool b) ? b : null,
         ModSettingKind.Slider => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) && double.IsFinite(d) ? d
             : null,
+        ModSettingKind.Text => text.Length <= MaxLength && !text.Any(char.IsControl) ? text : null,
         _ => _options.FirstOrDefault(o => string.Equals(o, text, StringComparison.Ordinal)),
     };
 
@@ -310,6 +347,7 @@ public sealed class ModSetting
     {
         var type = _property.PropertyType;
         if (Kind == ModSettingKind.Switch) return (bool)value;
+        if (Kind == ModSettingKind.Text) return OneLine(value as string ?? Format(value));
         if (Kind == ModSettingKind.List)
         {
             string name = value is string s ? s : Format(value);
@@ -321,6 +359,15 @@ public sealed class ModSetting
         if (type == typeof(int)) return (int)Math.Round(v);
         if (type == typeof(float)) return (float)v;
         return Math.Round(v, 10);
+    }
+
+    /// <summary>
+    /// A free text as kept: control characters (line breaks, tabs) as spaces, cut to <see cref="MaxLength"/>.
+    /// </summary>
+    string OneLine(string text)
+    {
+        var line = new string([.. text.Select(c => char.IsControl(c) ? ' ' : c)]);
+        return line.Length <= MaxLength ? line : line[..MaxLength];
     }
 
     /// <summary>

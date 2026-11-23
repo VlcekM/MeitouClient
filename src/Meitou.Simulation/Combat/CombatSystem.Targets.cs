@@ -57,6 +57,10 @@ public sealed partial class CombatSystem
         /// </summary>
         public bool Player, Hold, Prone, Animal;
         /// <summary>
+        /// The current target is the player's pick (asked of the engagement filters).
+        /// </summary>
+        public bool Picked;
+        /// <summary>
         /// Where a holding chooser holds.
         /// </summary>
         public Vector3 HoldPoint;
@@ -78,6 +82,11 @@ public sealed partial class CombatSystem
         /// Fights started this tick by target, counted as attackers (the AI's serial step, <see cref="BestAttackerOf"/>; null: none).
         /// </summary>
         public IReadOnlyDictionary<int, int>? Pending;
+
+        /// <summary>
+        /// Which choice this is, as the target score filters are told.
+        /// </summary>
+        public TargetChoiceKind Kind;
     }
 
     #region Target choice
@@ -111,7 +120,9 @@ public sealed partial class CombatSystem
         var q = new Choice
         {
             Self = i,
+            Kind = TargetChoiceKind.Fight,
             Current = s.TargetSlot,
+            Picked = s.Picked,
             Cold = cold,
             Player = cold.IsPlayer,
             Hold = hold,
@@ -261,6 +272,7 @@ public sealed partial class CombatSystem
         var q = new Choice
         {
             Self = looker,
+            Kind = TargetChoiceKind.Join,
             Current = -1,
             Cold = cold,
             Player = cold.IsPlayer,
@@ -320,7 +332,8 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// Scores candidate <paramref name="c"/> for the chooser (<see cref="TargetScore"/>) and keeps it when it beats the best; one down, caged,
-    /// carried, of the chooser's faction or squad (but the current target), off its hold post or found unreachable lately is left out.
+    /// carried, of the chooser's faction or squad (but the current target), off its hold post, found unreachable lately or refused by an engagement
+    /// filter (<see cref="ICombatEngageFilter"/>) is left out.
     /// </summary>
     void Consider(World world, ref Choice q, int c, bool protect)
     {
@@ -337,18 +350,37 @@ public sealed partial class CombatSystem
         if (c != q.Current && (tc.Faction == q.Cold.Faction || q.Cold.SquadId >= 0 && tc.SquadId == q.Cold.SquadId)) return;
         if (TargetScore.SparesSlave(q.Cold, tc)) return;
         if (LeaveAlone.Spares(world, new LeaveAlone.Kit(Relations, Memory, this), i, q.Cold, c, tc)) return;
+        if (!world.CombatEngageFilters.Allows(world, i, c, EngageKind.Choice, q.Picked && c == q.Current, false)) return;
 
         ref readonly var o = ref _read[c];
         bool downed = tc.Medical is { Crawling: true } || o.AttackTech >= 0;
         if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, downed, o.TargetSlot >= 0))
             return;
 
+        var candidate = CandidateOf(world, in q, c, tc, protect);
+        float? score = TargetScore.Score(candidate, q.Player, q.Hold, q.Prone, q.Animal, q.Cold.Manoeuvre);
+        if (world.TargetScoreFilters.Pass(world, i, c, q.Kind, candidate, score) is { } kept && kept > q.BestScore)
+        {
+            q.Best = c;
+            q.BestScore = kept;
+        }
+    }
+
+    /// <summary>
+    /// The facts the target score weighs of candidate <paramref name="c"/> (<paramref name="tc"/>) for the chooser of <paramref name="q"/>.
+    /// </summary>
+    TargetCandidate CandidateOf(World world, in Choice q, int c, CharacterCold tc, bool protect)
+    {
+        var prev = world.Characters.Previous;
+        int i = q.Self;
+        ref readonly var o = ref _read[c];
         int attackers = AttackerCount(world, c) + (q.Pending is { } pending ? pending.GetValueOrDefault(c) : 0);
         float dx = prev[c].Position.X - prev[i].Position.X;
         float dz = prev[c].Position.Z - prev[i].Position.Z;
-        var candidate = new TargetCandidate
+        return new TargetCandidate
         {
             Current = c == q.Current,
+            ChooserHasTarget = q.Current >= 0,
             Staggered = o.StumbleClip >= 0 && world.Tick < o.StunUntil,
             Attackers = attackers,
             ChooserAttacks = c == q.Current,
@@ -364,11 +396,6 @@ public sealed partial class CombatSystem
             Peaceful = o.TargetSlot < 0 && Relations is { } relations && !AggroSystem.IsEnemy(relations, tc.Faction, q.Cold.Faction),
             GettingUp = CharacterFacts.GettingUp(tc, world.Tick),
         };
-        if (TargetScore.Score(candidate, q.Player, q.Hold, q.Prone, q.Animal, q.Cold.Manoeuvre) is { } score && score > q.BestScore)
-        {
-            q.Best = c;
-            q.BestScore = score;
-        }
     }
 
     #endregion

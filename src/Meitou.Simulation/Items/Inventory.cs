@@ -218,6 +218,12 @@ public sealed class Inventory(int width, int height)
     public bool AddTo(string section, ItemInstance item) => TopUp(this, item, false, section) || Place(this, section, item);
 
     /// <summary>
+    /// <see cref="AddTo"/>'s top-up alone: units of <paramref name="item"/> into the stacks of <paramref name="section"/> with room left; true when
+    /// none are left.
+    /// </summary>
+    internal bool TopUpIn(string section, ItemInstance item) => TopUp(this, item, false, section);
+
+    /// <summary>
     /// Moves units of <paramref name="item"/> into stacks of <paramref name="into"/> with room left (of <paramref name="section"/>, else of its
     /// grids; <paramref name="dropReceipt"/>: plain stacks too); true when none are left. Partial charges combine as in
     /// <see cref="InventoryCommands.Merge"/>.

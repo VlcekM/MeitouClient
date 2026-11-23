@@ -214,6 +214,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The header's search box and its results.
     /// </summary>
     internal SettingsSearch Search => field ??= new(this);
+    /// <summary>
+    /// The free-text row being typed in.
+    /// </summary>
+    internal SettingsTextEdit TextEdit => field ??= new(this);
 
     /// <summary>
     /// A drop-down: its options, the chosen one, and what choosing does.
@@ -227,7 +231,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
         InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false, bool Changed = false,
         string? Impact = null, bool Warn = false, string? Raw = null, int Depth = 0, bool? Open = null, string? GroupId = null, Action? Reset = null,
-        bool Locked = false, string? Tag = null, bool TagHot = false, string? RunLabel = null);
+        bool Locked = false, string? Tag = null, bool TagHot = false, string? RunLabel = null, TextEntry? Text = null);
 
     /// <summary>
     /// A clickable widget as the last frame drew it: its bounds, what a click does, and a slider's track.
@@ -310,6 +314,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             Focus = -1;
             Notice = "";
             EditingNumber = null;
+            TextEdit.Cancel();
 
             if (value)
             {
@@ -1209,6 +1214,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             if (NumberBounds.Contains(at.X, at.Y)) return true;
             if (!CommitNumber()) return true;
         }
+        if (TextEdit.Editing is not null)
+        {
+            if (TextEdit.Bounds.Contains(at.X, at.Y)) return true;
+            TextEdit.Commit();
+        }
 
         if (GrabScrollBar(at)) return true;
 
@@ -1293,7 +1303,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public bool Scroll(float steps)
     {
         if (!Visible) return false;
-        if (EditingNumber is not null || Rebinding is not null || ResetPending || PendingAction is not null)
+        if (EditingNumber is not null || TextEdit.Editing is not null || Rebinding is not null || ResetPending || PendingAction is not null)
             return true;
         if (ActiveChoice is { } choice)
             ChoiceScroll = Math.Clamp(ChoiceScroll - (int)steps, 0, Math.Max(0, choice.Options().Count - 6));
@@ -1314,15 +1324,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         if (Rebinding is { } action)
         {
-            if (key == Key.Escape) Rebinding = null;
-            else if (key == Key.Delete || key == Key.Backspace)
-            {
-                Bindings.Set(action);
-                Rebinding = null;
-                Notice = "Binding cleared.";
-            }
-            else SetBinding(action, key);
-
+            RebindKey(action, key);
             return true;
         }
 
@@ -1379,10 +1381,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// A key: the preset name dialog, else the search box (Ctrl+F focuses it), else the typed value's keys (Esc, Enter, Tab, then the
     /// editing keys of <see cref="TextField"/>), else as without Ctrl.
     /// </summary>
-    public bool KeyDown(Key key, bool shift, bool ctrl)
+    public bool KeyDown(Key key, bool shift, bool ctrl, bool alt = false)
     {
+        _heldModifiers = InputBindings.Modifiers(ctrl, shift, alt);
         if (PresetNaming.Open && Visible) return PresetNaming.OnKey(key);
         if (Search.Focused && Visible) return Search.OnKey(key, shift, ctrl);
+        if (TextEdit.Editing is not null && Visible) return TextEdit.OnKey(key, shift, ctrl);
         if (key == Key.F && ctrl && Visible && EditingNumber is null && Rebinding is null) return Search.Begin();
         if (EditingNumber is null) return KeyDown(key, shift);
 
@@ -1422,6 +1426,12 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         if (Search.Focused && Visible)
         {
             Search.OnText(value);
+            return;
+        }
+
+        if (TextEdit.Editing is not null && Visible)
+        {
+            TextEdit.OnText(value);
             return;
         }
 
@@ -1473,6 +1483,35 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Notice = "";
         return true;
     }
+
+    /// <summary>
+    /// The modifiers held as the key being handled went down (<see cref="KeyDown(Key, bool, bool, bool)"/>), for a code mod's chord.
+    /// </summary>
+    KeyModifiers _heldModifiers;
+
+    /// <summary>
+    /// A key while <paramref name="action"/> waits for its binding: Esc cancels, Delete or Backspace unbinds, any other key binds. A code mod's
+    /// action takes the key with the modifiers held as a chord (docs/modding.md "Key actions") and waits on while only a modifier goes down.
+    /// </summary>
+    void RebindKey(InputAction action, Key key)
+    {
+        bool modAction = Bindings.ModAction(action) is not null;
+        if (key == Key.Escape) Rebinding = null;
+        else if (key == Key.Delete || key == Key.Backspace)
+        {
+            Bindings.Set(action);
+            Rebinding = null;
+            Notice = "Binding cleared.";
+        }
+        else if (modAction && IsModifier(key)) return;
+        else SetBinding(action, modAction && _heldModifiers != KeyModifiers.None ? Binding.Of(key).With(_heldModifiers) : key);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="key"/> is a Ctrl, Shift or Alt key.
+    /// </summary>
+    static bool IsModifier(Key key) =>
+        key is Key.LeftControl or Key.RightControl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt;
 
     /// <summary>
     /// Binds <paramref name="action"/> to <paramref name="binding"/>, taking it from the actions of its key map that have it; a reserved key is

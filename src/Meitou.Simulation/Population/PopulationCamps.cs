@@ -298,7 +298,10 @@ public sealed partial class PopulationSystem
         foreach (var drop in drops)
         {
             var item = drop.List ? Loot(world, drop, owner, ref rng) : _data.Items.Create(drop.Record, 1, 0);
-            if (item is not null) world.GroundItems.Place(item, drop.Position, drop.Yaw, null, -1, camp);
+            if (item is null) continue;
+
+            Items.ItemCreatedObservers.Report(world, Items.ItemCreatedKind.Loot, item, CharacterId.None);
+            world.GroundItems.Place(item, drop.Position, drop.Yaw, null, -1, camp);
         }
     }
 

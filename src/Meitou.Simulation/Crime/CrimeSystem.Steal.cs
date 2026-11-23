@@ -336,6 +336,25 @@ public sealed partial class CrimeSystem
     }
 
     /// <summary>
+    /// The steal roll for a code mod's own theft (docs/modding.md "Crimes"): <paramref name="watcher"/> (none or gone: nobody, never caught)
+    /// notices the thief unless a draw falls under <paramref name="chance"/> (0: always caught, 1 or more: never), with the game's outcome of
+    /// <see cref="Steal(World, int, StealSource, TakeKind)"/>: a watcher in bed may only speak, else it gets up, says event 8 and remembers the
+    /// thief, and the thief gets a Theft (timer 30) against <paramref name="faction"/> with <paramref name="victim"/> as its victim; thievery XP
+    /// as the game's roll. The draw is the world seed's, the thief's, the victim's (else the watcher's) and the tick's. No pending crime is set
+    /// before the roll (<see cref="SetPending"/> does that). True when caught. Serial phases.
+    /// </summary>
+    public bool StealRoll(World world, CharacterId thief, CharacterId watcher, float chance, int faction, CharacterId victim)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(thief, out int t)) throw new ArgumentException($"thief {thief} is not in the world", nameof(thief));
+        if (!float.IsFinite(chance)) throw new ArgumentOutOfRangeException(nameof(chance), chance, "not a finite number");
+
+        int w = table.TryResolveNext(watcher, out int found) ? found : -1;
+        var salted = victim.IsNone ? watcher : victim;
+        return Roll(world, t, w, chance, faction, victim, Rng.Key(salted));
+    }
+
+    /// <summary>
     /// The pending crime of a take out of another faction's character (<see cref="TakeCode"/>) without the steal roll, as
     /// <see cref="PendSteal(World, int, Locks.Fixture, TakeKind)"/> for a thief without room. False when the take is no steal.
     /// </summary>

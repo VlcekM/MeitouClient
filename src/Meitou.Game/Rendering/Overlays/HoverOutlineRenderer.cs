@@ -16,8 +16,10 @@ namespace Meitou.Game.Rendering.Overlays;
 /// <param name="Depth">Its depth, from the projection <paramref name="Near"/>..<paramref name="Far"/>.</param>
 /// <param name="Tint">The outline's and tint's colour (alpha: their strength).</param>
 /// <param name="Spheres">The bounding spheres of what is in it.</param>
+/// <param name="Through">Drawn through walls (a mod's tint, docs/modding.md "Glow"): its characters as drawn in the mask where the scene hides them,
+/// blended towards the tint, with no outline and nothing where they are seen.</param>
 public readonly record struct HoverMask(GpuTexture Colour, GpuTexture Depth, float Near, float Far, Vector4 Tint,
-    IReadOnlyList<(Vector3 Centre, float Radius)> Spheres);
+    IReadOnlyList<(Vector3 Centre, float Radius)> Spheres, bool Through = false);
 
 /// <summary>
 /// The hover outline (Meitou only, docs/game/ui-input.md "Hover outline"): the character under the mouse (and, with Alt held, those near) and the
@@ -53,6 +55,7 @@ public sealed class HoverOutlineRenderer
         uniform vec2 uScenePlanes;
         uniform vec4 uColour;
         uniform int uRadius;
+        uniform int uThrough;            // 1: the characters as drawn where the scene hides them, no outline (HoverMask.Through)
         """ + DepthConvention.Glsl + """
         float coverage(ivec2 p)
         {
@@ -75,12 +78,20 @@ public sealed class HoverOutlineRenderer
             {
                 float character = depthViewZ(texelFetch(uMaskDepth, p, 0).r, uMaskPlanes);
                 float scene = depthViewZ(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy * uDepthScale), 0).r, uScenePlanes);
-                if (character > scene * 1.01 + 1.0) discard;
+                bool hidden = character > scene * 1.01 + 1.0;
+                if (uThrough != 0)
+                {
+                    if (!hidden) discard;
+                    vec3 seen = mix(texelFetch(uMask, p, 0).rgb, uColour.rgb, 0.5);
+                    fragColour = vec4(seen * uColour.a, uColour.a);
+                    return;
+                }
+                if (hidden) discard;
                 float a = uColour.a * 0.11;
                 fragColour = vec4(uColour.rgb * a, a);
                 return;
             }
-            if (emptyAround(p)) discard;
+            if (uThrough != 0 || emptyAround(p)) discard;
             float nearest = 1e9;
             for (int y = -uRadius; y <= uRadius; y++)
                 for (int x = -uRadius; x <= uRadius; x++)
@@ -113,7 +124,7 @@ public sealed class HoverOutlineRenderer
     /// <summary>
     /// The program's uniforms: the scene depth's scale, the mask's and the scene's depth planes, the mask's colour and the outline's radius.
     /// </summary>
-    readonly UniformHandle _depthScale, _maskPlanes, _scenePlanes, _colour, _radius;
+    readonly UniformHandle _depthScale, _maskPlanes, _scenePlanes, _colour, _radius, _through;
 
     /// <summary>
     /// The program's slots: the mask's colour and depth, and the scene's depth.
@@ -133,6 +144,7 @@ public sealed class HoverOutlineRenderer
         _scenePlanes = _program.Uniform("uScenePlanes");
         _colour = _program.Uniform("uColour");
         _radius = _program.Uniform("uRadius");
+        _through = _program.Uniform("uThrough");
         _mask = _program.Sampler("uMask");
         _maskLinear = _program.Sampler("uMaskLinear");
         _maskDepth = _program.Sampler("uMaskDepth");
@@ -173,6 +185,7 @@ public sealed class HoverOutlineRenderer
                 _program.Set(_scenePlanes, sceneNear, sceneFar);
                 _program.Set(_colour, hover.Tint.X, hover.Tint.Y, hover.Tint.Z, hover.Tint.W);
                 _program.Set(_radius, outline);
+                _program.Set(_through, hover.Through ? 1 : 0);
                 var state = DrawState.For(over.Formats, _gpu.DepthClamp,
                     blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha));
                 state.Record(cmd, over);

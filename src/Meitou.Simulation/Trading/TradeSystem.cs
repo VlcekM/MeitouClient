@@ -364,7 +364,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                     if (CustomerTrades(world, sell.From)) Sell(world, sell);
                     break;
                 case ArrangeStock when _open:
-                    if (Resolve(world, out _, out _, out var arranged)) InventoryCommands.Arrange(arranged!.Window);
+                    if (Resolve(world, out _, out _, out var arranged))
+                    {
+                        InventoryCommands.Arrange(world, arranged!.Window, ItemOwner.Stock, InventoryArrangeReason.Button);
+                    }
                     break;
                 case SetSquadShop given:
                     SetShop(world, given);
@@ -875,8 +878,19 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         merged.Fills = (int)world.Tick;
         var fill = ShopFiller.Roll(merged, template, Market(world), _data, world.VendorTables, world.Seed, key, specials: first);
+        ReportFill(world, fill, -1);
         PlaceFill(world, usable, fill, terms, key, merged.Fills);
         LockFilled(usable);
+    }
+
+    /// <summary>
+    /// Tells the code mods' item-created observers of a fill's units and special items (<see cref="ItemCreatedKind.ShopStock"/>), before they are
+    /// placed.
+    /// </summary>
+    static void ReportFill(World world, ShopFill fill, int squad)
+    {
+        ItemCreatedObservers.ReportAll(world, ItemCreatedKind.ShopStock, fill.Units, CharacterId.None, squad);
+        ItemCreatedObservers.ReportAll(world, ItemCreatedKind.ShopStock, fill.Specials, CharacterId.None, squad);
     }
 
     /// <summary>
@@ -980,6 +994,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (shop.View.Live && world.Player.Held?.From.Holder == ItemHolder.Stock) return false;
 
         var fill = ShopFiller.Roll(shop, template, Market(world), _data, world.VendorTables, world.Seed, (ulong)squad.Id, specials: shop.Fills == 0);
+        ReportFill(world, fill, squad.Id);
         var purse = ShopFiller.StockSquad(shop, fill, Market(world));
 
         // A faction shop's purse holds only what trades and its mod put in (Meitou: no fill makes money for the player's faction), and the money
@@ -1016,6 +1031,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
 
         var fill = ShopFiller.Roll(shop, template, Market(world), _data, world.VendorTables, world.Seed, (ulong)squad.Id, specials: shop.Fills == 0);
+        ReportFill(world, fill, squad.Id);
         if (PlaceFill(world, usable, fill, shop.Terms, (ulong)squad.Id, shop.Fills) is { } value) squad.Money = ShopFiller.Purse(fill, value);
 
         LockFilled(usable);
@@ -1253,7 +1269,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!Resolve(world, out _, out _, out var shop) || shop is null) return;
 
         SettleView(world, shop);
-        if (!shop.View.Pending) shop.View.Build(shop, BoxesOf(world, shop, out _));
+        if (!shop.View.Pending) shop.View.Build(world, shop, BoxesOf(world, shop, out _));
     }
 
     /// <summary>
@@ -1284,7 +1300,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     void ReopenView(World world, Shop shop)
     {
-        if (Shows(world, shop)) shop.View.Build(shop, BoxesOf(world, shop, out _));
+        if (Shows(world, shop)) shop.View.Build(world, shop, BoxesOf(world, shop, out _));
         else shop.View.Drop(shop);
     }
 
@@ -1868,7 +1884,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!world.TradePriceFilters.Active) return price;
 
         int shopSquad = world.Characters.TryResolveNext(_trader, out int t) ? world.Characters.Cold(t)?.SquadId ?? -1 : -1;
-        return world.TradePriceFilters.Pass(world, new TradeDeal(world.Tick, item.Record, units, sell, _customer, shopSquad), price);
+        var deal = new TradeDeal(world.Tick, item.Record, units, sell, _customer, shopSquad) { Item = item };
+        return world.TradePriceFilters.Pass(world, deal, price);
     }
 
     /// <summary>

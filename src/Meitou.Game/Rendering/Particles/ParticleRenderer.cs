@@ -40,7 +40,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         uniform mat4 uViewProjection;               // world-from-camera-relative included: the positions are relative to the eye
         uniform vec3 uCameraRight;
         uniform vec3 uCameraUp;
-        uniform int uMode;                          // 0 point, 1 oriented_common, 2 oriented_self, 3 perpendicular_common, 4 perpendicular_self
+        // 0 point, 1 oriented_common, 2 oriented_self, 3 perpendicular_common, 4 perpendicular_self, 5 a quad on its own axes (Meitou's trails)
+        uniform int uMode;
         uniform vec2 uAnchor;                       // the origin of the quad as an offset from its centre, in widths and heights (bottom_center: 0, -0.5)
         uniform vec3 uCommonDirection;
         uniform vec3 uCommonUp;
@@ -132,6 +133,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 float l = length(right);
                 right = l > 1e-5 ? right / l : uCameraRight;
             }
+            else if (uMode == 5)
+            {
+                // A mod's trail piece (Meitou): its own axes, up the direction row, right in the rotation and the last two of the height row.
+                up = aDirectionWidth.xyz;
+                right = vec3(aPositionRotation.w, aHeight.z, aHeight.w);
+            }
             else
             {
                 // A flat quad: facing along the common direction (3) or the direction of travel (4), its up the common up vector.
@@ -145,7 +152,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             vec3 world = position + right * q.x + up * q.y;
             gl_Position = uViewProjection * vec4(world, 1.0);
             vDepth = gl_Position.w;
-            vUv = vec2(aCorner.x + 0.5, 0.5 - aCorner.y);
+            vUv = vec2(uMode == 5 ? aHeight.y : aCorner.x + 0.5, 0.5 - aCorner.y);   // a trail piece: u where it lies along the trail
             vColour = vec4(aColour.rgb * uColourScale.rgb, aColour.a * uColourScale.a);
             vHazeMul = vec3(1.0);
             vHazeAdd = vec3(0.0);
@@ -505,6 +512,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public List<Tracer> Tracers { get; } = [];
 
     /// <summary>
+    /// The code mods' trail pieces (docs/modding.md "Trails"), which the host fills every frame: drawn after the tracers, one draw per material,
+    /// each piece a quad on its own axes, unlit, at full size.
+    /// </summary>
+    internal List<Modding.TrailQuad> Ribbons { get; } = [];
+
+    /// <summary>
     /// One technique's draw: its instances in the frame's constants, its material, texture and target size.
     /// </summary>
     struct DrawItem
@@ -596,6 +609,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _white = SampledImage.Rgba8(gpu, 1, 1, [255, 255, 255, 255], repeat: false, mipmaps: false, "particle white");
         _tracerTexture = SampledImage.Rgba8(gpu, TracerTextureWidth, TracerTextureHeight, TracerPixels(), repeat: false,
             mipmaps: true, "particle tracer");
+        _ribbonTexture = SampledImage.Rgba8(gpu, 1, RibbonTextureHeight, RibbonPixels(), repeat: false, mipmaps: true, "particle ribbon");
     }
 
     /// <summary>
@@ -1030,7 +1044,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _drawnParticles = 0;
         _drawnUnits = 0;
         _coveragePending = false;
-        if (!Enabled || (_groups.WeatherGroups.Count == 0 && _groups.Placers.Count == 0 && Tracers.Count == 0)) return;
+        if (!Enabled || (_groups.WeatherGroups.Count == 0 && _groups.Placers.Count == 0 && Tracers.Count == 0 && Ribbons.Count == 0)) return;
         _draws.Clear();
         var frame = _gpu.Frame;
         var forward = -new Vector3(view.M13, view.M23, view.M33);   // the view's -Z axis in the world
@@ -1087,6 +1101,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             }
         }
         if (Tracers.Count > 0) AddTracers(frame, eye, forward, nearPlane);
+        if (Ribbons.Count > 0) AddRibbons(frame, eye, forward, nearPlane);
 
         // A size is worth its two extra passes (the depth reduction, the composite) only when it saves enough fill: it is taken up from MinLayers and
         // left below half that (so a storm thickening or the view turning does not flip the dust between full size and low resolution, which looked
@@ -1192,6 +1207,122 @@ public sealed unsafe class ParticleRenderer : IDisposable
             Texture = _tracerTexture, Divisor = 1, Tracer = true });
         _drawnParticles += n;
     }
+
+    /// <summary>
+    /// The billboard type that makes the shader place a quad on its own axes (mode 5).
+    /// </summary>
+    const string RibbonBillboard = "meitou_quad";
+    /// <summary>
+    /// The trails' technique: a quad on its own axes.
+    /// </summary>
+    static readonly PuTechniqueDef RibbonTechnique = new()
+    {
+        Name = "meitou ribbon",
+        Renderer = new PuRendererDef { TypeName = "Billboard", BillboardType = RibbonBillboard },
+        Source = new PuNode("technique", [], 0),
+    };
+    /// <summary>
+    /// The trails' own material when a style names none: additive, depth tested and not written, unlit, clamped.
+    /// </summary>
+    static readonly ParticleMaterial RibbonMaterial = new("meitou ribbon", null, ParticleBlend.Add, DepthCheck: true, DepthWrite: false,
+        Ambient: false, Vector4.One, Clamp: true);
+    /// <summary>
+    /// The trails' texture height in pixels (one column: it varies across the trail only).
+    /// </summary>
+    const int RibbonTextureHeight = 32;
+    /// <summary>
+    /// The trails' own soft streak (<see cref="RibbonPixels"/>).
+    /// </summary>
+    readonly SampledImage _ribbonTexture;
+    /// <summary>
+    /// The trail pieces by material ("" for the trails' own), kept to avoid allocating.
+    /// </summary>
+    readonly Dictionary<string, List<Modding.TrailQuad>> _ribbonGroups = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The trails' white streak: opaque along its middle, its alpha falling off softly to both edges.
+    /// </summary>
+    static byte[] RibbonPixels()
+    {
+        var rgba = new byte[RibbonTextureHeight * 4];
+        for (int y = 0; y < RibbonTextureHeight; y++)
+        {
+            float across = (y + 0.5f) / RibbonTextureHeight * 2 - 1;
+            rgba[y * 4] = rgba[y * 4 + 1] = rgba[y * 4 + 2] = 255;
+            rgba[y * 4 + 3] = (byte)MathF.Round(Math.Clamp(1 - across * across, 0, 1) * 255);
+        }
+        return rgba;
+    }
+
+    /// <summary>
+    /// The <see cref="Ribbons"/>, one draw per material; a material the particles do not have draws as the trails' own, one whose texture is still
+    /// decoding waits a frame.
+    /// </summary>
+    void AddRibbons(IGpuFrame frame, Vector3 eye, Vector3 forward, float nearPlane)
+    {
+        foreach (var list in _ribbonGroups.Values) list.Clear();
+        foreach (var q in Ribbons)
+        {
+            string key = q.Material is { } name && Library.FindMaterial(name) is not null ? name : "";
+            if (!_ribbonGroups.TryGetValue(key, out var list)) _ribbonGroups[key] = list = [];
+            list.Add(q);
+        }
+
+        foreach (var (key, list) in _ribbonGroups)
+        {
+            if (list.Count == 0) continue;
+
+            var material = key.Length == 0 ? RibbonMaterial : Library.FindMaterial(key)!;
+            var texture = key.Length == 0 ? _ribbonTexture : TextureFor(material);
+            if (texture is not null) AddRibbonDraw(frame, list, material, texture, eye, forward, nearPlane);
+        }
+    }
+
+    /// <summary>
+    /// One material's trail pieces as one draw.
+    /// </summary>
+    void AddRibbonDraw(IGpuFrame frame, List<Modding.TrailQuad> pieces, ParticleMaterial material, SampledImage texture, Vector3 eye,
+        Vector3 forward, float nearPlane)
+    {
+        int n = 0;
+        if (_scratch.Length < pieces.Count) _scratch = new ParticleInstance[Math.Max(pieces.Count, _scratch.Length * 2)];
+        bool additive = material.Blend == ParticleBlend.Add;
+        foreach (var q in pieces)
+        {
+            if (RibbonPiece(q, eye, additive) is { } piece) _scratch[n++] = piece;
+        }
+        if (n == 0) return;
+
+        int close = _gpu is not GpuContext ? 0 : PartitionByDepth(_scratch.AsSpan(0, n), forward, nearPlane);
+        var instances = frame.AllocateConstants((ulong)(n * InstanceBytes), 16);
+        _scratch.AsSpan(0, n).CopyTo(new Span<ParticleInstance>(instances.Pointer, n));
+        _draws.Add(new DrawItem { Instances = instances, Count = n, Close = close, Technique = RibbonTechnique, Material = material,
+            Texture = texture, Divisor = 1, Tracer = true });
+        _drawnParticles += n;
+    }
+
+    /// <summary>
+    /// A trail piece as an instance (camera-relative): a swept band's parallelogram between its two samples (right from the older to the newer,
+    /// up from base to tip), or a point ribbon's quad from the older to the newer point turned to face the eye; null when it is too small or out
+    /// of range. An additive one's colour is taken by its alpha.
+    /// </summary>
+    internal static ParticleInstance? RibbonPiece(in Modding.TrailQuad q, Vector3 eye, bool additive)
+    {
+        var centre = (q.BaseA + q.TipA + q.BaseB + q.TipB) * 0.25f;
+        bool band = Vector3.DistanceSquared(q.BaseA, q.TipA) > 1e-6f;
+        var right = band ? (q.BaseA + q.TipA - q.BaseB - q.TipB) * 0.5f : q.BaseA - q.BaseB;
+        var up = band ? (q.TipA + q.TipB - q.BaseA - q.BaseB) * 0.5f : Vector3.Cross(right, eye - centre);
+        float width = right.Length();
+        float height = band ? up.Length() : (q.WidthA + q.WidthB) * 0.5f;
+        if (width < 1e-3f || up.LengthSquared() < 1e-12f || height <= 0 || Vector3.Distance(centre, eye) > DrawRange) return null;
+
+        right /= width;
+        up = Vector3.Normalize(up);
+        var rgb = new Vector3(q.Colour.X, q.Colour.Y, q.Colour.Z) * (additive ? q.Colour.W : 1);
+        return new ParticleInstance { Position = centre - eye, Rotation = right.X, Direction = up, Width = width,
+            Colour = new Vector4(rgb, q.Colour.W), Height = height, Depth = q.Along, Pad0 = right.Y, Pad1 = right.Z };
+    }
+
 
     /// <summary>
     /// This frame's camera-relative view-projections: the scene's, the close one, and the low-resolution draws' pair.
@@ -1567,6 +1698,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         "oriented_self" or "oriented_shape" => 2,   // oriented_shape: Unknown, drawn as oriented_self
         "perpendicular_common" => 3,
         "perpendicular_self" => 4,
+        RibbonBillboard => 5,
         _ => 0,
     };
 
@@ -1691,6 +1823,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         foreach (var t in _textures.Values) t?.Dispose();
         _white.Dispose();
         _tracerTexture.Dispose();
+        _ribbonTexture.Dispose();
         _quad.Dispose();
         _program.Dispose();
     }

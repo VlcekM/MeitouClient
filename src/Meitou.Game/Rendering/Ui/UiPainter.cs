@@ -744,7 +744,7 @@ public sealed partial class UiPainter : IDisposable
     {
         var loaded = LoadTexture(image.Texture);
         float textureWidth = loaded.Texture.Desc.Width, textureHeight = loaded.Texture.Desc.Height;
-        var source = image.Source.Width > 0 && image.Source.Height > 0 ? image.Source : new UiRect(0, 0, textureWidth, textureHeight);
+        var source = image.Source.Width > 0 && image.Source.Height > 0 ? image.Source : UvSource(c, textureWidth, textureHeight);
 
         // ImageFlipV: an image drawn by the renderer. Both backends draw it with the engine's y-up clip space; Metal's
         // targets keep row 0 at the top but its viewport maps that clip space top-down, so the stored picture is upside
@@ -775,6 +775,15 @@ public sealed partial class UiPainter : IDisposable
             AddOpaque(imageMask, source, b, clip, allowCore: !flip && !bordered);
         _overlay.Flush(width, height, clip, pass);
     }
+
+    /// <summary>
+    /// The part of a texture <paramref name="textureWidth"/> by <paramref name="textureHeight"/> an ImageBox shows by Meitou's <c>ImageUv</c>
+    /// (four fractions: left, top, width, height; a mod node's <c>UiNode.ImageCrop</c>), else the whole texture.
+    /// </summary>
+    static UiRect UvSource(UiControl c, float textureWidth, float textureHeight) =>
+        c.Properties.TryGetValue("ImageUv", out string? uv) && UiRect.Parse(uv) is { Width: > 0, Height: > 0 } r
+            ? new(r.X * textureWidth, r.Y * textureHeight, r.Width * textureWidth, r.Height * textureHeight)
+            : new(0, 0, textureWidth, textureHeight);
 
     /// <summary>
     /// An image cut into nine pieces by a border of <paramref name="border"/> texels: the corners keep their size (times <c>ImageBorderScale</c>),

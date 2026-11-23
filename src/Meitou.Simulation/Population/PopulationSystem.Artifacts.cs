@@ -143,6 +143,7 @@ public sealed partial class PopulationSystem
 
         var (items, gear) = MakeArtifacts(list);
         list.Clear();
+        ItemCreatedObservers.ReportAll(world, ItemCreatedKind.Loot, items.Concat(gear).Select(a => a.Item), CharacterId.None);
 
         var rng = new BoostRandom(Artifacts.Seed);
         var given = new Dictionary<TownBuilding, List<MadeArtifact>>(ReferenceEqualityComparer.Instance);

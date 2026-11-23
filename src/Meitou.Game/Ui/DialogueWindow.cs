@@ -41,6 +41,12 @@ sealed class DialogueWindow(PlayerInterface player)
     readonly DialogueChoiceLayout _choices = new();
 
     /// <summary>
+    /// The code mods' replies shown after the game's choices, and the conversation view they were asked for (asked again only when its NPC, line
+    /// or choices change, so the rows keep still while the player reads them).
+    /// </summary>
+    (ConversationView? For, IReadOnlyList<UiDialogueReply> Replies) _modReplies = (null, []);
+
+    /// <summary>
     /// Opens the panel when a conversation opens, closes it when it ends, ends the conversation when the player closed the panel; runs a finished
     /// conversation's request.
     /// </summary>
@@ -104,7 +110,7 @@ sealed class DialogueWindow(PlayerInterface player)
 
         // The choices are drawn as buttons, so the player box's template scroll bar would only be an empty track.
         var layout = player.FaithfulScreens.Layout("dialogue");
-        _choices.Bind(b, layout, talk.Choices, player.UiPainter, player.Width, player.Height, player.StandardPixels);
+        _choices.Bind(b, layout, Choices(talk), player.UiPainter, player.Width, player.Height, player.StandardPixels);
         var playerBox = layout.Find("PlayerDialog");
         foreach (var bar in playerBox?.Children.Where(w => w.Type == "ScrollBar") ?? [])
             b.HiddenWidgets.Add(bar);
@@ -122,7 +128,49 @@ sealed class DialogueWindow(PlayerInterface player)
         if (player.Session.CurrentSnapshot.Conversation is not { } talk || controls.FirstOrDefault(c => c.Name == "PlayerDialog") is not { } area)
             return;
 
-        _choices.AddChoices(controls, area, talk.Choices, ChoiceColour, ChoiceHover);
+        _choices.AddChoices(controls, area, Choices(talk), ChoiceColour, ChoiceHover);
+    }
+
+    /// <summary>
+    /// The choices shown for <paramref name="talk"/>: the game's, then the code mods' replies (<see cref="UiRegistration.AddDialogueReplies"/>).
+    /// </summary>
+    IReadOnlyList<string> Choices(ConversationView talk)
+    {
+        var replies = ModReplies(talk);
+        return replies.Count == 0 ? talk.Choices : [.. talk.Choices, .. replies.Select(r => r.Text)];
+    }
+
+    /// <summary>
+    /// The code mods' replies for <paramref name="talk"/>, asked again only when its NPC, line or choices changed; none without a mod that adds any.
+    /// </summary>
+    IReadOnlyList<UiDialogueReply> ModReplies(ConversationView talk)
+    {
+        if (!player.HasModDialogueReplies) return [];
+        if (_modReplies.For is { } asked && SameLine(asked, talk)) return _modReplies.Replies;
+
+        _modReplies = (talk, player.ModDialogueReplies(talk));
+        return _modReplies.Replies;
+    }
+
+    /// <summary>
+    /// Whether two views show the same line with the same choices to the same NPC.
+    /// </summary>
+    static bool SameLine(ConversationView a, ConversationView b) =>
+        ReferenceEquals(a, b) || a.Npc == b.Npc && a.Player == b.Player && a.Text == b.Text && a.Choices.SequenceEqual(b.Choices);
+
+    /// <summary>
+    /// Picks choice <paramref name="index"/>: one of the game's goes to the world, a code mod's reply runs.
+    /// </summary>
+    void Choose(ConversationView talk, int index)
+    {
+        if (index < talk.Choices.Count)
+        {
+            player.Say(new DialogueChoice(index) { Tick = player.Session.World.Tick });
+            return;
+        }
+
+        var replies = ModReplies(talk);
+        if (index - talk.Choices.Count < replies.Count) replies[index - talk.Choices.Count].Press();
     }
 
     /// <summary>
@@ -131,9 +179,9 @@ sealed class DialogueWindow(PlayerInterface player)
     internal void DialogueAction(MyGuiEvent e)
     {
         if (!e.Action.StartsWith("dialogue-choice:", StringComparison.Ordinal)) return;
-        if (!int.TryParse(e.Action[16..], CultureInfo.InvariantCulture, out int index)) return;
+        if (!int.TryParse(e.Action[16..], CultureInfo.InvariantCulture, out int index) || index < 0) return;
 
-        player.Say(new DialogueChoice(index) { Tick = player.Session.World.Tick });
+        if (player.Session.CurrentSnapshot.Conversation is { } talk) Choose(talk, index);
     }
 
     /// <summary>
@@ -145,7 +193,7 @@ sealed class DialogueWindow(PlayerInterface player)
 
         int index = key - Host.Input.Key.D1;
         if (index < 0 || index > 8) return false;
-        if (index < talk.Choices.Count) player.Say(new DialogueChoice(index) { Tick = player.Session.World.Tick });
+        Choose(talk, index);
         return true;
     }
 }

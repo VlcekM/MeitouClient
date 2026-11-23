@@ -407,6 +407,30 @@ public enum MouseButton
 }
 
 /// <summary>
+/// The modifier keys a chord holds (<see cref="Binding.With"/>; docs/modding.md "Key actions"): either key of each.
+/// </summary>
+[Flags]
+public enum KeyModifiers : byte
+{
+    /// <summary>
+    /// No modifier: a plain binding, which fires whatever modifier is held.
+    /// </summary>
+    None = 0,
+    /// <summary>
+    /// Either Ctrl key.
+    /// </summary>
+    Ctrl = 1,
+    /// <summary>
+    /// Either Shift key.
+    /// </summary>
+    Shift = 2,
+    /// <summary>
+    /// Either Alt key.
+    /// </summary>
+    Alt = 4,
+}
+
+/// <summary>
 /// One key or one mouse button an action can be bound to.
 /// </summary>
 public readonly record struct Binding
@@ -417,9 +441,18 @@ public readonly record struct Binding
     readonly int _code;
 
     /// <summary>
-    /// The binding of an encoded key or button.
+    /// The modifiers a chord holds; none for a plain binding.
     /// </summary>
-    Binding(int code) => this._code = code;
+    readonly KeyModifiers _modifiers;
+
+    /// <summary>
+    /// The binding of an encoded key or button with <paramref name="modifiers"/>.
+    /// </summary>
+    Binding(int code, KeyModifiers modifiers = KeyModifiers.None)
+    {
+        _code = code;
+        _modifiers = modifiers;
+    }
 
     /// <summary>
     /// The binding of a key.
@@ -439,6 +472,18 @@ public readonly record struct Binding
     public static implicit operator Binding(MouseButton button) => Of(button);
 
     /// <summary>
+    /// This key as a chord with exactly <paramref name="modifiers"/> held (<see cref="KeyModifiers.None"/>: the plain key). Only a code mod's key
+    /// action takes a chord; it is checked before the game's bindings (docs/modding.md "Key actions"). Throws for a mouse button or an undefined flag.
+    /// </summary>
+    public Binding With(KeyModifiers modifiers)
+    {
+        if (IsMouse) throw new InvalidOperationException("A chord is a key with modifiers, not a mouse button.");
+        if ((modifiers & ~(KeyModifiers.Ctrl | KeyModifiers.Shift | KeyModifiers.Alt)) != 0) throw new ArgumentOutOfRangeException(nameof(modifiers));
+
+        return new(_code, modifiers);
+    }
+
+    /// <summary>
     /// Whether the binding is a mouse button.
     /// </summary>
     public bool IsMouse => _code < 0;
@@ -450,18 +495,68 @@ public readonly record struct Binding
     /// The mouse button; throws for a key binding.
     /// </summary>
     public MouseButton Button => IsMouse ? (MouseButton)(-1 - _code) : throw new InvalidOperationException("A key binding");
-
     /// <summary>
-    /// "W", or "Mouse:Right" for a button (the form <see cref="InputBindings"/> reads from a config).
+    /// The modifiers a chord holds; <see cref="KeyModifiers.None"/> for a plain key or button.
     /// </summary>
-    public override string ToString() => IsMouse ? "Mouse:" + Button : Key.ToString();
+    public KeyModifiers Modifiers => _modifiers;
+    /// <summary>
+    /// Whether the binding is a chord (a key with modifiers).
+    /// </summary>
+    public bool IsChord => _modifiers != KeyModifiers.None;
+    /// <summary>
+    /// The plain key or button without its modifiers.
+    /// </summary>
+    public Binding Plain => new(_code);
 
     /// <summary>
-    /// Reads a binding in the form <see cref="ToString"/> writes ("W", "Mouse:Right"; case ignored); false for an unknown key or button.
+    /// "W", "Ctrl+Shift+P" for a chord, or "Mouse:Right" for a button (the form <see cref="InputBindings"/> reads from a config).
+    /// </summary>
+    public override string ToString() => IsMouse ? "Mouse:" + Button : Prefix(_modifiers) + Key;
+
+    /// <summary>
+    /// A chord's modifiers as written before its key, in the order Ctrl, Shift, Alt.
+    /// </summary>
+    static string Prefix(KeyModifiers modifiers) =>
+        ((modifiers & KeyModifiers.Ctrl) != 0 ? "Ctrl+" : "") + ((modifiers & KeyModifiers.Shift) != 0 ? "Shift+" : "")
+        + ((modifiers & KeyModifiers.Alt) != 0 ? "Alt+" : "");
+
+    /// <summary>
+    /// Reads a binding in the form <see cref="ToString"/> writes ("W", "Ctrl+Shift+P" with the modifiers in any order, "Mouse:Right"; case
+    /// ignored); false for an unknown key, button or modifier.
     /// </summary>
     public static bool TryParse(string text, out Binding binding)
     {
-        text = text.Trim();
+        binding = default;
+        var parts = text.Trim().Split('+', StringSplitOptions.TrimEntries);
+        var modifiers = KeyModifiers.None;
+        foreach (string part in parts[..^1])
+        {
+            if (ModifierOf(part) is not { } modifier) return false;
+            modifiers |= modifier;
+        }
+
+        if (!TryParsePlain(parts[^1], out var plain) || (modifiers != KeyModifiers.None && plain.IsMouse)) return false;
+
+        binding = modifiers == KeyModifiers.None ? plain : plain.With(modifiers);
+        return true;
+    }
+
+    /// <summary>
+    /// A modifier's name ("Ctrl" or "Control", "Shift", "Alt"; case ignored); null for another word.
+    /// </summary>
+    static KeyModifiers? ModifierOf(string name) => name.ToUpperInvariant() switch
+    {
+        "CTRL" or "CONTROL" => KeyModifiers.Ctrl,
+        "SHIFT" => KeyModifiers.Shift,
+        "ALT" => KeyModifiers.Alt,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Reads one key or button ("W", "Mouse:Right").
+    /// </summary>
+    static bool TryParsePlain(string text, out Binding binding)
+    {
         const string prefix = "Mouse:";
         if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {

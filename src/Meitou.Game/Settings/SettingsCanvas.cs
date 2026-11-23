@@ -471,6 +471,10 @@ sealed class SettingsCanvas(SettingsMenu menu)
         {
             DrawChoiceButton(choice, buttonY);
         }
+        else if (entry.Text is { } text)
+        {
+            DrawTextBox(text, R(688, buttonY, 412, 26));
+        }
         else if (entry.Slider is { } slider)
         {
             DrawSliderRow(entry, slider, y, row);
@@ -507,6 +511,35 @@ sealed class SettingsCanvas(SettingsMenu menu)
             ChoiceAnchor = at;
             menu.Focus = -1;
         }, menu.Viewport);
+    }
+
+    /// <summary>
+    /// A free-text row's box: its text, or the text being typed with its caret; a click starts typing.
+    /// </summary>
+    void DrawTextBox(TextEntry entry, UiRect at)
+    {
+        Rect(at, new(0.06f, 0.05f, 0.04f, 0.95f), menu.Viewport);
+        var textAt = at with { X = at.X + 6 * menu.Scale, Width = at.Width - 12 * menu.Scale };
+        if (!menu.TextEdit.Edits(entry))
+        {
+            if (at.Contains(menu.Pointer.X, menu.Pointer.Y)) Rect(at, MainInk with { W = 0.06f }, menu.Viewport);
+            Text(entry.Get(), textAt, 13, LightInk, "Left VCenter", menu.Viewport);
+            if (at.Intersect(menu.Viewport).Height >= at.Height - 1) menu.Hits.Add(new(at, () => menu.TextEdit.Begin(entry, at)));
+            return;
+        }
+
+        var field = menu.TextEdit.Field;
+        menu.TextEdit.Bounds = at;
+        menu.Controls.Add(new("settings-text", "EditBox", textAt, field.Text, "", "", true,
+            new Dictionary<string, string>
+            {
+                ["Focused"] = "true",
+                ["TextAlign"] = "Left VCenter",
+                ["FontPixels"] = ((int)MathF.Round(13 * menu.Scale)).ToString(CultureInfo.InvariantCulture),
+                ["SelectionStart"] = field.SelectionStart.ToString(CultureInfo.InvariantCulture),
+                ["SelectionLength"] = field.SelectionLength.ToString(CultureInfo.InvariantCulture),
+                ["CaretIndex"] = field.Caret.ToString(CultureInfo.InvariantCulture),
+            }, Vector4.Zero, LightInk, Clip: menu.Viewport, Pickable: false));
     }
 
     /// <summary>

@@ -177,6 +177,60 @@ public sealed class ModHost
     }
 
     /// <summary>
+    /// Attaches a new player interface for the mods' <see cref="ModInterface"/>s; on the host's thread.
+    /// </summary>
+    internal void AttachInterface(IModInterfaceHost host) => _registry.Interface.Attach(host);
+
+    /// <summary>
+    /// Whether a mod registered a per-frame callback.
+    /// </summary>
+    public bool WantsFrames => _registry.Frames.Count > 0;
+
+    /// <summary>
+    /// Hands <paramref name="frame"/> to every mod's per-frame callback, in load order, on the host's thread; one that throws is logged and not
+    /// called again.
+    /// </summary>
+    public void DeliverFrame(ModFrame frame)
+    {
+        foreach (var view in _registry.Frames)
+        {
+            if (view.Faulted) continue;
+            try
+            {
+                view.Run(frame);
+            }
+            catch (Exception e)
+            {
+                view.Faulted = true;
+                Console.Error.WriteLine($"mod       {view.Owner}: frame callback disabled: {e.GetType().Name}: {e.Message}");
+                CodeModFaults.Tell(view.Owner, e);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tells every mod's save-written listener, in load order, that the save folder <paramref name="folder"/> was written; on the host's thread. One
+    /// that throws is logged and not called again.
+    /// </summary>
+    public void TellSaveWritten(string folder)
+    {
+        foreach (var listener in _registry.SavesWritten)
+        {
+            if (listener.Faulted) continue;
+            try
+            {
+                listener.Run(folder);
+            }
+            catch (Exception e)
+            {
+                listener.Faulted = true;
+                Console.Error.WriteLine($"mod       {listener.Owner}: save-written listener disabled: {e.GetType().Name}: {e.Message}");
+                CodeModFaults.Tell(listener.Owner, e);
+            }
+        }
+    }
+
+    /// <summary>
     /// The mods' display-only effects (docs/modding.md "Visual effects"), played by the host once a frame.
     /// </summary>
     internal ModEffects Effects => _registry.Effects;
@@ -185,6 +239,41 @@ public sealed class ModHost
     /// The mods' display-only glows (docs/modding.md "Glow"), handed to the renderer by the host once a frame.
     /// </summary>
     internal ModGlows Glows => _registry.Glows;
+
+    /// <summary>
+    /// The mods' display-only ribbon trails (docs/modding.md "Trails"), sampled and handed to the particles by the host once a frame.
+    /// </summary>
+    internal ModTrails Trails => _registry.Trails;
+
+    /// <summary>
+    /// A mod registered a projectile feed: the host then compares the shown snapshots' bolts every frame.
+    /// </summary>
+    public bool WantsProjectiles => _registry.ProjectileFeeds.Count > 0;
+
+    /// <summary>
+    /// The bolts' changes since the last frame to every mod's projectile feed, in load order, on the host's thread; a feed that throws is logged
+    /// and gets no more.
+    /// </summary>
+    public void DeliverProjectiles(IReadOnlyList<ProjectileEvent> changes)
+    {
+        if (changes.Count == 0) return;
+
+        foreach (var feed in _registry.ProjectileFeeds)
+        {
+            if (feed.Faulted) continue;
+
+            try
+            {
+                feed.Run(changes);
+            }
+            catch (Exception e)
+            {
+                feed.Faulted = true;
+                Console.Error.WriteLine($"mod       {feed.Owner}: projectile feed disabled: {e.GetType().Name}: {e.Message}");
+                CodeModFaults.Tell(feed.Owner, e);
+            }
+        }
+    }
 
     /// <summary>
     /// Whether a mod arranges the faction tab's list.
@@ -662,6 +751,7 @@ public sealed class ModHost
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
             _registry.Effects.Drop(context.Id);
             _registry.Glows.Drop(context.Id);
+            _registry.Trails.Drop(context.Id);
             TellDependenciesItFailed(mod);
             throw;
         }

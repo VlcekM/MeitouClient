@@ -23,6 +23,21 @@ public enum GlowTargetKind
 }
 
 /// <summary>
+/// How a code mod's display-only glow shows (<see cref="ModContext.Glow"/>, <see cref="ModContext.Tint"/>).
+/// </summary>
+public enum GlowMode
+{
+    /// <summary>
+    /// Light of its own, added to the lit colour.
+    /// </summary>
+    Light,
+    /// <summary>
+    /// The surface's own colour blended towards the glow's before it is lit.
+    /// </summary>
+    Tint,
+}
+
+/// <summary>
 /// What a code mod's display-only glow lights (docs/modding.md "Glow"): made with <see cref="Character"/>, <see cref="Weapon"/> or
 /// <see cref="Worn"/>. A character holds one glow per target; on a part that several of its targets cover, the weapon's or the slot's wins over
 /// the whole character's.

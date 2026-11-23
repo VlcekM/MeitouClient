@@ -35,6 +35,18 @@ public static class OrderDesire
     /// </summary>
     public static float? Of(World world, int slot, OrderEntry order)
     {
+        var desire = GameOf(world, slot, order);
+        var filters = world.Decisions.DesireFilters;
+        if (desire is not { } d || !filters.Active) return desire;
+
+        return filters.Pass(world, world.Characters.IdOf(slot), order.Row, GoalDesireKind.Order, d);
+    }
+
+    /// <summary>
+    /// <see cref="Of"/> as the game weighs it, before the code mods' desire filters (<see cref="IGoalDesireFilter"/>).
+    /// </summary>
+    static float? GameOf(World world, int slot, OrderEntry order)
+    {
         var cold = world.Characters.Cold(slot)!;
         return order.Row switch
         {

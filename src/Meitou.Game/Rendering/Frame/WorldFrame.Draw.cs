@@ -425,7 +425,8 @@ static partial class WorldFrame
         StageClock.Part(StageClock.PartPortraits);
 
         // Before the colour pass, whose statistics stand.
-        gpu.Characters?.DrawHoverMasks(gpu.HoverOutline is null ? [] : gpu.HoverKeys, f.Width, f.Height, camera.View, camera.FieldOfView, f.Eye);
+        gpu.Characters?.DrawHoverMasks(gpu.HoverOutline is null ? [] : gpu.HoverKeys, f.Width, f.Height, camera.View, camera.FieldOfView, f.Eye,
+            gpu.HoverOutline is null ? [] : gpu.ThroughKeys);
         StageClock.Part(StageClock.PartHover);
 
         gpu.Characters?.DrawIcons();   // the item icons being made, from the same update

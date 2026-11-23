@@ -421,6 +421,37 @@ public static class InventoryCommands
         Arrange(bag ? [(root.Backpack?.Contents, "backpack_content")] : [(root, "main")]);
 
     /// <summary>
+    /// An arrange the game runs, as a code mod sees it (docs/modding.md "Inventory arrange"): <paramref name="root"/>'s main grid and worn bag
+    /// (<paramref name="bag"/> null), only the bag (true) or only the main grid (false), for the window of <paramref name="owner"/> because of
+    /// <paramref name="reason"/>. The world's <see cref="IInventoryArrangeFilter"/>s are asked first; without one that arranges it is the game's
+    /// (<see cref="Arrange(Inventory)"/>, <see cref="Arrange(Inventory, bool)"/>, which never ask the filters). True when arranged.
+    /// </summary>
+    public static bool Arrange(World world, Inventory root, ItemOwner owner, InventoryArrangeReason reason, bool? bag = null)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(root);
+
+        (Inventory? Grid, string Section)[] sections = bag switch
+        {
+            null => [(root, "main"), (root.Backpack?.Contents, "backpack_content")],
+            true => [(root.Backpack?.Contents, "backpack_content")],
+            false => [(root, "main")],
+        };
+
+        return world.ArrangeFilters.Active && world.ArrangeFilters.Arrange(world, Ask(world, root, owner, reason, sections)) || Arrange(sections);
+    }
+
+    /// <summary>
+    /// The filters' ask for an arrange of <paramref name="sections"/> (the missing grids left out).
+    /// </summary>
+    static InventoryArrangeAsk Ask(World world, Inventory root, ItemOwner owner, InventoryArrangeReason reason,
+        (Inventory? Grid, string Section)[] sections)
+    {
+        var grids = sections.Where(s => s.Grid is not null).Select(s => new ArrangeGrid(s.Grid!, s.Section)).ToArray();
+        return new InventoryArrangeAsk(world.Tick, root, owner, reason, grids, Merged: false);
+    }
+
+    /// <summary>
     /// Arranges <paramref name="sections"/> (a grid and the section of it arranged; a missing grid is skipped) as <see cref="Arrange(Inventory)"/>.
     /// </summary>
     static bool Arrange((Inventory? Grid, string Section)[] sections)

@@ -211,6 +211,12 @@ public sealed partial class PopulationSystem
     bool Kept(Platoon p) => OriginalKeeps(p) || !p.Dead && (p.ModSpawned || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers));
 
     /// <summary>
+    /// <see cref="Kept(Platoon)"/>, or a code mod's veto keeps the loaded platoon as it leaves the world
+    /// (<see cref="Bodies.RemovalKind.PlatoonDespawned"/>). Serial.
+    /// </summary>
+    bool Kept(World world, Platoon p) => Kept(p) || world.RemovalVetoes.KeepsPlatoon(world, p.Id, Bodies.RemovalKind.PlatoonDespawned);
+
+    /// <summary>
     /// The original's own keep test (see <see cref="Kept"/>): a platoon that is not declared dead and occupies a town or is persistent, or a
     /// campaign's force that has not been spent.
     /// </summary>
@@ -229,7 +235,8 @@ public sealed partial class PopulationSystem
     /// </summary>
     void StepOffscreen(World world, Platoon p, float dt)
     {
-        if (!p.Pinned && !Kept(p) && (p.ReplacedHome || !Wanted(world, p))) p.OrphanSeconds += dt;
+        bool orphaned = !p.Pinned && !Kept(p) && (p.ReplacedHome || !Wanted(world, p));
+        if (orphaned && !world.RemovalVetoes.KeepsPlatoon(world, p.Id, Bodies.RemovalKind.PlatoonOrphaned)) p.OrphanSeconds += dt;
         else p.OrphanSeconds = 0;
         if (p.OrphanSeconds > OrphanLimitSeconds) return;
 
@@ -580,7 +587,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     bool MemberDownInZone(World world, Platoon p, Squad squad)
     {
-        if (p.Pinned || !Kept(p) || OriginalKeeps(p)) return false;
+        if (p.Pinned || !Kept(world, p) || OriginalKeeps(p)) return false;
 
         var table = world.Characters;
         foreach (var m in squad.Members)
@@ -671,7 +678,7 @@ public sealed partial class PopulationSystem
     /// of the zone is destroyed, and the platoon stays while any is left (<see cref="ThinOutOfZone"/>).
     /// </summary>
     bool StaysActive(World world, Platoon p, Squad squad) =>
-        Kept(p) || p.Pinned ? MemberInView(world, squad) : ThinOutOfZone(world, p, squad);
+        p.Pinned || Kept(world, p) ? MemberInView(world, squad) : ThinOutOfZone(world, p, squad);
 
     /// <summary>
     /// Whether a member of the squad, dead or alive, is on screen (the original's <c>Character+0x1a9</c>, <see cref="Bodies.MedicalClock.OnScreen"/>):
@@ -721,7 +728,7 @@ public sealed partial class PopulationSystem
 
         // Faithful: a platoon the original does not keep (not a town's own, not in a campaign, not occupying) is despawned as it leaves; a save's
         // wild one by the wild switch.
-        if (!Kept(p) && !p.Pinned)
+        if (!p.Pinned && !Kept(world, p))
         {
             PayRoamerDespawn(world, p, squad);
             Despawn(world, p);

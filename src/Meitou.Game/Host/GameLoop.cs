@@ -873,6 +873,11 @@ sealed class GameLoop(GameHost host)
         || keyboard.IsKeyPressed(SilkKey.ControlRight);
 
     /// <summary>
+    /// Whether an Alt key is held.
+    /// </summary>
+    static bool AltDown(Silk.NET.Input.IKeyboard keyboard) => keyboard.IsKeyPressed(SilkKey.AltLeft) || keyboard.IsKeyPressed(SilkKey.AltRight);
+
+    /// <summary>
     /// The key a modal window takes: the keypad's Enter as Enter.
     /// </summary>
     static EngineKey? ModalKeyOf(SilkKey k) => k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k);
@@ -970,7 +975,7 @@ sealed class GameLoop(GameHost host)
             host.Loading?.SkipSplash();
             return;
         }
-        if (ModalKey(keyboard, k) || PhotoKey(k) || InterfaceKey(keyboard, k)) return;
+        if (ModalKey(keyboard, k) || ChordKey(keyboard, k) || PhotoKey(k) || InterfaceKey(keyboard, k)) return;
         if (KeyMap.Map(k) is { } uiKey && host.Player.UiKey(uiKey, CtrlDown(keyboard), _shiftDown)) return;
         GameKey(keyboard, k);
     }
@@ -999,7 +1004,7 @@ sealed class GameLoop(GameHost host)
             if (ModalKeyOf(k) is { } settingsKey)
             {
                 if (settingsKey is EngineKey.F8 or EngineKey.PrintScreen) host.ScreenshotRequested = true;
-                else _panel.KeyDown(settingsKey, _shiftDown, CtrlDown(keyboard));
+                else _panel.KeyDown(settingsKey, _shiftDown, CtrlDown(keyboard), AltDown(keyboard));
             }
             return true;
         }
@@ -1036,6 +1041,22 @@ sealed class GameLoop(GameHost host)
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// A key that goes down with modifiers held as a code mod's chord (<see cref="InputBindings.TakeChord"/>, docs/modding.md "Key actions"): it
+    /// reaches that key action only, before photo mode, the interface and the game's bindings. Not while a text field has the keys, over the
+    /// title or in photo mode.
+    /// </summary>
+    bool ChordKey(Silk.NET.Input.IKeyboard keyboard, SilkKey k)
+    {
+        if (host.Player.UiEditing || host.Player.TitleOpen || _photo.Active || KeyMap.Map(k) is not { } key) return false;
+
+        var held = InputBindings.Modifiers(CtrlDown(keyboard), _shiftDown, AltDown(keyboard));
+        if (!host.Session.Bindings.TakeChord(key, held)) return false;
+
+        host.Session.Input.SetKey(key, true);
+        return true;
     }
 
     /// <summary>

@@ -4,13 +4,53 @@ namespace Meitou.Game.Ui;
 /// A line an extension adds to an item's tooltip (<see cref="UiRegistration.AddItemTooltipLines"/>): <paramref name="Label"/> in the tooltip's label
 /// column, <paramref name="Value"/> (null or blank: none) in its value column.
 /// </summary>
-public sealed record UiItemTooltipLine(string Label, string? Value = null);
+public sealed record UiItemTooltipLine(string Label, string? Value = null)
+{
+    /// <summary>
+    /// The line's colours (<see cref="UiLineStyle"/>; its icon is not drawn in tooltips); null: the tooltip's own.
+    /// </summary>
+    public UiLineStyle? Style { get; init; }
+}
 
 /// <summary>
 /// What an extension's item tooltip lines get: the item's record string id, its name, its code-mod tag (<c>ItemInstance.ModTag</c>, "" none; a
-/// trader's stock item has none), its quantity, level and quality.
+/// trader's stock item has none), its quantity, level and quality; who holds it and its index there, whether this is its tooltip's first build,
+/// the tick and the command queue.
 /// </summary>
-public sealed record UiItemTooltipContext(string Record, string Name, string ModTag, int Quantity, int Level, float Quality);
+public sealed record UiItemTooltipContext(string Record, string Name, string ModTag, int Quantity, int Level, float Quality)
+{
+    /// <summary>
+    /// Who holds the item (a character's inventory, a machine's or storage's site), which a command names it by with <see cref="Index"/>; null
+    /// for an item no command can name (a trader's stock, a crafted product's preview).
+    /// </summary>
+    public Simulation.Items.ItemOwner? Owner { get; init; }
+
+    /// <summary>
+    /// The item's index among <see cref="Owner"/>'s items (<c>InventoryItemView.Index</c>); -1 without an owner. It names the item only until the inventory changes, so a command checks the record (and tag) it expects there.
+    /// </summary>
+    public int Index { get; init; } = -1;
+
+    /// <summary>
+    /// Whether this is the first build of the tooltip for this item as it is now: true when the tooltip last showed another item (or the item
+    /// changed, its tag included), false while the same tooltip is built again each frame it shows.
+    /// </summary>
+    public bool First { get; init; }
+
+    /// <summary>
+    /// The tick source and command queue (none in a context made without them: <see cref="Tick"/> is 0 and <see cref="Enqueue"/> does nothing).
+    /// </summary>
+    internal (Func<long> Tick, Action<Simulation.SimCommand> Enqueue)? World { get; init; }
+
+    /// <summary>
+    /// The world's tick now, for a command's <see cref="Simulation.SimCommand.Tick"/>.
+    /// </summary>
+    public long Tick => World?.Tick() ?? 0;
+
+    /// <summary>
+    /// Queues a command for the world (the only way a source changes it, e.g. to tag an item the first time its tooltip shows).
+    /// </summary>
+    public void Enqueue(Simulation.SimCommand command) => World?.Enqueue(command);
+}
 
 /// <summary>
 /// The extensions' item tooltip line sources (docs/modding.md "Item tooltip lines"), asked whenever an item's tooltip is built.
@@ -83,7 +123,7 @@ sealed class ItemTooltipLines
     /// A line as the tooltip shows it: label and value on one line and cut, a blank value none.
     /// </summary>
     static UiItemTooltipLine Shown(UiItemTooltipLine line) =>
-        new(Text(line.Label), string.IsNullOrWhiteSpace(line.Value) ? null : Text(line.Value));
+        new(Text(line.Label), string.IsNullOrWhiteSpace(line.Value) ? null : Text(line.Value)) { Style = UiLineStyle.Shown(line.Style) };
 
     /// <summary>
     /// <paramref name="text"/> cut to <see cref="MaxText"/> characters and put on one line.
