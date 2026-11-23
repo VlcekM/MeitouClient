@@ -267,6 +267,7 @@ public sealed partial class World : IDisposable
             CombatEngageFilters.Register(this._systems[k], k);
             BlowReactionFilters.Register(this._systems[k], k);
             CombatDefenceFilters.Register(this._systems[k], k);
+            ArrangeFilters.Register(this._systems[k], k);
         }
         for (int k = 0; k < this._systems.Count; k++) RegisterTasks(this._systems[k], k);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) Decisions.RegisterFrom(owner);
@@ -537,6 +538,10 @@ public sealed partial class World : IDisposable
     /// The systems filtering hits before they land (<see cref="Combat.ICombatHitFilter"/>).
     /// </summary>
     internal Combat.CombatHitFilters CombatHitFilters { get; } = new();
+    /// <summary>
+    /// The systems replacing inventory arranges (<see cref="Items.IInventoryArrangeFilter"/>).
+    /// </summary>
+    internal Items.InventoryArrangeFilters ArrangeFilters { get; } = new();
     /// <summary>
     /// The systems adjusting trade prices (<see cref="Trading.ITradePriceFilter"/>).
     /// </summary>
@@ -885,6 +890,7 @@ public sealed partial class World : IDisposable
         CombatEngageFilters.Register(system, _systems.Count - 1);
         BlowReactionFilters.Register(system, _systems.Count - 1);
         CombatDefenceFilters.Register(system, _systems.Count - 1);
+        ArrangeFilters.Register(system, _systems.Count - 1);
         RegisterTasks(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner);
         Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
@@ -1569,6 +1575,7 @@ public sealed partial class World : IDisposable
         CombatEngageFilters.HashFaults(ref h);
         BlowReactionFilters.HashFaults(ref h);
         CombatDefenceFilters.HashFaults(ref h);
+        ArrangeFilters.HashFaults(ref h);
         Decisions.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
     }

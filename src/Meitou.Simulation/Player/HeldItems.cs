@@ -901,9 +901,15 @@ sealed class HeldItems(PopulationData? data)
         bool shut = InventoryCommands.MainClosed(owner);
         bool canAdd = !shut || item.Contents is not { Items.Count: > 0 };
         if (canAdd && root.Add(item, shut)) return;
-        if (canAdd && (shut ? InventoryCommands.Arrange(root, bag: true) : InventoryCommands.Arrange(root)) && root.Add(item, shut)) return;
+        if (canAdd && MakeRoom(world, root, held.From, shut) && root.Add(item, shut)) return;
         if (DropSpot(world, held) is var (at, from)) Ground(world, item, at, from);
     }
+
+    /// <summary>
+    /// Arranges the held item's inventory for room (only its worn bag when the main grid is <paramref name="shut"/>).
+    /// </summary>
+    static bool MakeRoom(World world, Inventory root, ItemOwner from, bool shut) =>
+        InventoryCommands.Arrange(world, root, from, InventoryArrangeReason.MakeRoom, shut ? true : null);
 
     /// <summary>
     /// A held item that came from no inventory back into its machine's slot, crafted list or output; onto the ground when none takes it.

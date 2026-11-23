@@ -364,7 +364,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                     if (CustomerTrades(world, sell.From)) Sell(world, sell);
                     break;
                 case ArrangeStock when _open:
-                    if (Resolve(world, out _, out _, out var arranged)) InventoryCommands.Arrange(arranged!.Window);
+                    if (Resolve(world, out _, out _, out var arranged))
+                    {
+                        InventoryCommands.Arrange(world, arranged!.Window, ItemOwner.Stock, InventoryArrangeReason.Button);
+                    }
                     break;
                 case SetSquadShop given:
                     SetShop(world, given);
@@ -1266,7 +1269,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!Resolve(world, out _, out _, out var shop) || shop is null) return;
 
         SettleView(world, shop);
-        if (!shop.View.Pending) shop.View.Build(shop, BoxesOf(world, shop, out _));
+        if (!shop.View.Pending) shop.View.Build(world, shop, BoxesOf(world, shop, out _));
     }
 
     /// <summary>
@@ -1297,7 +1300,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// </summary>
     void ReopenView(World world, Shop shop)
     {
-        if (Shows(world, shop)) shop.View.Build(shop, BoxesOf(world, shop, out _));
+        if (Shows(world, shop)) shop.View.Build(world, shop, BoxesOf(world, shop, out _));
         else shop.View.Drop(shop);
     }
 

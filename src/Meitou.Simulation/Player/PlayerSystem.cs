@@ -258,7 +258,9 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
                 break;
             case Items.ArrangeInventory arrange:
                 if (table.TryResolveNext(arrange.Character, out int character)
-                    && table.Cold(character) is { IsPlayer: true, Inventory: { } carried } && !Items.InventoryCommands.Arrange(carried, arrange.Bag))
+                    && table.Cold(character) is { IsPlayer: true, Inventory: { } carried }
+                    && !Items.InventoryCommands.Arrange(world, carried, Items.ItemOwner.Of(arrange.Character), Items.InventoryArrangeReason.Button,
+                        arrange.Bag))
                 {
                     world.Post("Cannot arrange inventory: the items do not fit.");
                 }

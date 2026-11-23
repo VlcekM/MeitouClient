@@ -33,7 +33,7 @@ sealed class ShopView
     /// <summary>
     /// Builds the trader window from what <paramref name="boxes"/> hold.
     /// </summary>
-    public void Build(Shop shop, IReadOnlyList<StockBox> boxes)
+    public void Build(World world, Shop shop, IReadOnlyList<StockBox> boxes)
     {
         var (columns, rows) = shop.ViewSize;
         shop.Window = new Inventory(columns, rows) { StackBonusMult = Shop.StockStackMult };
@@ -44,7 +44,7 @@ sealed class ShopView
                 if (item.ItemFunction != PlayerSystem.MoneyFunction) Put(shop, item.Copy());
         }
 
-        InventoryCommands.Arrange(shop.Window);
+        InventoryCommands.Arrange(world, shop.Window, ItemOwner.Stock, InventoryArrangeReason.StockShown);
         _mirrored = Frozen(Tally(shop.Window.Items));
         Live = true;
         Pending = false;
