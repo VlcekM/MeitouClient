@@ -8,8 +8,8 @@ namespace Meitou.Simulation.Weather;
 
 /// <summary>
 /// What the weather does to characters (docs/formats/weather.md "Effects on characters"; the character's weather update <c>FUN_1405cf790</c>,
-/// <b>Verified</b> by decompilation). For each living character with a body every <see cref="EveryTicks"/> ticks, in the slow-world phase (serial),
-/// with that many ticks of character time:
+/// <b>Verified</b> by decompilation). For each living person with a body (an animal has no weather update) every <see cref="EveryTicks"/> ticks, in
+/// the slow-world phase (serial), with that many ticks of character time:
 /// <list type="number">
 /// <item>Acid, unless the race is immune to it: swimming (water state 3) in a region with <c>acidic water</c> burns every part; otherwise, outdoors,
 /// standing (not down or carried), not in a bed or cage and with an empty boots slot, <c>acidic ground</c> burns the legs.</item>
@@ -119,6 +119,9 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
         cold.WeatherStrength = cold.WeatherProtection = 0;
         cold.WeatherNotice = WeatherNotice.None;
         if (cold.Medical is not { Dead: false } medical || cold.Race is not { } race) return;
+
+        // An animal's weather update is empty (CharacterAnimal's vtable slot is a bare return).
+        if (Factions.SquadRegistry.IsAnimal(cold)) return;
 
         var at = next[i].Position;
         if (source.At(at.X, at.Z) is not { } here) return;
