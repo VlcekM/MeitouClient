@@ -1292,7 +1292,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
 - **Lockpicking** (`Lockpicking`, serial; the player's order is in [Arrest and jail](#arrest-and-jail)): `Step` per task update (pending crime,
   timer on the lock, seeded roll by the lock's roll counter, XP), `Allowed` (min chance; engine: conscious, an arm, not
   carried), `Sheathe` (a weapon in hand put away first by every pick and cut, one update, [locks](game/locks.md#lockpicking-task_picklock-76-task_picklock_shackles-201)), `Break` (strength > 3 x hardness); `CutLock` / `Break` also serve doors, containers and cages (Use Tools / Use Strength, `LockSystem.Force.cs`, [locks](game/locks.md#player-orders-on-locks)).
-  A player character picking a lock or shackles at the lock gets the floating bar (`CharacterSnapshot.Bar`, drawn in the
+  A player-faction character (only, as the original) picking a lock or shackles at the lock gets the floating bar (`CharacterSnapshot.Bar`, drawn in the
   `Kenshi_ProgressBarPanel` layout just above the name tag; anchor engine choice). No bar for cutting.
 - **Bashing doors** (`LockSystem.Bash`, `DoorPlan`; rules in [locks](game/locks.md)): every 30 ticks an NPC attacking whose target is inside a building
   whose doors are all locked (`IsShut`; inside: nearer the door fixture's origin than its farthest door spot) while it is outside plans row 4 with the

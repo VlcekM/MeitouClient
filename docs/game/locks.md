@@ -97,7 +97,9 @@ Save sample (autosave of the owner's game, 51 zone files): `lock lvl` values spa
   `k = 1.2` on success, 0.24 on failure. The lock level is passed but unused.
 - **Bar** (**Verified**, Task_PickLock slot 2 `FUN_140359160`): each update sets the task's floating bar
   (`FloatingProgressBar::ProgressBarWidget`, `FUN_1406e8580`, layout `Kenshi_ProgressBarPanel`: `ProgressBar` fill, `Text`
-  caption) to pick time / next-roll time and its caption to "Lockpicking (Chance {p}%)" with the cage penalty.
+  caption) to pick time / next-roll time and its caption to "Lockpicking (Chance {p}%)" with the cage penalty. Only a player-faction picker
+  has the bar: `ProgressBarTask`'s start (`FUN_140331ca0`, **Verified**) makes it only when the character's faction (vfunc `0x58`) has
+  `+0x250` set, and the update skips the caption with none, so an NPC picking a lock shows only the floaters below (#1313).
 - **Messages/sounds** (**Verified** `FUN_140359160`): after every roll, success or failure, any picker (no player check) gets a
   floating label (`FUN_14073faf0`, font 0 small) 15 units over it: "Pick success!" (0.4, 0.8, 0.4, alpha 0.9) or "Pick failed"
   (0.7, 0.4, 0.4, alpha 0.7), the stealth KO's colours; no name, no log line. Success also plays `Character_Unlock_Success`.
@@ -269,7 +271,8 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   through a locked door (no unlock, bash, pick or cut) and stops there; 60 still gives it the way out of a building it stands in.
   **Observed** (headless, vanilla Sho-Battai, 30,000 ticks): before, the UC town racists' boss on patrol worked the shut shop 43.11:16's lock
   from outside at night for 1,900 ticks, was booked for Burglary and the garrison fought his squad; after, no such booking or fight. **Observed** (headless, #885 save and a fresh Mourn): before, a Tech Hunter patroller unlocked Mourn's Ancient Lab gate, which then stood open, and the Great White Gorillo fought the guards and left; after, the gate
-  stayed locked for 40,000 ticks. A picker or cutter puts a weapon in
+  stayed locked for 40,000 ticks. Unlike the patroller, 157 Static town guard (and 38 / 268) has a way in: its `31` atNode comes from 31 Staying close, whose list B
+  has 59 (**Verified**, row table), so a guard whose drawn post is inside a locked building works its way in like any NPC (#1313). A picker or cutter puts a weapon in
   hand away first ([weapon away](#lockpicking-task_picklock-76-task_picklock_shackles-201)). An NPC's planned goal whose destination is behind
   locked doors does not plan (59 in the main planner, `PlanContext.Accessible`: its own unlock, a bash, a cut or a pick, as `WayIn` gives; an
   animal a building keeps out gets 59's default), so its walk is not started; once under way it takes the same way in at the door. An engine
