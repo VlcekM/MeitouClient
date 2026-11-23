@@ -182,6 +182,33 @@ public sealed class ModHost
     internal void AttachInterface(IModInterfaceHost host) => _registry.Interface.Attach(host);
 
     /// <summary>
+    /// Whether a mod registered a per-frame callback.
+    /// </summary>
+    public bool WantsFrames => _registry.Frames.Count > 0;
+
+    /// <summary>
+    /// Hands <paramref name="frame"/> to every mod's per-frame callback, in load order, on the host's thread; one that throws is logged and not
+    /// called again.
+    /// </summary>
+    public void DeliverFrame(ModFrame frame)
+    {
+        foreach (var view in _registry.Frames)
+        {
+            if (view.Faulted) continue;
+            try
+            {
+                view.Run(frame);
+            }
+            catch (Exception e)
+            {
+                view.Faulted = true;
+                Console.Error.WriteLine($"mod       {view.Owner}: frame callback disabled: {e.GetType().Name}: {e.Message}");
+                CodeModFaults.Tell(view.Owner, e);
+            }
+        }
+    }
+
+    /// <summary>
     /// Tells every mod's save-written listener, in load order, that the save folder <paramref name="folder"/> was written; on the host's thread. One
     /// that throws is logged and not called again.
     /// </summary>

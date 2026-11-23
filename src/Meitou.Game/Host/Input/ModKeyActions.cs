@@ -126,6 +126,11 @@ public sealed record ModKeyContext(WorldSnapshot Snapshot, IReadOnlyList<Charact
     /// Either Alt key was held as the key was pressed.
     /// </summary>
     public bool Alt { get; init; }
+
+    /// <summary>
+    /// What the host shows as the key is pressed (docs/modding.md "Frame"); valid during the press only.
+    /// </summary>
+    public Modding.ModFrame? Frame { get; init; }
 }
 
 /// <summary>

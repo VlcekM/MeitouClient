@@ -1653,6 +1653,7 @@ sealed partial class GameHost(
         UpdateWakes();
         UpdateSplashes();
         Modding.UpdateModHits();
+        Modding.UpdateModFrames();
         Modding.UpdateModEffects();
         Modding.UpdateModGlows();
         Modding.UpdateModFaults();

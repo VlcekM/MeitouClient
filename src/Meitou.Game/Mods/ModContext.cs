@@ -505,6 +505,19 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Calls <paramref name="frame"/> once a frame on the host's thread, after the frame's snapshot and before the frame is drawn (docs/modding.md
+    /// "Frame"), with what the host shows: the snapshot, selection, pointer, modifiers, speed, screen, camera, projection, open screens and
+    /// bindings, and the notice line. A tick may be in flight: it must not touch the world (queue commands with <see cref="Enqueue"/>), must be
+    /// cheap, and must not keep the frame. A throw is logged and the callback is not called again.
+    /// </summary>
+    public void AddFrame(Action<ModFrame> frame)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(frame);
+        Pending.Frames.Add(new ModFrameView(Id, frame));
+    }
+
+    /// <summary>
     /// Plays a display-only effect on <paramref name="anchor"/> (docs/modding.md "Visual effects"): a world point, a character's bone or held
     /// weapon, or a building, the system's origin at the anchor, its axes turned to the anchor's frame and its emitters scaled by its stretch,
     /// following it while it emits; while the anchor cannot be located (not drawn, weapon sheathed, building gone) it pauses, until its lifetime

@@ -164,6 +164,11 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     public bool HasWindows => _open.Count > 0;
 
     /// <summary>
+    /// The open screens' ids, the front one last.
+    /// </summary>
+    public IReadOnlyList<string> OpenIds => _open;
+
+    /// <summary>
     /// A modal screen is open.
     /// </summary>
     public bool HasModal => _open.Any(id => _screens[id].Modal);

@@ -822,6 +822,14 @@ holds refuses the second mod.
   characters or on more than one line, refuses the mod. The actions are numbered `InputAction` from `InputBindings.FirstModAction` (1000) in
   load order, for this session only. Without key actions the bindings, the page and `meitou.user.json` are the game's. Engine API, not in the
   original.
+- **Frame:** `AddFrame(frame => ...)` on `ModContext` calls the mod once a frame on the host's thread, after the combat hit feed and before the
+  frame is drawn (not over the title), with `ModFrame`: `Snapshot`, `Tick`, `Selected`, `Shown` (the HUD's character), `Hovered` (under the
+  pointer), `Pointer`, `Ctrl`/`Shift`/`Alt` held now and `Highlight` (the game's Highlight key), `Paused`, `Speed`, `ScreenSize`, `UiScale`,
+  `UiVisible`, `CameraEye`, `CameraTarget`, `Project(point)` (a world point's screen pixel, null behind the camera), `OpenScreens` and
+  `IsOpen(id)` (the game screens' layout ids), `Bindings(action)` (the player's keys for a game or mod action) and `Notify(text, error)` (the
+  interface's notice line). Reads are live and read only; a tick may be in flight, so the callback must not touch the world (commands through
+  `Enqueue`), must be cheap and must not keep the frame. A throw is logged and the callback is not called again. A key action's
+  `ModKeyContext.Frame` is the same view at the press. Engine API, not in the original.
 - **Squad AI tab options:** in `Register`, `registration.AddSquadAiOptions(context => options)` adds tick buttons to the squad overview's AI
   tab, after the game's own and above Follow Formation; the tab's lines shrink to fit. The source runs on the host thread on every layout pass
   while the tab is open, so it must be cheap; a tick may be in flight, so it must not touch the world. It gets `UiSquadAiContext` (the
