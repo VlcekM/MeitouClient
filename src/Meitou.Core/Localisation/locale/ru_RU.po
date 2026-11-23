@@ -166,6 +166,12 @@ msgstr "Отряд, возвращающийся в область вокруг 
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "Болотная черепаха в бою бодается и кусается. В оригинальной игре она дерётся выданным ей мечом или дубиной, движения которых её тело не может исполнить, поэтому удары наносятся без всякой анимации."
 
+msgid "Pick-up thefts from the owner"
+msgstr "Кража с пола — у владельца"
+
+msgid "Taking someone else's item from the floor of a building is a theft from the item's owner. The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else."
+msgstr "Поднять с пола здания чужой предмет — значит украсть его у владельца предмета. Игра считает это кражей у владельца здания, в котором вы стоите, даже если предмет принадлежит кому-то другому."
+
 msgid "Turret fire is a crime"
 msgstr "Стрельба из турели — преступление"
 

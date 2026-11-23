@@ -470,6 +470,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? BagSearchChanged { get; init; }
 
     /// <summary>
+    /// Applies the pick-up theft fix (<see cref="UserConfig.FixPickUpTheft"/>).
+    /// </summary>
+    public Action<bool>? PickUpTheftChanged { get; init; }
+
+    /// <summary>
     /// Applies the shop counter talk reach (<see cref="UserConfig.CounterTalk"/>).
     /// </summary>
     public Action<bool>? CounterTalkChanged { get; init; }
@@ -1632,6 +1637,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         CagedAnimalsChanged?.Invoke(true);
         Config.FixBagSearch = true;
         BagSearchChanged?.Invoke(true);
+        Config.FixPickUpTheft = true;
+        PickUpTheftChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;
         Config.KeepInfoPanel = true;
         Config.FixRaidClocks = true;

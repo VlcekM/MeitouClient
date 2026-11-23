@@ -166,6 +166,12 @@ msgstr "Un escuadrón que vuelve a la zona de tus escuadrones se ha curado duran
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "Una tortuga del pantano embiste y muerde cuando lucha. En el juego lucha con una espada o un garrote desenvainado para ella, cuyos movimientos su cuerpo no puede reproducir, así que sus golpes impactan sin ningún movimiento."
 
+msgid "Pick-up thefts from the owner"
+msgstr "Robos al recoger, del dueño"
+
+msgid "Taking someone else's item from the floor of a building is a theft from the item's owner. The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else."
+msgstr "Recoger del suelo de un edificio un objeto ajeno es robarle a su dueño. El juego lo cuenta como robado a quien posea el edificio en el que estás, aunque el objeto pertenezca a otra persona."
+
 msgid "Turret fire is a crime"
 msgstr "Disparar torretas es delito"
 

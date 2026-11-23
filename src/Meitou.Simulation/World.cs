@@ -506,6 +506,12 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool BagSearchFix { get; set; } = true;
     /// <summary>
+    /// A ground item of another faction picked up inside a building is a Theft from the item's owner, its faction and owner character (Fixes
+    /// settings, Meitou); off, from the faction of the building the picker stands in with that building's resident leader as the victim, as the game
+    /// does (docs/game/economy.md "Fencing, stealing and smuggling").
+    /// </summary>
+    public bool PickUpTheftFix { get; set; } = true;
+    /// <summary>
     /// A shopkeeper at its counter is talked to and traded with from the counter's front (Gameplay settings, Meitou): its talk reach is
     /// <see cref="Dialogue.DialogueSystem.CounterTalkReach"/>; off, the game's reach, so the customer walks round behind the counter
     /// (docs/game/dialogue.md "Player conversation").

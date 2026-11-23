@@ -684,6 +684,11 @@ sealed class GamePages(SettingsMenu menu)
             + "confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found.",
             Toggle: new("Bags in the inventory", () => menu.Config.FixBagSearch,
                 v => { menu.Config.FixBagSearch = v; menu.BagSearchChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Pick-up thefts from the owner",
+            "Taking someone else's item from the floor of a building is a theft from the item's owner. "
+            + "The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else.",
+            Toggle: new("Pick-up thefts from the owner", () => menu.Config.FixPickUpTheft,
+                v => { menu.Config.FixPickUpTheft = v; menu.PickUpTheftChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Guards spare their own",
             "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. "
             + "In the game they enslave them too. Arrests that end in slavery are not affected.",

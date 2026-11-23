@@ -166,6 +166,12 @@ msgstr "분대 주변 지역으로 돌아온 분대는 떠나 있던 시간만�
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "늪 거북은 싸울 때 들이받고 뭅니다. 게임에서는 그를 위해 꺼낸 검이나 곤봉으로 싸우는데, 몸이 그 동작을 재생할 수 없어 공격이 아무 움직임 없이 적중합니다."
 
+msgid "Pick-up thefts from the owner"
+msgstr "주운 도둑질은 주인에게서"
+
+msgid "Taking someone else's item from the floor of a building is a theft from the item's owner. The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else."
+msgstr "건물 바닥에서 남의 아이템을 주우면 그 아이템 주인의 물건을 훔친 것이 됩니다. 원래 게임은 아이템이 다른 사람의 것이어도 서 있는 건물의 주인에게서 훔친 것으로 칩니다."
+
 msgid "Turret fire is a crime"
 msgstr "포탑 사격은 범죄"
 

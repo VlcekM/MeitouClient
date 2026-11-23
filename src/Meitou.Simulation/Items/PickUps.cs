@@ -240,6 +240,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
             int before = item.Item.Quantity;
             var mark = item.Item.Mark;
             if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction) item.Item.Mark = OwnerMark(world, item);
+            var owner = item.Item.Mark.Owner;
 
             // What does not fit stays on the ground (Inventory.Add leaves it in the item); gear or a bag that does not fit is worn when its slot
             // is free.
@@ -252,7 +253,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
 
                 // Task_Pickup: another faction's item taken inside a building is a Theft.
                 if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction && world.Sight.BuildingOf(s) is { } inside)
-                    world.SystemOf<Crime.CrimeSystem>()?.StolePickUp(world, s, item.OwnedBy, inside);
+                    world.SystemOf<Crime.CrimeSystem>()?.StolePickUp(world, s, item.OwnedBy, owner, inside);
                 if (wear) assembly?.RefreshEquipment(c);
                 world.EmitSound(SoundKind.PickedUp, s, next[s].Position);
             }
