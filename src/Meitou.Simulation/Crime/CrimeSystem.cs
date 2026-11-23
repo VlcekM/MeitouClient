@@ -284,6 +284,59 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public bool Book(World world, int culprit, int faction, CharacterId witness) => _bounties.Book(this, world, culprit, faction, witness);
 
+    /// <summary>
+    /// A code mod's bounty (engine API; the original's <c>FUN_140853e20</c>, which dialogue's assigned bounty and a new NPC's rolled one use): adds
+    /// <paramref name="amount"/> to the character's ledger entry of <paramref name="faction"/>'s booking faction
+    /// (<see cref="CrimeFactions.BookingOf"/>: its <c>legal system</c>, else itself when it books bounties), stamps the time of the last raise, so
+    /// the entry lasts as a witnessed one does
+    /// (<see cref="CrimeTable.LifetimeHours"/>: for ever from 10000), and reports it as <see cref="CrimeEventKind.Booked"/> with no crime and no
+    /// witness. No pending crime is touched and no message is posted. Any character, the player's or not, alive or dead. Returns the entry's
+    /// amount after the raise; -1, changing nothing, for an amount of 0 or less, a character that is not in the world, a faction with no booking
+    /// faction, or during the parallel phase. Serial phases and <see cref="IWorldReady"/>.
+    /// </summary>
+    public int AssignBounty(World world, CharacterId character, int faction, int amount)
+    {
+        var table = world.Characters;
+        if (table.Phase == TablePhase.Parallel || amount <= 0) return -1;
+        if (!table.TryResolveNext(character, out int slot) || table.Cold(slot) is not { } c) return -1;
+
+        return AddBounty(world, slot, c, faction, amount, CrimeCode.None, CharacterId.None)?.Amount ?? -1;
+    }
+
+    /// <summary>
+    /// A code mod's pardon (engine API): removes the character's ledger entry of <paramref name="faction"/>'s booking faction, reported as
+    /// <see cref="CrimeEventKind.Cleared"/>, as a paid fine removes it. Relations and recognition are left as they are. Returns the amount removed;
+    /// 0 when there was no such entry, during the parallel phase or for a character that is not in the world. Serial phases and
+    /// <see cref="IWorldReady"/>.
+    /// </summary>
+    public int ClearBounty(World world, CharacterId character, int faction)
+    {
+        var table = world.Characters;
+        if (table.Phase == TablePhase.Parallel || !table.TryResolveNext(character, out int slot)) return 0;
+        if (table.Cold(slot) is not { Bounties: { } ledger } c || ledger.Of(Factions.BookingOf(faction)) is not { } entry) return 0;
+
+        ClearBounty(world, slot, c, ledger, entry);
+        return entry.Amount;
+    }
+
+    /// <summary>
+    /// Adds <paramref name="amount"/> to the entry of <paramref name="faction"/>'s booking faction on the character in <paramref name="slot"/>
+    /// (<c>FUN_140853e20</c>: added and the time stamped unconditionally, no crime bit) and reports the booking with <paramref name="code"/> and
+    /// <paramref name="witness"/>. Null, changing nothing, when the faction has no booking faction (the original's entry has a null key nothing
+    /// reads).
+    /// </summary>
+    internal BountyEntry? AddBounty(World world, int slot, CharacterCold c, int faction, int amount, CrimeCode code, CharacterId witness)
+    {
+        int key = Factions.BookingOf(faction);
+        if (key < 0) return null;
+
+        var entry = (c.Bounties ??= new BountyLedger()).Get(key, Factions.NameOf(key));
+        entry.Amount += amount;
+        entry.RaisedTick = world.Tick;
+        Note(world, CrimeEventKind.Booked, slot, code, key, entry.Amount, witness);
+        return entry;
+    }
+
     #endregion
 
     #region The sweep

@@ -324,20 +324,16 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// <c>DA_ASSIGN_BOUNTY</c> with an amount (<c>FUN_140853e20</c>, <b>Verified</b>): marks the target's pending crime booked, then adds the amount
-    /// to the speaker's faction's booking entry (none kept without one), reported as a booking with the speaker as the witness
-    /// (<see cref="Crime.CrimeEventKind.Booked"/>).
+    /// to the speaker's faction's booking entry (none kept without one) and stamps the time of its last raise
+    /// (<see cref="Crime.CrimeSystem.AddBounty"/>), reported as a booking with the speaker as the witness (<see cref="Crime.CrimeEventKind.Booked"/>).
     /// </summary>
     void AssignBounty(World world, int amount, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold tc)
     {
         if (tc.Pending is { } pending) pending.Booked = true;
-        if (Crime.CrimeFactions.BookingKey(_data.Relations, mc.Faction) is not (var key and >= 0)) return;
-
-        var entry = (tc.Bounties ??= new Crime.BountyLedger()).Get(key, _data.Factions[key].Name);
-        entry.Amount += amount;
         if (!world.Characters.TryResolveNext(target, out int culprit)) return;
 
         var code = tc.Pending?.Code ?? Crime.CrimeCode.None;
-        world.SystemOf<Crime.CrimeSystem>()?.Note(world, Crime.CrimeEventKind.Booked, culprit, code, key, entry.Amount, me);
+        world.SystemOf<Crime.CrimeSystem>()?.AddBounty(world, culprit, tc, mc.Faction, amount, code, me);
     }
 
     /// <summary>
