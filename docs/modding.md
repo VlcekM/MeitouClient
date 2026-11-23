@@ -744,13 +744,16 @@ holds refuses the second mod.
   `Right` of it (clipped to the screen only, so it may lie outside the window). The node's `Placement`, flow and styles work as in the overlay; it
   is drawn over the screen after its own controls, and a node's `Action` names an action of `RegisterAction`, run on a click (the screen's
   click sound first). `UiScreens.ItemCells` as the anchor builds once per item cell of a character window (inventory, bag, limbs, loot), at
-  most 128 cells per source and frame, with `Item` set. `UiScreenContext` gives `Screen`, `Kind`, `AnchorWidget`, `Anchor` (the arranged
+  most 128 cells per source and frame, with `Item` set; `UiScreens.Portraits` on the HUD builds once per squad bar portrait shown (anchor: its
+  picture, clipped to the bar's page), with `Character` the member. On the overview anchored to `MapImage`, `Anchor` is the whole map image
+  (it pans and zooms) and `Map` (`UiWorldMapView`, see "World map input") is set while the Map tab shows. `UiScreenContext` gives `Screen`, `Kind`, `AnchorWidget`, `Anchor` (the arranged
   rectangle), `Character` (a character window's own, the stats window's selected, the NPC talked to, the HUD's selected or lead; null for
   none), `Building` (a machine or storage window's site id), `Item` (`UiScreenItem`: the holder, an `ItemOwner`, and the `InventoryItemView`),
   `Snapshot`, `Tick`, `Enqueue` (from an action) and `Frame` (registered controls). Return null to add nothing. Nothing shows while the
-  screen is closed or its layout lacks the widget (a UI mod's), and without a source the screens are as before. Text boxes are refused. The
+  screen is closed or its layout lacks the widget (a UI mod's), and without a source the screens are as before. A text box node works as on
+  the overlay (see "Interface"). The
   source runs on the host thread each time the screen is arranged (each frame it is open), so it must be cheap and must not touch the world.
-  At most 256 controls of all sources per screen (the rest left out, logged once per screen); a source that throws, builds a text box or lays
+  At most 256 controls of all sources per screen (the rest left out, logged once per screen); a source that throws or lays
   out a node not finite is logged once and dropped; an action that throws is logged. Engine API, not in the original. **Observed** with the
   installed HUD and stats layouts headless (placement, clicks, disposal); no test yet, not seen in a running game.
 - **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
@@ -779,6 +782,22 @@ holds refuses the second mod.
   that stay empty or fixed get no mod rows: no selection, a body the first selected carries (Put Down only), a body someone outside the player's
   faction carries; an animals-only selection keeps only the original's animal verbs. A source that throws, or returns a row without a caption
   or action, is logged once and dropped for the session; a row's action that throws is logged.
+  `registration.AddMenuVerbs(context => rows)` is the same for every target: `UiMenuTargetContext.Target` (`UiMenuTarget`: `Kind`, the
+  menu's `Name`, `Position`, and by kind `Character`, `GroundItem`, or the container's, door's or building's `Id` and `Record`) with the
+  selection, cursor, `Shift`, `Tick` and `Enqueue`; it is asked only with a selection. Kinds: `Character` (after the character rows, same
+  rules), `Container`, `Door` and `Building` (a player-built site, also a bed's or cage's, after the game's rows), `GroundItem` (the hold
+  menu Pick Up plus the rows; a quick click still picks up) and `WorldPoint` (the ground under the cursor, `Position` the point; an untitled
+  menu of the rows; a quick click still moves there). A target that gets no rows behaves as without the mod. Engine API, not in the original.
+  **Observed** headless (rows, faults; not the menus in a running game).
+- **World map input:** `registration.AddMapInput(input => taken)` gets `UiMapInput`s while the overview's Map tab shows: `Press` (a mouse
+  button down over the map image or its markers, not over a mod's own control, which its screen takes), `Key` (a key no text box took;
+  `Typing` says whether one has the keys) and `Closed` (the map stopped showing; every handler hears it). Each carries `Button` or `Key`,
+  `Point`, `Shift`, `Ctrl`, `Alt`, the `View` (`UiWorldMapView`: the map image and viewport on screen, the zoom level and UI scale;
+  `ScreenToMap`/`MapToScreen` for map points 0..1, `ScreenToWorld`/`WorldToScreen` and the static `MapToWorld`/`WorldToMap` for world
+  X, Z), `Snapshot`, `Tick` and `Enqueue`. Returning true takes the press or key from the game (no pan, no move order, no hotkey); the
+  first handler in registration order that takes it ends the round. It runs on the host thread and must not touch the world. A handler
+  that throws is logged once and dropped. Draw on the map with `AddScreenControls("overview", "MapImage", ...)`. Engine API, not in the
+  original.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.

@@ -379,6 +379,16 @@ public sealed class UiHost
     internal DialogueReplies Replies { get; } = new();
 
     /// <summary>
+    /// The extensions' right-click menu rows for any target (<see cref="UiRegistration.AddMenuVerbs"/>).
+    /// </summary>
+    internal MenuTargetVerbs TargetVerbs { get; } = new();
+
+    /// <summary>
+    /// The extensions' world map input handlers (<see cref="UiRegistration.AddMapInput"/>).
+    /// </summary>
+    internal MapInputs Map { get; } = new();
+
+    /// <summary>
     /// The contributions: owner, slot, mode (null: every mode), order and factory.
     /// </summary>
     readonly List<(string Owner, string Slot, UiMode? Mode, int Order, Func<UiFrameContext, UiNode> Factory)> _contributions = [];
@@ -548,6 +558,8 @@ public sealed class UiHost
         CharacterPanel.Remove(owner);
         Screens.Remove(owner);
         Replies.Remove(owner);
+        TargetVerbs.Remove(owner);
+        Map.Remove(owner);
         foreach (string id in _styles.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _styles.Remove(id);
         foreach (string id in _controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _controls.Remove(id);
         foreach (string id in _actions.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _actions.Remove(id);
@@ -596,6 +608,27 @@ public sealed class UiHost
 
         return rows;
     }
+
+    /// <summary>
+    /// Whether any extension adds rows to the right-click menus of any target (<see cref="MenuVerbs"/>).
+    /// </summary>
+    public bool HasTargetMenuVerbs => TargetVerbs.Any;
+
+    /// <summary>
+    /// The rows the extensions add to the right-click menu of <paramref name="context"/>'s target (<see cref="MenuTargetVerbs.For"/>), with the
+    /// character rows' rules: a failing source reported once and dropped, a row's action that throws reported each time.
+    /// </summary>
+    public IReadOnlyList<UiMenuVerb> MenuVerbs(UiMenuTargetContext context) => TargetVerbs.For(context, Guarded, Diagnostic);
+
+    /// <summary>
+    /// Whether any extension handles world map input (<see cref="MapInput"/>).
+    /// </summary>
+    public bool HasMapInput => Map.Any;
+
+    /// <summary>
+    /// Hands a world map input to the extensions (<see cref="MapInputs.Handle"/>); true when one took it.
+    /// </summary>
+    public bool MapInput(UiMapInput input) => Map.Handle(input, Diagnostic);
 
     /// <summary>
     /// A menu row's action that reports a throw as a <see cref="Diagnostic"/> instead of passing it on to the input, and does nothing once its
@@ -1113,7 +1146,9 @@ public sealed class UiHost
     {
         if (e.Screen != MyGuiScreenHost.OverlayScreen) return false;
 
-        if (e.Action == "text" && _textBoxes.TryGetValue(e.Widget, out var box)) Dispatch(box, e.Text);
+        if (e.Action != "text") return true;
+
+        if ((_textBoxes.GetValueOrDefault(e.Widget) ?? Screens.TextBox(e.Widget)) is { } box) Dispatch(box, e.Text);
         return true;
     }
 
@@ -1343,6 +1378,31 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(build);
         _host.Screens.Add(Id, screen, anchorWidget, placement, build);
+    }
+
+    /// <summary>
+    /// Adds rows to the right-click menu of any target (docs/modding.md "Right-click menu rows"): <paramref name="verbs"/> gets the target
+    /// (<see cref="UiMenuTarget"/>: a character, ground item, container, door, building or the ground) whenever the game builds a menu for one with a
+    /// selection, which can be each frame the target is under the cursor, so it must be cheap and must not touch the world; a chosen row queues
+    /// commands (<see cref="UiMenuTargetContext.Enqueue"/>).
+    /// </summary>
+    public void AddMenuVerbs(Func<UiMenuTargetContext, IEnumerable<UiMenuVerb>> verbs)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(verbs);
+        _host.TargetVerbs.Add(Id, verbs);
+    }
+
+    /// <summary>
+    /// Handles input on the world map (docs/modding.md "World map input"): <paramref name="input"/> gets presses over the map, keys while it shows
+    /// and its closing, with the map as drawn (<see cref="UiWorldMapView"/>), on the host's thread; true takes the press or key from the game (no
+    /// pan, no move order). It must not touch the world; it queues commands.
+    /// </summary>
+    public void AddMapInput(Func<UiMapInput, bool> input)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(input);
+        _host.Map.Add(Id, input);
     }
 
     /// <summary>

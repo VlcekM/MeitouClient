@@ -51,6 +51,12 @@ public static class UiScreens
     /// with <see cref="UiScreenContext.Item"/> set.
     /// </summary>
     public const string ItemCells = "*item-cells";
+
+    /// <summary>
+    /// An anchor of the HUD that stands for every squad bar portrait shown (its picture, <c>portrait-N</c>): the controls are built once per
+    /// portrait, with <see cref="UiScreenContext.Character"/> the member.
+    /// </summary>
+    public const string Portraits = "*portraits";
 }
 
 /// <summary>
@@ -63,7 +69,18 @@ public sealed record UiScreenItem(Simulation.Items.ItemOwner Owner, InventoryIte
 /// the snapshot, the tick and the command queue.
 /// </summary>
 internal sealed record ScreenView(string Screen, string Kind, CharacterSnapshot? Character, string? Building, Func<UiControl, UiScreenItem?>? ItemOf,
-    WorldSnapshot Snapshot, Func<long> Tick, Action<SimCommand> Enqueue);
+    WorldSnapshot Snapshot, Func<long> Tick, Action<SimCommand> Enqueue)
+{
+    /// <summary>
+    /// The squad member a HUD portrait control shows; null for any other control (none off the HUD).
+    /// </summary>
+    public Func<UiControl, CharacterSnapshot?>? PortraitOf { get; init; }
+
+    /// <summary>
+    /// The world map as drawn, while the overview shows it; null otherwise.
+    /// </summary>
+    public UiWorldMapView? Map { get; init; }
+}
 
 /// <summary>
 /// What an extension's screen controls get (<see cref="UiRegistration.AddScreenControls"/>): the screen, the anchor and its arranged rectangle, the
@@ -77,11 +94,18 @@ public sealed class UiScreenContext
     readonly ScreenView _view;
 
     /// <summary>
+    /// The squad member a portrait build is for; null otherwise.
+    /// </summary>
+    readonly CharacterSnapshot? _member;
+
+    /// <summary>
     /// The context for one build against <paramref name="anchor"/>.
     /// </summary>
-    internal UiScreenContext(ScreenView view, string anchorWidget, UiRect anchor, UiScreenItem? item, UiFrameContext frame)
+    internal UiScreenContext(ScreenView view, string anchorWidget, UiRect anchor, UiScreenItem? item, UiFrameContext frame,
+        CharacterSnapshot? member = null)
     {
         _view = view;
+        _member = member;
         AnchorWidget = anchorWidget;
         Anchor = anchor;
         Item = item;
@@ -109,9 +133,16 @@ public sealed class UiScreenContext
     public UiRect Anchor { get; }
 
     /// <summary>
-    /// The character the screen shows (a character window's, the stats window's, the HUD's selected, the NPC talked to); null for none.
+    /// The character the screen shows (a character window's, the stats window's, the HUD's selected, the NPC talked to; for a portrait the
+    /// member); null for none.
     /// </summary>
-    public CharacterSnapshot? Character => _view.Character;
+    public CharacterSnapshot? Character => _member ?? _view.Character;
+
+    /// <summary>
+    /// The world map as drawn, on the overview while its Map tab shows; null otherwise. Anchored to <c>MapImage</c>, <see cref="Anchor"/> is the
+    /// whole map image (it pans and zooms) and an inside placement is clipped to the visible viewport.
+    /// </summary>
+    public UiWorldMapView? Map => _view.Map;
 
     /// <summary>
     /// The building the screen shows (a machine or storage window's site id); null for none.
@@ -176,6 +207,11 @@ sealed class ScreenControls
     readonly Dictionary<string, Dictionary<string, UiControl>> _shown = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The text boxes the screens last showed, by name, for their text events.
+    /// </summary>
+    readonly Dictionary<string, UiControl> _textBoxes = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The screens whose controls were cut at <see cref="MaxControls"/>, each reported once.
     /// </summary>
     readonly HashSet<string> _cut = new(StringComparer.Ordinal);
@@ -203,6 +239,8 @@ sealed class ScreenControls
     public void Remove(string owner)
     {
         _entries.RemoveAll(e => e.Owner == owner);
+        foreach (string name in _textBoxes.Where(p => p.Value.Properties.GetValueOrDefault(OwnerProperty) == owner).Select(p => p.Key).ToArray())
+            _textBoxes.Remove(name);
         foreach (var shown in _shown.Values)
         {
             foreach (string name in shown.Where(p => p.Value.Properties.GetValueOrDefault(OwnerProperty) == owner).Select(p => p.Key).ToArray())
@@ -222,13 +260,21 @@ sealed class ScreenControls
         _shown.TryGetValue(screen, out var shown) ? shown.GetValueOrDefault(name) : null;
 
     /// <summary>
+    /// The text box <paramref name="name"/> a screen last showed; null for none.
+    /// </summary>
+    public UiControl? TextBox(string name) => _textBoxes.GetValueOrDefault(name);
+
+    /// <summary>
     /// Builds the sources of <paramref name="view"/>'s screen (or its kind) against their anchors in <paramref name="controls"/>, in registration
     /// order, and adds their controls after the screen's own, at most <see cref="MaxControls"/>. A source whose anchor is missing adds nothing; one
-    /// that throws, builds a text box or lays out a node not finite is reported once and dropped.
+    /// that throws or lays out a node not finite is reported once and dropped.
     /// </summary>
     public void Arrange(UiHost host, ScreenView view, List<UiControl> controls, UiFrameContext frame, Action<UiDiagnostic>? report)
     {
-        _shown.Remove(view.Screen);
+        if (_shown.Remove(view.Screen, out var before))
+        {
+            foreach (string name in before.Keys) _textBoxes.Remove(name);
+        }
         var added = new List<UiControl>();
         foreach (var entry in _entries.ToArray())
         {
@@ -251,10 +297,17 @@ sealed class ScreenControls
     }
 
     /// <summary>
-    /// <paramref name="entry"/>'s controls: once against its anchor, or once per item cell for <see cref="UiScreens.ItemCells"/>.
+    /// <paramref name="entry"/>'s controls: once against its anchor, or once per item cell for <see cref="UiScreens.ItemCells"/> or per portrait
+    /// for <see cref="UiScreens.Portraits"/>.
     /// </summary>
     static void BuildEntry(UiHost host, Entry entry, ScreenView view, List<UiControl> controls, UiFrameContext frame, List<UiControl> local)
     {
+        if (entry.Anchor == UiScreens.Portraits)
+        {
+            BuildPortraits(host, entry, view, controls, frame, local);
+            return;
+        }
+
         if (entry.Anchor != UiScreens.ItemCells)
         {
             if (controls.FirstOrDefault(c => c.Name == entry.Anchor) is { } anchor) Build(host, entry, view, anchor, null, frame, local);
@@ -272,13 +325,27 @@ sealed class ScreenControls
     }
 
     /// <summary>
+    /// <paramref name="entry"/>'s controls once per squad bar portrait shown.
+    /// </summary>
+    static void BuildPortraits(UiHost host, Entry entry, ScreenView view, List<UiControl> controls, UiFrameContext frame, List<UiControl> local)
+    {
+        if (view.PortraitOf is null) return;
+
+        var portraits = controls
+            .Select(c => (Control: c, Member: view.PortraitOf(c)))
+            .Where(c => c.Member is not null)
+            .ToList();
+        foreach (var (portrait, member) in portraits) Build(host, entry, view, portrait, null, frame, local, member);
+    }
+
+    /// <summary>
     /// One build of <paramref name="entry"/> against <paramref name="anchor"/>, its controls named after the extension and the anchor.
     /// </summary>
-    static void Build(UiHost host, Entry entry, ScreenView view, UiControl anchor, UiScreenItem? item, UiFrameContext frame, List<UiControl> local)
+    static void Build(UiHost host, Entry entry, ScreenView view, UiControl anchor, UiScreenItem? item, UiFrameContext frame, List<UiControl> local,
+        CharacterSnapshot? member = null)
     {
-        var node = entry.Build(new UiScreenContext(view, entry.Anchor, anchor.Bounds, item, frame));
+        var node = entry.Build(new UiScreenContext(view, entry.Anchor, anchor.Bounds, item, frame, member));
         if (node is null) return;
-        if (HasTextBox(node)) throw new NotSupportedException("Screen controls cannot hold text boxes.");
 
         var (parent, clip) = Parent(anchor, entry.Placement, frame.Viewport);
         var arranged = new List<UiControl>();
@@ -289,11 +356,6 @@ sealed class ScreenControls
             local.Add(c with { Name = $"{entry.Owner}:{anchor.Name}/{c.Name}", Properties = properties });
         }
     }
-
-    /// <summary>
-    /// Whether <paramref name="node"/> or a node under it is a text box.
-    /// </summary>
-    static bool HasTextBox(UiNode node) => node.Kind == UiNodeKind.TextBox || node.Children.Any(HasTextBox);
 
     /// <summary>
     /// The rectangle a node is laid out in for <paramref name="placement"/> against <paramref name="anchor"/>, and its clip: inside, the anchor
@@ -333,6 +395,7 @@ sealed class ScreenControls
         controls.AddRange(added);
         var shown = new Dictionary<string, UiControl>(StringComparer.Ordinal);
         foreach (var c in added.Where(c => c.Action.Length > 0)) shown[c.Name] = c;
+        foreach (var c in added.Where(c => c.Type == "EditBox")) _textBoxes[c.Name] = c;
         _shown[screen] = shown;
     }
 }

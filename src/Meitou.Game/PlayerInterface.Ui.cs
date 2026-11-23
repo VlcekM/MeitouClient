@@ -368,7 +368,11 @@ sealed partial class PlayerInterface
         var character = ScreenCharacter(screen, kind, snapshot);
         string? building = ProductionWindows.IsMachineScreen(screen) ? Production.SiteOf(screen) : null;
         Func<UiControl, UiScreenItem?>? itemOf = IsItemWindow(kind) && character is { ItemGrid: not null } ? c => CellItem(character, c) : null;
-        return new(screen, kind, character, building, itemOf, snapshot, () => Session.World.Tick, Say);
+        return new(screen, kind, character, building, itemOf, snapshot, () => Session.World.Tick, Say)
+        {
+            PortraitOf = kind == UiScreens.Hud ? PortraitBar.MemberOfCell : null,
+            Map = kind == "overview" ? WorldMap.ModView : null,
+        };
     }
 
     /// <summary>
@@ -443,11 +447,36 @@ sealed partial class PlayerInterface
     /// </summary>
     internal IEnumerable<(string Caption, Action Give)> ModMenuVerbs(CharacterSnapshot target)
     {
-        if (!_uiHost.HasMenuVerbs) return [];
+        var targetRows = ModTargetVerbs(UiMenuTarget.Of(target));
+        if (!_uiHost.HasMenuVerbs) return targetRows;
 
         var context = new UiMenuContext(target, SelectedIds(), Mouse, () => SlowModifier, () => Session.World.Tick, Say);
-        return _uiHost.CharacterMenuVerbs(context).Select(v => (v.Caption, v.Choose));
+        return _uiHost.CharacterMenuVerbs(context)
+            .Select(v => (v.Caption, v.Choose))
+            .Concat(targetRows);
     }
+
+    /// <summary>
+    /// The rows the interface extensions add to the right-click menu of <paramref name="target"/> (<see cref="UiHost.MenuVerbs"/>); none without
+    /// such an extension or a selection.
+    /// </summary>
+    internal IReadOnlyList<(string Caption, Action Give)> ModTargetVerbs(UiMenuTarget target)
+    {
+        if (!_uiHost.HasTargetMenuVerbs || SelectedIds() is not { Count: > 0 } selected) return [];
+
+        var context = new UiMenuTargetContext(target, selected, Mouse, () => SlowModifier, () => Session.World.Tick, Say);
+        return [.. _uiHost.MenuVerbs(context).Select(v => (v.Caption, v.Choose))];
+    }
+
+    /// <summary>
+    /// Hands a world map input to the interface extensions (<see cref="UiHost.MapInput"/>); false without such an extension.
+    /// </summary>
+    internal bool ModMapInput(UiMapInput input) => _uiHost.HasMapInput && _uiHost.MapInput(input);
+
+    /// <summary>
+    /// Whether any interface extension handles world map input.
+    /// </summary>
+    internal bool HasModMapInput => _uiHost.HasMapInput;
 
     /// <summary>
     /// Switches the interface style; a drag or a held order under way ends.
@@ -803,7 +832,6 @@ sealed partial class PlayerInterface
             [UiSlots.Squad] = FaithfulSlot("SquadPanel"),
         };
         var overlay = hud ? _uiHost.Arrange(UiMode, Width, Height, b, slots).ToList() : [];
-        FaithfulScreens.ArrangeOverlayEdits(overlay);
         controls.AddRange(RecordPortraits.Resolve(overlay));
         PortraitBar.SquadBarRow = 0;
         if (FindControl(controls, "SquadPanel") is { } squadPanel)
@@ -815,6 +843,9 @@ sealed partial class PlayerInterface
         if (hud) AddModScreenControls(UiScreens.Hud, controls);
         if (hud) TutorialWindow.AddTutorialPanel(controls);
         AddScreens(controls);
+
+        // After the screens: a mod's text box may lie in one (screen controls) as well as on the overlay.
+        FaithfulScreens.ArrangeOverlayEdits(controls);
         return controls;
     }
 
@@ -970,7 +1001,7 @@ sealed partial class PlayerInterface
         var controls = ArrangeUi();
         if (InventoryWindows.InventoryPointerDown(p)) return true;
         if (ItemsWindow.PointerDown(p)) return true;
-        if (WorldMap.MapPointerDown(p)) return true;
+        if (WorldMap.MapPointerDown(p, MouseButton.Left)) return true;
         if (SquadWindows.SquadPointerDown(p)) return true;
         if (FaithfulScreens.PointerDown(p))
         {
@@ -1347,6 +1378,7 @@ sealed partial class PlayerInterface
         if (key == Key.Escape && LevelEditorPanel.LevelEscape()) return true;
         if (key == Key.Escape) return EscapeKey();
         if (FaithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
+        if (WorldMap.ModMapKey(key, ctrl, shift)) return true;
         if (GameHotkeys.Bound(InputAction.RotateItem, key) && InventoryWindows.RotateAt(Mouse)) return true;
         if (ScreenKey(key, shift) is { } screenTook) return screenTook;
         return WindowHotkey(key);

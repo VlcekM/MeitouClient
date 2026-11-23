@@ -649,6 +649,17 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// </summary>
     internal List<(string Caption, Action Give)> ContainerVerbs(ContainerSpot container)
     {
+        var verbs = GameContainerVerbs(container);
+        var target = new UiMenuTarget(UiMenuTargetKind.Container, container.Record, container.Position) { Id = container.Id, Record = container.Record };
+        verbs.AddRange(player.ModTargetVerbs(target));
+        return verbs;
+    }
+
+    /// <summary>
+    /// A container's own verbs (<see cref="ContainerVerbs"/>, without the code mods' rows).
+    /// </summary>
+    List<(string Caption, Action Give)> GameContainerVerbs(ContainerSpot container)
+    {
         var verbs = new List<(string, Action)>();
         if (player.SelectedIds().Count == 0) return verbs;
 
@@ -685,6 +696,17 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// the building. A locked one also has Use Tools, Use Strength and Smash (285, 286, 226: <see cref="Meitou.Simulation.Locks.ForceLockOrder"/>).
     /// </summary>
     internal List<(string Caption, Action Give)> DoorVerbs((DoorPick Door, bool Locked) pick)
+    {
+        var verbs = GameDoorVerbs(pick);
+        var target = new UiMenuTarget(UiMenuTargetKind.Door, Loc.Tr("Door"), pick.Door.Position) { Id = pick.Door.Id };
+        verbs.AddRange(player.ModTargetVerbs(target));
+        return verbs;
+    }
+
+    /// <summary>
+    /// A door's own verbs (<see cref="DoorVerbs"/>, without the code mods' rows).
+    /// </summary>
+    List<(string Caption, Action Give)> GameDoorVerbs((DoorPick Door, bool Locked) pick)
     {
         var verbs = new List<(string, Action)>();
         if (player.SelectedIds().Count == 0) return verbs;
