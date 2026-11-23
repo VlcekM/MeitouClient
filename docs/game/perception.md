@@ -46,12 +46,15 @@ relations: [factions](factions-squads-towns.md). Simulation senses/leash remain 
 The request byte `+0xdc` is raised by the sight test `FUN_140852f70`:104-112 on looker and target (the target's value is read before the flag is set, so the first test after a quiet period sees bare daylight) and by the stat multiplier `FUN_1406457e0`:190 (**Verified**). Meitou (`SightMap.SampleLight`, `Light` / `PeekLight`): the same rule with a per-slot request flag that the workers only ever set (`Range` and the stat multiplier read through `Light`, the HUD and the query bound through `PeekLight`) and the serial update consumes, so the outcome does not depend on the order of the parallel tests.
 
 Meitou (`SightMap`): every sight test (aggro, dialogue sightings, crime witnesses, bounty spotting, slave catching, loot witnesses) uses these
-rules. Rooms are the registered towns' buildings' `interior mask` volumes and lamps their lights, plus the lanterns characters carry
+rules. Rooms are the `interior mask` volumes of the registered towns' buildings and of the player's completed buildings (keyed by the site id
+their doors take; made when the building registry changes, `SightMap.ReadSites`; one under construction, ruined or gone has none, an upgraded one
+gets its new record's), and lamps their lights, plus the lanterns characters carry
 (`CharacterAppearance.Lights` at the owner, its place and floor) and the lamps of completed player buildings (outdoor lights, except that
-one in a town building with the building over it, or hung from its ceiling, lights that building's room on the floor it was placed on, as
+one in a building with a room and the building over it, or hung from its ceiling, lights that room on the floor it was placed on, as
 the original's `FUN_140a0af10` counts a building's lights as indoor while its location is a building and its outside flag (`+0x240`, set at
-placement when nothing is over it) is clear; the `interiorlamps` switch leaves these to their own rule, as drawn; ruins and the player's
-buildings have no room); a lit lamp of another building's interior is not counted indoors (floors are
+placement when nothing is over it) is clear; the `interiorlamps` switch leaves these to their own rule, as drawn; ruins have no room). A
+character inside a player's house is indoors, so the region's weather (acid rain) skips it as in a town's (**Observed**: issue #1264's save,
+`probe premises --nav` puts the leader in the player's Storm House, outdoors before); a lit lamp of another building's interior is not counted indoors (floors are
 compared only within the character's building). With the `interiorlamps` switch on (Meitou, default) interior lamps count at
 any daylight, as the renderer draws them; off, night-only ones count at daylight <= 0.1 as in the game. The ray for a pair where the target or the looker is the player's (not both) or the target sneaks (`SightRay`, aggro's plain test included; the town
 early return and the other target states are left out; headless, one player character among 34 NPCs: no measurable tick cost); no weather, no posture factor; the 0.75 / 0.5 light gate is
