@@ -1520,7 +1520,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// A fetch's take at its storage, the player's haul take (<see cref="Production.FillDemand.TakeStored"/>, <c>Task_EmptyMachine</c> with flag 0):
+    /// A fetch's take at its storage (<see cref="Production.FillDemand.TakeStored"/>, <c>Task_EmptyMachine</c> with flag 0):
     /// the first record the storage lists that the town wants, up to that count, whatever the machine the plan fills next needs; the units moved.
     /// </summary>
     int TakeAt(World world, TownDuty d, CharacterCold gc, Vector3 at)

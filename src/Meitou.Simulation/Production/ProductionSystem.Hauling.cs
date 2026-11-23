@@ -36,8 +36,8 @@ public sealed partial class ProductionSystem
         bool changed = false;
         foreach (var input in m.Inputs)
         {
-            int room = input.Recipe.Capacity - input.Count;
-            if (input.Rate <= 0 || room <= 0) continue;
+            int room = input.FillRoom;
+            if (room <= 0) continue;
             foreach (var item in Carried(inv, input.Item).ToList())
             {
                 int n = Math.Min(room, item.Quantity);
@@ -145,10 +145,7 @@ public sealed partial class ProductionSystem
             return;
         }
 
-        if (store.Output is not { } from || from.Recipe.Item != want) return;
-
-        int take = Math.Min(room, from.Count);
-        if (take > 0 && _items.Create(want, take) is { } made) from.Count -= Placed(inv, made);
+        TakeOutput(store, want, room, inv);
     }
 
     /// <summary>
@@ -164,26 +161,34 @@ public sealed partial class ProductionSystem
             return;
         }
 
-        if (store.Output is not { } from || from.Recipe.Item != want || _items.Create(want, 1) is not { } unit) return;
+        if (store.Output?.Recipe.Item != want || _items.Create(want, 1) is not { } unit) return;
 
-        int take = Math.Min(FillDemand.Count(world, _towns, cold, at, unit, store.Site, store.Data.Id), from.Count);
-        if (take > 0 && _items.Create(want, take) is { } made) from.Count -= Placed(inv, made);
+        TakeOutput(store, want, FillDemand.Count(world, _towns, cold, at, unit, store.Site, store.Data.Id), inv);
     }
 
     /// <summary>
-    /// The units of <paramref name="record"/> a machine's inputs that take it still have room for; an input whose data gives no limit (a negative
-    /// capacity) counts 1, as <see cref="FillDemand.Count"/>'s source does for <c>max</c> -1.
+    /// The units of <paramref name="record"/> the operator's fill would put into the machine's inputs (<see cref="InputSlot.FillRoom"/>).
     /// </summary>
     static int InputRoom(Machine m, string record)
     {
         int room = 0;
         foreach (var input in m.Inputs)
         {
-            if (!input.Takes(record)) continue;
-            room += input.Recipe.Capacity < 0 ? 1 : Math.Max(0, input.Recipe.Capacity - input.Count);
+            if (input.Item == record) room += input.FillRoom;
         }
 
         return room;
+    }
+
+    /// <summary>
+    /// Takes up to <paramref name="limit"/> units of <paramref name="want"/> out of a producer's output into <paramref name="inv"/>.
+    /// </summary>
+    void TakeOutput(Machine store, string want, int limit, Inventory inv)
+    {
+        if (store.Output is not { } from || from.Recipe.Item != want) return;
+
+        int take = Math.Min(limit, from.Count);
+        if (take > 0 && _items.Create(want, take) is { } made) from.Count -= Placed(inv, made);
     }
 
     /// <summary>
