@@ -1361,6 +1361,11 @@ inputs in list order as the finder does, takes storages before producers and ski
   on a storage 124 "Hauling to" (several targets allowed); an automatic machine (152) adds 152 plus 124 on it. The first job in a
   character's list that can run wins; operating is skipped while the machine's output is full or its inputs are empty (row 87's !63 and !62 unmet at the job's root,
   [perma-jobs](ai-tasks.md#perma-jobs)), so a character moves down its list and returns when the machine can work again.
+- **Fuel generators** (**Verified**, probe of the merged base data): Small Generator and Generator II have BUILDING `max operators` -1 and
+  functionality 0 (raw 0, automatic) and consume Fuel (10, rate 100), so their order is 152 Auto-Haul (Generator class slot 131,
+  [ui-input](ui-input.md#building-picking-and-selection)) and Shift adds 152 plus 124. Meitou: `MachineData.IsFuelGenerator` makes them `Operable`
+  and `IsHauledAutomatic`, so the hauler fetches Fuel from a storage into the tank as for an automatic producer; wind generators and batteries
+  get no verb.
 - **Storage pick** (**Verified**, `FUN_14059acd0`, also called by the 242 ditch finder `FUN_1405a59a0`): the candidates are the current town's
   buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, whose slot `0x4a0`
   takes the item; the nearest to the character by squared 3D distance wins, within the AI's range-mode bound (ROAM_FAR 4.246733e7).
