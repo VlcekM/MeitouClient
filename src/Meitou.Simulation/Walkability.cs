@@ -13,6 +13,15 @@ public sealed record PathResult(IReadOnlyList<Vector3> Points)
     /// </summary>
     public static readonly PathResult NotFound = new([]);
     /// <summary>
+    /// No path: the goal lies on loaded ground the walker's own cannot reach (shut in or out, a locked door on the only way). The original moves
+    /// no walker towards such a goal (docs/game/pathfinding.md "Unreachable goals").
+    /// </summary>
+    public static readonly PathResult ShutOff = new([]) { Unreachable = true };
+    /// <summary>
+    /// Whether this no-path answer is <see cref="ShutOff"/>: the goal is on loaded ground and cannot be reached, so nothing walks at it.
+    /// </summary>
+    public bool Unreachable { get; init; }
+    /// <summary>
     /// Whether a path was found.
     /// </summary>
     public bool Found => Points.Count > 0;

@@ -426,25 +426,20 @@ public sealed partial class NavmeshWalkability : IWalkability
         // run).
         if (!Joined(w, WorldLayout.ZoneOf(from.X, from.Z), WorldLayout.ZoneOf(to.X, to.Z)))
             return LongRoute(w, from, to, agent, fromLoaded);
-        // Unreachable over the loaded zones (shut in, or the way round leads through zones not loaded): as near as can be got, then on to the goal
-        // provisionally, which asks again a few times on the way (MovementSystem) before the walker gives up.
+        // Unreachable over the loaded zones (shut in or out, a locked door on the only way): no path unless the nearest point reached is within the
+        // goal's snap; the original moves no walker at such a goal (docs/game/pathfinding.md "Unreachable goals").
         var part = Toward(w, from, to, agent);
         if (!part.Found) return exact;
 
-        // The ground the nearest-point search covered, read before the door query below searches again on this thread.
-        bool metDoor = NavQuery.LastSearchMetClosedDoor;
+        // The ground the nearest-point search covered. A nearest point within the goal's snap is the path's end as it is.
         long[] ground = key is null ? [] : NavQuery.LastSearchReached();
-
-        // Shut out by a door closed at run time: the tail goes on through that door, so the walker meets it and a locked one stops it (LockSystem);
-        // straight to the goal, it passed beside a locked gate's post (#560). A nearest point within the goal's snap is the path's end as it is.
         var nearest = part.Points[^1];
         bool arrives = Arrives(nearest, to);
-        var door = metDoor && !arrives ? new NavQuery(w, Doors).ClosedDoorOnTheWay(from, to, nearest, agent) : null;
 
-        // Also after a search cut short by its limit: the exact search would be cut short the same way, so the walker gets this same route.
-        if (key is { } found) Remember(found, new Unreachable(w, doors, nearest, door, arrives, ground, Volatile.Read(ref _tick)));
+        // Also after a search cut short by its limit: the exact search would be cut short the same way, so the walker gets this same answer.
+        if (key is { } found) Remember(found, new Unreachable(w, doors, nearest, arrives, ground, Volatile.Read(ref _tick)));
 
-        return arrives ? part : Provisional(w, part, to, door);
+        return arrives ? part : PathResult.ShutOff;
     }
 
     /// <summary>
@@ -483,7 +478,7 @@ public sealed partial class NavmeshWalkability : IWalkability
         var near = new NavQuery(w, Doors).FindPath(from, hit.Nearest, agent, null, out _);
         if (!near.Found) return null;
 
-        return arrives ? FromWalker(from, near) : Provisional(w, FromWalker(from, near), to, hit.Door);
+        return arrives ? FromWalker(from, near) : PathResult.ShutOff;
     }
 
     /// <summary>
@@ -502,24 +497,11 @@ public sealed partial class NavmeshWalkability : IWalkability
 
     /// <summary>
     /// What is remembered of a goal found unreachable: the navmesh it was found on (any other mesh, after a zone went live or unloaded, asks again),
-    /// the doors' version (NavDoors.Version), the nearest reachable point, the closed door the tail goes through
-    /// (<see cref="NavQuery.ClosedDoorOnTheWay"/>), whether that point was within the goal's snap (<see cref="Arrives"/>: the path ended there),
+    /// the doors' version (NavDoors.Version), the nearest reachable point, whether that point was within the goal's snap (<see cref="Arrives"/>: the
+    /// path ended there),
     /// the ground the failed search covered (<see cref="NavQuery.LastSearchReached"/>) and the world tick it was found on.
     /// </summary>
-    readonly record struct Unreachable(NavWorld World, int Doors, Vector3 Nearest, Vector3? Door, bool Arrived, long[] Ground, long At);
-
-    /// <summary>
-    /// A navmesh part to the nearest reachable point, then on to the goal provisionally (asked again on the way, MovementSystem), through
-    /// <paramref name="door"/> first when a closed door shuts the goal off.
-    /// </summary>
-    PathResult Provisional(NavWorld w, PathResult part, Vector3 to, Vector3? door = null)
-    {
-        List<Vector3> points = [.. part.Points];
-        if (door is { } through) points.Add(through);
-        points.Add(to);
-        Ahead(w, points, part.Points.Count);
-        return new PathResult(points) { Exact = part.Points.Count };
-    }
+    readonly record struct Unreachable(NavWorld World, int Doors, Vector3 Nearest, bool Arrived, long[] Ground, long At);
 
     /// <summary>
     /// How long (game seconds: world ticks, so the same from run to run) a goal found unreachable is remembered (engine choice; a door locked or
