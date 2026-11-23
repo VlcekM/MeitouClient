@@ -649,6 +649,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction.",
             Toggle: new("Bench facing", () => menu.Config.FixBenchFacing,
                 v => { menu.Config.FixBenchFacing = v; menu.BenchFacingChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Beds used as seats",
+            "A character sleeping on furniture that works as a seat, such as Bed (job), lies along the mattress as in a real bed. "
+            + "The game seats it on the furniture's middle, so it lies across the foot of the bed.",
+            Toggle: new("Beds used as seats", () => menu.Config.FixSeatBeds,
+                v => { menu.Config.FixSeatBeds = v; menu.SeatBedsChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Prisoners hold still",
             "A wounded prisoner on a pole or in a cage keeps the pole's or cage's pose. "
             + "In the game it clutches its wounds there instead.",

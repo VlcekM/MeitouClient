@@ -362,6 +362,10 @@ public sealed class DecisionSystem
     /// The trace lines of the character being looked at (kept only while <see cref="Tracing"/> is on).
     /// </summary>
     readonly List<string> _lines = [];
+    /// <summary>
+    /// Whether the character being looked at was asked for outside its think's turn (<see cref="Asked"/>).
+    /// </summary>
+    bool _asked;
 
     /// <summary>
     /// Takes the AI's think period (<paramref name="thinkEvery"/>), once when the world is made.
@@ -407,7 +411,9 @@ public sealed class DecisionSystem
         {
             if (!table.Previous[i].Alive || table.Previous[i].Dormant || !world.Steps(i) || table.Cold(i) is not { } cold) continue;
             if (Decides(cold) && Saving.OrderSave.Pending(cold)) Saving.OrderSave.Restore(world, i, cold);
-            if (!Concerns(cold) || !Due(world, i, cold, every)) continue;
+            if (!Concerns(cold)) continue;
+            bool asked = Asked(world, i, cold);
+            if (!asked && !Turn(world, i, cold, every)) continue;
 
             var row = _rows[i] ??= new ChooserRow();
             row.Reset(world.Tick, _sources.Count);
@@ -415,7 +421,7 @@ public sealed class DecisionSystem
             row.Due = true;
             _anyRow = true;
             cold.Replan = false;
-            LookAt(world, i, cold, row);
+            LookAt(world, i, cold, row, asked);
         }
     }
 
@@ -432,13 +438,19 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Whether the character's chooser runs this tick: its think's turn (the AI's period anchored at tick + slot, as the think's), or asked (its
-    /// replan bit or its mind's, an order that held it, the plan step on a running follow, <see cref="FollowDefence.Due"/>, the order step's own
-    /// asks, <see cref="Ai.OrderStep.Asks"/>).
+    /// Whether the character's think's turn runs the chooser this tick (the AI's period anchored at tick + slot, as the think's; engine:
+    /// <see cref="TurnAsks"/>).
     /// </summary>
-    static bool Due(World world, int slot, CharacterCold cold, int every)
+    static bool Turn(World world, int slot, CharacterCold cold, int every) =>
+        (world.Tick + slot) % every < world.StepTicks(slot) && TurnAsks(world, slot, cold);
+
+    /// <summary>
+    /// Whether the chooser is asked for the character outside its think's turn, as the original's update replans: its replan bit or its mind's, an
+    /// order that held it, the plan step on a running follow (<see cref="FollowDefence.Due"/>), the order step's own asks
+    /// (<see cref="Ai.OrderStep.Asks"/>).
+    /// </summary>
+    static bool Asked(World world, int slot, CharacterCold cold)
     {
-        if ((world.Tick + slot) % every < world.StepTicks(slot) && TurnAsks(world, slot, cold)) return true;
         if (cold.Replan || cold.OrderWins || cold.Ai is { Replan: true }) return true;
         if (FollowDefence.Due(world, slot, cold)) return true;
 
@@ -463,27 +475,31 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// One character's look: a stagger's stumble ended by the update's replan, the order step's pops, then its sources, the trace lines kept while
-    /// tracing.
+    /// One character's look (<paramref name="asked"/>: outside its think's turn, <see cref="Asked"/>): a stagger's stumble ended by the update's
+    /// replan, the order step's pops, then its sources, the trace lines kept while tracing.
     /// </summary>
-    void LookAt(World world, int slot, CharacterCold cold, ChooserRow row)
+    void LookAt(World world, int slot, CharacterCold cold, ChooserRow row, bool asked)
     {
         _lines.Clear();
+        _asked = asked;
         Combat.BodyOrders.UpdateEnds(world, slot);
         PlayerOrders.Prepare(world, slot);
         Ask(world, slot, cold, row);
-        LookSecond(world, slot, cold, row);
+        LookSecond(world, slot, cold, row, asked);
         if (Tracing) row.Lines = [.. _lines];
     }
 
     /// <summary>
     /// Scores the second list's entries for the think's rung 3 (<c>FUN_14050df10</c> over <c>+0x70</c>): an entry that runs the character's task, or
     /// can start and is not done (its row's list A, effect and finished test, <see cref="ListTests.OrderDone"/>), scores its desire
-    /// (<see cref="OrderDesire"/>) x weight 1 (the loader's), as a goal source does; one whose task ended is no longer started. The plan step
+    /// (<see cref="OrderDesire"/>) x weight 1 (the loader's), as a goal source does; one whose task ended is no longer started, and one whose task
+    /// has had an update keeps that (<see cref="OrderEntry.Ran"/>: a move found at its point is not started again). Such an entry is tested again
+    /// only on an asked look (<paramref name="asked"/>), as the original's scorer runs only at a replan: Meitou's turn look on a job's walk saw a
+    /// loaded move order as unfinished (the walker off its point) and sent the operator back to it, over and over. The plan step
     /// ends a running entry's task as a front's (<see cref="PlayerOrders.EndSecond"/>). A loaded entry waiting for its target
     /// (<see cref="OrderEntry.Awaits"/>) scores 0.
     /// </summary>
-    void LookSecond(World world, int slot, CharacterCold cold, ChooserRow row)
+    void LookSecond(World world, int slot, CharacterCold cold, ChooserRow row, bool asked)
     {
         var list = cold.SecondList;
         if (row.SecondScores.Length < list.Count) row.SecondScores = new float[Math.Max(list.Count, row.SecondScores.Length * 2)];
@@ -500,6 +516,13 @@ public sealed class DecisionSystem
 
             var check = PlayerOrders.SecondCheck(world, slot, entry);
             if (entry.Started && !check.Running) entry.Started = false;
+            if (check.Running && TaskFinished.Updated(world, slot)) entry.Ran = true;
+            if (!asked && entry.Ran && !check.Running)
+            {
+                row.SecondScores[k] = 0;
+                if (Tracing) _lines.Add($"3 second list [{k}] {(int)entry.Row}: waits for a replan");
+                continue;
+            }
             if (check.Running && PlayerOrders.EndSecond(world, slot, entry)) check = PlayerOrders.SecondCheck(world, slot, entry);
 
             bool done = entry.Spent || !check.Running && ListTests.OrderDone(world, slot, entry, false);
@@ -888,7 +911,8 @@ public sealed class DecisionSystem
     /// Steps 3 and 5: the character's job list in order (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Perma-jobs"): the jobs switch gates every job
     /// but 16, 31, 45, 57, 58 and 250 (<c>FUN_14050c1c0</c>) in both passes; a job whose type has no contributor or whose row the repertoire does not
     /// register is skipped, and so is one the general list tests pass over (<see cref="ListTests.JobSkipped"/>: done, or nothing to do); the first
-    /// job that can run wins (one that runs the character's task already ends the step), so a higher job takes over a lower one at the next decision.
+    /// job that can run wins (one that runs the character's task already ends the step), so a higher job takes over a lower one at the next decision,
+    /// but not on a turn look during a fetch walk (<see cref="JobSource.OnTrip"/>).
     /// Step 3 asks only the jobs that are urgent now. The implicit jobs are step 5's next source
     /// (<see cref="Production.ProductionSystem"/>).
     /// </summary>
@@ -919,6 +943,8 @@ public sealed class DecisionSystem
         {
             _picked = -1;
             var cold = world.Characters.Cold(slot)!;
+            if (!urgent && !owner._asked && OnTrip(world, slot, cold) is { } trip) return trip;
+
             bool on = (cold.Orders & CharacterOrders.Jobs) != 0;
             for (int k = 0; k < cold.Jobs.Count; k++)
             {
@@ -954,6 +980,28 @@ public sealed class DecisionSystem
             if (!filters.Active) return false;
 
             return filters.Pass(world, world.Characters.IdOf(slot), type, GoalDesireKind.Job, 1, k) <= 0;
+        }
+
+        /// <summary>
+        /// On a turn look (not asked), a list job on a fetch walk keeps the character while it can go on, so no higher job takes over halfway
+        /// (engine: the original chooses again only at a replan; the turn look let a haul that came within reach on the way take over a corpse
+        /// fetch, over and over). A fetch walk gives itself up when it cannot get there: a corpse's lift (<see cref="CharacterTask.PickUp"/>,
+        /// <see cref="Carrying.CarrySystem"/>) or a haul to its loose item (<see cref="CharacterCold.HaulItem"/>); a haul's leg to a machine or its
+        /// storage does not, so it is not kept. Null: the list is walked as usual.
+        /// </summary>
+        DecisionCheck? OnTrip(World world, int slot, CharacterCold cold)
+        {
+            var task = (CharacterTask)world.Characters.Next[slot].Task;
+            if (task != CharacterTask.PickUp && (task != CharacterTask.Haul || cold.HaulItem is null)) return null;
+            if (Production.PermaJobs.ListJob(cold, task) is not { Implicit: false } run || run.Job >= cold.Jobs.Count) return null;
+            if (owner._jobs.GetValueOrDefault(cold.Jobs[run.Job].Type) is not { } source) return null;
+
+            var check = source.CanRun(world, slot, run.Job);
+            if (!check.Running) return null;
+
+            if (owner.Tracing) owner._lines.Add($"{(int)Step} {Name} [{run.Job}] {(int)cold.Jobs[run.Job].Type}: runs (its trip)");
+            _picked = run.Job;
+            return check;
         }
 
         /// <summary>

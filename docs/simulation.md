@@ -2070,7 +2070,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   on); a "Hauling to" job fetches finished items as it does a producer's output, the instances themselves (quality and model kept) (#762). Carried output
   goes only with a full output just taken, or while the output stays full: a stray unit sends no one on a trip (#388). A walker
   stopped within reach of a site whose height has no floor (furniture on an upper storey the navmesh lacks, the Hub's Storm House)
-  counts as there (`ProductionSystem.OffFloor`).
+  counts as there (`ProductionSystem.OffFloor`). Leg beat (engine choice): a worker's walk stops where a leg ends (a pick-up, a fetch, a fill, a
+  drop-off) and it stands `ProductionSystem.StepPauseSeconds` (0.5 s) before the next leg or job; a path left to finish by itself set a wanderer's 5-10 s wait.
 - **Automatic machines** (`MachineData.IsAutomatic`, raw `max operators` 0; [facts](game/buildings-production.md#production)) produce
   every tick with nobody at them at s = 1 (producers only: refineries, mines, auto-looms, campfires), and their power demand is full. A character
   operating one (job 152, or the quick order) does not work it: it only hauls as above, every round whatever `AutoHaul` says.
@@ -2108,8 +2109,12 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   - 87 Operating machine: blocked while others hold every operator place or the machine has no work (no power; no queued research or craft; a
     farm growing with water, or with no water it holds or can get, or ripe with no plant left or no room; an empty input the operator cannot fill from its pack, a storage or a machine's output;
     a full output (a bench's first craft at its store) no storage takes). A farmer goes to a growing farm only to fill an empty input; he plays the farm's clip after the fill until his next job check, then goes on to his next job ([farming](game/buildings-production.md#farming)).
-  - 124 Hauling to (`CharacterTask.Haul`): the nearest player machine within that 4.246733e7 bound (3D, engine choice: the original's 124 sources nothing) of the storage whose output (a bench's: its finished items) the storage takes is
-    emptied into the hauler's pack and carried there; items the hauler already carries that some machine makes or crafts go first. Blocked with neither.
+  - 124 Hauling to (`CharacterTask.Haul`): items the hauler already carries that the storage's `limit inventory` lists or some machine makes or crafts
+    go first; else the nearest loose item of a listed record within 1200 of the hauler is picked up and carried there (`ProductionSystem.LooseFor`, the
+    original's source order, [hauling](game/buildings-production.md#hauling)), never one another faction owns (engine choice: the ownership test alone
+    lets a hauler in a player town take such an item, which marks it stolen); else the nearest player machine within that 4.246733e7 bound (3D) of the storage whose output
+    (a bench's: its finished items) the storage takes is emptied into the hauler's pack and carried there. Blocked with none. The walk stops at
+    the pick-up and the drop-off ([leg beat](#production), engine choice).
   - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).
     Blocked unless it is mid-trip for it, carries an item an input has room for, an empty input's item is in a storage, or a full or carried output has a storage that takes it
     (engine reading of the row's goal "no empty inputs", `AutoWork`). 124 on an automatic machine runs the same way, blocked unless it carries an item an input has room for.

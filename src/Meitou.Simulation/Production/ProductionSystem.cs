@@ -128,6 +128,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         this._nodes = nodes;
         _craftOptions = new CraftOptionsCache(BuildCraftOptions);
         _smiths = new SmithViewCache(db);
+        _seatBeds = new SeatBeds(db);
         UnloadedProduction = Settings.UnloadedProduction;
     }
 
@@ -354,6 +355,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// ground; not saved, not hashed).
     /// </summary>
     readonly Dictionary<string, (Vector3 Spot, float Range)> _turretSpots = [];
+
+    /// <summary>
+    /// The seats that play a bed's clip, lain on at their use nodes with <see cref="World.SeatBedFix"/>.
+    /// </summary>
+    readonly SeatBeds _seatBeds;
 
     /// <summary>
     /// The clip a turret's gunner holds.
@@ -869,6 +875,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.HaulFetch = null;
         cold.Operating = false;
         cold.HaulTo = null;
+        cold.HaulItem = null;
     }
 
     /// <summary>
@@ -896,6 +903,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.HaulFetch = null;
         cold.Operating = false;
         cold.HaulTo = null;
+        cold.HaulItem = null;
         var goal = GoalOf(world, site, m, n.Position);
         if (!AtSite(world, n, site, m)) WalkToSite(ref n, cold, site, goal);
         _sweep = true;
@@ -919,6 +927,24 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.HaulFetch = null;
         cold.Operating = false;
         cold.HaulTo = null;
+        cold.HaulItem = null;
+    }
+
+    /// <summary>
+    /// A hauler's walk: to the loose item it fetches, else to its leg's machine; the trip ends when that is gone or the hauler cannot work.
+    /// </summary>
+    void HaulWalk(World world, int slot, ref CharacterHot n, CharacterCold cold, float dt)
+    {
+        if (cold.HaulItem is { } item)
+        {
+            ApproachLoose(world, slot, ref n, cold, item, dt);
+            return;
+        }
+
+        if (Lingers(cold)) return;
+        if (cold.HaulSite is { } to && Site(world, to) is { Complete: true } leg && world.Machines.Find(to) is { } legMachine && Able(cold))
+            Approach(world, slot, ref n, cold, leg, legMachine, dt);
+        else End(world, slot);
     }
 
     /// <summary>
@@ -940,9 +966,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             var cold = table.Cold(i)!;
             if (n.Task == (byte)CharacterTask.Haul)
             {
-                if (cold.HaulSite is { } to && Site(world, to) is { Complete: true } leg && world.Machines.Find(to) is { } legMachine && Able(cold))
-                    Approach(world, i, ref n, cold, leg, legMachine, dt);
-                else End(world, i);
+                HaulWalk(world, i, ref n, cold, dt);
                 continue;
             }
 
@@ -990,14 +1014,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !_turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m, n.Position);
         if (AtSite(world, n, site, m))
         {
-            if ((n.Flags & path) != 0)
-            {
-                n.Flags = (ushort)(n.Flags & ~path);
-                n.PathCursor = 0;
-                cold.PathRequest = 0;
-            }
-
-            n.TaskTime = 0;
+            StopWalk(ref n, cold);
             return;
         }
 
@@ -1026,6 +1043,29 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.PathFailed = false;
         cold.NoteUnreachable(site.Id, world.Tick + (long)MathF.Ceiling(ConstructionSystem.UnreachableSeconds / world.TickSeconds));
         End(world, i);
+    }
+
+    /// <summary>
+    /// The beat a worker stands at the end of a leg (a pick-up, a fill, a drop-off) before it sets off on the next: a walk left to end by itself
+    /// set the idle wait of a finished path (5 to 10 s), and none at all looked mechanical.
+    /// </summary>
+    internal const float StepPauseSeconds = 0.5f;
+
+    /// <summary>
+    /// Stops a worker's walk where it stands (its path and any pending request dropped) and sets its wait to <see cref="StepPauseSeconds"/>, so its
+    /// next leg starts after that beat.
+    /// </summary>
+    static void StopWalk(ref CharacterHot n, CharacterCold cold)
+    {
+        const ushort path = (ushort)MoveFlags.AnyPath;
+        if ((n.Flags & path) != 0)
+        {
+            n.Flags = (ushort)(n.Flags & ~path);
+            n.PathCursor = 0;
+            cold.PathRequest = 0;
+        }
+
+        n.TaskTime = StepPauseSeconds;
     }
 
     #endregion
@@ -1212,7 +1252,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (Hauling(world, cold) is { } haul)
         {
             cold.OperateToolHeld = false;
-            if (AtSite(world, n, haul.Site, haul.Machine)) HaulAt(world, cold, n.Position, m, haul.Machine);
+            if (!AtSite(world, n, haul.Site, haul.Machine)) return;
+
+            // The walk stops at the storage, as a hauler's does (StopWalk), so the walk back starts after the beat.
+            HaulAt(world, cold, n.Position, m, haul.Machine);
+            StopWalk(ref n, cold);
             return;
         }
 

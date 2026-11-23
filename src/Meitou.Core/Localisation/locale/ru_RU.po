@@ -4851,6 +4851,12 @@ msgstr "Сохранить текущий набор"
 msgid "Sort by"
 msgstr "Сортировать по"
 
+msgid "Beds used as seats"
+msgstr "Кровати-сиденья"
+
+msgid "A character sleeping on furniture that works as a seat, such as Bed (job), lies along the mattress as in a real bed. The game seats it on the furniture's middle, so it lies across the foot of the bed."
+msgstr "Персонаж, спящий на мебели, которая работает как сиденье, например Bed (job), ложится вдоль матраса, как на настоящей кровати. Игра усаживает его в середину мебели, и он лежит поперёк в ногах кровати."
+
 #. machine-translated
 msgid "Outpost:"
 msgstr "Аванпост:"

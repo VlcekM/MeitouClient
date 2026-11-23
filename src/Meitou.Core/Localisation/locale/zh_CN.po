@@ -5692,6 +5692,12 @@ msgstr "保存当前预设"
 msgid "Sort by"
 msgstr "排序方式"
 
+msgid "Beds used as seats"
+msgstr "当作座位的床"
+
+msgid "A character sleeping on furniture that works as a seat, such as Bed (job), lies along the mattress as in a real bed. The game seats it on the furniture's middle, so it lies across the foot of the bed."
+msgstr "在作为座位使用的家具（如 Bed (job)）上睡觉的角色会像在真正的床上一样顺着床垫躺下。原版游戏让角色坐在家具正中，于是会横躺在床尾。"
+
 #. machine-translated
 msgid "Outpost:"
 msgstr "前哨:"

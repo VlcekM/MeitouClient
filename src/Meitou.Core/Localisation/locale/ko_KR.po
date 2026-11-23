@@ -4847,6 +4847,12 @@ msgstr "현재 프리셋 저장"
 msgid "Sort by"
 msgstr "정렬 기준"
 
+msgid "Beds used as seats"
+msgstr "좌석으로 쓰이는 침대"
+
+msgid "A character sleeping on furniture that works as a seat, such as Bed (job), lies along the mattress as in a real bed. The game seats it on the furniture's middle, so it lies across the foot of the bed."
+msgstr "Bed (job)처럼 좌석으로 작동하는 가구에서 자는 캐릭터가 진짜 침대처럼 매트리스를 따라 눕습니다. 원래 게임은 가구 한가운데에 앉히기 때문에 침대 발치에 가로로 눕습니다."
+
 #. machine-translated
 msgid "Outpost:"
 msgstr "전초기지:"

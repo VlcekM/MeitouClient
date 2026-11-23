@@ -653,6 +653,7 @@ sealed partial class GameHost(
             clock: clock, simulation: settings, systems: systems, walkability: walkability);
 
         Session.World.BenchFacingFix = Config.FixBenchFacing;
+        Session.World.SeatBedFix = Config.FixSeatBeds;
         Session.World.PrisonPoseFix = Config.FixPrisonPose;
         Session.World.CagedAnimalFix = Config.FixCagedAnimals;
         Session.World.BagSearchFix = Config.FixBagSearch;

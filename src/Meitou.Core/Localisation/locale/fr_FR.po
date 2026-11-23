@@ -4849,6 +4849,12 @@ msgstr "Enregistrer le préréglage actuel"
 msgid "Sort by"
 msgstr "Trier par"
 
+msgid "Beds used as seats"
+msgstr "Lits servant de sièges"
+
+msgid "A character sleeping on furniture that works as a seat, such as Bed (job), lies along the mattress as in a real bed. The game seats it on the furniture's middle, so it lies across the foot of the bed."
+msgstr "Un personnage qui dort sur un meuble servant de siège, comme Bed (job), s'allonge dans le sens du matelas comme dans un vrai lit. Le jeu l'assoit au milieu du meuble, si bien qu'il se couche en travers au pied du lit."
+
 #. machine-translated
 msgid "Outpost:"
 msgstr "Avant-poste :"

@@ -796,6 +796,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             },
             systems: systems, walkability: walkability);
         host.Session.World.BenchFacingFix = host.Config.FixBenchFacing;
+        host.Session.World.SeatBedFix = host.Config.FixSeatBeds;
         host.Session.World.PrisonPoseFix = host.Config.FixPrisonPose;
         host.Session.World.CagedAnimalFix = host.Config.FixCagedAnimals;
         host.Session.World.BagSearchFix = host.Config.FixBagSearch;
@@ -1356,6 +1357,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 foreach (var players in host.Session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on;
             },
             BenchFacingChanged = on => host.Session.World.BenchFacingFix = on,
+            SeatBedsChanged = on => host.Session.World.SeatBedFix = on,
             PrisonPoseChanged = on => host.Session.World.PrisonPoseFix = on,
             CagedAnimalsChanged = on => host.Session.World.CagedAnimalFix = on,
             BagSearchChanged = on => host.Session.World.BagSearchFix = on,

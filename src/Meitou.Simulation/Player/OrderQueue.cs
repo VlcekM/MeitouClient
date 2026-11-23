@@ -215,6 +215,12 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// </summary>
     public bool Spent { get; internal set; }
     /// <summary>
+    /// The entry's task has had an update since a start (<see cref="TaskFinished.Updated"/>): a <c>Task_Move</c>'s byte +0x94, which its first update
+    /// sets and nothing clears, so a second-list move that ran tests finished from then on, also while it does not run (<b>Verified</b>,
+    /// <c>FUN_140332130</c>; docs/game/ai-tasks.md "Precedence").
+    /// </summary>
+    public bool Ran { get; internal set; }
+    /// <summary>
     /// An engine act on the character's body (getting up, stumbling, getting out of bed, <see cref="Combat.BodyOrders"/>): its start lets no duty
     /// go (<see cref="IDutyRelease"/>), as the original's goals are planned again once it is over.
     /// </summary>
