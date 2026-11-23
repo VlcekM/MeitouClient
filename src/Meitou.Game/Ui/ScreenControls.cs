@@ -80,7 +80,19 @@ internal sealed record ScreenView(string Screen, string Kind, CharacterSnapshot?
     /// The world map as drawn, while the overview shows it; null otherwise.
     /// </summary>
     public UiWorldMapView? Map { get; init; }
+
+    /// <summary>
+    /// What the screen keeps to itself that its extensions may read (<see cref="UiScreenContext.State"/>); empty for none.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> State { get; init; } = UiScreenContext.NoState;
 }
+
+/// <summary>
+/// The pointer side of an extension's screen control: its owner, node id, action and argument, the pointer events it asks for, whether it takes
+/// clicks, and its parent's index in its build (-1: the root).
+/// </summary>
+internal readonly record struct ScreenNode(string Owner, string Node, string Action, string Argument, UiPointerEvents Pointer, bool Enabled,
+    int Parent);
 
 /// <summary>
 /// What an extension's screen controls get (<see cref="UiRegistration.AddScreenControls"/>): the screen, the anchor and its arranged rectangle, the
@@ -99,10 +111,10 @@ public sealed class UiScreenContext
     readonly CharacterSnapshot? _member;
 
     /// <summary>
-    /// The context for one build against <paramref name="anchor"/>.
+    /// The context for one build against <paramref name="anchor"/> (the arranged <paramref name="widget"/>, null for none).
     /// </summary>
     internal UiScreenContext(ScreenView view, string anchorWidget, UiRect anchor, UiScreenItem? item, UiFrameContext frame,
-        CharacterSnapshot? member = null)
+        CharacterSnapshot? member = null, UiControl? widget = null)
     {
         _view = view;
         _member = member;
@@ -110,7 +122,25 @@ public sealed class UiScreenContext
         Anchor = anchor;
         Item = item;
         Frame = frame;
+        Widget = widget is null ? null : UiScreenWidget.Of(widget);
     }
+
+    /// <summary>
+    /// No screen state.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> NoState = new Dictionary<string, string>();
+
+    /// <summary>
+    /// The widget the controls are anchored to, or the one an override is asked for, as arranged this frame; null for none.
+    /// </summary>
+    public UiScreenWidget? Widget { get; }
+
+    /// <summary>
+    /// What the screen keeps to itself, by key (docs/modding.md "Screen overrides"): the stats window's <c>selected</c> (the stat its description
+    /// shows: a stat's number as in its rows' <c>stat:N</c> actions, a mod skill's <c>mod:N</c>, empty for none) and <c>race-bonus-line</c> (the
+    /// race XP bonus paragraph its description ends with, empty for none). Empty for a screen that publishes none.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> State => _view.State;
 
     /// <summary>
     /// The screen's id as the interface registers it (a pinned inventory's own id, e.g. <c>inventory-pinned-1</c>).
@@ -212,6 +242,11 @@ sealed class ScreenControls
     readonly Dictionary<string, UiControl> _textBoxes = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The nodes of the controls each screen last showed, by control name, with their parent's control name (null: a root), for the pointer.
+    /// </summary>
+    readonly Dictionary<string, Dictionary<string, (ScreenNode Node, string? Parent)>> _nodes = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The screens whose controls were cut at <see cref="MaxControls"/>, each reported once.
     /// </summary>
     readonly HashSet<string> _cut = new(StringComparer.Ordinal);
@@ -246,6 +281,32 @@ sealed class ScreenControls
             foreach (string name in shown.Where(p => p.Value.Properties.GetValueOrDefault(OwnerProperty) == owner).Select(p => p.Key).ToArray())
                 shown.Remove(name);
         }
+        foreach (var nodes in _nodes.Values)
+        {
+            foreach (string name in nodes.Where(p => p.Value.Node.Owner == owner).Select(p => p.Key).ToArray()) nodes.Remove(name);
+        }
+    }
+
+    /// <summary>
+    /// The node of the control <paramref name="name"/> the extensions last showed on <paramref name="screen"/>; null for none.
+    /// </summary>
+    public ScreenNode? Node(string screen, string name) =>
+        _nodes.TryGetValue(screen, out var nodes) && nodes.TryGetValue(name, out var entry) ? entry.Node : null;
+
+    /// <summary>
+    /// The nearest node from control <paramref name="name"/> of <paramref name="screen"/> up asking for any of <paramref name="wanted"/>; null for
+    /// none.
+    /// </summary>
+    public ScreenNode? Nearest(string screen, string name, UiPointerEvents wanted)
+    {
+        if (!_nodes.TryGetValue(screen, out var nodes)) return null;
+
+        for (string? at = name; at is not null && nodes.TryGetValue(at, out var entry); at = entry.Parent)
+        {
+            if ((entry.Node.Pointer & wanted) != 0) return entry.Node;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -276,15 +337,17 @@ sealed class ScreenControls
             foreach (string name in before.Keys) _textBoxes.Remove(name);
         }
         var added = new List<UiControl>();
+        var pointer = new Dictionary<string, (ScreenNode, string?)>(StringComparer.Ordinal);
         foreach (var entry in _entries.ToArray())
         {
             if (entry.Screen != view.Screen && entry.Screen != view.Kind) continue;
 
-            var local = new List<UiControl>();
+            var local = new BuildOutput([], new(StringComparer.Ordinal));
             try
             {
                 BuildEntry(host, entry, view, controls, frame, local);
-                added.AddRange(local);
+                added.AddRange(local.Controls);
+                foreach (var (name, node) in local.Nodes) pointer[name] = node;
             }
             catch (Exception e)
             {
@@ -294,13 +357,19 @@ sealed class ScreenControls
         }
 
         Commit(view.Screen, controls, added, report);
+        _nodes[view.Screen] = pointer;
     }
+
+    /// <summary>
+    /// Where one source's build puts its controls and their nodes.
+    /// </summary>
+    readonly record struct BuildOutput(List<UiControl> Controls, Dictionary<string, (ScreenNode, string?)> Nodes);
 
     /// <summary>
     /// <paramref name="entry"/>'s controls: once against its anchor, or once per item cell for <see cref="UiScreens.ItemCells"/> or per portrait
     /// for <see cref="UiScreens.Portraits"/>.
     /// </summary>
-    static void BuildEntry(UiHost host, Entry entry, ScreenView view, List<UiControl> controls, UiFrameContext frame, List<UiControl> local)
+    static void BuildEntry(UiHost host, Entry entry, ScreenView view, List<UiControl> controls, UiFrameContext frame, BuildOutput local)
     {
         if (entry.Anchor == UiScreens.Portraits)
         {
@@ -327,7 +396,7 @@ sealed class ScreenControls
     /// <summary>
     /// <paramref name="entry"/>'s controls once per squad bar portrait shown.
     /// </summary>
-    static void BuildPortraits(UiHost host, Entry entry, ScreenView view, List<UiControl> controls, UiFrameContext frame, List<UiControl> local)
+    static void BuildPortraits(UiHost host, Entry entry, ScreenView view, List<UiControl> controls, UiFrameContext frame, BuildOutput local)
     {
         if (view.PortraitOf is null) return;
 
@@ -341,19 +410,22 @@ sealed class ScreenControls
     /// <summary>
     /// One build of <paramref name="entry"/> against <paramref name="anchor"/>, its controls named after the extension and the anchor.
     /// </summary>
-    static void Build(UiHost host, Entry entry, ScreenView view, UiControl anchor, UiScreenItem? item, UiFrameContext frame, List<UiControl> local,
+    static void Build(UiHost host, Entry entry, ScreenView view, UiControl anchor, UiScreenItem? item, UiFrameContext frame, BuildOutput local,
         CharacterSnapshot? member = null)
     {
-        var node = entry.Build(new UiScreenContext(view, entry.Anchor, anchor.Bounds, item, frame, member));
+        var node = entry.Build(new UiScreenContext(view, entry.Anchor, anchor.Bounds, item, frame, member, anchor));
         if (node is null) return;
 
         var (parent, clip) = Parent(anchor, entry.Placement, frame.Viewport);
         var arranged = new List<UiControl>();
-        host.ArrangeInto(node, parent, clip, arranged);
-        foreach (var c in arranged)
+        var nodes = new List<ScreenNode>();
+        host.ArrangeInto(node, parent, clip, arranged, nodes, entry.Owner);
+        var names = arranged.Select(c => $"{entry.Owner}:{anchor.Name}/{c.Name}").ToArray();
+        for (int i = 0; i < arranged.Count; i++)
         {
-            var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { [OwnerProperty] = entry.Owner };
-            local.Add(c with { Name = $"{entry.Owner}:{anchor.Name}/{c.Name}", Properties = properties });
+            var properties = new Dictionary<string, string>(arranged[i].Properties, StringComparer.Ordinal) { [OwnerProperty] = entry.Owner };
+            local.Controls.Add(arranged[i] with { Name = names[i], Properties = properties });
+            local.Nodes[names[i]] = (nodes[i], nodes[i].Parent >= 0 ? names[nodes[i].Parent] : null);
         }
     }
 

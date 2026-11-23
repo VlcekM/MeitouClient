@@ -845,16 +845,24 @@ holds refuses the second mod.
   a second. A contribution to `UiSlots.Overlay` whose root sets `ShowWithHudHidden` is also drawn while the interface is hidden (F7, not the
   cinema's clean picture or recorded frames), laid out every frame with no bindings, without input or portraits. Pointer events:
   `Pointer` (`UiPointerEvents` flags `Release`, `Drag`, `Wheel`, `Hover`) makes the node's `Action` get them besides the left press, all through
-  `UiActionContext`: `Kind` (`UiEventKind`: `Press`, `Text`, `Release`, `Drag`, `Wheel`, `Enter`, `Leave`), `Node` (the asking node's id),
+  `UiActionContext`: `Kind` (`UiEventKind`: `Press`, `Text`, `Release`, `Drag`, `Wheel`, `Enter`, `Leave`, `Submit`), `Node` (the asking node's id),
   `Position`, `Start` (the press), `Delta` (since the last drag event), `Wheel` (steps, above 0 up) and `Over` (for a drag or release, the
   topmost overlay node's id under the pointer, a drop target). A left press on a node or a child is held by the nearest one asking for
   `Release` or `Drag` (while held the world does not see the pointer), which gets each move and the release wherever it happens; the wheel and
-  hover go to the nearest asking. A window is made draggable by adding `Delta` to its placement. `UiNodeKind.ScrollView` lays out its
+  hover go to the nearest asking. `Buttons` gives the nearest asking node the presses of the other buttons (right, middle, extra) as `Press`
+  with `UiActionContext.Button` (the left for every other press); such a press is then the node's, not the game's (no context menu, no
+  order). A window is made draggable by adding `Delta` to its placement. `UiNodeKind.ScrollView` lays out its
   children by its flow shifted by its offset and clipped to it; while they overflow it shows a `Kenshi_ScrollBarV`-skinned bar (14 pixels, at
   its right, unless `ScrollBar` is false); the wheel over it or a child that does not take the wheel, the arrows (`ScrollStep`, 24 pixels),
   the track (a page) and the thumb scroll it. Its offset is kept by the extension and node id across frames and clamped to its content, and
-  is forgotten when the extension is disposed. Events run on the host's thread like any action; a throw is reported each time and leaves
-  the press held until the release. With no overlay node nothing changes. Engine API, not in the original.
+  is forgotten when the extension is disposed. `registration.ScrollOffset(nodeId)` reads it (pixels from the top of the content, as last laid
+  out or set; 0 for one never scrolled) and `registration.ScrollTo(nodeId, offset)` sets it (finite; below 0 is 0; the next layout clamps it to
+  the content), on the host's thread, for the extension's own scroll views (a screen control's too, which takes no wheel or bar input). A text
+  box whose node sets `Focus` takes the keys when it shows with it and did not the frame before (so a node kept set focuses once; not a
+  disabled box), the caret at the end; Enter in a mod's text box lets go of the keys and runs its `Action` as `Submit` with its text. Events run
+  on the host's thread like any action; a throw is reported each time and leaves the press held until the release. With no overlay node
+  nothing changes. Engine API, not in the original. **Observed** (scratch program, headless UiHost and MyGuiScreenHost): `Buttons`,
+  `ScrollTo`/`ScrollOffset` with clamping, `Focus` once per request and `Submit`; no test, not seen in a running game.
 - **Interface actions:** `context.Interface` (`ModInterface`) acts on the game's screens from the host's thread (a UI action, key action, menu
   row, hit feed): `OpenScreen(ModScreen kind, ScreenTarget target)` opens `CharacterEditor` (a recruit's edit, free with race and gender kept,
   of `target.Characters`; false while no listed character is in the snapshot yet, so a mod opening it on a character made this tick tries again
@@ -871,19 +879,37 @@ holds refuses the second mod.
   `anchorWidget` by `UiAnchorPlacement`: `Inside` its rectangle (clipped to it), or in a rectangle of its size just `Above`, `Below`, `Left` or
   `Right` of it (clipped to the screen only, so it may lie outside the window). The node's `Placement`, flow and styles work as in the overlay; it
   is drawn over the screen after its own controls, and a node's `Action` names an action of `RegisterAction`, run on a click (the screen's
-  click sound first). `UiScreens.ItemCells` as the anchor builds once per item cell of a character window (inventory, bag, limbs, loot), at
+  click sound first). A node (or a parent) asking `Pointer` `Release` or `Drag` holds a left press as on the overlay: its press runs at the
+  button's down without the click sound, then each move (`Delta`) and the release reach the holder wherever the pointer goes (`Over` names
+  overlay nodes only), and the screen sees none of it (no window drag); `Buttons` works as on the overlay. The wheel, hover and a scroll view's
+  bar are the overlay's only. `UiScreens.ItemCells` as the anchor builds once per item cell of a character window (inventory, bag, limbs, loot), at
   most 128 cells per source and frame, with `Item` set; `UiScreens.Portraits` on the HUD builds once per squad bar portrait shown (anchor: its
   picture, clipped to the bar's page), with `Character` the member. On the overview anchored to `MapImage`, `Anchor` is the whole map image
   (it pans and zooms) and `Map` (`UiWorldMapView`, see "World map input") is set while the Map tab shows. `UiScreenContext` gives `Screen`, `Kind`, `AnchorWidget`, `Anchor` (the arranged
   rectangle), `Character` (a character window's own, the stats window's selected, the NPC talked to, the HUD's selected or lead; null for
   none), `Building` (a machine or storage window's site id), `Item` (`UiScreenItem`: the holder, an `ItemOwner`, and the `InventoryItemView`),
-  `Snapshot`, `Tick`, `Enqueue` (from an action) and `Frame` (registered controls). Return null to add nothing. Nothing shows while the
+  `Snapshot`, `Tick`, `Enqueue` (from an action), `Frame` (registered controls), `Widget` (`UiScreenWidget`: the anchor's name, type, caption,
+  action, argument, rectangle and enabled state as arranged) and `State` (see "Screen overrides"). Return null to add nothing. Nothing shows while the
   screen is closed or its layout lacks the widget (a UI mod's), and without a source the screens are as before. A text box node works as on
   the overlay (see "Interface"). The
   source runs on the host thread each time the screen is arranged (each frame it is open), so it must be cheap and must not touch the world.
   At most 256 controls of all sources per screen (the rest left out, logged once per screen); a source that throws or lays
   out a node not finite is logged once and dropped; an action that throws is logged. Engine API, not in the original. **Observed** with the
   installed HUD and stats layouts headless (placement, clicks, disposal); no test yet, not seen in a running game.
+- **Screen overrides:** in `Register`, `registration.AddScreenOverrides(screen, widgetPattern, context => override)` changes a faithful screen's
+  or the HUD's own widgets (screen as for screen controls). Each time the screen is arranged, after its own content and before the extensions'
+  screen controls, the source is asked for each arranged widget whose name matches `widgetPattern` (exact, or `*` and `?` wildcards; at most
+  512 widgets per source and frame), with `UiScreenContext` (`Widget` the widget, `AnchorWidget`/`Anchor` its name and rectangle, `Item` for an
+  item cell, `Character` for a portrait or the screen's) and answers a `UiWidgetOverride` (null: no change): `Caption` (its text, at most 4096
+  characters, inline `#RRGGBB` tags as in the game's texts), `TextColour` (RGBA, each 0 to 1, before the skin's) or `Visible` false (left out:
+  not drawn, not clicked; its children are widgets of their own). Sources apply in registration order, each seeing the last one's changes.
+  `UiScreenContext.State` is what a screen keeps to itself, by key: the stats window's `selected` (the stat its description shows: a stat's
+  number as in its rows' `stat:N` actions, a mod skill's `mod:N`, empty for none) and `race-bonus-line` (the race XP bonus paragraph its
+  description body `stat-description-body` ends with after a blank line, empty when it shows none); other screens publish none yet. It runs on
+  the host thread and must be cheap and not touch the world; a source that throws or answers a caption too long or a colour out of range
+  changes nothing that frame and is logged once and dropped. Without a source the screens are as before. Engine API, not in the original.
+  **Observed** (scratch program, headless UiHost with stats-like controls, and screen-control drags and buttons); no test, not seen in a
+  running game.
 - **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
   (the snapshot the map is drawn from and its zoom level, 0 for the whole map to 2) on the host's thread each frame the map shows, so it
   must not touch the world, and returns `UiMapMarker`s: a world point (X, Z), an image group of the game's map marker set
@@ -949,9 +975,17 @@ holds refuses the second mod.
   editor has the keys, nor over the title or a loading cover; it does arrive under a window without text input, with the F10 menu open while
   it takes no text, in the character editor, and for the mouse's extra buttons in photo mode, as the game's own actions do; a numpad key bound
   to one is not the cinema camera's. On the Metal host F7, F8, F11, F12 and Print Screen are the view's own keys and never reach an action.
-  A binding is one key or button with no modifier, as the game's own bindings are in Meitou: the action fires whatever Shift, Ctrl or Alt is
-  held, and the press tells which in its context (the host's own combinations, Alt+Enter, Ctrl+F9 and on the Vulkan host Shift with F1,
-  F2, F11 or F12, never reach the bindings).
+  A plain binding is one key or button, as the game's own bindings are in Meitou: the action fires whatever Shift, Ctrl or Alt is held, and the
+  press tells which in its context. A mod's action may also take chords (`KeyModifiers`): `Binding.Of(Key.P).With(KeyModifiers.Ctrl |
+  KeyModifiers.Shift)` as a default, or on the Controls page its key pressed with the modifiers held (a modifier alone waits; the game's rows
+  stay plain). A chord fires only with exactly its modifiers held; its key going down that way is the chord's before photo mode, the
+  interface's keys and the game's bindings (Ctrl+Shift+P is not photo mode's P, Ctrl+J not Rescue's J), and while that key stays down no plain
+  binding of it fires. A chord is not taken while a text field has the keys, over the title or in photo mode. It is saved as `Ctrl+Shift+P`
+  (modifiers in any order when read); the game's own actions take no chord (one in `bindings` is skipped as unknown). The host's own
+  combinations never reach the bindings: Alt+Enter, Alt+F4, Ctrl+F9, Ctrl+C, Ctrl+V and Shift with F1, F2, F11 or F12 are left out as defaults
+  with a log line and refused on the page; on the Metal host a chord of F7, F8, F11, F12 or Print Screen never fires. **Observed** (scratch
+  program on `InputBindings`: laying, taking, resolving against photo mode's P, saving and reading back); the hosts' key path and the Controls
+  page not run.
   Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`, and `Ctrl`, `Shift`,
   `Alt`: either key of each held as it was pressed, so a mod can give Ctrl+key its own meaning) runs on the host thread at the control tick,
   so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at the last control tick, for
@@ -1177,6 +1211,15 @@ holds refuses the second mod.
   ([loading](#loading)), so another mod's command type, even from a copy of the same DLL in another mod folder, is a different type and does not
   match. A mod whose commands another mod's system should handle shares the type through a [dependency](modding-dependencies.md); otherwise each
   mod handles its own commands in a system of its own.
+- **Commands while paused:** while the clock is paused the world applies the interface's commands between ticks
+  (`World.ApplyPausedInterfaceCommands`: selection, orders, inventory, trade and the other game interface commands) and a mod's command waits
+  for the next tick, unless its type implements `IPausedCommand` (`Meitou.Simulation`, a marker). Such a command is taken in that step, in
+  queue order with the game's, and given to the `Inputs` of every system implementing `IPausedCommandHandler` (and the game's command systems),
+  in system order, inside the step's serial input phase; no other phase runs and time does not advance, so the handler only applies its
+  commands. Running, it is applied at its tick as any command. Without a handler system no command is taken early. A handler that throws is
+  disabled with its fault in the state hash, as in a tick. Deterministic as the game's paused commands: same commands, same order, between the
+  same ticks. Engine API, not in the original. **Observed** (scratch program, a bare world): marked commands reach the handler in queue order
+  without a tick, unmarked ones and those of a world without a handler wait for the next tick; no test.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
   `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous);

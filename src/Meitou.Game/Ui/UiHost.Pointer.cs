@@ -296,6 +296,17 @@ public sealed partial class UiHost
     }
 
     /// <summary>
+    /// <paramref name="owner"/>'s scroll view <paramref name="id"/>'s offset, pixels, as last laid out or set; 0 for one never scrolled.
+    /// </summary>
+    internal float ScrollOffset(string owner, string id) => _scrollOffsets.GetValueOrDefault(ScrollKey(owner, id));
+
+    /// <summary>
+    /// Sets <paramref name="owner"/>'s scroll view <paramref name="id"/>'s offset to <paramref name="offset"/> pixels (at least 0); the next layout
+    /// clamps it to the view's content.
+    /// </summary>
+    internal void ScrollTo(string owner, string id, float offset) => _scrollOffsets[ScrollKey(owner, id)] = Math.Max(0, offset);
+
+    /// <summary>
     /// Moves a scroll view's offset by <paramref name="delta"/> pixels, within its range.
     /// </summary>
     void ScrollBy(ScrollState view, float delta) =>
@@ -371,6 +382,47 @@ public sealed partial class UiHost
         bool ran = Run(control.Enabled, control.Action, f => Event(f, entry.Node.Id, control.Argument, UiEventKind.Press, p) with { Start = p });
         Capture(index, p);
         return ran;
+    }
+
+    /// <summary>
+    /// A press of <paramref name="button"/> (not the left) on <paramref name="control"/>, the topmost overlay control there: the nearest node from
+    /// it up asking for <see cref="UiPointerEvents.Buttons"/> gets it as <see cref="UiEventKind.Press"/>. False when none asks (another's control).
+    /// </summary>
+    public bool ButtonPress(UiControl control, Vector2 p, Host.Input.MouseButton button)
+    {
+        if (_last.Find(control) is not { } index) return false;
+
+        for (int at = index; at >= 0; at = _last.Nodes[at].Parent)
+        {
+            var e = _last.Nodes[at];
+            if (e.Part != ScrollPart.None || (e.Node.Pointer & UiPointerEvents.Buttons) == 0) continue;
+
+            return Run(e.Control.Enabled, e.Control.Action,
+                f => Event(f, e.Node.Id, e.Control.Argument, UiEventKind.Press, p) with { Start = p, Button = button });
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A press on <paramref name="widget"/>, an extension's control on <paramref name="screen"/> (docs/modding.md "Screen controls"): with the
+    /// left button, when it or a parent asks for the release or drags, its action gets the press and that node holds it, as on the overlay; with
+    /// another button, the nearest asking for <see cref="UiPointerEvents.Buttons"/> gets it. False otherwise (the screen takes the press).
+    /// </summary>
+    public bool PressScreen(string screen, string widget, Vector2 p, Host.Input.MouseButton button)
+    {
+        if (button != Host.Input.MouseButton.Left)
+        {
+            return Screens.Nearest(screen, widget, UiPointerEvents.Buttons) is { } b
+                && Run(b.Enabled, b.Action, f => Event(f, b.Node, b.Argument, UiEventKind.Press, p) with { Start = p, Button = button });
+        }
+
+        if (Screens.Nearest(screen, widget, UiPointerEvents.Release | UiPointerEvents.Drag) is not { } holder) return false;
+
+        if (Screens.Node(screen, widget) is { } pressed)
+            Run(pressed.Enabled, pressed.Action, f => Event(f, pressed.Node, pressed.Argument, UiEventKind.Press, p) with { Start = p });
+        if (holder.Enabled) _capture = new(holder.Owner, holder.Action, holder.Argument, holder.Node, holder.Pointer, p, p);
+        return true;
     }
 
     /// <summary>

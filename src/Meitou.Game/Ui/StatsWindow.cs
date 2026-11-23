@@ -22,6 +22,18 @@ sealed class StatsWindow(PlayerInterface player)
     internal string SelectedStat = "";
 
     /// <summary>
+    /// The race XP bonus paragraph the last description ended with; empty for none.
+    /// </summary>
+    string _raceBonusLine = "";
+
+    /// <summary>
+    /// What the window keeps to itself, for its extensions (<see cref="UiScreenContext.State"/>): the selected stat and the race bonus paragraph of
+    /// the content laid out last.
+    /// </summary>
+    internal IReadOnlyDictionary<string, string> ScreenState() =>
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["selected"] = SelectedStat, ["race-bonus-line"] = _raceBonusLine };
+
+    /// <summary>
     /// Whether the window was open at the last <see cref="PollStatHover"/>.
     /// </summary>
     bool _statsOpen;
@@ -126,6 +138,7 @@ sealed class StatsWindow(PlayerInterface player)
     internal void AddStatsContent(List<UiControl> controls)
     {
         var lead = player.Selected().FirstOrDefault();
+        _raceBonusLine = "";
 
         // The skill columns sit in Kenshi_GenericTextBoxSkin frames; the attributes column's frame has no text colour, so its painted labels
         // keep the painted-text template's.
@@ -393,7 +406,8 @@ sealed class StatsWindow(PlayerInterface player)
         if (help.PhysicalEffect.Length > 0) description += "\n\n" + help.PhysicalEffect;
         if (multiplier > 0 && Math.Abs(multiplier - 1) > 0.001f)
         {
-            description += "\n\n" + StatHelp.TextAt(451) + " " + ((multiplier - 1) * 100).ToString("+0;-0;0", CultureInfo.InvariantCulture) + "%";
+            _raceBonusLine = StatHelp.TextAt(451) + " " + ((multiplier - 1) * 100).ToString("+0;-0;0", CultureInfo.InvariantCulture) + "%";
+            description += "\n\n" + _raceBonusLine;
         }
 
         var body = new UiRect(bar.X + 10 * scale, bar.Y + 28 * scale, bar.Width - 20 * scale, Math.Max(0, right.Bounds.Height - 36 * scale));
