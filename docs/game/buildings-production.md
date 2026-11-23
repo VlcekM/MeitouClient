@@ -180,11 +180,11 @@ none stepping on the spot, the workplaces' operators 20 at tick 9 000 (8 at tick
 Meitou (`SiteReach`): builders 40 (walls 60), operators and storage fetches the `use range`, doubled once stopped, measured
 to the building's footprint hull (engine choice standing in for touching; a building without collision uses its parts' bounds
 hull) or, unknown, its position. A player machine with two or more use nodes is measured instead from its position marker
-(`ProductionSystem.UseNodeMarker`: the node nearest the worker that stands on the machine's floor within the height limit below, others
-passed over) with the walkable surface unbroken from the worker to it (`IWalkability.LineOfSight`), and its operator or hauler walks to
-that node. **Observed** (original 1.0.68, #1180: a Copper Alloy Bench against a Storm House's inner wall, a worker on its operate job
-standing against the wall outside, about 33 from the nearest node): the worker walked round through the door and worked from inside,
-though the reach rule above alone passes there; what stops it in the original is **Unknown**, and the line of sight is Meitou's stand-in.
+(`ProductionSystem.UseNodeMarker`: the node nearest the worker that stands on the machine's floor within the height limit above, others
+passed over), and its operator or hauler walks to that node; for a machine inside a building the worker must also stand on that building's
+floor, as the node does (`IWalkability.InteriorNear`, engine choice). **Observed** (original 1.0.68, #1180: a Copper Alloy Bench against a
+Storm House's inner wall, a worker on its operate job standing against the wall outside, about 33 from the nearest node, within the reach
+rule above once stopped): the worker walked round through the door and worked the bench from inside.
 A rock's operator has arrived within 10 (20 once stopped) of its mesh's footprint (the convex hull of
 its vertices seen from above) as the instance places it (its bounds circle without the mesh); it walks to the bounds box's centre and
 faces it (a rock's origin can lie off its pile). Engine choice, nearer than the original: its rule above has a copper rock (`use range`
