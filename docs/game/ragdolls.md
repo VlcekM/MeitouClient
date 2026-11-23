@@ -206,7 +206,8 @@ one's); that its Medic job then treats it where it lies is **Observed** (#870, t
   tick by the character's senses' counts (`BodySystem.Senses`, [senses](perception.md#senses); the character looks while playing dead or about to wake, faded counts would always read safe); the waking window is Act's longest step, so a far character is asked too. A vital part or
   the blood ends a knockout on the tick it heals, which no window foresees: one whose senses faded (`SenseBlock.Faded`, not carried
   or a slave) is held down, unconscious, until its next look (`MedicalContext.GetUpUnasked`, engine choice), then asked; a player
-  order standing it up grants the toughness (`BodySystem.GotUpByOrder`); animals never play dead. Rechecked every 15 ticks
+  order standing it up grants the toughness (`BodySystem.GotUpByOrder`); animals never play dead, nor does one in a bed or a cage
+  (posture 3 is chosen only in the WHOLE branch, which never runs there, above; one playing dead when put in gets up; #1159). Rechecked every 15 ticks
   (engine choice). `MedicalState.StandUp` ends it. Health header: `HudText.HealthWord`. The medic gates read it as awake
   (`FirstAidSystem.Awake`), and `BodySystem` keeps its treatment of itself.
 
