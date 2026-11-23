@@ -318,7 +318,8 @@ change that gave every Widget a `Client` (its `Widget::initialiseOverride` is em
   (`UiRect.AlignTo`, centring then). A position the code binds is where the widget was made (its children are made in it), unless `UiBindings.MadeSizes` gives the size
   it was made at: then its children align from that, as a window resized by its grips (`MyGuiScreenHost.PlaceRoots`) does.
   Template parts and skin pieces use `MyGuiScale` at the template scale (`UiBindings.TemplateScale`; the painter's UI scale), the parts' fractions converted at the scaled
-  template size (`TemplateRealPosition`).
+  template size (`TemplateRealPosition`). Every faithful screen binds at the UI scale (`ScreenRouter.BindFaithfulScreen`), so a `Kenshi_ListBox`'s
+  18 px lines are 36 px at 2160 lines, as its text is.
 - **Window** (Verified, `Window.cpp`; layouts): `Snap` (set by every Kenshi window template) snaps an edge to the viewport's within 10 px (`|left| <= 10`, `|right - width| < 10`, likewise top / bottom) while dragging,
   without clamping; Meitou lets a dragged window leave the screen but keeps its top edge and 48 px of it in view (`KeepVisible`), and places others fully on screen. `Movable` false (`Kenshi_MessageBox`, `Kenshi_AdvancedOptionsWindow`) stops the drag; `MinSize` / `MaxSize` (`Kenshi_OpenSaveFileDialog` 200 200) bound the
   size a resize gives. **Observed**: no Kenshi window template has a child with the user strings `Action` or `Scale` (MyGUI's resize / move markers), so the original has no user resizing; the generic grips (`Scale`
