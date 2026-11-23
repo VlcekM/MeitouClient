@@ -24,9 +24,18 @@ public sealed class GameInstall
     public const string LocalConfigFile = "meitou.local.json";
 
     /// <summary>
+    /// The Wine prefixes' save folders (<see cref="FindPrefixSaveDirectories"/>), found on first use.
+    /// </summary>
+    readonly Lazy<string[]> _prefixSaveDirectories;
+
+    /// <summary>
     /// Wraps an already validated, full install path.
     /// </summary>
-    GameInstall(string root) => Root = root;
+    GameInstall(string root)
+    {
+        Root = root;
+        _prefixSaveDirectories = new(FindPrefixSaveDirectories);
+    }
 
     /// <summary>
     /// Full path of the install's folder (the one holding the game's exe and <c>data</c>).
@@ -47,20 +56,62 @@ public sealed class GameInstall
     /// <summary>
     /// The original's per-user save folders (docs/formats/save.md "Where saves live"): <c>%LOCALAPPDATA%/kenshi/save</c>, then, for a Steam
     /// install, the one inside the Proton prefix (<c>steamapps/compatdata/233860/pfx/.../AppData/Local/kenshi/save</c>), where the game run
-    /// through Proton on Linux saves. Either may be missing.
+    /// through Proton on Linux saves, then those of the other Wine prefixes that hold the install
+    /// (<see cref="FindPrefixSaveDirectories"/>). Any may be missing.
     /// </summary>
     public IReadOnlyList<string> UserSaveDirectories
     {
         get
         {
             string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save");
-            if (SteamAppsDirectory is not { } steamapps) return [local];
+            if (SteamAppsDirectory is not { } steamapps) return [local, .. _prefixSaveDirectories.Value];
 
             string proton = Path.Combine(steamapps, "compatdata", "233860", "pfx", "drive_c", "users", "steamuser", "AppData", "Local",
                 "kenshi", "save");
-            return [local, proton];
+            return [local, proton, .. _prefixSaveDirectories.Value];
         }
     }
+
+    /// <summary>
+    /// The save folders of the Wine prefixes (Heroic, Lutris, Bottles, <c>~/.wine</c>) that hold the install
+    /// (<see cref="GameInstallSources.PrefixesOf"/>, #1200): each user's <c>drive_c/users/&lt;user&gt;/AppData/Local/kenshi/save</c> that exists, a
+    /// user linked to another (Proton's <c>&lt;user&gt; → steamuser</c>) once. None on Windows.
+    /// </summary>
+    string[] FindPrefixSaveDirectories()
+    {
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return
+        [
+            .. GameInstallSources.PrefixesOf(Root, home, Environment.GetEnvironmentVariable)
+                .SelectMany(UsersOf)
+                .Select(user => Path.Combine(user, "AppData", "Local", "kenshi", "save"))
+                .Where(Directory.Exists)
+                .Distinct(),
+        ];
+    }
+
+    /// <summary>
+    /// The user folders of a Wine prefix's <c>drive_c/users</c>, a link as the folder it names; none when it cannot be read.
+    /// </summary>
+    static IEnumerable<string> UsersOf(string prefix)
+    {
+        var users = Path.Combine(prefix, "drive_c", "users");
+        if (!Directory.Exists(users)) return [];
+
+        try
+        {
+            return [.. new DirectoryInfo(users).EnumerateDirectories().Select(ResolvedPath)];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// The full path of a folder, a link as the folder it names.
+    /// </summary>
+    static string ResolvedPath(DirectoryInfo folder) => folder.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? folder.FullName;
 
     /// <summary>
     /// The install's game exe: the first of <see cref="ExecutableNames"/> that exists, else the Steam name (missing).
