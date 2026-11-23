@@ -420,22 +420,29 @@ shows the first failing message in this order (**Verified** unless marked):
 - **A ramp's mesh sits in its wall's own space** (**Verified**, mesh bounds): `basic_wall_ramp2.mesh` spans x -102..-20, z 0..24, just
   outside Concrete Wall's `wall_basic02.mesh` (x -19.5..3.9, z -2.7..118.7); Defensive Wall Ramp IV's staircase spans x -268..-49, z
   187..222 against Wall IV (x -59..27, z 0..305; both scale 0.85). At its wall's position and turn a ramp stands against the wall's -X side.
-- **Turrets** have no `snaps to`, and none refers to the `Node Turret` instances (node type 3, as `Node Defensive Position`) that wall parts
-  such as `Wall Level 02` carry: they stand on a wall's walkway like on any surface (**Observed**, data only).
+- **Turrets snap to `Node Turret`** (**Verified**, decompile of `PreviewBuilding_Snapping`, Steam 1.0.68): a building with `snaps to` or a
+  `gun turret` gets the `_Snapping` ghost (factory `0x1404e1a97`-`0x1404e1e48`), so turrets have one although none lists `snaps to`. Its snap
+  node type (`0x1404dd250`) is 3 for a `gun turret`, else the `node type` of the first `snaps to` record when that is an `is node` record, else
+  none (it snaps to `snaps to` buildings). With a node type the update (`0x1404dd7a0`) takes the nearest node of that **node type** (any record,
+  `0x14038aca0`) within 300 units 3D, 60 for a `gun turret`, and its position and turn; a turret then turns 180 degrees about its own up
+  (`0x1404dda21` -> `0x1404d4f80`). The `Node Turret` instances sit on wall parts' walkways (`Wall Level 02`: three at x -1.2, y 43.4, turned
+  180 degrees about Y; data).
 - **Snap nodes and blue node markers** (**Verified**, `PreviewBuilding_Snapping` vtable `0x1416e1cb8`, `0x1404dd410`, `0x1404ddb43`, `0x1404d0ff0`,
   `0x1404fe160`, `0x14038cdf0`, `0x140388e10`):
   - A building's `is node` child instances (such as `Node Light Mount`, `node type` 5, or `Node Turret`, `node type` 3) are placed at
     `parent.pos + parent.rot * instance.pos` (unscaled by `scale`) and `parent.rot * instance.rot` (`0x140388e10`).
-  - `PreviewBuilding_Snapping` searches both buildings and building nodes matching `snaps to` within squared 3D distance `32400` (`180` units,
-    `0x1404ddb43`). Slot 5 (`0x1404d0ff0`) refuses unsnapped placement with `NeedsSnapNode` ("Can only be placed on certain locations (marked by
-    blue nodes).") unless slot `+0x108` (`0x1404fe160`) finds a `gun turret` reference.
-  - `showBlueNodes` (`0x14038cdf0`) draws `unit_sphere.mesh` scaled `5.0` in cyan-blue `(0, 0.8, 1.0, 0.5)` at every matching node of player-owned
-    buildings (or all buildings in the level editor).
-- **Meitou** (`GhostSnap`, `BuildMode.SnapToTarget`, `MarkerRenderer.BlueNodes`): a `snaps to` ghost takes the position and turn of the nearest
-  building of a target record (within 150 X/Z) or the nearest matching `is node` instance of an owned building or player site (direct pointer ray
-  hover preferred, else nearest within 180 3D); it is judged by its own pitch like a wall piece, its host building does not block it, and an
+  - Without a snap node type the ghost searches its `snaps to` buildings with squared distance `32400` (`180` units, `0x1404ddb43`). Slot 5
+    (`0x1404d0ff0`) refuses unsnapped placement with `NeedsSnapNode` ("Can only be placed on certain locations (marked by blue nodes).") unless
+    slot `+0x108` (`0x1404fe160`) finds a `gun turret` reference.
+  - Slot 7 (`0x1404deb80`) calls `showBlueNodes` (`0x14038cdf0`) with the snap node type: `unit_sphere.mesh` scaled `5.0` in cyan-blue
+    `(0, 0.8, 1.0, 0.5)` at every node of that type on player-owned buildings (or all buildings in the level editor), a turret's `Node Turret`
+    ones too.
+- **Meitou** (`GhostSnap`, `BuildMode.SnapToTarget`, `MarkerRenderer.BlueNodes`): a snapping ghost with a snap node type takes the position and
+  turn of the nearest node of that type on an owned building or player site (direct pointer ray hover preferred, else nearest within 300 3D, 60
+  for a turret, which turns 180 degrees and is not blocked by walls), one without takes the nearest building of a `snaps to` record (within 150
+  X/Z of its footprint centre, engine choice); it is judged by its own pitch like a wall piece, its host building does not block it, and an
   exterior snap attachment records its parent while staying outside (`Outside` / `flags` bit 0) so it remains visible and lit outdoors when the
-  house's interior is closed. While a ghost that snaps to `is node` records is held, matching nodes on player sites and owned buildings (all
+  house's interior is closed. While a ghost with a snap node type is held, the nodes of that type on player sites and owned buildings (all
   non-destroyed buildings in the level editor) show blue node spheres (`unit_sphere.mesh` scaled 5), and unsnapped placement fails with
   `NeedsSnapNode` unless the building has a `gun turret`. Resources (`is foliage`, e.g. Ore Drill -> Iron Resource) are not searched. A ghost over
   a raised walkable surface outside the rooms (a wall top, `InteriorView.SurfaceMoveHit`) stands on it level, with that height as its ground, and
