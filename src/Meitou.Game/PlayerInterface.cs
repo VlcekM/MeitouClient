@@ -296,6 +296,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             || Picking.ShownInteriorHit?.Invoke(ray.Origin, ray.Direction, distance) is not null;
 
     /// <summary>
+    /// Whether a character or an object the ray meets at <paramref name="distance"/> is out of the pointer's reach: <see cref="Hidden"/>, or the
+    /// terrain or a building without rooms stands before it (<see cref="WorldPicking.Blocked"/>).
+    /// </summary>
+    internal bool Obscured((Vector3 Origin, Vector3 Direction) ray, float distance) => Hidden(ray, distance) || Picking.Blocked(ray, distance);
+
+    /// <summary>
     /// The HUD's height at the bottom of the screen, pixels.
     /// </summary>
     public float HudBottom => 48;

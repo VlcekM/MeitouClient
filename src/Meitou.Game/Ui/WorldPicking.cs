@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Game.Building;
 using Meitou.Simulation;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Game.Ui;
 
@@ -152,17 +153,27 @@ sealed class WorldPicking(PlayerInterface player)
         if (player.Build.Services is not { } host) return null;
 
         var nearest = (T: limit, Steep: false);
-        LevelFaces(host, origin, direction, ref nearest);
-        SiteFaces(host, origin, direction, ref nearest);
+        foreach (var hit in StaticHits(host, origin, direction, limit))
+        {
+            if (hit.T < nearest.T) nearest = (hit.T, MathF.Abs(hit.Normal.Y) < SteepCos);
+        }
+
         return nearest.Steep ? nearest.T : null;
     }
 
     /// <summary>
-    /// Takes into <paramref name="nearest"/> the first hit of the ray on the collision of a level building without rooms, when nearer.
+    /// The first hit of the ray within <paramref name="limit"/> on the collision of each building without rooms it meets: the level ones
+    /// (<see cref="LevelHits"/>) and the player's sites (<see cref="SiteHits"/>).
     /// </summary>
-    void LevelFaces(BuildServices host, Vector3 origin, Vector3 direction, ref (float T, bool Steep) nearest)
+    IEnumerable<StaticHit> StaticHits(BuildServices host, Vector3 origin, Vector3 direction, float limit) =>
+        LevelHits(host, origin, direction, limit).Concat(SiteHits(host, origin, direction, limit));
+
+    /// <summary>
+    /// The first hit of the ray within <paramref name="limit"/> on the collision of each level building without rooms it meets.
+    /// </summary>
+    IEnumerable<StaticHit> LevelHits(BuildServices host, Vector3 origin, Vector3 direction, float limit)
     {
-        foreach (var candidate in host.Placement.StaticAlong(origin, direction, nearest.T))
+        foreach (var candidate in host.Placement.StaticAlong(origin, direction, limit))
         {
             var b = candidate.Placement;
             // A building with rooms answers for its own collision (InteriorFaceHit): its hidden floors do not count, its walls drop to the floor
@@ -175,16 +186,17 @@ sealed class WorldPicking(PlayerInterface player)
             if (mesh.Count == 0 || BuildMode.RayPrism(origin, direction, hull, y + candidate.Footprint.YMin, y + candidate.Footprint.YMax) is null)
                 continue;
 
-            if (RayMeshHit((origin, direction), mesh, new Vector3(b.Position.X, y, b.Position.Z), b.Rotation) is { } hit && hit.T < nearest.T)
-                nearest = (hit.T, MathF.Abs(hit.Normal.Y) < SteepCos);
+            var at = new Vector3(b.Position.X, y, b.Position.Z);
+            if (RayMeshHit((origin, direction), mesh, at, b.Rotation) is { } hit && hit.T < limit)
+                yield return new StaticHit(hit.T, hit.Normal, candidate.Footprint, at, b.Rotation);
         }
     }
 
     /// <summary>
-    /// Takes into <paramref name="nearest"/> the first hit of the ray on the collision of one of the player's sites without rooms (a wall, a gate,
-    /// a machine), when nearer: placed as <see cref="BuildMode.PickSiteAt"/> places it.
+    /// The first hit of the ray within <paramref name="limit"/> on the collision of each of the player's sites without rooms it meets (a wall, a
+    /// gate, a machine): placed as <see cref="BuildMode.PickSiteAt"/> places it.
     /// </summary>
-    void SiteFaces(BuildServices host, Vector3 origin, Vector3 direction, ref (float T, bool Steep) nearest)
+    IEnumerable<StaticHit> SiteHits(BuildServices host, Vector3 origin, Vector3 direction, float limit)
     {
         foreach (var site in player.Session.CurrentSnapshot.Buildings)
         {
@@ -198,8 +210,8 @@ sealed class WorldPicking(PlayerInterface player)
             float y = site.Position.Y;
             if (mesh.Count == 0 || BuildMode.RayPrism(origin, direction, hull, y + footprint.YMin, y + footprint.YMax) is null) continue;
 
-            if (RayMeshHit((origin, direction), mesh, site.Position, yaw) is { } hit && hit.T < nearest.T)
-                nearest = (hit.T, MathF.Abs(hit.Normal.Y) < SteepCos);
+            if (RayMeshHit((origin, direction), mesh, site.Position, yaw) is { } hit && hit.T < limit)
+                yield return new StaticHit(hit.T, hit.Normal, footprint, site.Position, yaw);
         }
     }
 
@@ -407,7 +419,7 @@ sealed class WorldPicking(PlayerInterface player)
             }
         }
 
-        (CharacterId Id, float T)? picked = best is not { } found || player.Hidden(ray, bestT) ? null : (found, bestT);
+        (CharacterId Id, float T)? picked = best is not { } found || player.Obscured(ray, bestT) ? null : (found, bestT);
         if (CageOccupant(pixel, accept, picked) is { } occupant) return occupant;
 
         return picked;
@@ -730,6 +742,82 @@ sealed class WorldPicking(PlayerInterface player)
         if (best is not { } met) return null;
 
         return (met, Vector3.Transform(normal.LengthSquared() < 1e-12f ? Vector3.UnitY : Vector3.Normalize(normal), q));
+    }
+
+    #endregion
+
+    #region Occlusion
+
+    /// <summary>
+    /// How much nearer than a pick's hit a blocking hit has to be to hide it, world units: a building's own collision, met where its pick meets it,
+    /// hides nothing (engine choice).
+    /// </summary>
+    const float BlockMargin = 1;
+
+    /// <summary>
+    /// The blockers of the shared pick's ray: its scope, ray and <see cref="Blockers"/>'s answer.
+    /// </summary>
+    (int Scope, Vector3 Origin, Vector3 Direction, float Ground, List<StaticHit> Hits) _blockers;
+
+    /// <summary>
+    /// A hit of a ray on the collision of a building without rooms, with the building's footprint and placement.
+    /// </summary>
+    readonly record struct StaticHit(float T, Vector3 Normal, BuildingFootprint Footprint, Vector3 Position, Quaternion Rotation)
+    {
+        /// <summary>
+        /// Whether <paramref name="point"/> lies inside one of the building's collision shapes (its hull on the ground, from the building's
+        /// lowest to its highest point): a body in a bed or a cage, an item in a container.
+        /// </summary>
+        public bool Holds(Vector3 point)
+        {
+            if (point.Y < Position.Y + Footprint.YMin || point.Y > Position.Y + Footprint.YMax) return false;
+
+            var xz = new Vector2(point.X, point.Z);
+            var shapes = Footprint.Shapes.Count > 0 ? Footprint.Shapes : [Footprint.Hull];
+            foreach (var shape in shapes)
+            {
+                if (new BuildingFootprint(shape, Footprint.YMin, Footprint.YMax).Gap(Position, Rotation, xz) == 0) return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether the terrain or the collision of a building without rooms stands on the ray before a character's or an object's hit at
+    /// <paramref name="distance"/>, as the original's pick walks its hits nearest first and ends at the ground or at a building taken first
+    /// (docs/game/ui-input.md "Building picking and selection"). A building whose collision shape holds the hit point (a bed, a cage, a container)
+    /// does not hide it.
+    /// </summary>
+    internal bool Blocked((Vector3 Origin, Vector3 Direction) ray, float distance)
+    {
+        var (ground, hits) = Blockers(ray.Origin, ray.Direction);
+        float before = distance - BlockMargin;
+        if (ground < before) return true;
+
+        var at = ray.Origin + ray.Direction * distance;
+        foreach (var hit in hits)
+        {
+            if (hit.T < before && !hit.Holds(at)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// How far the ray reaches before the ground (<see cref="PickReach"/>; the world's reach when it meets none) and the hits on buildings without
+    /// rooms up to there, kept for the shared pick's same ray.
+    /// </summary>
+    (float Ground, List<StaticHit> Hits) Blockers(Vector3 origin, Vector3 direction)
+    {
+        if (SharedScope != 0 && _blockers.Scope == SharedScope && _blockers.Origin == origin && _blockers.Direction == direction)
+            return (_blockers.Ground, _blockers.Hits);
+
+        float ground = PickReach(origin, direction, float.MaxValue).Reach;
+        float limit = MathF.Min(ground, 40000);
+        List<StaticHit> hits = player.Build.Services is { } host ? [.. StaticHits(host, origin, direction, limit)] : [];
+        if (SharedScope != 0) _blockers = (SharedScope, origin, direction, ground, hits);
+        return (ground, hits);
     }
 
     #endregion
