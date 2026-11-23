@@ -1324,15 +1324,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         if (Rebinding is { } action)
         {
-            if (key == Key.Escape) Rebinding = null;
-            else if (key == Key.Delete || key == Key.Backspace)
-            {
-                Bindings.Set(action);
-                Rebinding = null;
-                Notice = "Binding cleared.";
-            }
-            else SetBinding(action, key);
-
+            RebindKey(action, key);
             return true;
         }
 
@@ -1389,8 +1381,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// A key: the preset name dialog, else the search box (Ctrl+F focuses it), else the typed value's keys (Esc, Enter, Tab, then the
     /// editing keys of <see cref="TextField"/>), else as without Ctrl.
     /// </summary>
-    public bool KeyDown(Key key, bool shift, bool ctrl)
+    public bool KeyDown(Key key, bool shift, bool ctrl, bool alt = false)
     {
+        _heldModifiers = InputBindings.Modifiers(ctrl, shift, alt);
         if (PresetNaming.Open && Visible) return PresetNaming.OnKey(key);
         if (Search.Focused && Visible) return Search.OnKey(key, shift, ctrl);
         if (TextEdit.Editing is not null && Visible) return TextEdit.OnKey(key, shift, ctrl);
@@ -1490,6 +1483,35 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Notice = "";
         return true;
     }
+
+    /// <summary>
+    /// The modifiers held as the key being handled went down (<see cref="KeyDown(Key, bool, bool, bool)"/>), for a code mod's chord.
+    /// </summary>
+    KeyModifiers _heldModifiers;
+
+    /// <summary>
+    /// A key while <paramref name="action"/> waits for its binding: Esc cancels, Delete or Backspace unbinds, any other key binds. A code mod's
+    /// action takes the key with the modifiers held as a chord (docs/modding.md "Key actions") and waits on while only a modifier goes down.
+    /// </summary>
+    void RebindKey(InputAction action, Key key)
+    {
+        bool modAction = Bindings.ModAction(action) is not null;
+        if (key == Key.Escape) Rebinding = null;
+        else if (key == Key.Delete || key == Key.Backspace)
+        {
+            Bindings.Set(action);
+            Rebinding = null;
+            Notice = "Binding cleared.";
+        }
+        else if (modAction && IsModifier(key)) return;
+        else SetBinding(action, modAction && _heldModifiers != KeyModifiers.None ? Binding.Of(key).With(_heldModifiers) : key);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="key"/> is a Ctrl, Shift or Alt key.
+    /// </summary>
+    static bool IsModifier(Key key) =>
+        key is Key.LeftControl or Key.RightControl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt;
 
     /// <summary>
     /// Binds <paramref name="action"/> to <paramref name="binding"/>, taking it from the actions of its key map that have it; a reserved key is
