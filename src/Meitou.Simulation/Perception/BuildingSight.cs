@@ -6,9 +6,9 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Perception;
 
 /// <summary>
-/// The simulation's rooms and lamps of the town buildings (<see cref="SightMap"/>): the building's indoor volume from its <c>interior mask</c>
-/// collision and its lights with those of its layouts, both from the level data the renderer builds its own from. Called on the simulation thread
-/// when a town registers; the collision files are cached.
+/// The simulation's rooms and lamps of the town buildings and the player's (<see cref="SightMap"/>): the building's indoor volume from its
+/// <c>interior mask</c> collision and its lights with those of its layouts, both from the level data the renderer builds its own from. Called on
+/// the simulation thread when a town registers or the player's buildings change; the collision files are cached.
 /// </summary>
 sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData levels, BuildingLayouts layouts) : ISightSource
 {
@@ -35,7 +35,14 @@ sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData 
         building.Resolved is { } r ? WorldLights.ForBuilding(db, levels, r, layouts) : [];
 
     /// <inheritdoc/>
-    public bool EnforcesCeiling(TownBuilding building) => db.Find(building.BuildingId)?.GetBool("enforce ceiling") == true;
+    public bool EnforcesCeiling(TownBuilding building) => EnforcesCeiling(building.BuildingId);
+
+    /// <inheritdoc/>
+    public bool EnforcesCeiling(string record) => db.Find(record)?.GetBool("enforce ceiling") == true;
+
+    /// <inheritdoc/>
+    public InteriorVolume? SiteRoom(Construction.BuildSite site) =>
+        db.Find(site.Record) is { } record ? InteriorVolume.For(db, record, site.Id, site.Position, site.Rotation, _collisions) : null;
 
     /// <inheritdoc/>
     public GroundHit? TopAt(TownBuilding building, bool destroyed, Vector2 at, float from = float.PositiveInfinity) => building.Resolved is { } r
