@@ -103,7 +103,7 @@ public class HouseRepairTests
 
         Assert.True(r.Site.Destroyed);
         Assert.True(r.Site.Complete);
-        Assert.Null(r.Construction.EngineerSite(r.World, r.Builder.Slot));
+        Assert.Null(r.Construction.EngineerWork(r.World, r.Builder.Slot));
 
         r.World.Sight.Update(r.World);
 

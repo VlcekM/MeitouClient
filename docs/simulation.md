@@ -1881,10 +1881,10 @@ optional), `EdgeGap` (site, point -> gap to its footprint hull; the host's).
   `2000 + (i << 16) + 2k` and `+1`, r = the footprint radius, at least `Reach` (engine: the original's bounding box is
   not in the sim). A destroyed flag (a save's, or a wall line hit to 0) turns a player-built building into a ruin on the next tick; a town house waits for Repair
   (**Verified** rule: progress 0.4 x target, delivered floor(delivered x U[0.3, 0.5) + 0.5)).
-- Engineer job (125, run by the [job lists](#production)): `EngineerSite` scores the faction's sites that `NeedsWork`,
-  not paused, destroyed, attached or being dismantled, `max(2 (1 - d^2/9000^2), 0.0001) / (n + 1)` (d 3D, n others
-  working it), skipping a stalled site the character carries nothing for and `Source` cannot feed; `StartBuilding` sends
-  it there. Without the job nobody builds unordered (the original has no other auto-build).
+- Engineer job (125, run by the [job lists](#production)): `EngineerWork` scores the faction's sites that `NeedsWork`,
+  not paused, destroyed, attached or being dismantled, and the doors needing repair of its complete ones (at the leaf),
+  `max(2 (1 - d^2/9000^2), 0.0001) / (n + 1)` (d 3D, n others working it), skipping a stalled site the character carries
+  nothing for and `Source` cannot feed; `StartBuilding` sends it there (a door: the door repair). Without the job nobody builds unordered (the original has no other auto-build).
 - `BuildingsRevision` bumps on add, complete, a complete building becoming a site (dismantling started), destroyed and
   remove. `Version` (progress, delivery, pause) only rebuilds the published list.
 
@@ -2113,8 +2113,9 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).
     Blocked unless it is mid-trip for it, carries an item an input has room for, an empty input's item is in a storage, or a full or carried output has a storage that takes it
     (engine reading of the row's goal "no empty inputs", `AutoWork`). 124 on an automatic machine runs the same way, blocked unless it carries an item an input has room for.
-  - 125 Engineer (ordered as 2 Build or 95 Repair; Shift + quick right click on an unfinished site): builds `ConstructionSystem.EngineerSite`'s
-    pick, whatever the job's target ([buildings](#buildings)); its tasks are *Build*, *DeliverMaterials* and *FetchMaterials*. Blocked with no site.
+  - 125 Engineer (ordered as 2 Build or 95 Repair; Shift + quick right click on an unfinished site): builds the site or repairs the door of
+    `ConstructionSystem.EngineerWork`'s pick, whatever the job's target ([buildings](#buildings)); its tasks are *Build*, *DeliverMaterials* and
+    *FetchMaterials*. Blocked with nothing to work.
   - Implicit jobs (`ImplicitPick`, `ImplicitJobs`, the decision step's step 5 after the list): with no list job to run, the switch on, not sneaking and not a slave (Sleep and Sit also not while holding position), the squad AI options (`PlayerState.SquadAi`, the
     overview's AI tab, on by default) start, in this order: Ditch items (242: carried ITEMs of function 0 or 15, and food but the first, go to the nearest
     storage within the 4.246733e7 bound (3D) of the character that takes them (finder `FUN_1405a59a0`, **Verified**), as a Haul trip; only with no queued orders; re-tested every pass, so a trip whose storage no longer takes a carried item, or that gained a queued order, drops out or re-picks at once, **Verified** `FUN_14050e5b0`), Sleep when injured (153: a character in a player town or a player building whose rested level is at most 0.9 and whose organic
