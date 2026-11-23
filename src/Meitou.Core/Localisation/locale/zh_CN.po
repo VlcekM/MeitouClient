@@ -5693,6 +5693,106 @@ msgid "Sort by"
 msgstr "排序方式"
 
 #. machine-translated
+msgid "A tall two-story building shell with stairs inside."
+msgstr "一座内有楼梯的高大两层建筑外壳。"
+
+#. machine-translated
+msgid "Makes basic first aid kits and sleeping bags from fabrics. Needs power."
+msgstr "用布料制作基础急救包和睡袋。需要电力。"
+
+#. machine-translated
+msgid "Makes first aid kits and splint kits from fabrics and hemp. Needs power."
+msgstr "用布料和大麻制作急救包和夹板包。需要电力。"
+
+#. machine-translated
+msgid "Grows hemp indoors, safe from the weather. Needs power and water."
+msgstr "在室内种植大麻，不受天气影响。需要电力和水。"
+
+#. machine-translated
+msgid "Grows riceweed indoors, safe from the weather. Needs power and water."
+msgstr "在室内种植水稻，不受天气影响。需要电力和水。"
+
+#. machine-translated
+msgid "Grows greenfruit indoors, safe from the weather. Needs power and water."
+msgstr "在室内种植绿果，不受天气影响。需要电力和水。"
+
+#. machine-translated
+msgid "Collects water when it rains."
+msgstr "下雨时收集雨水。"
+
+#. machine-translated
+msgid "A sturdy metal table."
+msgstr "一张结实的金属桌子。"
+
+#. machine-translated
+msgid "A simple round table."
+msgstr "一张简单的圆桌。"
+
+#. machine-translated
+msgid "A wooden shelf, for decoration."
+msgstr "一个木架子，用于装饰。"
+
+#. machine-translated
+msgid "A simple stool to sit on."
+msgstr "一张可以坐的简单凳子。"
+
+#. machine-translated
+msgid "Stores power for when your generators fall short."
+msgstr "储存电力，以备发电机供电不足时使用。"
+
+#. machine-translated
+msgid "A larger wind generator with twice the power of the first when the wind is up. Keep batteries as a backup."
+msgstr "更大的风力发电机，有风时发电量是第一种的两倍。记得备好蓄电池。"
+
+#. machine-translated
+msgid "A large storage tank for fuel."
+msgstr "一个大型燃料储存罐。"
+
+#. machine-translated
+msgid "A stack of boxes you can store anything in."
+msgstr "一堆箱子，可以存放任何东西。"
+
+#. machine-translated
+msgid "A storage barrel for cactus."
+msgstr "仙人掌储存桶。"
+
+#. machine-translated
+msgid "A storage barrel for greenfruit."
+msgstr "绿果储存桶。"
+
+#. machine-translated
+msgid "A storage barrel for riceweed."
+msgstr "水稻储存桶。"
+
+#. machine-translated
+msgid "A low, crude wall that won't keep enemies out for long."
+msgstr "一道低矮粗糙的墙，挡不住敌人多久。"
+
+#. machine-translated
+msgid "A proper defensive wall, taller than a makeshift one."
+msgstr "一道真正的防御墙，比简易墙更高。"
+
+#. machine-translated
+msgid "A taller, heavier defensive wall."
+msgstr "一道更高、更厚重的防御墙。"
+
+#. machine-translated
+msgid "A towering fortified wall."
+msgstr "一道高耸的防御城墙。"
+
+#. machine-translated
+msgid "The gate for Defensive Wall II."
+msgstr "2级防御墙的大门。"
+
+#. machine-translated
+msgid "The gate for Defensive Wall III."
+msgstr "3级防御墙的大门。"
+
+#. machine-translated
+msgid "The gate for Defensive Wall IV."
+msgstr "4级防御墙的大门。"
+
+#. machine-translated
 msgid "Simple terrain shading"
 msgstr "简易地形着色"
 

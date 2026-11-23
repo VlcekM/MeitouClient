@@ -4848,6 +4848,106 @@ msgid "Sort by"
 msgstr "정렬 기준"
 
 #. machine-translated
+msgid "A tall two-story building shell with stairs inside."
+msgstr "내부에 계단이 있는 높은 2층 건물 외벽."
+
+#. machine-translated
+msgid "Makes basic first aid kits and sleeping bags from fabrics. Needs power."
+msgstr "직물로 응급처치 도구(기본)와 침낭을 만듭니다. 전력이 필요합니다."
+
+#. machine-translated
+msgid "Makes first aid kits and splint kits from fabrics and hemp. Needs power."
+msgstr "직물과 대마로 응급처치 도구와 부목 도구를 만듭니다. 전력이 필요합니다."
+
+#. machine-translated
+msgid "Grows hemp indoors, safe from the weather. Needs power and water."
+msgstr "날씨의 영향 없이 실내에서 대마를 재배합니다. 전력과 물이 필요합니다."
+
+#. machine-translated
+msgid "Grows riceweed indoors, safe from the weather. Needs power and water."
+msgstr "날씨의 영향 없이 실내에서 벼 잡초를 재배합니다. 전력과 물이 필요합니다."
+
+#. machine-translated
+msgid "Grows greenfruit indoors, safe from the weather. Needs power and water."
+msgstr "날씨의 영향 없이 실내에서 초록과일을 재배합니다. 전력과 물이 필요합니다."
+
+#. machine-translated
+msgid "Collects water when it rains."
+msgstr "비가 오면 물을 모읍니다."
+
+#. machine-translated
+msgid "A sturdy metal table."
+msgstr "튼튼한 금속 탁자."
+
+#. machine-translated
+msgid "A simple round table."
+msgstr "단순한 원형 탁자."
+
+#. machine-translated
+msgid "A wooden shelf, for decoration."
+msgstr "장식용 나무 선반."
+
+#. machine-translated
+msgid "A simple stool to sit on."
+msgstr "앉을 수 있는 단순한 의자."
+
+#. machine-translated
+msgid "Stores power for when your generators fall short."
+msgstr "발전기 전력이 모자랄 때를 대비해 전력을 저장합니다."
+
+#. machine-translated
+msgid "A larger wind generator with twice the power of the first when the wind is up. Keep batteries as a backup."
+msgstr "더 큰 풍력 발전기로, 바람이 불면 첫 번째 것의 두 배 전력을 냅니다. 예비용 전지를 갖춰 두세요."
+
+#. machine-translated
+msgid "A large storage tank for fuel."
+msgstr "연료를 담는 대형 저장 탱크."
+
+#. machine-translated
+msgid "A stack of boxes you can store anything in."
+msgstr "무엇이든 보관할 수 있는 상자 더미."
+
+#. machine-translated
+msgid "A storage barrel for cactus."
+msgstr "선인장 저장 통."
+
+#. machine-translated
+msgid "A storage barrel for greenfruit."
+msgstr "초록과일 저장 통."
+
+#. machine-translated
+msgid "A storage barrel for riceweed."
+msgstr "벼 잡초 저장 통."
+
+#. machine-translated
+msgid "A low, crude wall that won't keep enemies out for long."
+msgstr "적을 오래 막지 못하는 낮고 조잡한 벽."
+
+#. machine-translated
+msgid "A proper defensive wall, taller than a makeshift one."
+msgstr "임시 벽보다 높은 제대로 된 방어벽."
+
+#. machine-translated
+msgid "A taller, heavier defensive wall."
+msgstr "더 높고 무거운 방어벽."
+
+#. machine-translated
+msgid "A towering fortified wall."
+msgstr "우뚝 솟은 요새 벽."
+
+#. machine-translated
+msgid "The gate for Defensive Wall II."
+msgstr "방어벽 II용 문."
+
+#. machine-translated
+msgid "The gate for Defensive Wall III."
+msgstr "방어벽 III용 문."
+
+#. machine-translated
+msgid "The gate for Defensive Wall IV."
+msgstr "방어벽 IV용 문."
+
+#. machine-translated
 msgid "Simple terrain shading"
 msgstr "간단한 지형 셰이딩"
 

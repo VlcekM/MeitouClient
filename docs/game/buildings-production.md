@@ -584,6 +584,11 @@ string; **Observed**: `finished0` of the five sample saves); Meitou adds it to e
 `build materials`, or "Nothing"), "Estimated build time:" (formula above, whole hours), then power output/consumption,
 `power capacity`, Num People (`max operators`), Produces (`produces`, `output rate`), Efficiency, Damage, Training max
 and Turrets bonus.
+Description box (`DescriptionText`): the BUILDING's `Description`, capitalised unlike an ITEM's `description` (**Verified**: every BUILDING of
+`gamedata.base`, `Newwworld.mod` and `rebirth.mod` carries `Description`; 18 also a lowercase one, empty on all but one). 25 of the 228
+research-unlocked base buildings leave it empty (walls and gates II-IV, indoor farms, medical desks, tables, storage barrels, Battery Bank, Wind
+Generator II, Oil Silo, Rain Collector, Storm_House_07); Meitou shows its own translated text for those, and a mod that sets their `Description`
+replaces it (`BuildingDescriptions`).
 Opening the menu pauses the game (a normal pause, the speed buttons resume) and closes the inventory windows
 (**Observed**, in-game).
 

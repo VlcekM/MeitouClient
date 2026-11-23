@@ -4852,6 +4852,106 @@ msgid "Sort by"
 msgstr "Сортировать по"
 
 #. machine-translated
+msgid "A tall two-story building shell with stairs inside."
+msgstr "Высокий двухэтажный каркас здания с лестницей внутри."
+
+#. machine-translated
+msgid "Makes basic first aid kits and sleeping bags from fabrics. Needs power."
+msgstr "Делает из тканей простые аптечки и спальные мешки. Нужно электричество."
+
+#. machine-translated
+msgid "Makes first aid kits and splint kits from fabrics and hemp. Needs power."
+msgstr "Делает из тканей и пеньки аптечки и наборы шин. Нужно электричество."
+
+#. machine-translated
+msgid "Grows hemp indoors, safe from the weather. Needs power and water."
+msgstr "Выращивает пеньку в помещении, без оглядки на погоду. Нужны электричество и вода."
+
+#. machine-translated
+msgid "Grows riceweed indoors, safe from the weather. Needs power and water."
+msgstr "Выращивает рисовую траву в помещении, без оглядки на погоду. Нужны электричество и вода."
+
+#. machine-translated
+msgid "Grows greenfruit indoors, safe from the weather. Needs power and water."
+msgstr "Выращивает зеленофрукт в помещении, без оглядки на погоду. Нужны электричество и вода."
+
+#. machine-translated
+msgid "Collects water when it rains."
+msgstr "Собирает воду, когда идёт дождь."
+
+#. machine-translated
+msgid "A sturdy metal table."
+msgstr "Прочный металлический стол."
+
+#. machine-translated
+msgid "A simple round table."
+msgstr "Простой круглый стол."
+
+#. machine-translated
+msgid "A wooden shelf, for decoration."
+msgstr "Деревянная полка для украшения."
+
+#. machine-translated
+msgid "A simple stool to sit on."
+msgstr "Простой табурет, чтобы сидеть."
+
+#. machine-translated
+msgid "Stores power for when your generators fall short."
+msgstr "Запасает электричество на случай, когда генераторов не хватает."
+
+#. machine-translated
+msgid "A larger wind generator with twice the power of the first when the wind is up. Keep batteries as a backup."
+msgstr "Ветрогенератор побольше: при ветре даёт вдвое больше энергии, чем первый. Держите аккумуляторы про запас."
+
+#. machine-translated
+msgid "A large storage tank for fuel."
+msgstr "Большой резервуар для топлива."
+
+#. machine-translated
+msgid "A stack of boxes you can store anything in."
+msgstr "Штабель ящиков, в который можно сложить что угодно."
+
+#. machine-translated
+msgid "A storage barrel for cactus."
+msgstr "Бочка для хранения кактусов."
+
+#. machine-translated
+msgid "A storage barrel for greenfruit."
+msgstr "Бочка для хранения зеленофрукта."
+
+#. machine-translated
+msgid "A storage barrel for riceweed."
+msgstr "Бочка для хранения рисовой травы."
+
+#. machine-translated
+msgid "A low, crude wall that won't keep enemies out for long."
+msgstr "Низкая грубая стена, которая надолго врагов не задержит."
+
+#. machine-translated
+msgid "A proper defensive wall, taller than a makeshift one."
+msgstr "Настоящая защитная стена, выше самодельной."
+
+#. machine-translated
+msgid "A taller, heavier defensive wall."
+msgstr "Более высокая и массивная защитная стена."
+
+#. machine-translated
+msgid "A towering fortified wall."
+msgstr "Высоченная укреплённая стена."
+
+#. machine-translated
+msgid "The gate for Defensive Wall II."
+msgstr "Ворота для защитной стены II."
+
+#. machine-translated
+msgid "The gate for Defensive Wall III."
+msgstr "Ворота для защитной стены III."
+
+#. machine-translated
+msgid "The gate for Defensive Wall IV."
+msgstr "Ворота для защитной стены IV."
+
+#. machine-translated
 msgid "Simple terrain shading"
 msgstr "Упрощённое затенение земли"
 

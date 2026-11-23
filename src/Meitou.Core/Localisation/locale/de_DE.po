@@ -4850,6 +4850,106 @@ msgid "Sort by"
 msgstr "Sortieren nach"
 
 #. machine-translated
+msgid "A tall two-story building shell with stairs inside."
+msgstr "Eine hohe zweistöckige Gebäudehülle mit Treppe im Inneren."
+
+#. machine-translated
+msgid "Makes basic first aid kits and sleeping bags from fabrics. Needs power."
+msgstr "Stellt aus Stoffen einfache Verbandskästen und Schlafsäcke her. Braucht Strom."
+
+#. machine-translated
+msgid "Makes first aid kits and splint kits from fabrics and hemp. Needs power."
+msgstr "Stellt aus Stoffen und Hanf Verbandskästen und Orthesenkästen her. Braucht Strom."
+
+#. machine-translated
+msgid "Grows hemp indoors, safe from the weather. Needs power and water."
+msgstr "Baut Hanf drinnen an, geschützt vor dem Wetter. Braucht Strom und Wasser."
+
+#. machine-translated
+msgid "Grows riceweed indoors, safe from the weather. Needs power and water."
+msgstr "Baut Reisgras drinnen an, geschützt vor dem Wetter. Braucht Strom und Wasser."
+
+#. machine-translated
+msgid "Grows greenfruit indoors, safe from the weather. Needs power and water."
+msgstr "Baut Grünfrucht drinnen an, geschützt vor dem Wetter. Braucht Strom und Wasser."
+
+#. machine-translated
+msgid "Collects water when it rains."
+msgstr "Sammelt Wasser, wenn es regnet."
+
+#. machine-translated
+msgid "A sturdy metal table."
+msgstr "Ein stabiler Metalltisch."
+
+#. machine-translated
+msgid "A simple round table."
+msgstr "Ein einfacher runder Tisch."
+
+#. machine-translated
+msgid "A wooden shelf, for decoration."
+msgstr "Ein Holzregal, zur Dekoration."
+
+#. machine-translated
+msgid "A simple stool to sit on."
+msgstr "Ein einfacher Hocker zum Sitzen."
+
+#. machine-translated
+msgid "Stores power for when your generators fall short."
+msgstr "Speichert Strom für den Fall, dass deine Generatoren nicht ausreichen."
+
+#. machine-translated
+msgid "A larger wind generator with twice the power of the first when the wind is up. Keep batteries as a backup."
+msgstr "Ein größerer Windgenerator mit doppelter Leistung des ersten, wenn der Wind weht. Halte Batterien als Reserve bereit."
+
+#. machine-translated
+msgid "A large storage tank for fuel."
+msgstr "Ein großer Lagertank für Treibstoff."
+
+#. machine-translated
+msgid "A stack of boxes you can store anything in."
+msgstr "Ein Stapel Kisten, in dem du alles lagern kannst."
+
+#. machine-translated
+msgid "A storage barrel for cactus."
+msgstr "Ein Lagerfass für Kaktus."
+
+#. machine-translated
+msgid "A storage barrel for greenfruit."
+msgstr "Ein Lagerfass für Grünfrucht."
+
+#. machine-translated
+msgid "A storage barrel for riceweed."
+msgstr "Ein Lagerfass für Reisgras."
+
+#. machine-translated
+msgid "A low, crude wall that won't keep enemies out for long."
+msgstr "Eine niedrige, grobe Mauer, die Feinde nicht lange aufhält."
+
+#. machine-translated
+msgid "A proper defensive wall, taller than a makeshift one."
+msgstr "Eine richtige Verteidigungsmauer, höher als eine notdürftige."
+
+#. machine-translated
+msgid "A taller, heavier defensive wall."
+msgstr "Eine höhere, schwerere Verteidigungsmauer."
+
+#. machine-translated
+msgid "A towering fortified wall."
+msgstr "Eine hoch aufragende befestigte Mauer."
+
+#. machine-translated
+msgid "The gate for Defensive Wall II."
+msgstr "Das Tor für Verteidigungsmauer II."
+
+#. machine-translated
+msgid "The gate for Defensive Wall III."
+msgstr "Das Tor für Verteidigungsmauer III."
+
+#. machine-translated
+msgid "The gate for Defensive Wall IV."
+msgstr "Das Tor für Verteidigungsmauer IV."
+
+#. machine-translated
 msgid "Simple terrain shading"
 msgstr "Einfache Bodenschattierung"
 
