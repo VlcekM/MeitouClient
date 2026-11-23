@@ -185,10 +185,10 @@ public class NavigationTests
         Assert.True(walk.FindPath(a, b).Found);
         walk.Doors.Close("gate-1");
 
-        // Shut out: the walker goes as near as it can on its side, and the rest is only provisional.
+        // Shut out: no path, as the original moves no walker at a goal behind a locked door (docs/game/pathfinding.md "Unreachable goals").
         var shut = walk.FindPath(a, b);
-        Assert.True(shut.IsProvisional);
-        Assert.True(shut.Points[shut.Exact - 1].Z < cz);
+        Assert.False(shut.Found);
+        Assert.True(shut.Unreachable);
     }
 
     [Fact]

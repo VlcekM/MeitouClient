@@ -583,6 +583,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// </summary>
     void WalkToSite(ref CharacterHot n, CharacterCold cold, BuildSite site, Vector3 goal)
     {
+        cold.PathFailed = false;   // a failure from before is not this walk's
         n.Goal = new Vector2(goal.X, goal.Z);
         n.Flags |= (ushort)MoveFlags.NeedPath;
         (cold.GoalHeight, cold.GoalHeightAt) = (goal.Y, n.Goal);
@@ -865,7 +866,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             if (n.Task == (byte)CharacterTask.Haul)
             {
                 if (cold.HaulSite is { } to && Site(world, to) is { Complete: true } leg && world.Machines.Find(to) is { } legMachine && Able(cold))
-                    Approach(world, ref n, cold, leg, legMachine, dt);
+                    Approach(world, i, ref n, cold, leg, legMachine, dt);
                 else End(world, i);
                 continue;
             }
@@ -898,7 +899,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
             // A hauling operator walks to its storage instead.
             if (Hauling(world, cold) is { } haul) (site, m) = haul;
-            Approach(world, ref n, cold, site, m, dt);
+            Approach(world, i, ref n, cold, site, m, dt);
         }
 
         if (world.Machines.Count == 0) _sweep = false;
@@ -906,9 +907,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// Walks a character to a building: at it, its path is dropped; else a path is asked for, again every <see cref="PursuitSystem.RepathSeconds"/>
-    /// while it has none.
+    /// while it has none. A walk with no way there is the task's end (<see cref="Impossible"/>).
     /// </summary>
-    void Approach(World world, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt)
+    void Approach(World world, int i, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt)
     {
         const ushort path = (ushort)MoveFlags.AnyPath;
         if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !_turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m, n.Position);
@@ -926,11 +927,30 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
 
         if ((n.Flags & path) != 0) return;
+        if (cold.PathFailed)
+        {
+            Impossible(world, i, cold, site);
+            return;
+        }
+
         n.TaskTime -= dt;
         if (n.TaskTime > 0) return;
         WalkToSite(ref n, cold, site, GoalOf(world, site, m, n.Position));
         n.Mode = SpeedMode.Free;
         n.TaskTime = PursuitSystem.RepathSeconds;
+    }
+
+    /// <summary>
+    /// "Task impossible: X can't get to Y" (<c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c> -> <c>FUN_140796ed0</c>, <b>Verified</b>,
+    /// docs/game/buildings-production.md "Arrival"): the walk ended with no way to the building, so the building is ignored for
+    /// <see cref="ConstructionSystem.UnreachableSeconds"/> and the task ends (the AI's re-think flag, <c>FUN_14001953d</c>); the job is tried again
+    /// later.
+    /// </summary>
+    void Impossible(World world, int i, CharacterCold cold, BuildSite site)
+    {
+        cold.PathFailed = false;
+        cold.NoteUnreachable(site.Id, world.Tick + (long)MathF.Ceiling(ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+        End(world, i);
     }
 
     #endregion

@@ -856,7 +856,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             }
             else
             {
-                NoPathFound(world, slot, ref n, cold);
+                NoPathFound(world, slot, ref n, cold, answer.Path.Unreachable);
             }
         }
     }
@@ -881,9 +881,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static bool Walks(byte task) => task is (byte)CharacterTask.GoTo or (byte)CharacterTask.Talk;
 
     /// <summary>
-    /// The latest request found no path: a player's short order walks straight at its goal, any other walk is dropped and waits.
+    /// The latest request found no path: a player's short order walks straight at its goal (not one on ground its own cannot reach,
+    /// <paramref name="unreachable"/>: behind a wall or a locked door it would walk through them), any other walk is dropped and waits.
     /// </summary>
-    static void NoPathFound(World world, int slot, ref CharacterHot n, CharacterCold cold)
+    static void NoPathFound(World world, int slot, ref CharacterHot n, CharacterCold cold, bool unreachable)
     {
         // A player ordered out of a spot no path can leave (shut in a hollow the navmesh does not cross, or shoved into one) walks straight
         // at the order's goal instead of losing the order: the ordinary step test still refuses what it cannot walk, and EscapesToward above
@@ -892,7 +893,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         float toGoal = new Vector2(n.Goal.X - n.Position.X, n.Goal.Y - n.Position.Z).Length();
         bool shortHop = toGoal <= StraightOrderReach && world.Walkability.IsWalkable(n.Goal.X, n.Goal.Y, n.Position.Y);
 
-        if (cold.IsPlayer && n.Task == (byte)CharacterTask.GoTo && shortHop)
+        if (cold.IsPlayer && n.Task == (byte)CharacterTask.GoTo && shortHop && !unreachable)
         {
             cold.PathFailed = false;
             cold.Path = [new Vector3(n.Goal.X, n.Position.Y, n.Goal.Y)];
