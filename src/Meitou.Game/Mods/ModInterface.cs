@@ -76,6 +76,11 @@ interface IModInterfaceHost
     /// of that id.
     /// </summary>
     bool ChooseBuild(string building);
+
+    /// <summary>
+    /// The game clock the speed buttons and keys set (the session's).
+    /// </summary>
+    Simulation.Session.SimulationClock Clock { get; }
 }
 
 /// <summary>
@@ -97,10 +102,16 @@ sealed class ModInterfaceHub
     readonly HashSet<(string Mod, bool OffThread)> _logged = [];
 
     /// <summary>
-    /// Attaches the interface made on this thread; a new interface replaces the old.
+    /// The mods' holds on the pause (<see cref="ModInterface.HoldPause"/>).
+    /// </summary>
+    internal ModPauseHolds Holds { get; } = new();
+
+    /// <summary>
+    /// Attaches the interface made on this thread; a new interface replaces the old and drops the pause holds on the old one's clock.
     /// </summary>
     internal void Attach(IModInterfaceHost host)
     {
+        Holds.Drop();
         _host = host;
         _hostThread = Environment.CurrentManagedThreadId;
     }
@@ -191,5 +202,81 @@ public sealed class ModInterface
     {
         ArgumentNullException.ThrowIfNull(building);
         return _hub.Host(_mod)?.ChooseBuild(building) ?? false;
+    }
+
+    /// <summary>
+    /// The game speed (0 while paused by the player; a menu's or the loading pause does not change it); 0 when refused.
+    /// </summary>
+    public double Speed => _hub.Host(_mod)?.Clock.Speed ?? 0;
+
+    /// <summary>
+    /// Whether no ticks run: paused by the player, a menu or the loading pause; false when refused.
+    /// </summary>
+    public bool Paused => _hub.Host(_mod)?.Clock.IsPaused ?? false;
+
+    /// <summary>
+    /// The speeds the game's speed buttons set (1, then the player's two fast ones); none when refused.
+    /// </summary>
+    public IReadOnlyList<double> Speeds => _hub.Host(_mod)?.Clock.Speeds ?? [];
+
+    /// <summary>
+    /// The highest speed <see cref="SetSpeed"/> takes (the top of the third speed's range).
+    /// </summary>
+    public const double MaxSpeed = Simulation.Session.SimulationClock.MaxFastestSpeed;
+
+    /// <summary>
+    /// Sets the game speed as a speed button does: 0 pauses (as the pause button, which the pause key does not resume at a stored speed); any other
+    /// in (0, <see cref="MaxSpeed"/>] runs at it. False for a speed out of range or a refused call.
+    /// </summary>
+    public bool SetSpeed(double speed)
+    {
+        if (!(speed >= 0 && speed <= MaxSpeed) || _hub.Host(_mod) is not { } host) return false;
+
+        host.Clock.SetSpeed(speed);
+        return true;
+    }
+
+    /// <summary>
+    /// The pause key's pause (<paramref name="paused"/>: the speed is stored, then 0) or resume (the stored speed; only while the speed is 0). No
+    /// change when already so. False when refused.
+    /// </summary>
+    public bool Pause(bool paused)
+    {
+        if (_hub.Host(_mod) is not { } host) return false;
+
+        var clock = host.Clock;
+        if (paused && clock.Speed != 0) clock.Pause();
+        else if (!paused && clock.Speed == 0) clock.PauseKey();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Holds the game paused while a mod's window shows: the first hold of all the mods keeps the player's speeds, each hold pauses the game when it
+    /// runs, and releasing the last one puts the kept speeds back if the game is still paused (a speed the player chose meanwhile stays). A new
+    /// session drops the holds. Null when refused.
+    /// </summary>
+    public ModPauseHold? HoldPause()
+    {
+        if (_hub.Host(_mod) is not { } host) return null;
+
+        _hub.Holds.Hold(host.Clock);
+        return new ModPauseHold(this, _hub.Holds.Generation);
+    }
+
+    /// <summary>
+    /// Whether holds of <paramref name="generation"/> still count.
+    /// </summary>
+    internal bool Holds(int generation) => _hub.Holds.Generation == generation;
+
+    /// <summary>
+    /// Releases one hold of <paramref name="generation"/>; false when the call is refused.
+    /// </summary>
+    internal bool Release(int generation)
+    {
+        if (_hub.Host(_mod) is null) return false;
+
+        _hub.Holds.Release(generation);
+        return true;
     }
 }

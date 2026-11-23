@@ -435,6 +435,22 @@ holds refuses the second mod.
   (a build order's materials) asks it between ticks on the host's thread, with the coming tick's number. One that throws is answered as allowing
   for the rest of that tick and is not asked from the next tick on; the fault enters the state hash. Without a filter nothing is asked. Engine
   API, not in the original.
+- **Inventory arrange:** a registered system implementing `IInventoryArrangeFilter` (`Meitou.Simulation.Items`) is asked
+  `Arrange(World, in InventoryArrangeAsk)` before every arrange the game runs: a window's ARRANGE (a character's main grid or worn bag, a
+  machine's or container's storage, the trade window's stock; `InventoryArrangeReason.Button`), making room for a held item going back
+  (`MakeRoom`) and the trade window's stock grid being built (`StockShown`); more reasons may come. The ask names the tick, the root inventory,
+  its window (`ItemOwner`: a character, `Stock`, a machine's or container's site), the reason and the grids (`ArrangeGrid`: a grid and its
+  section, `main` and/or `backpack_content`). It answers null (the next filter's, finally the game's arrange) or an `InventoryArrangement` of
+  `ItemPlacement(item, x, y, rotated = null)`: every item of the grids placed once, in its own grid, inside it and overlapping none; the
+  grids' items are then listed in placement order after their other sections' items, as the game's arrange lists them.
+  `InventoryArrangement.MergeFirst` has the engine merge the grids' partial stacks first (the game's top-up, each stack topping up those before
+  it in list order) and ask the same filter again with `Merged` set; a null answer then undoes the merge. Filters run serially in system order
+  until one arranges. A filter must be a pure read; one that throws or answers an invalid arrangement (or `MergeFirst` twice) is undone for that
+  arrange, which the next filter or the game then makes, and is disabled for that world; the fault enters the state hash. Without a filter
+  nothing is built. `InventoryCommands.Arrange(world, root, owner, reason, bag = null)` is that arrange (both grids, or only the bag or only the
+  main grid), for a mod's own button too; `Arrange(root)` and `Arrange(root, bag)` stay the game's and never ask the filters. Engine API, not in
+  the original. **Observed** with a scratch program (placement, order, rotation, each invalid answer, throw, merge, hash, inert without a
+  filter); no test yet.
 - **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the first
   (`world.Start` then says how: `WorldStartKind.NewGame`, `Load` or `Import`, with `SaveFolder` the full path of the save read, null for a new
   game; `Unknown` for a world the game host did not start; not saved, hashed or read by the engine, so a mod reads a file of its own or the
@@ -919,6 +935,16 @@ holds refuses the second mod.
   category, group and variant (false when the window is closed or does not list it). A call off the host's thread or without an interface
   answers false, empty or null and is logged once per mod and problem. Display state only: nothing enters the state hash or a save. New
   `ModScreen` kinds are added at the end. Engine API, not in the original.
+- **Game speed:** `context.Interface` also sets the game clock through the speed buttons' and pause key's own path, on the host's thread as
+  above. `Speed` (0 while paused by the player), `Paused` (no ticks run: the player, a menu or the loading pause) and `Speeds` (1 and the
+  player's two fast speeds) read it; `SetSpeed(speed)` is a speed button (0 the pause button; above `MaxSpeed`, 20, refused); `Pause(true)` is
+  the pause key's pause (the speed it resumes at is stored) and `Pause(false)` its resume (only while the speed is 0). `HoldPause()` returns a
+  `ModPauseHold` for a mod's window: the first hold of all mods keeps the player's speeds, each hold pauses the game when it runs, and
+  releasing the last (`Release()` or `Dispose()`) puts the kept speeds back while the game is still paused, so a speed the player chose
+  meanwhile stays; a new session drops the holds (`Held` false). Refused calls answer false, 0, none or null. The clock decides only how
+  many fixed ticks a frame runs, so speed never changes a tick's result or the state hash. Engine API, not in the original. **Observed**
+  with a scratch program against a stub interface (speeds, pause and resume, nested holds, a player's speed kept, a new session, off-thread
+  refusal); no test yet.
 - **Screen controls:** in `Register`, `registration.AddScreenControls(screen, anchorWidget, placement, context => node)` adds a `UiNode` tree
   to a faithful screen (its id as the interface registers it, e.g. `stats`, `inventory`, `dialogue`, `bench`, or its kind: a pinned inventory
   is `inventory`) or the HUD (`UiScreens.Hud`; the time controls are `TimeMoneyPanel`), laid out against the arranged widget named

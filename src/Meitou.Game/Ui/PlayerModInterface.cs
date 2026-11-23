@@ -83,4 +83,7 @@ sealed class PlayerModInterface(PlayerInterface player) : IModInterfaceHost
 
     /// <inheritdoc/>
     public bool ChooseBuild(string building) => player.Build.ModChoose(building);
+
+    /// <inheritdoc/>
+    public Simulation.Session.SimulationClock Clock => player.Session.Simulation;
 }
