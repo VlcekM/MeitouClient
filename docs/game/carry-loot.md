@@ -270,7 +270,7 @@ TaskData (`FUN_140319a60`) holds a **target finder** at `+0x160` and the player 
 
 **Character finder** (`FUN_1408cd2d0(task, out, include, exclude, allowBed)`, **Verified** by decompile; rescue 105/148 call it with masks 1 / 0x4010 and `allowBed` 0,
 kidnap 132 with 0x4008 / 0x811 and `allowBed` 1): walks the owner's sensed list, keeping entries whose category word has a bit of `include` and none of `exclude`
-(bit 0 = SENSE_ALLY = not the owner's enemy and slot 126 `FUN_1407923d0` friendly, bit 4 dead, bit 14 crawling, [sense tags](perception.md#sense-tags-who-is-an-enemy)); the nearest (squared XZ distance) passing all of these wins: the target is down (ragdolled or carried, `FUN_1407d1440`, or the byte
+(bit 0 = SENSE_ALLY = not the owner's enemy and slot 126 `FUN_1407923d0` friendly, bit 3 down, bit 4 dead, bit 11 robot race, bit 14 crawling; so kidnap never takes a skeleton, [sense tags](perception.md#sense-tags-who-is-an-enemy)); the nearest (squared XZ distance) passing all of these wins: the target is down (ragdolled or carried, `FUN_1407d1440`, or the byte
 `+0x5b8`) or, only when `allowBed`, in a bed (`+0x2f8 == 1`); not carried (`+0x3d4`), not dead, special state 0 (not caged; bed 1 when allowed), not an animal
 (slot `0x248` is `asAnimal`), and not worked by a squad mate (`FUN_1402690e0`, `Blackboard::howManyGuysWorkingOnThisSubTarget`: the squad blackboard's entries whose worker is neither the asker nor the target and whose sub-target is the target; **Verified**, a count every finder tests, not a give-up list). Rescue (`include` 1) also requires
 the target to share the owner's faction (vfunc `0x58`), tested only when the global `+0x112` (Rescue Allies, [squad AI options](ai-tasks.md#squad-ai-options)) is clear **and** the owner's
