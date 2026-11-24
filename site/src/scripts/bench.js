@@ -271,31 +271,58 @@
     return Object.keys(vs).map(Number).sort((a, b) => b - a);
   }
 
-  /** Fingerprints of the selected version and scenario, newest session's first; legacy data has none. */
-  function fingerprints() {
+  /** Fingerprints of <scenario> in the selected version, newest session's first; legacy data has none. */
+  function fingerprintsOf(scenario) {
     const out = [];
     D.entries.forEach((e) => {
-      if (e.version !== state.version || e.scenario !== state.scenario) return;
+      if (e.version !== state.version || e.scenario !== scenario) return;
       if (e.fingerprint && out.indexOf(e.fingerprint) < 0) out.push(e.fingerprint);
     });
     return out;
   }
 
-  function inScenario() {
-    return D.entries.filter((e) => e.version === state.version && e.scenario === state.scenario &&
-      (!state.fingerprint || e.fingerprint === state.fingerprint));
+  /** Fingerprints of the selected version and scenario, newest session's first; legacy data has none. */
+  function fingerprints() { return fingerprintsOf(state.scenario); }
+
+  function inScenarioOf(scenario, fp) {
+    return D.entries.filter((e) => e.version === state.version && e.scenario === scenario && (!fp || e.fingerprint === fp));
   }
 
-  /** The newest session per (machine, platform, target) of the selected version, scenario, fingerprint, tier and group. */
-  function selected() {
+  function inScenario() { return inScenarioOf(state.scenario, state.fingerprint); }
+
+  /** The newest session per (machine, platform, target) for a given scenario, fingerprint, tier and group. */
+  function selectedFor(scenario, fp, tier, group) {
     const seen = dict();
-    return inScenario().filter((e) => {
-      if (e.tier !== state.tier || e.group !== state.group) return false;
+    return inScenarioOf(scenario, fp).filter((e) => {
+      if (e.tier !== tier || e.group !== group) return false;
       const k = e.line + "|" + e.target;
       if (seen[k]) return false;
       seen[k] = 1;
       return true;
     });
+  }
+
+  /** The newest session per (machine, platform, target) of the selected version, scenario, fingerprint, tier and group. */
+  function selected() { return selectedFor(state.scenario, state.fingerprint, state.tier, state.group); }
+
+  /** How many plotted results would show for a hypothetical (scenario, fp, tier, group) under the active metric and machine filter. */
+  function countFor(scenario, fp, tier, group) {
+    return selectedFor(scenario, fp, tier, group)
+      .filter((e) => !state.hidden[e.line] && matches(e.line) && shownRun(e, state.metric) >= 0).length;
+  }
+
+  /** How many plotted results would show if <scenario> were selected (resolving its default fingerprint, tier and group the same way). */
+  function countForScenario(scenario) {
+    const fp = scenario === state.scenario ? state.fingerprint : (fingerprintsOf(scenario)[0] || "");
+    const entries = inScenarioOf(scenario, fp);
+    const haveTiers = dict(), haveGroups = dict();
+    entries.forEach((e) => { haveTiers[e.tier] = 1; haveGroups[e.group] = 1; });
+    const tiers = TIERS.filter((t) => haveTiers[t]).concat(Object.keys(haveTiers).filter((t) => TIERS.indexOf(t) < 0).sort());
+    const groups = (haveGroups.all ? ["all"] : [])
+      .concat(Object.keys(GROUPS).filter((g) => haveGroups[g] && g !== "all"), Object.keys(haveGroups).filter((g) => !own(GROUPS, g)).sort());
+    const tier = tiers.indexOf(state.tier) >= 0 ? state.tier : (tiers.indexOf("medium") >= 0 ? "medium" : tiers[0] || "");
+    const group = groups.indexOf(state.group) >= 0 ? state.group : (groups.indexOf("all") >= 0 ? "all" : groups[0] || "");
+    return countFor(scenario, fp, tier, group);
   }
 
   /** Run 2 when it has the value, else run 1 (some old kit sessions have one run). */
@@ -424,10 +451,14 @@
     host.innerHTML = "";
     const groups = groupsOf();
     host.appendChild(control("Benchmark", versionSelect()));
-    host.appendChild(control("Scenario", segmented(scenariosOf(), state.scenario, scenarioName, selectScenario)));
+    host.appendChild(control("Scenario", segmented(scenariosOf(), state.scenario, scenarioName, selectScenario, null, countForScenario)));
     if (fingerprints().length > 1) host.appendChild(control("Fingerprint", fingerprintSelect()));
-    host.appendChild(control("Tier", segmented(tiersOf(), state.tier, tierName, pickTier)));
-    if (groups.length > 1) host.appendChild(control("Segments", segmented(groups, state.group, groupName, pickGroup, groupDesc)));
+    host.appendChild(control("Tier", segmented(tiersOf(), state.tier, tierName, pickTier, null,
+      (t) => countFor(state.scenario, state.fingerprint, t, state.group))));
+    if (groups.length > 1) {
+      host.appendChild(control("Segments", segmented(groups, state.group, groupName, pickGroup, groupDesc,
+        (g) => countFor(state.scenario, state.fingerprint, state.tier, g))));
+    }
     host.appendChild(control("Metric", metricSelect()));
   }
 
@@ -476,6 +507,7 @@
   function metricSelect() {
     return select(METRICS.map((m) => [m.key, m.label]), state.metric, (k) => {
       state.metric = k;
+      renderControls();
       renderChart();
       renderMachines();
     });
@@ -489,13 +521,17 @@
     return s;
   }
 
-  function segmented(items, current, label, onPick, titleOf) {
+  function segmented(items, current, label, onPick, titleOf, countOf) {
     const seg = el("div", { class: "seg", role: "group" });
     items.forEach((it) => {
       const attrs = { type: "button", "aria-pressed": it === current ? "true" : "false" };
       const title = titleOf ? titleOf(it) : "";
       if (title) attrs.title = title;
       const b = el("button", attrs, label(it));
+      if (countOf) {
+        const n = countOf(it);
+        b.appendChild(el("span", { class: n === 0 ? "seg-n is-zero" : "seg-n", "aria-label": n + " results" }, String(n)));
+      }
       b.addEventListener("click", () => onPick(it));
       seg.appendChild(b);
     });
@@ -543,6 +579,7 @@
       cb.checked = !state.hidden[l.key];
       cb.addEventListener("change", () => {
         state.hidden[l.key] = !cb.checked;
+        renderControls();
         renderChart();
       });
       lab.appendChild(cb);
@@ -564,6 +601,7 @@
     box.value = state.search;
     box.addEventListener("input", () => {
       state.search = box.value;
+      renderControls();
       renderChart();
       const again = document.querySelector("#chart .msearch");
       again.focus();

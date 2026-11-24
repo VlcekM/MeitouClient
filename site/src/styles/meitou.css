@@ -231,3 +231,39 @@ a:focus-visible, .mt-btn:focus-visible, .mt-tab:focus-visible {
 .mt-caption { font: 400 12px/15px var(--font-exo); opacity: .75; }
 .mt-good { color: var(--good); }
 .mt-bad { color: var(--bad-bright); }
+
+/* ---------- Motion: snappy entrance and scroll-reveal across the whole site ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .top { animation: mt-fade-down .32s cubic-bezier(.22, 1, .36, 1) both; }
+  .brand.is-corner { animation: mt-fade-up .36s cubic-bezier(.22, 1, .36, 1) .14s both; }
+  .mt-btn, .mt-btn-primary, .mt-tab { transition: color .15s ease, filter .15s ease, transform .15s cubic-bezier(.22, 1, .36, 1), box-shadow .18s ease; }
+  .mt-btn:hover { transform: translateY(-1px); }
+  .mt-btn:active { transform: translateY(1px); }
+
+  html.mt-anim .mt-reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity .36s cubic-bezier(.22, 1, .36, 1), transform .38s cubic-bezier(.22, 1, .36, 1);
+    transition-delay: var(--mt-d, 0ms);
+    will-change: opacity, transform;
+  }
+  html.mt-anim .mt-reveal.is-in {
+    opacity: 1;
+    transform: none;
+    will-change: auto;
+  }
+}
+
+@keyframes mt-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mt-fade-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+}

@@ -25,6 +25,9 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
     <meta name="description" content={description} />
     <link rel="icon" href="/favicon.ico" />
     <title>{title}</title>
+    <script is:inline>
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('mt-anim');
+    </script>
     <slot name="head" />
   </head>
   <body>
@@ -84,6 +87,47 @@ const { title, description = 'MeitouClient: a .NET reimplementation of the Kensh
         if (matchMedia('(prefers-reduced-motion: reduce)').matches) document.querySelector('.bg video')?.pause();
       </script>
     )}
+    <script is:inline>
+      // Snappy site-wide entrance & scroll reveal (progressive: only active when html.mt-anim is set).
+      (() => {
+        if (!document.documentElement.classList.contains('mt-anim')) return;
+        const targets = document.querySelectorAll(
+          'main > section:not(.hero), main > article, main > .mt-plate, main > .mt-card, main > header, .bn > header, .bn > section, .bn > details, .hero > *, .foot'
+        );
+        if (!targets.length) return;
+        const reveal = (el, delay) => {
+          if (delay) el.style.setProperty('--mt-d', delay + 'ms');
+          el.classList.add('is-in');
+        };
+        const vh = window.innerHeight || 900;
+        let topIdx = 0;
+        const pending = [];
+        targets.forEach((el) => {
+          el.classList.add('mt-reveal');
+          const r = el.getBoundingClientRect();
+          if (r.top < vh * 0.94) {
+            const delay = Math.min(topIdx++, 5) * 45;
+            requestAnimationFrame(() => reveal(el, delay));
+          } else {
+            pending.push(el);
+          }
+        });
+        if (!pending.length) return;
+        if (!('IntersectionObserver' in window)) {
+          pending.forEach((el) => reveal(el, 0));
+          return;
+        }
+        const io = new IntersectionObserver((entries) => {
+          let batch = 0;
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            reveal(entry.target, Math.min(batch++, 4) * 40);
+            io.unobserve(entry.target);
+          });
+        }, { threshold: 0.06, rootMargin: '0px 0px -24px 0px' });
+        pending.forEach((el) => io.observe(el));
+      })();
+    </script>
   </body>
 </html>
 
