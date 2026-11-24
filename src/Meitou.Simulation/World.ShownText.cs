@@ -69,10 +69,4 @@ public sealed partial class World
         if (name == f.Name) return ShownText.Record(f.Id, name);
         return faction == Player.Faction && name == Player.FactionName ? ShownText.Name("faction", f.Id, f.Name, name) : name;
     }
-
-    /// <summary>
-    /// Town <paramref name="town"/>'s name as shown: its record's name, or with <paramref name="unexplored"/> its <c>unexplored name</c>.
-    /// </summary>
-    internal static string ShownName(TownData town, bool unexplored = false) =>
-        unexplored ? ShownText.Record(town.Id, town.UnexploredName, "unexplored name") : ShownText.Record(town.Id, town.Name);
 }

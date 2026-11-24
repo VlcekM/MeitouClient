@@ -1534,19 +1534,19 @@ sealed class BuildMode(PlayerInterface player)
         site.LevelPlacement is not null ? site.Name : Services?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
 
     /// <summary>
-    /// <see cref="SiteName"/> as shown, for the menu's title and the panels: a building's record name as the mods' text sources show it; a level
-    /// building's name as the simulation's view gives it.
+    /// <see cref="SiteName"/> as shown, for the menu's title and the panels: a building's record name as the mods' text sources show it; a town
+    /// building's name as its record's when it is that, else as a name of its own (a place).
     /// </summary>
     internal string ShownSiteName(BuildingSnapshot site) =>
-        site.LevelPlacement is not null ? site.Name : ShownText.Record(site.Record, SiteName(site));
+        site.LevelPlacement is not null ? player.ShownName("place", site.Record, site.Name) : ShownText.Record(site.Record, SiteName(site));
 
     /// <summary>
     /// Build category <paramref name="category"/> as the list shows it: the <c>building category</c> text of the first building of the catalog
     /// that has it, as the mods' text sources show it.
     /// </summary>
     string ShownCategory(string category) =>
-        ShownText.Any && Services?.Menu.Catalog.FirstOrDefault(b => b.Category == category) is { } first
-            ? ShownText.Record(first.Id, category, Host.ShownFields.BuildingCategory)
+        ShownText.Any && Services?.Menu.FirstOfCategory(category) is { } first
+            ? ShownText.Record(first, category, Data.Gameplay.Construction.BuildingBuildData.CategoryField)
             : category;
 
     /// <summary>
@@ -1556,7 +1556,7 @@ sealed class BuildMode(PlayerInterface player)
     static string ShownGroup(BuildGroup group) =>
         !ShownText.Any ? group.Name
             : group.Name == group.Default.Name ? ShownText.Record(group.Default.Id, group.Name)
-            : ShownText.Record(group.Default.Id, group.Name, Host.ShownFields.BuildingGroup);
+            : ShownText.Record(group.Default.Id, group.Name, Data.Gameplay.Construction.BuildingBuildData.GroupField);
 
     /// <summary>
     /// The verbs the selection has for a site (the original's building branch, docs/game/ui-input.md "Context menu verbs"): Build (2) for an

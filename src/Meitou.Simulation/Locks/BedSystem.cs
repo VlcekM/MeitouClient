@@ -222,7 +222,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (!CanWalk(c)) return OrderCheck.Blocked();
         return BedFor(world, slot, order) is { Kind: FixtureKind.Bed }
             ? OrderCheck.Run
-            : OrderCheck.Blocked(c.IsPlayer ? $"{c.Name}: no free bed nearby" : null, posted: true);
+            : OrderCheck.Blocked(c.IsPlayer ? $"{world.ShownName(c)}: no free bed nearby" : null, posted: true);
     }
 
     /// <inheritdoc/>
@@ -637,7 +637,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
                 || data.Db.Find(bed.RecordId) is not { } record)
             return null;
 
-        string? town = bed.Site >= 0 && bed.Site < data.Sites.Count ? World.ShownName(data.Sites[bed.Site].Town) : null;
+        string? town = bed.Site >= 0 && bed.Site < data.Sites.Count ? data.Sites[bed.Site].Town.ShownName() : null;
         float healing = Data.Gameplay.Construction.MachineData.From(data.Db, record)?.OutputValue ?? 1;
         return new BuildingDetail(instance, [], bed.Owner == world.Player.Faction)
         {

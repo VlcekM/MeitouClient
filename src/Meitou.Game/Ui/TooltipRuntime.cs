@@ -1103,7 +1103,7 @@ sealed class TooltipRuntime(PlayerInterface player)
 
         // The record's description closes every other item's tooltip, with no blank row before it (the second tooltip function, FUN_14079f4d0 and its
         // overrides).
-        if (armour is null && record?.ShownString("description") is { Length: > 0 } text)
+        if (armour is null && record?.GetShownString("description") is { Length: > 0 } text)
             lines.Add(new(text, "", TooltipTone.Ink, Paragraph: true));
         if (type == Data.Fcs.FcsRecordType.Weapon) lines.AddRange(WeaponTail(t, model));
 
@@ -1287,7 +1287,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         // Then a blank row and the record's description; for a piece with a crafter's name another blank row, the heading and a paragraph naming
         // the smith and the player's faction (FUN_1407a33a0, Observed: docs/game/ui-screens.md "Item tooltip"). Paragraphs wrap at the tooltip's
         // width without widening it.
-        if (record?.ShownString("description") is { Length: > 0 } description)
+        if (record?.GetShownString("description") is { Length: > 0 } description)
         {
             lines.Add(new(" "));
             lines.Add(new(description, "", TooltipTone.Title, Paragraph: true));
@@ -1514,7 +1514,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         else if (t.Company.Length > 0 && ItemRecordOf?.Invoke(t.Company) is { } company)
         {
             yield return new("[" + Loc.Tr("Manufactured by") + " " + company.ShownName() + "]", "", TooltipTone.Main);
-            if (company.ShownString(Host.ShownFields.CompanyDescription) is { Length: > 0 } about)
+            if (company.GetShownString("company description") is { Length: > 0 } about)
                 yield return new(about, "", TooltipTone.Ink, Paragraph: true);
         }
     }

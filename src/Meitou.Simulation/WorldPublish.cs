@@ -550,7 +550,7 @@ public sealed partial class World
             : [];
         s.Slave = cold is { SlaveState: >= 1 and <= 3 }
             ? new SlaveView(cold.SlaveState,
-                population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? factions[cold.SlaveOwner].Name : "",
+                population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? ShownName(factions[cold.SlaveOwner]) : "",
                 SystemOf<Kidnap.CaptiveSystem>()?.LooksLikeSlaveLevel(cold) ?? 0)
             : null;
         s.Disguise = detailed && cold!.Faction == Player.Faction && (cold.DisguiseLevel > 0 || cold.RecentlyWanted > 0)

@@ -500,7 +500,7 @@ public sealed partial class PopulationSystem : IStateHashed
     string ShownNameOf(World world, CampaignTown t)
     {
         if (!ShownText.Any) return NameOf(world, t);
-        if (t.Site >= 0) return World.ShownName(_data.Sites[t.Site].Town);
+        if (t.Site >= 0) return _data.Sites[t.Site].Town.ShownName();
         if (world.Buildings.FindTown(t.PlayerTown) is { } town) return world.ShownName(town);
 
         return PlayerFactionOf(world) is >= 0 and var pf ? World.ShownName(_data.Factions[pf]) : "";

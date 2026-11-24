@@ -207,7 +207,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         Editor.Shown.Add(Editor.Current);
         if (Editor.Animals.Contains(Editor.Current))
         {
-            player.FaithfulScreens.SetText("editor", "NameText", player.ShownName(Editor.Current, AnimalName(Editor, Editor.Current)));
+            player.FaithfulScreens.SetText("editor", "NameText", AnimalName(Editor, Editor.Current));
             player.Select([Editor.Current], false);
             return;
         }
@@ -216,7 +216,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         if (Editor.Kind == EditKind.Creation && EditorData is { } data && EditorRaces(data.Db) is [{ } first, ..] groups
                 && IndexOf(groups, draft.Race) < 0)
             draft.SetRace(first.Races[0], Editor.Seed++);
-        player.FaithfulScreens.SetText("editor", "NameText", player.ShownName(Editor.Current, draft.Name));
+        player.FaithfulScreens.SetText("editor", "NameText", draft.Name);
         player.Select([Editor.Current], false);
     }
 
@@ -638,7 +638,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         // "-" without a choice of gender (FUN_1405ee0c0: the race's gender list has fewer than two entries).
         b.Text["GenderText"] = draft.Race.GetBool("single gender") ? "-" : draft.Female ? "Female" : "Male";
         b.Text["CharIndexText"] = $"{s.Index + 1}/{s.Characters.Count}";
-        b.Text["DescriptionPanelText"] = draft.Race.ShownString("description");
+        b.Text["DescriptionPanelText"] = draft.Race.GetShownString("description");
         b.Properties["DescriptionPanelText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true",
             ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_WordWrap") };
         b.Properties["NameText"] = new Dictionary<string, string> { ["DefaultAction"] = "false" };
@@ -677,7 +677,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         b.Text["SubRaceText"] = look.Race.ShownName();
         b.Text["GenderText"] = "-";
         b.Text["CharIndexText"] = $"{s.Index + 1}/{s.Characters.Count}";
-        b.Text["DescriptionPanelText"] = look.Race.ShownString("description");
+        b.Text["DescriptionPanelText"] = look.Race.GetShownString("description");
         string ink = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_WordWrap");
         b.Properties["DescriptionPanelText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true",
             ["TextAlign"] = "Left Top", ["TextColour"] = ink };

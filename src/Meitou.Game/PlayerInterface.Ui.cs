@@ -302,21 +302,6 @@ sealed partial class PlayerInterface
     internal string ShownName(CharacterSnapshot c) => ShownName("character", c.RecordId, c.Name);
 
     /// <summary>
-    /// Character <paramref name="id"/>'s name <paramref name="name"/> (as a view of the simulation gives it) as shown, with the record its snapshot
-    /// names ("" when it has none).
-    /// </summary>
-    internal string ShownName(CharacterId id, string name)
-    {
-        if (!ShownText.Any) return name;
-
-        foreach (var c in Session.CurrentSnapshot.Characters)
-        {
-            if (c.Id == id) return ShownName("character", c.RecordId, name);
-        }
-        return ShownName("character", "", name);
-    }
-
-    /// <summary>
     /// Faction <paramref name="faction"/>'s name (<see cref="FactionName"/>: the player's as renamed, else the data's) as shown, with its record;
     /// null as <see cref="FactionName"/>.
     /// </summary>

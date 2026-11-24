@@ -61,6 +61,13 @@ public enum TownType
 public sealed record TownData
 {
     /// <summary>
+    /// The town's name as the mods' text sources show it (<see cref="Meitou.Localisation.ShownText.Record"/>), or with
+    /// <paramref name="unexplored"/> its <c>unexplored name</c>. Display only.
+    /// </summary>
+    public string ShownName(bool unexplored = false) =>
+        unexplored ? Meitou.Localisation.ShownText.Record(Id, UnexploredName, "unexplored name") : Meitou.Localisation.ShownText.Record(Id, Name);
+
+    /// <summary>
     /// The TOWN's string id.
     /// </summary>
     public required string Id { get; init; }

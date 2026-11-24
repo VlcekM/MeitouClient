@@ -457,7 +457,13 @@ sealed class BuildingSelection(PlayerInterface player)
         if (focus.Type is { Length: > 0 } type) state.Add(new("Type:", type));
         var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance
             ? ir : (Simulation.Production.RichnessView?)null;
-        if ((focus.Town ?? site?.TownName ?? detail?.Bed?.Town ?? inspected?.TownName) is { Length: > 0 } town) state.Add(new("Town:", town));
+        // The site's town is the game's text in its snapshot (rebuilt every tick while anything is built), so it is shown here; the others are shown
+        // text already.
+        string? siteTown = site?.TownName is { } named
+            ? site.TownRecord is { } townRecord ? ShownText.Record(townRecord, named)
+                : player.ShownName("outpost", Simulation.Construction.PlayerTown.Template, named)
+            : null;
+        if ((focus.Town ?? siteTown ?? detail?.Bed?.Town ?? inspected?.TownName) is { Length: > 0 } town) state.Add(new("Town:", town));
         Useable.AddEmptyLine(focus, site?.Record ?? focus.Record, detail, state);
         Useable.AddStateLine(site?.Record ?? focus.Record, state);
         if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance)

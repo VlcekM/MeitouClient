@@ -31,6 +31,26 @@ public sealed class BuildMenu(IReadOnlyList<BuildingBuildData> catalog)
     public IReadOnlyList<BuildingBuildData> Catalog { get; } = catalog;
 
     /// <summary>
+    /// The first building of <see cref="Catalog"/> in each category, made on first use.
+    /// </summary>
+    Dictionary<string, string>? _firstOfCategory;
+
+    /// <summary>
+    /// The string id of the first building of <see cref="Catalog"/> in <paramref name="category"/>, the record the category's text is asked under
+    /// (<see cref="BuildingBuildData.CategoryField"/>); null when none has it.
+    /// </summary>
+    public string? FirstOfCategory(string category)
+    {
+        if (_firstOfCategory is null)
+        {
+            var first = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var b in Catalog) first.TryAdd(b.Category, b.Id);
+            _firstOfCategory = first;
+        }
+        return _firstOfCategory.GetValueOrDefault(category);
+    }
+
+    /// <summary>
     /// The categories with a member the set unlocks, by name in byte order (the original keeps them in a <c>std::map</c> of names,
     /// <c>FUN_1404e4480</c>).
     /// </summary>

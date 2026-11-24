@@ -73,7 +73,12 @@ public sealed record BuildingSnapshot(
     public bool Public { get; init; } = true;
 
     /// <summary>
-    /// The name of the player town it belongs to (see <see cref="Public"/>).
+    /// The name of the town it belongs to: the player's outpost, or a world town's for a building of a town (see <see cref="Public"/>).
     /// </summary>
     public string? TownName { get; init; }
+
+    /// <summary>
+    /// The TOWN record of the world town <see cref="TownName"/> names, for showing it through the mods' text sources; null for the player's outpost.
+    /// </summary>
+    public string? TownRecord { get; init; }
 }

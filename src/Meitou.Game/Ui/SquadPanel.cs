@@ -188,11 +188,10 @@ sealed class SquadPanel(PlayerInterface player)
         bool typing = focus is { } fc && fc.Item2 == nameBox;
 
         // The box shows the squad's name, or what is being typed; a box not being typed in starts from the name when it is next pressed.
-        string shown = typing ? "" : player.ShownName("squad", "", squad.Name);
-        if (!typing) player.FaithfulScreens.SetText("overview", nameBox, shown);
+        if (!typing) player.FaithfulScreens.SetText("overview", nameBox, squad.Name);
 
         var b = new UiBindings { TemplateScale = player.UiScale };
-        b.Text["SquadNameText"] = typing ? player.FaithfulScreens.GetText("overview", nameBox) : shown;
+        b.Text["SquadNameText"] = typing ? player.FaithfulScreens.GetText("overview", nameBox) : squad.Name;
         int count = squad.Members.Count;
         b.Text["SquadSizeText"] = $"{count}/{maxSize}";
         if (count >= maxSize)
@@ -353,7 +352,7 @@ sealed class SquadPanel(PlayerInterface player)
                 Vector4.Zero, Pickable: false, Clip: clip));
         }
 
-        controls.Add(new($"{name}-name", "TextBox", At(0.05f, 0.05f, 0.9f, 0.8875f), player.ShownName(member), "", "Kenshi_TextboxStandardText", true,
+        controls.Add(new($"{name}-name", "TextBox", At(0.05f, 0.05f, 0.9f, 0.8875f), member.Name, "", "Kenshi_TextboxStandardText", true,
             new Dictionary<string, string>
             {
                 ["TextAlign"] = "HCenter Bottom",

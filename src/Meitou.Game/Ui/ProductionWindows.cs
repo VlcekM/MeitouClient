@@ -1951,8 +1951,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 ? ""
                 : PlayerInterface.Tag(PlayerInterface.BadColour) + " (" + Loc.Format("{1,num=fix,p=0}", -smith.Penalty) + ")"
                     + PlayerInterface.Tag(MyGuiColours.InkText);
-            string smithName = player.ShownName("character", "", smith.Name);
-            rows.Add(new(Loc.Tr("-Current Smith:"), smithName.Replace("#", "##", StringComparison.Ordinal) + Loc.Tr(" (skill: {1,num}{2})",
+            rows.Add(new(Loc.Tr("-Current Smith:"), smith.Name.Replace("#", "##", StringComparison.Ordinal) + Loc.Tr(" (skill: {1,num}{2})",
                 smith.Skill, penalty)));
 
             if (index < smith.Entries.Count)

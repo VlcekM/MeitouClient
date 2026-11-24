@@ -42,9 +42,9 @@ public sealed class BuildSite
     /// </summary>
     public BuildingPlacement? LevelPlacement { get; init; }
     /// <summary>
-    /// The name of the level-data town of <see cref="LevelPlacement"/> (null: none), shown as the town it belongs to.
+    /// The level-data town of <see cref="LevelPlacement"/> (null: none), shown as the town it belongs to.
     /// </summary>
-    public string? LevelTownName { get; init; }
+    public Meitou.Data.Gameplay.TownData? LevelTown { get; init; }
     /// <summary>
     /// The BUILDING record; an upgrade or downgrade swaps it in place (<see cref="ConstructionSystem"/> "Upgrades").
     /// </summary>
@@ -565,7 +565,7 @@ public sealed partial class BuildingRegistry
 
             list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials,
                 s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public, Outside = s.Outside,
-                TownName = s.LevelTownName ?? FindTown(s.Town)?.Name, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
+                TownName = s.LevelTown?.Name ?? FindTown(s.Town)?.Name, TownRecord = s.LevelTown?.Id, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
         }
 
         _publishedVersion = Version;

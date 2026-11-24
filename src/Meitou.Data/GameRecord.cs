@@ -197,7 +197,7 @@ public sealed class GameRecord
     /// String field <paramref name="key"/> (<see cref="GetString"/>) as the mods' text sources show it (<see cref="Meitou.Localisation.ShownText.Record"/>,
     /// the field named by <paramref name="key"/>). Display only.
     /// </summary>
-    public string ShownString(string key, string fallback = "") => Meitou.Localisation.ShownText.Record(StringId, GetString(key, fallback), key);
+    public string GetShownString(string key, string fallback = "") => Meitou.Localisation.ShownText.Record(StringId, GetString(key, fallback), key);
 
     /// <summary>
     /// The file path <paramref name="key"/>, or <paramref name="fallback"/> when the record has none.

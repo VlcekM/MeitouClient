@@ -15,6 +15,11 @@ sealed class CraftOptionsCache(Func<World, Machine, IReadOnlyList<CraftOptionVie
     IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>>? _published;
 
     /// <summary>
+    /// The shown text revision (<see cref="ShownText.Revision"/>) the published view was built at: its names are rebuilt when a mod's text changes.
+    /// </summary>
+    int _shownRevision;
+
+    /// <summary>
     /// The crafting machines <see cref="_published"/> was made from, in the registry's order. A machine's site, record and bench state are fixed when
     /// it is made, so a bench added, dropped or replaced (an upgrade to another record) shows as a different machine here.
     /// </summary>
@@ -38,7 +43,9 @@ sealed class CraftOptionsCache(Func<World, Machine, IReadOnlyList<CraftOptionVie
     public IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>> Of(World world)
     {
         Sync(world);
-        if (_published is not null && SameBenches(world)) return _published;
+        if (_published is not null && _shownRevision == ShownText.Revision && SameBenches(world)) return _published;
+
+        _shownRevision = ShownText.Revision;
 
         _benches = [.. world.Machines.All.Where(m => m.Craft is not null)];
         var map = new Dictionary<string, IReadOnlyList<CraftOptionView>>(StringComparer.Ordinal);

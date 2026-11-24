@@ -1290,10 +1290,18 @@ sealed partial class GameHost(
         ui.PricesOf = PriceLookup();
         ui.GroundItemPicks.ArtifactOf = id => PopData?.Db.Find(id)?.GetBool("artifact") == true;
 
-        var specialFoodRaces = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+        // Kept per item with the shown text revision it was made at, since the race names in it are shown text.
+        var specialFoodRaces = new System.Collections.Concurrent.ConcurrentDictionary<string, (int Revision, string Text)>(StringComparer.Ordinal);
         ui.TooltipRuntime.ItemRecordOf = id => PopData?.Db.Find(id);
         ui.TooltipRuntime.SpecialFoodRaces = id =>
-            PopData is { } d ? specialFoodRaces.GetOrAdd(id, item => Data.Gameplay.Bodies.SpecialFood.EatenBy(d.Db, item)) : "";
+        {
+            if (PopData is not { } d) return "";
+            int revision = ShownText.Revision;
+            if (specialFoodRaces.TryGetValue(id, out var known) && known.Revision == revision) return known.Text;
+            string text = Data.Gameplay.Bodies.SpecialFood.EatenBy(d.Db, id);
+            specialFoodRaces[id] = (revision, text);
+            return text;
+        };
         ui.TooltipRuntime.CombatOf = () => PopData?.Combat;
         ui.TooltipRuntime.RangedDamageMultiplier = () => PopData?.BodyOptions.GlobalDamageMultiplier ?? 1;
     }

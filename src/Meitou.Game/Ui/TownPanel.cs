@@ -64,10 +64,7 @@ sealed class TownPanel(PlayerInterface player)
 
         if (!player.FaithfulScreens.IsOpen(TownScreen)) player.FaithfulScreens.Open(TownScreen);
         if (player.FaithfulScreens.Focus is not { Screen: TownScreen, Widget: TownNameBox })
-        {
-            player.FaithfulScreens.SetText(TownScreen, TownNameBox,
-                player.ShownName("outpost", Simulation.Construction.PlayerTown.Template, town.Name));
-        }
+            player.FaithfulScreens.SetText(TownScreen, TownNameBox, town.Name);
     }
 
     /// <summary>

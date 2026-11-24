@@ -529,8 +529,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (order.Row == TaskType.OperateStorage) return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         if (cold.OperateSite == id) return OrderCheck.Run;
         if (order.Row == TaskType.UseTurret ? !AbleToMan(cold) : !Able(cold)) return OrderCheck.Blocked();
-        if (IsSeat(m) && SeatOccupied(world, site)) return OrderCheck.Blocked($"{site.Name} is already in use.", posted: true);
-        if (OperatorsOf(world, id) >= m.Data.MaxOperators) return OrderCheck.Blocked($"{site.Name} is already in use.", posted: true);
+        if (IsSeat(m) && SeatOccupied(world, site)) return OrderCheck.Blocked($"{world.ShownName("place", site.Record, site.Name)} is already in use.", posted: true);
+        if (OperatorsOf(world, id) >= m.Data.MaxOperators)
+            return OrderCheck.Blocked($"{world.ShownName("place", site.Record, site.Name)} is already in use.", posted: true);
         return Unpowered(world, order, site, m) ? OrderCheck.Blocked(Loc.Tr("It needs electricity.")) : OrderCheck.Run;
     }
 
@@ -1858,6 +1859,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     long _researchVersion = -1;
 
     /// <summary>
+    /// The shown text revision (<see cref="ShownText.Revision"/>) the research view was built at: its names are rebuilt when a mod's text changes.
+    /// </summary>
+    int _shownRevision;
+
+    /// <summary>
     /// The machines' version and work count <see cref="_publishedResearch"/> was built at.
     /// </summary>
     (long Version, long Worked) _machinesVersion = (-1, -1);
@@ -2161,13 +2167,15 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         var zone = FocusZone();
         var machines = (world.Machines.Version, world.Machines.Worked);
-        if (_publishedResearch is not null && _researchVersion == world.Research.Version && _machinesVersion == machines && _researchZone == zone)
+        if (_publishedResearch is not null && _researchVersion == world.Research.Version && _machinesVersion == machines && _researchZone == zone
+            && _shownRevision == ShownText.Revision)
             return _publishedResearch;
 
         // Progress, bench stock and the focus zone (each zone crossed in a flight) move often: those refresh at most once a second; finishing,
         // queueing or paying at once.
         var lists = (world.Research.Completed.Count, world.Research.Queue.Count, world.Research.Paid.Count, world.Research.BenchLevel);
-        if (_publishedResearch is not null && _researchLists == lists && (ulong)(world.Tick - _researchBuilt) < ResearchRefreshTicks)
+        if (_publishedResearch is not null && _researchLists == lists && (ulong)(world.Tick - _researchBuilt) < ResearchRefreshTicks
+            && _shownRevision == ShownText.Revision)
             return _publishedResearch;
 
         _researchLists = lists;
@@ -2175,6 +2183,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         _researchZone = zone;
         _researchVersion = world.Research.Version;
         _machinesVersion = machines;
+        _shownRevision = ShownText.Revision;
         _allResearch ??= ResearchData.LoadAll(_db);
         var state = world.Research;
         var queue = state.Queue.Select(q => (q.Id, Research(q.Id) is { } named ? ShownText.Record(q.Id, named.Name) : q.Id,

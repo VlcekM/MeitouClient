@@ -54,7 +54,7 @@ public static class BuildingDescriptions
         // The field is capitalised, unlike an ITEM's description (Verified: every BUILDING of gamedata.base, Newwworld.mod and rebirth.mod carries
         // "Description"; 18 also carry a lowercase one, empty on all but one).
         if (record.GetString("Description") is var own && !string.IsNullOrWhiteSpace(own))
-            return ShownText.Record(record.StringId, own, Host.ShownFields.BuildingDescription);
+            return record.GetShownString("Description");
 
         return Fallback(record.StringId);
     }
