@@ -231,7 +231,7 @@ sealed class HeldItems(PopulationData? data)
             world.Machines.Touch();
             return;
         }
-        if (world.SystemOf<Production.ProductionSystem>()?.Reach(world, lift.Actor, site, out _) is not { } m) return;
+        if (world.SystemOf<Production.ProductionSystem>()?.Reach(world, lift.Actor, site, fromSite: true, out _) is not { } m) return;
         LiftFromMachine(world, lift, m);
     }
 
@@ -428,7 +428,7 @@ sealed class HeldItems(PopulationData? data)
                     return open ? new(grid, grid, "main", grid.Width, grid.Height, null, container, null) : null;
                 }
 
-                return world.SystemOf<Production.ProductionSystem>()?.Reach(world, held.Actor, into.Site, out _) is { Storage: { } storage,
+                return world.SystemOf<Production.ProductionSystem>()?.Reach(world, held.Actor, into.Site, fromSite: false, out _) is { Storage: { } storage,
                         Closed: false } m
                     ? new(storage, storage, "main", storage.Width, storage.Height, null, null, m) : null;
         }
@@ -704,7 +704,7 @@ sealed class HeldItems(PopulationData? data)
         int k = InputIndex(place.Section);
         if (held.From.Holder == ItemHolder.Stock
                 || world.SystemOf<Production.ProductionSystem>()?.Reach(world, held.Actor, place.Into.Site,
-                        out _) is not { } m || k < 0 || k >= m.Inputs.Length)
+                        fromSite: false, out _) is not { } m || k < 0 || k >= m.Inputs.Length)
         {
             ReturnHeldItem(world);
             return;

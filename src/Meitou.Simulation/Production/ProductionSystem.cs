@@ -38,9 +38,10 @@ public sealed class ProductionSettings
     /// </summary>
     public Func<BuildSite, Vector2, float?>? EdgeGap { get; init; }
     /// <summary>
-    /// A character gives or takes items from within this far (X/Z) of a building's footprint, else "Out of trading range." (the original: the
-    /// building's bounds radius + 40 from its position for an item out of it, 60 for one out of a character's inventory, docs/game/economy.md
-    /// "Trading range"; engine choice: 40 from the footprint both ways, or 60 from the position, <see cref="ContainerAccess.TradingRange"/>).
+    /// A character gives or takes items from within this far (X/Z) of a building's footprint when the move is flagged (<see cref="Near"/>), else
+    /// "Out of trading range." (the original: the building's bounds radius + 40 from its position for an item out of it, 60 for one out of a
+    /// character's inventory, docs/game/economy.md "Trading range"; engine choice: 40 from the footprint both ways, or 60 from the position,
+    /// <see cref="ContainerAccess.TradingRange"/>).
     /// </summary>
     public float TransferReach { get; init; } = 40;
     /// <summary>
@@ -2214,10 +2215,20 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     #region Items in and out
 
     /// <summary>
-    /// Whether the player character is within reach of the site (else posts it is out of range): <see cref="ProductionSettings.TransferReach"/> of
-    /// its footprint, or <see cref="ContainerAccess.TradingRange"/> of its position, so a small storage is never stricter than the original (#505).
+    /// The X/Z reach of an item move between two inventories that is not flagged (<c>FUN_14070d290</c>, <b>Verified</b>: 1000, stored squared).
     /// </summary>
-    bool Near(World world, CharacterId who, BuildSite site, out CharacterCold cold)
+    public const float ItemMoveRange = 1000;
+
+    /// <summary>
+    /// Whether the player character may move items between its inventory and the site, the site's or the character's being the source
+    /// (<paramref name="fromSite"/>), else posts "Out of trading range." (<c>FUN_14070d290</c>, <b>Verified</b>; docs/game/economy.md "Trading range").
+    /// Between the player's own windows the move is unflagged: the two positions within <see cref="ItemMoveRange"/> on the X/Z plane (#1361). It is
+    /// flagged for a site not the player's (the stealing test <c>FUN_140711740</c>), an imprisoned character, or a source standing in a town that
+    /// restricts (<see cref="RestrictsMoves"/>); then <see cref="ProductionSettings.TransferReach"/> of the footprint or
+    /// <see cref="ContainerAccess.TradingRange"/> of the position, so a small storage is never stricter than the original (#505; engine reading of
+    /// the original's same place and floor, 60 or the bounds radius + 40).
+    /// </summary>
+    bool Near(World world, CharacterId who, BuildSite site, bool fromSite, out CharacterCold cold)
     {
         cold = null!;
         var table = world.Characters;
@@ -2226,11 +2237,39 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
         var at = table.Next[slot].Position;
         float centre = Vector2.Distance(new Vector2(at.X, at.Z), new Vector2(site.Position.X, site.Position.Z));
-        if (GapTo(site, at) <= Settings.TransferReach || centre <= ContainerAccess.TradingRange) return true;
+        bool flagged = site.Owner != world.Player.Faction || c.InSomething == Locks.HeldState.Imprisoned
+            || RestrictsMoves(world, fromSite ? site.Position : at);
+        if (flagged ? GapTo(site, at) <= Settings.TransferReach || centre <= ContainerAccess.TradingRange : centre <= ItemMoveRange) return true;
 
         world.Post("Out of trading range.");
         return false;
     }
+
+    /// <summary>
+    /// Whether the town at <paramref name="at"/> flags an item move whose source stands there (Town slot 0x260 <c>FUN_140926fc0</c>, <b>Verified</b>):
+    /// none when its faction is the player's or an ally (relation 50 or more); else a public town (<c>is public</c>) not hostile (relation above -30)
+    /// only when it is a prison, any other town always. No town: none.
+    /// </summary>
+    bool RestrictsMoves(World world, Vector3 at)
+    {
+        if (_towns is not { } data || AiSystem.TownAt(data, world, at) is not { Site: >= 0 } town || town.Site >= data.SiteFactions.Count) return false;
+
+        int player = world.Player.Faction;
+        int faction = data.SiteFactions[town.Site];
+        if (faction < 0 || player < 0) return true;
+        if (faction == player) return false;
+
+        float relation = data.Relations.Get(faction, player);
+        if (relation >= FactionRelations.AllyThreshold) return false;
+
+        var info = data.Sites[town.Site].Town;
+        return !info.IsPublic || relation <= HostileRelation || info.Type == TownType.Prison;
+    }
+
+    /// <summary>
+    /// The relation at or below which a public town counts as hostile for <see cref="RestrictsMoves"/> (<c>FUN_1406b26d0</c>: -30).
+    /// </summary>
+    const float HostileRelation = -30;
 
     /// <summary>
     /// Put an item into a container's grid (<see cref="ContainerAccess.ContainerFor"/>): at a free cell, or with X below 0 where it first fits
@@ -2337,12 +2376,15 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// The complete machine at <paramref name="site"/> when <paramref name="who"/> (one of the player's characters) may move items in and out of it
-    /// from where it stands; posts "Out of trading range." when it is too far. For the held item (<see cref="PlayerState.Held"/>).
+    /// from where it stands, the site's or the character's being the source (<paramref name="fromSite"/>); posts "Out of trading range." when it is
+    /// too far. For the held item (<see cref="PlayerState.Held"/>).
     /// </summary>
-    internal Machine? Reach(World world, CharacterId who, string site, out CharacterCold? cold)
+    internal Machine? Reach(World world, CharacterId who, string site, bool fromSite, out CharacterCold? cold)
     {
         cold = null;
-        if (Site(world, site) is not { Complete: true } built || Ensure(world, built) is not { } m || !Near(world, who, built, out var c)) return null;
+        if (Site(world, site) is not { Complete: true } built || Ensure(world, built) is not { } m || !Near(world, who, built, fromSite, out var c))
+            return null;
+
         cold = c;
         return m;
     }
@@ -2359,7 +2401,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
 
         if (Site(world, put.Site) is not { Complete: true } site || Ensure(world, site) is not { } m
-            || !Near(world, put.Character, site, out var cold))
+            || !Near(world, put.Character, site, fromSite: false, out var cold))
             return;
 
         var root = cold.Inventory!;
@@ -2424,7 +2466,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
 
         if (Site(world, take.Site) is not { Complete: true } site || world.Machines.Find(take.Site) is not { } m
-            || !Near(world, take.Character, site, out var cold))
+            || !Near(world, take.Character, site, fromSite: true, out var cold))
             return;
         var goods = TownGoods(take.Site);
         var (record, wanted) = world.GoodsTakenObservers.Active && goods is { Owner: >= 0 } ? Wanted(m, take) : ("", 0);

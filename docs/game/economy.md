@@ -76,8 +76,12 @@ money-item branches are scoped in the expressions/field tables and undecoded que
 An item may move between two inventories of different owners only within an X/Z distance of the owners' positions; a failure is result 1, "Out of trading range.",
 with the sound `gui_notrade` (`FUN_14070f7e0`). The limit is 1000 unless a flag is set: the caller's flag (the one-unit move sets it when the target is a building's
 inventory, `uses_building_category`), or an owner of type 1 whose +0x2f8 is 2, or of type 0x5b whose +0xc0 object has +0x2f8 = 2, or the source owner's +0x78 object passing
-its slot +0x260. Flagged: the owners must not be enemies (faction test) and must be on the same floor, and the limit is 60, or the source owner's bounds radius + 40
-when the source is a building (class 0). The limits are stored squared (1e6, 3600). Same owner: always allowed. A carried, unconscious squad member trades through its own window (**Observed** in the original 1.0.68, plain game, 2026-11-13: Zepp carries the unconscious Beep into a
+its slot +0x260 (the source's current town, Town slot 0x260 `FUN_140926fc0`, **Verified**: false when the town's faction is the player's or an ally,
+relation 50 or more (`FUN_1406b2630`); else, for a public town (slot 0x298, Town `+0x380`) not hostile (relation above -30, `FUN_1406b26d0`), true only
+for a prison (Town `+0xd8` 7); any other town true). Flagged: the owners must not be enemies (faction test) and must be on the same floor, and the limit is 60, or the source owner's bounds radius + 40
+when the source is a building (class 0). The limits are stored squared (1e6, 3600). A move between the player's own windows is not stealing (`FUN_140711740`), so between a player character and a storage
+of the player's the limit is 1000 unless the character is imprisoned or the source stands in such a town. Meitou (`ProductionSystem.Near`, #1361): 1000
+X/Z then; flagged, 40 from the footprint or 60 from the position, an engine reading of the same place, floor and 60 / bounds radius + 40. Same owner: always allowed. A carried, unconscious squad member trades through its own window (**Observed** in the original 1.0.68, plain game, 2026-11-13: Zepp carries the unconscious Beep into a
 bar and trades with the barman; Beep's portrait clicked during the trade shows Beep's window beside the trader's, an item dragged from it to the trader sells for 27 and
 dragged back buys for 27). Meitou: an open trade passes to a knocked-out player character within 1000 whose window is used and stays with them, so stock dragged
 or right-clicked into that window is bought and their goods sell (`TradeSystem.Trades`, `Parties`; `HeldItems.KeepHeld` keeps a stock lift for them); opening a trade
