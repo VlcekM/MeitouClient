@@ -1848,7 +1848,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         TownBuilding? held = null)
     {
         if (!WorkAllowed(world, self.Slot, town)) return null;
+        if (AssignedWorkOf(world, self) is { } assigned) return HasFreeSlot(assigned, held) && WorksAt(world, assigned, type) ? assigned : null;
+
         var list = WorkplacesFor(town, type);
+        if (world.JobScoreFilters.Active) return PickScoredWork(world, self, list, epoch, type, held);
+
         int free = 0;
         foreach (var b in list) if (HasFreeSlot(b, held)) free++;
         if (free == 0) return null;
@@ -1861,7 +1865,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Whether a mind holds a workplace that is still one its goal <paramref name="type"/> may work at.
     /// </summary>
-    bool HoldsWork(AiMind mind, CampaignTown town, TaskType type) => mind.WorkPost is { } post && WorkplacesFor(town, type).Contains(post);
+    bool HoldsWork(AiMind mind, CampaignTown town, TaskType type) => mind.WorkPost is { } post
+        && (AssignedWorkOf(mind.Squad) is { } assigned ? ReferenceEquals(post, assigned) : WorkplacesFor(town, type).Contains(post));
 
     /// <summary>
     /// Whether a workplace has an operator slot no one holds in this cadence pass (73 <c>machineHasFreeOperatorSlot</c>; the finder's
@@ -4114,9 +4119,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        if (board.Gate?.Building == gate) return;
+        bool inside = gate.RuntimeKey is not null || (squad.Conduct & SquadConduct.GateInside) != 0;
+        if (board.Gate is { } kept && kept.Building == gate && kept.Inside == inside) return;
         var centre = town.IsNone ? Flat(gate.Position) : TownExit.Centre(world, data, town);
-        board.Gate = PostOf(world, gate, centre, inside: gate.RuntimeKey is not null);
+        board.Gate = PostOf(world, gate, centre, inside);
     }
 
     /// <summary>

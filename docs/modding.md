@@ -1387,6 +1387,20 @@ holds refuses the second mod.
   minds and the independence. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
   **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
   move order takes them at once and they resume after it, and a re-saved game loads autonomous.
+- **Job choice** (`Meitou.Simulation.Ai`; engine API, not in the original): `SetSquadWork(squadId, building)` gives a player's squad a work
+  building apart from its home (a workplace key as `WorkSlots` takes; null clears it): its members on 189 / 190 work there while it has a free
+  operator slot (189 only where it can really work), else not at all, wherever their home is. `SetSquadConduct(squadId, conduct)` sets
+  `SquadConduct` flags (more may come): `GateInside` posts its gate guard (180) and the gate's flanking guards on the town's side of the gate,
+  as the game posts them at a gate the player built; `CloseDoors` closes a door or gate a member opened on a walk (the movement's own
+  opening) once that member is through it, 20 past the leaf, with nobody else within 20 of it (left open after 60 s). Both are saved on the
+  squad (`meitou work`, `meitou conduct`, [save](formats/save.md)), hashed while set, and cleared with the home when the autonomy's owner mod
+  is missing at a load. A registered system implementing `IJobScoreFilter` is asked `Score(World, in JobScoreAsk)` for each workplace with a
+  free slot a worker on 189 / 190 may pick in its work town (`JobCandidateKind.Workplace`; more kinds may come): the tick, character, task
+  type, the workplace key, its BUILDING record id (a mod finds the stat it trains in its data) and the score, 1 as the game weighs them
+  alike. The best wins, ties drawn by the game's own roll, so asking again names the same; 0 or below leaves one out. An assigned work
+  building is not scored. Filters run in system order, each seeing the earlier answer, on any thread (the think picks too): quick,
+  thread-safe, a pure read. A throw or a non-finite answer keeps the score; the filter is still asked for the rest of that tick, not from the
+  next, and the fault enters the state hash. Without a filter nothing is asked.
 - **Squads outside the faction size count** (`Meitou.Simulation.Factions`): `SetSquadUncounted(squadId, on, Owner: context.Id)` keeps a squad of
   the player's faction out of the `max faction size` count (`Squad.Uncounted`; recruiting, slave trading, `SpawnIntoPlayerSquad` and the squads
   screen's count use `SquadManagement.CappedHeads`), for townspeople, staff or followers a mod adds beside the player's own characters; the

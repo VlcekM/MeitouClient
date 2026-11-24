@@ -609,6 +609,7 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
         }
 
         _gateGoals?.Hash(ref hasher);
+        HashCloseBehind(ref hasher);
         _wardens?.Hash(ref hasher);
         _escapes?.Hash(ref hasher);
     }
