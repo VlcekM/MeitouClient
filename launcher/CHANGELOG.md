@@ -2,6 +2,11 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.19.0
+
+- New Benchmark page: installs the benchmark builds, runs their scenarios at the chosen graphics tiers (natively or under Proton on Linux), shows the results and submits them
+- Flies Are Muted, Silent Corpse Flies and the fly buzzing mods are marked as built into Meitou (Audio settings: Mute corpse flies)
+
 ## v1.18.0
 
 - Mods page: sort the list by load order, name, date added or last modified
