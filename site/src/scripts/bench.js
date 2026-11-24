@@ -121,6 +121,7 @@
 
   function setStatus(text) {
     const s = document.getElementById("status");
+    s.classList.remove("is-loading");
     s.hidden = !text;
     s.textContent = text || "";
   }

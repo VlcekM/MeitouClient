@@ -107,7 +107,7 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
       <div id="controls" class="controls"></div>
       <p id="group-desc" class="muted small" hidden></p>
       <div id="caveat"></div>
-      <div id="status" class="box" role="status">Loading benchmark results...</div>
+      <div id="status" class="box is-loading" role="status" aria-label="Loading benchmark results"><span class="spinner" aria-hidden="true"></span></div>
       <div id="chart"></div>
     </section>
 
@@ -240,6 +240,9 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .muted{color:var(--muted)}
   .small{font-size:.9rem;margin:.4rem 0 .2rem}
   .box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px 18px;margin:16px 0}
+  #charts-sec{min-height:540px}
+  .box.is-loading{display:flex;align-items:center;justify-content:center;min-height:460px}
+  .spinner{width:36px;height:36px;border-radius:50%;border:3px solid color-mix(in srgb,var(--line) 85%,transparent);border-top-color:var(--accent);animation:bn-spin .75s cubic-bezier(.5,.15,.5,.85) infinite}
   & > section > h2{margin-top:2rem}
   .setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px;margin:.6rem 0}
   .setup dt{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
@@ -319,5 +322,6 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
   }
   @keyframes bn-pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes bn-spin{to{transform:rotate(360deg)}}
   @media (max-width: 700px) { .bn h1 { font-size: 1.8rem; } }
 </style>
