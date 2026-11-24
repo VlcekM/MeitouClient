@@ -106,10 +106,10 @@ public static class Loc
     /// <summary>
     /// The plural message <paramref name="singular"/> / <paramref name="plural"/> for <paramref name="n"/> (<c>ngettext</c>): the catalog's form for
     /// <paramref name="n"/> by its <c>Plural-Forms</c> rule, else the English one. <paramref name="args"/> fill the placeholders (usually
-    /// <paramref name="n"/> itself).
+    /// <paramref name="n"/> itself). The mods' text sources are asked under the English form for <paramref name="n"/>.
     /// </summary>
     public static string Plural(string singular, string plural, long n, params object?[] args) =>
-        Format(Shown(singular, "",
+        Format(Shown(n == 1 ? singular : plural, "",
             (Translating ? s_catalog.FindPlural(singular, n) ?? s_meitou.FindPlural(singular, n) : null) ?? (n == 1 ? singular : plural)), args);
 
     /// <summary>

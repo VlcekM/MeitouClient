@@ -94,7 +94,7 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
     float? Charge, ItemOwner From, int BagItems)
 {
     /// <summary>
-    /// The item's code-mod tag ("" none; the mods' item names, docs/modding.md "Item names").
+    /// The item's code-mod tag ("" none; the mods' shown text, docs/modding.md "Shown text").
     /// </summary>
     public string ModTag { get; init; } = "";
 

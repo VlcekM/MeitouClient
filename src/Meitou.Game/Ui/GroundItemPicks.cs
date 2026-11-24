@@ -206,6 +206,11 @@ sealed class GroundItemPicks(PlayerInterface player)
     (UiMode Mode, float Minimum, float FontSize) _labelWidthsFor;
 
     /// <summary>
+    /// The names the labels show, in the order of the items labelled this frame (<see cref="AddItemLabels"/>), kept so each is resolved once.
+    /// </summary>
+    readonly List<string> _labelNames = [];
+
+    /// <summary>
     /// The font resource a ground item's name is drawn in.
     /// </summary>
     const string ItemLabelFont = "Kenshi_StandardFont_Medium";
@@ -291,11 +296,6 @@ sealed class GroundItemPicks(PlayerInterface player)
         _itemLabels.AddRange(placed);
         AddLabelControls(controls, near, placed);
     }
-
-    /// <summary>
-    /// The names the labels show, in the order of the items labelled this frame (<see cref="AddItemLabels"/>), kept so each is resolved once.
-    /// </summary>
-    readonly List<string> _labelNames = [];
 
     /// <summary>
     /// The name a ground item's label shows: the mods' item names (<see cref="PlayerInterface.ShownItemName"/>), else the item's.

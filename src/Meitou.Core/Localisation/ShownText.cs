@@ -53,7 +53,8 @@ public static class ShownText
     public const int MaxText = 4000;
 
     /// <summary>
-    /// The most answers kept; past it the cache starts over (formatted and tagged texts can make the set open-ended).
+    /// The most answers kept; past it the cache starts over (tagged items and texts the code builds can make the set open-ended), and only the texts
+    /// shown after that are asked again.
     /// </summary>
     const int MaxCached = 16384;
 
@@ -126,6 +127,20 @@ public static class ShownText
     }
 
     /// <summary>
+    /// Removes every source added for <paramref name="host"/> (an interface that is done).
+    /// </summary>
+    public static void Remove(object host)
+    {
+        lock (Asking)
+        {
+            var kept = Array.FindAll(s_sources, s => !ReferenceEquals(s.Host, host));
+            if (kept.Length == s_sources.Length) return;
+            s_sources = kept;
+            Forget();
+        }
+    }
+
+    /// <summary>
     /// Forgets the texts shown so far, so every source is asked again (a source whose answers changed). Texts already handed out (a dialogue line
     /// said, a notice posted) keep what they were given.
     /// </summary>
@@ -160,7 +175,7 @@ public static class ShownText
                     var context = new ShownTextContext(kind, asked.Item2, shown, asked.Item4);
                     try
                     {
-                        if (source(context) is { } given && !string.IsNullOrWhiteSpace(given)) shown = Clean(kind, given);
+                        if (source(context) is { } given && Clean(kind, given) is { Length: > 0 } clean && !string.IsNullOrWhiteSpace(clean)) shown = clean;
                     }
                     catch (Exception e)
                     {
@@ -193,6 +208,7 @@ public static class ShownText
     /// <summary>
     /// A source's answer as shown: an item name on one line (line breaks, the interface's written <c>\n</c> and tabs made spaces) and cut to
     /// <see cref="MaxName"/>; any other text cut to <see cref="MaxText"/>. Never cut between the two halves of a character outside the basic plane.
+    /// A blank result keeps the text so far.
     /// </summary>
     static string Clean(ShownTextKind kind, string given)
     {

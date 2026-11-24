@@ -1142,8 +1142,8 @@ holds refuses the second mod.
   `Tag`; return the text to show, or null or blank to keep it. Several mods chain in load order, each getting the last one's text, so a
   translation and a mod that tweaks a few words stack. The kinds:
   - `Message`: a text the code asks the translation catalog for ([localisation](formats/localisation.md) "UI strings": captions, HUD lines,
-    menu verbs, notices, tooltips' rows, the simulation's messages). `Key` is the English source text (`msgid`; a plural message's singular, a
-    layout caption as the layout writes it), placeholders such as `{1}` still in it, and `Text` that text in the player's language; `Tag` is the
+    menu verbs, notices, tooltips' rows, the simulation's messages). `Key` is the English source text (`msgid`; a plural message's English form for its
+    number, a layout caption as the layout writes it), placeholders such as `{1}` still in it, and `Text` that text in the player's language; `Tag` is the
     message context (`msgctxt`, "" none). Keep the placeholders: the values are put in after the mods' text. Text the game shows without
     asking the catalog is not asked.
   - `ItemName`: an item's name where the interface shows it: inventory, trade and machine cells (and their caption while the icon loads), the
@@ -1159,8 +1159,8 @@ holds refuses the second mod.
   Display only: records, saves, the state hash and every decision keep the game's text. The answer for a kind, key, text and tag is kept until
   `registration.RefreshText()`, which a mod calls when its answers change (a word learned, an item identified, a save loaded whose state its
   answers read); text already handed out (a line said, a notice posted) keeps what it got. So a source runs once per text shown, not per frame,
-  but it may be asked on any thread (messages and dialogue are made on the simulation's threads), one call at a time: read only the context and
-  the mod's own state, safely across threads. Texts other than item names are cut to 4,000 characters. A source that throws is reported once
+  but it may be asked on any thread (messages and dialogue are made on the simulation's threads), one call at a time (other text waits meanwhile, so
+  keep it quick and never wait on the game): read only the context and the mod's own state, safely across threads. Texts other than item names are cut to 4,000 characters. A source that throws is reported once
   and dropped. With no source, text shows as before at the cost of one check per lookup; with one, a shown text costs one dictionary lookup
   after its first time. Engine API, not in the original.
 - **Item tooltip lines:** in `Register`, `registration.AddItemTooltipLines(context => lines)` adds `UiItemTooltipLine`s (a label and an

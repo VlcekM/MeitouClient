@@ -99,7 +99,7 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     float Quality, long Price, long UnitPrice, bool Stolen)
 {
     /// <summary>
-    /// The item's code-mod tag ("" none; the mods' item names, docs/modding.md "Item names").
+    /// The item's code-mod tag ("" none; the mods' shown text, docs/modding.md "Shown text").
     /// </summary>
     public string ModTag { get; init; } = "";
 

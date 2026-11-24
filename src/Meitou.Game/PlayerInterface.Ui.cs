@@ -246,7 +246,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// Frees the painter and removes the interface's UI extension.
+    /// Frees the painter and removes the interface's UI extension and the extensions' text sources.
     /// </summary>
     public void DisposeUi()
     {
@@ -256,6 +256,7 @@ sealed partial class PlayerInterface
         _uiRegistration = null;
         _xpLabelRegistration?.Dispose();
         _xpLabelRegistration = null;
+        Localisation.ShownText.Remove(_uiHost);
     }
 
     /// <summary>

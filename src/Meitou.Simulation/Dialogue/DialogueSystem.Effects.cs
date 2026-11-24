@@ -641,6 +641,27 @@ public sealed partial class DialogueSystem
     {
         if (text.IndexOf('/') < 0) return text;
         var used = new bool[tokens.Count];
+        return Tokens(text, token =>
+        {
+            int at = -1;
+            for (int t = 0; t < tokens.Count; t++)
+            {
+                if (tokens[t].Token != token) continue;
+                at = t;
+                if (!used[t]) break;
+            }
+            if (at < 0) return "";
+            used[at] = true;
+            return tokens[at].Shown;
+        });
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with each <c>/NAME/</c> pair replaced by <paramref name="value"/> of its trimmed name, left to right (an unclosed
+    /// <c>/</c> and what follows it kept), a value at the start or after ". ", "! ", "? " capitalised.
+    /// </summary>
+    static string Tokens(string text, Func<string, string> value)
+    {
         var sb = new StringBuilder(text.Length + 16);
         int i = 0;
         while (i < text.Length)
@@ -653,28 +674,18 @@ public sealed partial class DialogueSystem
                 break;
             }
             sb.Append(text, i, open - i);
-            string token = text[(open + 1)..close].Trim();
-            int at = -1;
-            for (int t = 0; t < tokens.Count; t++)
-            {
-                if (tokens[t].Token != token) continue;
-                at = t;
-                if (!used[t]) break;
-            }
-            string value = "";
-            if (at >= 0)
-            {
-                used[at] = true;
-                value = tokens[at].Shown;
-            }
-            bool capital = sb.Length == 0 || sb.ToString().EndsWith(". ", StringComparison.Ordinal)
-                || sb.ToString().EndsWith("! ", StringComparison.Ordinal) || sb.ToString().EndsWith("? ", StringComparison.Ordinal);
-            if (capital && value.Length > 0) value = char.ToUpperInvariant(value[0]) + value[1..];
-            sb.Append(value);
+            string put = value(text[(open + 1)..close].Trim());
+            if (put.Length > 0 && (sb.Length == 0 || EndsWithStop(sb))) put = char.ToUpperInvariant(put[0]) + put[1..];
+            sb.Append(put);
             i = close + 1;
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Whether <paramref name="sb"/> ends with ". ", "! " or "? ".
+    /// </summary>
+    static bool EndsWithStop(StringBuilder sb) => sb.Length >= 2 && sb[^1] == ' ' && sb[^2] is '.' or '!' or '?';
 
     /// <summary>
     /// The text tokens (docs/game/dialogue.md "Tokens"): <c>/NAME/</c> pairs until none is left; COST, MYNAME, YOURNAME, TARGETFACTION and
@@ -686,28 +697,12 @@ public sealed partial class DialogueSystem
         List<(string Token, string Value, string Shown)>? tokens = null)
     {
         if (depth > 4 || text.IndexOf('/') < 0) return text;
-        var sb = new StringBuilder(text.Length + 16);
-        int i = 0;
-        while (i < text.Length)
+        return Tokens(text, token =>
         {
-            int open = text.IndexOf('/', i);
-            int close = open < 0 ? -1 : text.IndexOf('/', open + 1);
-            if (close < 0)
-            {
-                sb.Append(text, i, text.Length - i);
-                break;
-            }
-            sb.Append(text, i, open - i);
-            string token = text[(open + 1)..close];
-            string value = Token(world, c, line, token.Trim(), me, other, depth, tokens is not null, out string? swapped);
-            tokens?.Add((token.Trim(), value, swapped ?? value));
-            bool capital = sb.Length == 0 || sb.ToString().EndsWith(". ", StringComparison.Ordinal)
-                || sb.ToString().EndsWith("! ", StringComparison.Ordinal) || sb.ToString().EndsWith("? ", StringComparison.Ordinal);
-            if (capital && value.Length > 0) value = char.ToUpperInvariant(value[0]) + value[1..];
-            sb.Append(value);
-            i = close + 1;
-        }
-        return sb.ToString();
+            string value = Token(world, c, line, token, me, other, depth, tokens is not null, out string? swapped);
+            tokens?.Add((token, value, swapped ?? value));
+            return value;
+        });
     }
 
     /// <summary>

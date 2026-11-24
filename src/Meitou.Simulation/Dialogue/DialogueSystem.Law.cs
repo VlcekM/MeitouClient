@@ -45,8 +45,8 @@ public sealed partial class DialogueSystem
             Speaker = b.Npc,
             Text = Loc.Tr("Pay Bounty"),
         };
-        foreach (var (_, name, price) in offers) c.Choices.Add((null, $"{name} (c.{price.ToString("N0", CultureInfo.InvariantCulture)})"));
-        c.Choices.Add((null, LeaveChoice));
+        foreach (var (_, name, price) in offers) c.Choices.Add((null, $"{name} (c.{price.ToString("N0", CultureInfo.InvariantCulture)})", null));
+        c.Choices.Add((null, LeaveChoice, null));
         if (offers.Count == 0) world.Post(Loc.Tr("Nobody here to bail out."));
         _bailList = [.. offers.Select(o => o.Prisoner)];
         _open = c;
