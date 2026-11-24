@@ -1144,8 +1144,10 @@ holds refuses the second mod.
   - `Message`: a text the code asks the translation catalog for ([localisation](formats/localisation.md) "UI strings": captions, HUD lines,
     menu verbs, notices, tooltips' rows, the simulation's messages). `Key` is the English source text (`msgid`; a plural message's English form for its
     number, a layout caption as the layout writes it), placeholders such as `{1}` still in it, and `Text` that text in the player's language; `Tag` is the
-    message context (`msgctxt`, "" none). Keep the placeholders: the values are put in after the mods' text. Text the game shows without
-    asking the catalog is not asked.
+    message context (`msgctxt`, "" none). Keep the placeholders: the values are put in after the mods' text. The game passes other text
+    through the same lookup too (numbers, names, text it built, and sometimes a text it already looked up, your answer included, as
+    it is or formatted or in capitals), so answer only the keys you know and return null for the rest. Text the game shows without asking
+    the catalog is not asked.
   - `ItemName`: an item's name where the interface shows it: inventory, trade and machine cells (and their caption while the icon loads), the
     held item, item tooltips' titles, backpack windows' titles, and the labels and right-click menu title of items on the ground. `Key` is the
     item's record string id, `Tag` its code-mod tag (`ItemInstance.ModTag`), so a mod can name one tagged item alone. Put on one line and cut to
