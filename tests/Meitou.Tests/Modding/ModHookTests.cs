@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay;
 using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation;
@@ -200,6 +201,44 @@ public class ModHookTests
         Assert.Equal((true, "10-t", faction, p.Size, 750L, false), reloaded);
         Assert.Equal(p.Key, again.Key);   // planned again as the same squad
         Assert.InRange(Vector2.Distance(p.Position, again.Position), 0, 1);
+    }
+
+    /// <summary>
+    /// <c>SpawnPlatoon</c>'s <c>maxMembers</c> cuts the plan to that many (the leader first) and the cap is saved and loaded back with the platoon,
+    /// so its squad is made again at that size; no cap, or one above the plan, leaves the plan as it is. Catches a cap that only changes
+    /// <see cref="Platoon.Size"/>, is lost in the save (the squad would come back full size), or drops the leader.
+    /// </summary>
+    [Fact]
+    public void A_capped_spawn_has_at_most_its_cap_and_keeps_it_through_a_save()
+    {
+        var (w, population) = Start();
+        using var world = w;
+        int faction = population.Data.FactionIndex(Faction);
+        int id = population.SpawnPlatoon(w, faction, "12-t", 0, new Vector2(20000, 20000), 100, 200, maxMembers: 2);
+        var p = w.Platoons.Find(id)!;
+        p.ModTag = "capped|1";
+
+        Assert.Equal((2, 2), (p.Size, p.MemberCap));
+
+        var template = SquadTemplate.From(population.Data.Db.Find("12-t")!);
+        var plan = SquadFactory.Plan(population.Data.Db, template, 1, w.Seed, p.Key, IWorldStates.None);
+
+        Assert.Equal(3, plan.TotalMembers);
+        Assert.Same(plan, plan.Capped(0));
+        Assert.Same(plan, plan.Capped(5));
+        Assert.Equal(plan.Members.Take(2), plan.Capped(2).Members);
+
+        var game = SaveCapture.Capture(w, population.Data, new SaveClock(1, 13, 0));
+        var record = game.Platoons.Single(x => x.Record.Strings.GetValueOrDefault(ModPlatoonSave.TagKey) == "capped|1").Record;
+
+        Assert.Equal(2, record.Ints[ModPlatoonSave.CapKey]);
+
+        var (w2, population2) = Start();
+        using var back = w2;
+        SaveLoader.Load(w2, game, population2.Data, new SaveLoadOptions { ApplyRelations = false });
+        var again = Assert.Single(w2.Platoons.All, x => x.ModTag == "capped|1");
+
+        Assert.Equal((2, 2), (again.Size, again.MemberCap));
     }
 
     /// <summary>

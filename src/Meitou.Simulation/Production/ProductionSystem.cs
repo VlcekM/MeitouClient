@@ -446,6 +446,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 case FocusCommand look: _focus = look.Position; break;
                 case QueueResearch queue: Queue(world, queue.Research); break;
                 case CancelResearch cancel: world.Research.Dequeue(cancel.Research); break;
+                case MoveResearch move: MoveResearchTo(world, move); break;
                 case QueueCraft craft: QueueCraft(world, craft); break;
                 case CancelCraft cancel: CancelCraft(world, cancel); break;
                 case RepeatCrafts repeat:
@@ -1899,6 +1900,48 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
+    /// Applies a research queue drop between two entries still in the queue.
+    /// </summary>
+    void MoveResearchTo(World world, MoveResearch move)
+    {
+        var state = world.Research;
+        var positions = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < state.Queue.Count; i++) positions.Add(state.Queue[i].Id, i);
+
+        if (!positions.TryGetValue(move.Research, out int from) || !positions.TryGetValue(move.Target, out int to) || from == to) return;
+        if (!CanMoveResearch(state, positions, from, to)) return;
+
+        state.Move(from, to);
+    }
+
+    /// <summary>
+    /// The original drop check (<c>FUN_14049f320</c>): look up prerequisites with the endpoints swapped and compare against each dependent's
+    /// original index.
+    /// </summary>
+    bool CanMoveResearch(ResearchState state, Dictionary<string, int> positions, int from, int to)
+    {
+        var queue = state.Queue;
+        for (int i = 0; i < queue.Count; i++)
+        {
+            if (Research(queue[i].Id) is not { } data) continue;
+
+            foreach (string id in data.Requirements)
+            {
+                if (_db.Find(id) is not { } record || RequirementMet(state, record)) continue;
+
+                if (!positions.TryGetValue(id, out int index)) return false;
+
+                int swapped = index == from ? to
+                    : index == to ? from
+                    : index;
+                if (swapped >= i) return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// A complete player-owned bench counts regardless of its town association.
     /// </summary>
     bool CanResearch(World world, Machine machine) => Site(world, machine.Site) is { Complete: true } site &&
@@ -1991,12 +2034,18 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             var record = _db.Find(req);
             if (record is null) continue;
-            if (record.Type == FcsRecordType.Research ? world.Research.IsDone(req) : world.Research.IsUnlocked(req)) continue;
+            if (RequirementMet(world.Research, record)) continue;
             if (!lenient || !Met(world, record.GetReferences("requirements").Select(l => l.TargetStringId), lenient: false)) return false;
         }
 
         return true;
     }
+
+    /// <summary>
+    /// Whether a research prerequisite has been completed or unlocked.
+    /// </summary>
+    static bool RequirementMet(ResearchState state, GameRecord record) =>
+        record.Type == FcsRecordType.Research ? state.IsDone(record.StringId) : state.IsUnlocked(record.StringId);
 
     /// <summary>
     /// The zone of the camera focus, null while none was told.

@@ -62,6 +62,29 @@ public sealed record SquadPlan(SquadTemplate Template, IReadOnlyList<MemberPlan>
     /// Members of this squad and, recursively, of its slave squads.
     /// </summary>
     public int TotalMembers => Members.Count + Slaves.Sum(s => s.TotalMembers);
+
+    /// <summary>
+    /// The plan cut to at most <paramref name="max"/> members (engine API, not in the original; <c>PopulationSystem.SpawnPlatoon</c>'s cap): the
+    /// first members in creation order (the leader first), then whole slave squads while they fit. <paramref name="max"/> 0 or less, or a plan
+    /// within it, is the plan unchanged.
+    /// </summary>
+    public SquadPlan Capped(int max)
+    {
+        if (max <= 0 || TotalMembers <= max) return this;
+
+        var members = Members.Take(max).ToList();
+        var slaves = new List<SquadPlan>();
+        int total = members.Count;
+        foreach (var slave in Slaves)
+        {
+            if (total + slave.TotalMembers > max) continue;
+
+            slaves.Add(slave);
+            total += slave.TotalMembers;
+        }
+
+        return this with { Members = members, Slaves = slaves };
+    }
 }
 
 /// <summary>

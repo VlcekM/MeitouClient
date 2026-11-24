@@ -341,20 +341,10 @@ public sealed partial class ProductionSystem
         NearestStorage(world, site, by, item.Record, s => s.Data.Accepts(item.Record, item.Type) && Fits(s.Storage!, item));
 
     /// <summary>
-    /// Whether some of an item fits: a stack of it with room, or a free cell.
+    /// Whether some of an item fits the storage's grid: a stack it may join with room, or a free cell (<see cref="Inventory.HasRoomIn"/>, the
+    /// stacking rule the put itself follows, <see cref="Inventory.SameStack"/>), so a storage chosen for an item always takes some of it.
     /// </summary>
-    static bool Fits(Inventory storage, ItemInstance item)
-    {
-        int limit = storage.LimitOf(item);
-        foreach (var other in storage.Items)
-        {
-            if (other.Record == item.Record && other.Quality == item.Quality && other.Mark == item.Mark && other.Section == "main"
-                && other.Quantity < limit)
-                return true;
-        }
-
-        return storage.FindCell("main", item.Width, item.Height, out _, out _);
-    }
+    static bool Fits(Inventory storage, ItemInstance item) => storage.HasRoomIn("main", item);
 
     /// <summary>
     /// Where an input's item is fetched from (the fill finder <c>FUN_14059d9b0</c> -> <c>FUN_14059d000</c>, <b>Verified</b>): the player's nearest

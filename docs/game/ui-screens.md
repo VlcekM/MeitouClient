@@ -594,8 +594,12 @@ also finds `MessagesTextBox`). The tag replaces the `Kenshi_EditBoxStandardText`
 character, test `FUN_1407916d0`), the conversation window's NPC line (`140674170`, ML_NORMAL), the player's chosen reply (`140683df0`, the player character's name or
 "Player", ML_PLAYER) and each MessageRoller message (`140724a20`, empty owner, ML_SYSTEM).
 
+**Observed** (Steam 1.0.68 `14049a130` and MyGUI 3.2.2 `EditBox::setCaption`): the visible Dialogue tab refreshes when new lines arrive.
+Replacing the caption moves the cursor to the end of the text and scrolls it into view.
+
 Meitou: `World.Said` from `DialogueSystem` (bubble lines, conversation lines, replies) → `DialogueLog.LogMessage`, each line tagged with its colour (ML_NORMAL is
 the kit's Main colour in the Meitou mode, for its dark panel); notices log as ML_SYSTEM without the `[`. The newest 200 lines are kept; not saved.
+The tab scrolls to the newest line when it shows an updated log. Manual scrolling holds its position between updates.
 
 ### Inline colour tags
 
@@ -1019,6 +1023,11 @@ Stats Affected and Ways To Train headings with bullet rows. The right starts wit
 a thin Next Level bar and percentage, followed by Description and wrapped prose.
 Help text is available from the installed [gettext catalog](../formats/gettext.md).
 
+**Physical effects** (**Verified**, 1.0.68 `FUN_1408b9270` branches matched to `main.pot`, `kenshi/statswindow.cpp`):
+the description adds a physical bulk label for Strength (line 429), Weapon smith and Armour smith (433),
+a slight muscle definition label for Athletics and Swimming (426), a visible muscle definition label for Dexterity and Martial arts (422),
+and a negative visible muscle definition label for Cooking and Science (437).
+
 **Observed** in the original (1.0.68): the description shows the stat whose row (label or value, attribute or skill) is under the pointer, with
 no click. It keeps the last stat pointed at once the pointer leaves the rows, and a click pins nothing: pointing at another row shows that one.
 The description is empty each time the window opens, until the pointer reaches a row. Meitou: the same; a click on a row still shows it.
@@ -1178,8 +1187,12 @@ Overview tab 2 (`ResearchTab`), part of `ManagementScreen` (constructor `FUN_140
   label-less line below with the rest, joined by ", " (#444444 finished, Good queued, else Bad; "-" for none); then one line per record of `enable buildings`, `enable weapon type`,
   `enable weapon model`, `enable armour`, `enable item`, `enable crossbow`, `enable backpack`, `enable robotics`, labelled "New Building:", "New Weapon Class:", "New Weapons
   Grade:", "New Armour Type:", "New Items:", "New Crossbows:", "New Backpacks:", "New Robot Limbs:", the name in Good (`FUN_14048ebc0`).
-- Meitou: `ResearchQueueList` rows are plain text; a click on a line queues it, on a queue row takes it off; the wheel
-  scrolls the blueprint lines a line per notch (no bar drawn); the description lines use the DatapanelGUI row geometry; the DESCRIPTION captions are inset 8 px at 1080 (engine choice).
+- **Queue drag** (**Verified**, Kenshi 1.0.68, `FUN_1404b13b0`, `FUN_14049f320`, `FUN_1404c8dd0`): drop onto another queue row to move there.
+  The drop check tests every queued item's unmet requirements by swapping the two endpoints for the lookup. Each unmet requirement must be found
+  before the dependent's original index in that lookup. An accepted drop removes the dragged entry and reinserts it at the target index, keeping its progress.
+- Meitou: `ResearchQueueList` rows are plain text; a click on a blueprint queues it and a click on a queue row takes it off. Drag between queue rows
+  to reorder them. The wheel scrolls the blueprint lines a line per notch (no bar drawn). The description lines use the DatapanelGUI row geometry,
+  and the DESCRIPTION captions are inset 8 px at 1080 (engine choice).
 
 ### Craft tab
 

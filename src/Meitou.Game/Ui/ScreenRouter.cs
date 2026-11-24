@@ -220,8 +220,7 @@ sealed class ScreenRouter(PlayerInterface player)
         foreach (var tab in layout.Widgets.Where(w => w.Type == "TabItem"))
             b.Properties[tab.Name] = new Dictionary<string, string> { ["Visible"] = "true" };
         player.FactionWindow.BindFactionTab(b);
-        b.Text["MessagesTextBox"] = player.DialogueLog.MessagesText();
-        b.Properties["MessagesTextBox"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true", ["TextAlign"] = "Left Top" };
+        if (shown >= 0 && shown < tabs.Length && tabs[shown].Name == "MessagesTab") player.DialogueLog.Bind(b);
         player.SquadWindows.BindSquadsTab(b);
         player.Production.BindResearchTab(b);
         player.Production.BindCraftTab(b);

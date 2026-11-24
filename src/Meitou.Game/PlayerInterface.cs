@@ -1186,6 +1186,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public void MouseMove(Vector2 p)
     {
         Mouse = p;
+        Production.ResearchPointerMove(p);
         if (CharacterEditor.EditorPointerMove(p)) return;
         if (ScrollBars.ScrollThumbMove(p)) return;
         if (UiVisible && _uiHost.PointerMove(p)) return;
@@ -1203,7 +1204,9 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         Mouse = p;
         UiInput++;
         CharacterEditor.EditorPointerUp(button);
-        if (ContextMenuWindow.ContextMenuRelease(button, p)) return;
+        bool contextRelease = ContextMenuWindow.ContextMenuRelease(button, p);
+        if (button == MouseButton.Left) Production.ResearchPointerUp(p, contextRelease);
+        if (contextRelease) return;
         if (button == MouseButton.Left && GroundItemPicks.LabelPress is { } labelled)
         {
             GroundItemPicks.LabelPress = null;

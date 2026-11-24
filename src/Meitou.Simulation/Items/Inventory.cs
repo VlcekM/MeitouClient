@@ -196,10 +196,19 @@ public sealed class Inventory(int width, int height)
         int limit = inv.LimitOf(item);
         if (limit > 1)
             foreach (var other in inv.Items)
-                if (other.Section == section && SameStack(other, item) && other.Contents is null && other.Quantity < limit)
+                if (other.Section == section && SameStack(other, item) && other.Contents is null && other.Quantity < limit
+                    && ReceiptJoins(other, item))
                     return true;
         return inv.FindCell(section, item.Width, item.Height, out _, out _);
     }
+
+    /// <summary>
+    /// Whether <see cref="Add"/> lets <paramref name="item"/> join the stack <paramref name="kept"/> as far as trade receipts go
+    /// (<see cref="TopUp"/>): a stack without a receipt takes any unit (one with a receipt drops it as a last resort); a stack with one only units
+    /// of the same session.
+    /// </summary>
+    static bool ReceiptJoins(ItemInstance kept, ItemInstance item) =>
+        kept.Buyback is not { } receipt || item.Buyback is { } coming && receipt.Joins(coming);
 
     /// <summary>
     /// Whether two items may share a stack: same record, company and material (as <see cref="InventoryCommands.Stackable"/>, <c>FUN_14075d510</c>),

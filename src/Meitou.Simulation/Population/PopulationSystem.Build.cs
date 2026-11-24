@@ -163,11 +163,12 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// One squad: its plan from the factory and a rolled look for every human member. Pure given its arguments (any thread).
+    /// One squad: its plan from the factory (cut to <paramref name="cap"/> members when above 0, a code mod's spawn) and a rolled look for every
+    /// human member. Pure given its arguments (any thread).
     /// </summary>
-    BuiltSquad? BuildOne(SquadTemplate template, int townFactionIndex, FactionData? townFaction, ulong key, ulong seed, Vector2 position)
+    BuiltSquad? BuildOne(SquadTemplate template, int townFactionIndex, FactionData? townFaction, ulong key, ulong seed, Vector2 position, int cap = 0)
     {
-        var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, seed, key, States);
+        var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, seed, key, States).Capped(cap);
         if (plan.TotalMembers == 0) return null;
 
         // The squad's own faction (its template's) wins over the town's (section 4); its members' races are drawn from it, not from the town's
