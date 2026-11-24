@@ -45,7 +45,7 @@ public static class BuildingDescriptions
     };
 
     /// <summary>
-    /// <paramref name="record"/>'s description for the build window, translated; empty when it has none.
+    /// <paramref name="record"/>'s description for the build window, translated and as the mods' text sources show it; empty when it has none.
     /// </summary>
     public static string Of(GameRecord? record)
     {
@@ -53,7 +53,8 @@ public static class BuildingDescriptions
 
         // The field is capitalised, unlike an ITEM's description (Verified: every BUILDING of gamedata.base, Newwworld.mod and rebirth.mod carries
         // "Description"; 18 also carry a lowercase one, empty on all but one).
-        if (record.GetString("Description") is var own && !string.IsNullOrWhiteSpace(own)) return own;
+        if (record.GetString("Description") is var own && !string.IsNullOrWhiteSpace(own))
+            return ShownText.Record(record.StringId, own, Host.ShownFields.BuildingDescription);
 
         return Fallback(record.StringId);
     }

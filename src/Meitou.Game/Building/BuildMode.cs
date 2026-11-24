@@ -1158,11 +1158,11 @@ sealed class BuildMode(PlayerInterface player)
         var groups = BuildGroups();
         var group = CurrentGroup();
         var building = CurrentBuilding();
-        b.Lists["CategoriesList"] = [.. categories.Select(c => new UiListItem(c, c))];
+        b.Lists["CategoriesList"] = [.. categories.Select(c => new UiListItem(c, ShownCategory(c)))];
         b.SelectedItems["CategoriesList"] = category is null ? -1 : categories.ToList().IndexOf(category);
-        b.Lists["BuildingsList"] = [.. groups.Select(g => new UiListItem(g.Name, g.Name))];
+        b.Lists["BuildingsList"] = [.. groups.Select(g => new UiListItem(g.Name, ShownGroup(g)))];
         b.SelectedItems["BuildingsList"] = group is null ? -1 : Math.Clamp(_buildGroup, 0, groups.Count - 1);
-        b.Text["BuildingName"] = building?.Name ?? "";
+        b.Text["BuildingName"] = building is null ? "" : ShownText.Record(building.Id, building.Name);
         b.Text["DescriptionText"] = building is null || Services is null ? "" : Services.Description(building.Id);
         b.Properties["DescriptionText"] = new Dictionary<string, string>
         {
@@ -1248,7 +1248,7 @@ sealed class BuildMode(PlayerInterface player)
         if (Services is not { } host) return;
         if (CurrentBuilding() is { } building)
         {
-            var lines = BuildMenu.Stats(building, host.ItemName).Select(l => new PlayerInterface.HudLine(l.Label, l.Value)).ToList();
+            var lines = BuildMenu.Stats(building, host.ShownName).Select(l => new PlayerInterface.HudLine(l.Label, l.Value)).ToList();
             if (controls.FirstOrDefault(c => c.Name == "StatsPanel") is { } panel)
                 player.AddLines(controls, "StatsPanel", lines, MathF.Max(14, panel.Bounds.Height / 11));
         }
@@ -1528,10 +1528,35 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The name of a site's building, for the menu's title.
+    /// The name of a site's building, the game's text (the code mods' menu target and the test channel get it).
     /// </summary>
     internal string SiteName(BuildingSnapshot site) =>
         site.LevelPlacement is not null ? site.Name : Services?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
+
+    /// <summary>
+    /// <see cref="SiteName"/> as shown, for the menu's title and the panels: a building's record name as the mods' text sources show it; a level
+    /// building's name as the simulation's view gives it.
+    /// </summary>
+    internal string ShownSiteName(BuildingSnapshot site) =>
+        site.LevelPlacement is not null ? site.Name : ShownText.Record(site.Record, SiteName(site));
+
+    /// <summary>
+    /// Build category <paramref name="category"/> as the list shows it: the <c>building category</c> text of the first building of the catalog
+    /// that has it, as the mods' text sources show it.
+    /// </summary>
+    string ShownCategory(string category) =>
+        ShownText.Any && Services?.Menu.Catalog.FirstOrDefault(b => b.Category == category) is { } first
+            ? ShownText.Record(first.Id, category, Host.ShownFields.BuildingCategory)
+            : category;
+
+    /// <summary>
+    /// Build group <paramref name="group"/>'s name as the list shows it: its default member's name, or that member's <c>building group</c> text,
+    /// as the mods' text sources show it.
+    /// </summary>
+    static string ShownGroup(BuildGroup group) =>
+        !ShownText.Any ? group.Name
+            : group.Name == group.Default.Name ? ShownText.Record(group.Default.Id, group.Name)
+            : ShownText.Record(group.Default.Id, group.Name, Host.ShownFields.BuildingGroup);
 
     /// <summary>
     /// The verbs the selection has for a site (the original's building branch, docs/game/ui-input.md "Context menu verbs"): Build (2) for an
@@ -1836,7 +1861,7 @@ sealed class BuildMode(PlayerInterface player)
 
         _sitePending = null;
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == pending.Site.Id) is not { } site) return;
-        player.ContextMenuWindow.OpenMenu = player.ContextMenuWindow.Menu(SiteName(site), pending.At, SiteVerbs(site), OfferedJobs(site));
+        player.ContextMenuWindow.OpenMenu = player.ContextMenuWindow.Menu(ShownSiteName(site), pending.At, SiteVerbs(site), OfferedJobs(site));
     }
 
     /// <summary>

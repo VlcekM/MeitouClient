@@ -1169,7 +1169,7 @@ sealed partial class GameHost(
     {
         ui.FactionName = FactionNameOf;
         ui.OwnerName = (faction, town) => BuildingSync.OwnerName(faction, town);
-        ui.PlayerFactionName = () => ui.FactionName?.Invoke(Session.World.Player.Faction) ?? "";
+        ui.PlayerFactionName = () => ui.ShownFactionName(Session.World.Player.Faction) ?? "";
 
         // The rename's test (FUN_1402e7950, as RenameFactionCommand's): another faction of the data has the name.
         ui.FactionWindow.FactionNameTaken = name =>
@@ -1186,7 +1186,7 @@ sealed partial class GameHost(
             return [.. d.Relations.Factions
                 .Select((f, i) => (f, i))
                 .Where(p => p.i != own && known.Contains(p.i) && !p.f.NotReal && p.f.Id != "GENERATION_TEMPLATE_FACTION")
-                .Select(p => new FactionListRow(p.i, p.f.Name, d.Relations.Get(own, p.i)))];
+                .Select(p => new FactionListRow(p.i, d.Db.ShownName("faction", p.f.Id, p.f.Name), d.Relations.Get(own, p.i)))];
         };
 
         // Its info panel's contracts and events, read from the live world as the list above is (a collection changed mid-read shows the panel empty
@@ -1256,7 +1256,7 @@ sealed partial class GameHost(
                 return null;
 
             var revealed = Simulation.Items.MapItems.Reveals(d, map, Session.CurrentSnapshot.Towns, Session.World.Seed);
-            return [.. revealed.Select(i => d.Sites[i].Town.Name)];
+            return [.. revealed.Select(i => ShownText.Record(d.Sites[i].Town.Id, d.Sites[i].Town.Name))];
         };
     }
 
@@ -1269,14 +1269,14 @@ sealed partial class GameHost(
 
         var faction = d.Factions[town];
         if (Session.World.Player.Faction is not (>= 0 and var mine))
-            return new MapFaction(faction.Name, 0, MapStanding.Neutral, faction.NotReal);
+            return new MapFaction(d.Db.ShownName("faction", faction.Id, faction.Name), 0, MapStanding.Neutral, faction.NotReal);
 
         float relation = d.Relations.Get(mine, town);
         var standing = town == mine ? MapStanding.Player
             : d.Relations.IsAlly(mine, town) ? MapStanding.Ally
             : relation < -30 ? MapStanding.Enemy
             : MapStanding.Neutral;
-        return new MapFaction(FactionNameOf(town) ?? faction.Name, relation, standing, faction.NotReal);
+        return new MapFaction(d.Db.ShownName("faction", faction.Id, FactionNameOf(town) ?? faction.Name), relation, standing, faction.NotReal);
     }
 
     /// <summary>
@@ -1285,7 +1285,7 @@ sealed partial class GameHost(
     void ConnectItems(PlayerInterface ui)
     {
         ui.ArmourOf = record => PopData?.Combat.Armour(record);
-        ui.RecordName = id => PopData?.Db.Find(id)?.Name;
+        ui.RecordName = id => PopData?.Db.Find(id)?.ShownName();
         ui.PopulationOf = () => PopData;
         ui.PricesOf = PriceLookup();
         ui.GroundItemPicks.ArtifactOf = id => PopData?.Db.Find(id)?.GetBool("artifact") == true;

@@ -670,8 +670,9 @@ sealed class HudPanels(PlayerInterface player)
             return;
         }
 
-        string faction = player.FactionName?.Invoke(lead.Faction) ?? "";
-        player.AddLines(controls, "NameText", [new(lead.Name, faction, PlayerInterface.TitleColour, PlayerInterface.TitleColour)], row, sidePixels);
+        string faction = player.ShownFactionName(lead.Faction) ?? "";
+        player.AddLines(controls, "NameText", [new(player.ShownName(lead), faction, PlayerInterface.TitleColour, PlayerInterface.TitleColour)], row,
+            sidePixels);
         player.AddLines(controls, "StateText", StateLines(lead, player.SpeedUnit), row, sidePixels);
         if (TooltipRuntime.ShowsBountyPanel(lead))
             player.AddLines(controls, "BountyText", [TooltipRuntime.StatusLine(lead) ?? TooltipRuntime.BountyLine(lead.Bounties)], row, sidePixels);

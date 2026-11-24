@@ -595,8 +595,10 @@ sealed class WorldMap(PlayerInterface player)
             {
                 if ((snapshot.Towns[i] & TownKnowledge.Discovered) != 0 && towns[i].Town.Type is not (TownType.NestMarker or TownType.Null))
                 {
-                    AddPlace(ref frame, "map-town-" + i, towns[i].Town.Type, towns[i].Town.Name, towns[i].Town.UnexploredName, towns[i].Town.Faction,
-                        towns[i].Position, snapshot.Towns[i]);
+                    var town = towns[i].Town;
+                    AddPlace(ref frame, "map-town-" + i, town.Type, ShownText.Record(town.Id, town.Name),
+                        ShownText.Record(town.Id, town.UnexploredName, Host.ShownFields.UnexploredName), town.Faction, towns[i].Position,
+                        snapshot.Towns[i]);
                 }
             }
         }
@@ -610,7 +612,8 @@ sealed class WorldMap(PlayerInterface player)
         // The player's outposts: TOWN player_town_template (type 1), in the same town list, made discovered and explored (FUN_140934e10).
         foreach (var outpost in snapshot.Outposts)
         {
-            AddPlace(ref frame, "map-outpost-" + outpost.Number, TownType.Outpost, outpost.Name, "", MapFactionId?.Invoke(outpost.Owner),
+            AddPlace(ref frame, "map-outpost-" + outpost.Number, TownType.Outpost,
+                player.ShownName("outpost", Simulation.Construction.PlayerTown.Template, outpost.Name), "", MapFactionId?.Invoke(outpost.Owner),
                 outpost.Position, TownKnowledge.Discovered | TownKnowledge.Explored);
         }
     }

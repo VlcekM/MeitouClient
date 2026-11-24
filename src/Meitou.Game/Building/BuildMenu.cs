@@ -80,7 +80,8 @@ public sealed class BuildMenu(IReadOnlyList<BuildingBuildData> catalog)
 /// the town gives none; <paramref name="PublicDay"/> / <paramref name="PublicNight"/> are the state's flags; <paramref name="Turret"/> marks a town's
 /// turret building (<c>TownBuilding.Turret</c>); <paramref name="Pieces"/> are the furniture standing in it that a click selects
 /// (<c>TownBuilding.Pieces</c>), none once it is bought or ruined; <paramref name="Machine"/> marks a town's building whose record is a machine
-/// its workers operate (a farm, a mine, a refinery: <c>ProductionSystem.TownWork</c>).
+/// its workers operate (a farm, a mine, a refinery: <c>ProductionSystem.TownWork</c>). The name, type, town and owner are as the mods' text sources
+/// show them (display only).
 /// </summary>
 public sealed record WorldBuildingInfo(
     string Name,
@@ -108,6 +109,11 @@ public sealed class BuildServices
     /// An ITEM record's name.
     /// </summary>
     public required Func<string, string> ItemName { get; init; }
+    /// <summary>
+    /// Record <paramref name="id"/>'s name (<see cref="ItemName"/>) as the mods' text sources show it (<see cref="ShownText.Record"/>); display
+    /// only.
+    /// </summary>
+    public string ShownName(string id) => ShownText.Record(id, ItemName(id));
     /// <summary>
     /// A BUILDING's description text.
     /// </summary>

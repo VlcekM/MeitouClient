@@ -164,7 +164,7 @@ sealed class TradeWindows(PlayerInterface player)
     internal void BindTraderScreen(UiBindings b)
     {
         var trade = player.Session.CurrentSnapshot.Trade;
-        b.Text["Root"] = trade?.TraderName.ToUpperInvariant() ?? "TRADER";
+        b.Text["Root"] = trade is null ? "TRADER" : player.ShownName(trade.Trader, trade.TraderName).ToUpperInvariant();
         b.Properties["datapanel"] = new Dictionary<string, string> { ["SkipCaption"] = "true" };
         b.Disabled.Remove("ArrangeButton");
         b.Actions["ArrangeButton"] = "ArrangeButton";
@@ -565,7 +565,7 @@ sealed class TradeWindows(PlayerInterface player)
             bool ticked = _characterTradeTicked.Contains(row.Character);
             string prefix = "character-row-" + i.ToString(CultureInfo.InvariantCulture) + "-";
             var b = new UiBindings { TemplateScale = player.UiScale };
-            b.Text["NameTextBox"] = row.Name;
+            b.Text["NameTextBox"] = player.ShownName(row.Character, row.Name);
             b.Text["PriceTextBox"] = "c." + Money(row.Price);
             b.Actions["CheckBox"] = "character-tick:" + i.ToString(CultureInfo.InvariantCulture);
             b.Properties["CheckBox"] = new Dictionary<string, string>
@@ -845,7 +845,7 @@ sealed class TradeWindows(PlayerInterface player)
             ? body?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach") is { } bag
                 ? player.ShownItemName(bag.Record, bag.Name, bag.ModTag)
                 : "BACKPACK"
-            : body?.Name ?? "INVENTORY";
+            : body is null ? "INVENTORY" : player.ShownName(body);
         b.Text["Root"] = caption.ToUpperInvariant();
 
         if (id == "loot-bag")

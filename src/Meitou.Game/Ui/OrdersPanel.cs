@@ -232,24 +232,24 @@ sealed class OrdersPanel(PlayerInterface player)
         if (job.Type == Data.Gameplay.Ai.TaskType.JobBuilder) return text;
 
         if (job.Site is { } id && player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { } site)
-            return text + ": " + player.Build.SiteName(site);
+            return text + ": " + player.Build.ShownSiteName(site);
 
         // A rock is no registry building: its id names its BUILDING (an Iron Ore deposit, a Stone outcrop).
         if (job.Site is { } rockId && Simulation.Production.ProductionSystem.NaturalRecord(rockId) is { } rock)
-            return text + ": " + (player.Build.Services?.ItemName(rock) ?? rock);
+            return text + ": " + (player.Build.Services?.ShownName(rock) ?? rock);
 
         // A town building's machine (a well, a farm: townwork:<key>) is no registry building either: its machine names its BUILDING (#1039).
         if (player.Production.Machine(job.Site) is { IsContainer: false } machine)
-            return text + ": " + (player.Build.Services?.ItemName(machine.Record) ?? machine.Record);
+            return text + ": " + (player.Build.Services?.ShownName(machine.Record) ?? machine.Record);
 
         if (job.Site is { } dummyId && player.Session.CurrentSnapshot.Dummies.FirstOrDefault(d => d.Id == dummyId) is { } dummy)
-            return text + ": " + (player.Build.Services?.ItemName(dummy.Record) ?? dummy.Record);
+            return text + ": " + (player.Build.Services?.ShownName(dummy.Record) ?? dummy.Record);
 
         // A job per target (TaskData +8: Bodyguard, Staying close) names its character (docs/game/ui-screens.md, jobs list); Obedient Slave does not.
         if (!job.Character.IsNone && Simulation.Production.PermaJobs.PerTarget(job.Type)
             && player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == job.Character) is { Name.Length: > 0 } target)
         {
-            return text + ": " + target.Name;
+            return text + ": " + player.ShownName(target);
         }
 
         return text;

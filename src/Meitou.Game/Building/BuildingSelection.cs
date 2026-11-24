@@ -98,8 +98,8 @@ sealed class BuildingSelection(PlayerInterface player)
     /// </summary>
     internal SelectedBuilding SiteBuilding(Simulation.Construction.BuildingSnapshot site)
     {
-        var name = player.Build.SiteName(site);
-        var owner = player.FactionName?.Invoke(player.Session.World.Player.Faction);
+        var name = player.Build.ShownSiteName(site);
+        var owner = player.ShownFactionName(player.Session.World.Player.Faction);
         var footprint = player.Build.Services?.Placement.Footprint(site.Record) ?? player.Build.Services?.Placement.Plot(site.Record);
         var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
         var hull = footprint is { } f ? f.Place(site.Position, rotation) : null;
@@ -196,7 +196,7 @@ sealed class BuildingSelection(PlayerInterface player)
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => IsSiteOf(s, hit.Id)) is { } site)
             return (SiteBuilding(site), hit.T);
 
-        var name = player.Build.Services?.ItemName(hit.Record) ?? hit.Record;
+        var name = player.Build.Services?.ShownName(hit.Record) ?? hit.Record;
         var owner = OwnerOf(hit.Owner, hit.Town);
         var town = TownOf(hit.House, hit.Position);
         return (new SelectedBuilding(name, null, owner, town, null, hit.Id, hit.Position, null, Record: hit.Record), hit.T);
@@ -237,7 +237,7 @@ sealed class BuildingSelection(PlayerInterface player)
 
         var info = host.WorldInfo(hit.House);
         var (id, record) = (hit.Piece.Id, hit.Piece.RecordId);
-        return (new SelectedBuilding(host.ItemName(record), null, info.Owner, info.Town, null, id, hit.Piece.Position, null, Record: record), hit.T);
+        return (new SelectedBuilding(host.ShownName(record), null, info.Owner, info.Town, null, id, hit.Piece.Position, null, Record: record), hit.T);
     }
 
     /// <summary>
@@ -258,7 +258,7 @@ sealed class BuildingSelection(PlayerInterface player)
         if (best is not { } hit) return null;
 
         var c = hit.Camp;
-        var name = c.Name.Length > 0 ? c.Name : host.ItemName(c.Record);
+        var name = c.Name.Length > 0 ? c.Name : host.ShownName(c.Record);
         return (new SelectedBuilding(name, null, OwnerOf(c.Owner, c.CampTown), null, null, c.Id, c.Position, null, Record: c.Record), hit.T);
     }
 
@@ -266,7 +266,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// The owner the name bar shows for <paramref name="faction"/> in <paramref name="town"/> (<see cref="PlayerInterface.OwnerName"/>).
     /// </summary>
     string? OwnerOf(int faction, Simulation.Locks.FixtureTown town) =>
-        player.OwnerName is { } shown ? shown(faction, town) : player.FactionName?.Invoke(faction);
+        player.OwnerName is { } shown ? shown(faction, town) : player.ShownFactionName(faction);
 
     /// <summary>
     /// Where the ray meets the camp building <paramref name="camp"/> before <paramref name="ground"/>; null when it misses, it is a bed, or a
@@ -595,12 +595,12 @@ sealed class BuildingSelection(PlayerInterface player)
         string? owner = focus.Owner;
         if (rock)
         {
-            owner = inspected is { Owner: >= 0 and var by } ? player.FactionName?.Invoke(by)
+            owner = inspected is { Owner: >= 0 and var by } ? player.ShownFactionName(by)
                 : player.RecordName?.Invoke(Simulation.Factions.SquadManagement.DismissFallbackFaction);
         }
 
         var name = detail?.Bed?.Name ?? focus.Name;
-        var value = mine ? player.FactionName?.Invoke(player.Session.World.Player.Faction) ?? "" : owner ?? "";
+        var value = mine ? player.ShownFactionName(player.Session.World.Player.Faction) ?? "" : owner ?? "";
         return new PlayerInterface.HudLine(name, value, PlayerInterface.TitleColour, PlayerInterface.TitleColour);
     }
 
@@ -677,7 +677,7 @@ sealed class BuildingSelection(PlayerInterface player)
         var snapshot = player.Session.CurrentSnapshot;
         if (UnlockedUpgradeOf?.Invoke(site.Record, false, snapshot.UnlockedBuildings) is { } up && DataOf(up) is { } higher)
         {
-            var tip = new StringBuilder($"{Loc.Tr("Upgrades To:")} {higher.Name}");
+            var tip = new StringBuilder($"{Loc.Tr("Upgrades To:")} {ShownText.Record(higher.Id, higher.Name)}");
             AppendOwed(tip, higher, site.Materials);
             if (PowerOutput?.Invoke(up) - PowerOutput?.Invoke(site.Record) is { } power and not 0)
                 tip.Append(CultureInfo.InvariantCulture, $"\n{Loc.Tr("Power")} {power}");
@@ -688,8 +688,8 @@ sealed class BuildingSelection(PlayerInterface player)
         if (!site.Complete && DowngradeOf?.Invoke(site.Record) is { } down && DataOf(down) is { } lower)
         {
             var downgradeCaption = $"[{Loc.Tr("Downgrade").ToUpper(CultureInfo.CurrentCulture)}]";
-            state.Add(new("", downgradeCaption, ValueColour: PlayerInterface.MainColour, Tooltip: $"{Loc.Tr("Downgrade To:")} {lower.Name}",
-                Action: "meitou:building-downgrade"));
+            state.Add(new("", downgradeCaption, ValueColour: PlayerInterface.MainColour,
+                Tooltip: $"{Loc.Tr("Downgrade To:")} {ShownText.Record(lower.Id, lower.Name)}", Action: "meitou:building-downgrade"));
         }
     }
 
@@ -705,7 +705,7 @@ sealed class BuildingSelection(PlayerInterface player)
         if (UnlockedUpgradeOf?.Invoke(site.Record, true, snapshot.UnlockedBuildings) is not { } up || DataOf(up) is not { } higher) return;
 
         var wall = site.WallParent is { } parent ? snapshot.Buildings.FirstOrDefault(s => s.Id == parent) ?? site : site;
-        var tip = new StringBuilder($"{Loc.Tr("Upgrades To:")} {higher.Name}");
+        var tip = new StringBuilder($"{Loc.Tr("Upgrades To:")} {ShownText.Record(higher.Id, higher.Name)}");
         AppendOwed(tip, higher, wall.Materials);
         state.Add(new("Upgradeable to:", UpgradeCaption(), ValueColour: PlayerInterface.GoodColour, Tooltip: tip.ToString(),
             Action: "meitou:building-upgrade"));
@@ -730,7 +730,7 @@ sealed class BuildingSelection(PlayerInterface player)
             had[cost.Item] = had.GetValueOrDefault(cost.Item) - delivered;
             if (cost.Required - delivered <= 0) continue;
 
-            var itemName = player.Build.Services?.ItemName(cost.Item) ?? cost.Item;
+            var itemName = player.Build.Services?.ShownName(cost.Item) ?? cost.Item;
             var owed = (cost.Required - delivered).ToString("0.##", CultureInfo.InvariantCulture);
             tip.Append(CultureInfo.InvariantCulture, $"\n      {itemName} +{owed}");
         }
@@ -881,7 +881,7 @@ sealed class BuildingSelection(PlayerInterface player)
                 string need = m.Delivered >= m.Required ? Loc.Tr("All necessary materials are ready.")
                     : Loc.Tr("{1} more 'Building Materials' will be needed to complete this construction.",
                         (m.Required - m.Delivered).ToString("0.##", CultureInfo.InvariantCulture));
-                var itemName = player.Build.Services?.ItemName(m.Item) ?? m.Item;
+                var itemName = player.Build.Services?.ShownName(m.Item) ?? m.Item;
                 rows.Add(Bar(itemName, share, $"{(int)m.Delivered}/{(int)m.Required}", need));
             }
         }

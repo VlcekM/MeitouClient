@@ -159,11 +159,11 @@ sealed class ScreenRouter(PlayerInterface player)
     /// </summary>
     void BindCharacterWindow(string id, UiBindings b, MyGuiLayout layout, CharacterSnapshot? lead, bool pinned)
     {
-        b.Text["Root"] = id == "stats" ? lead?.Name.ToUpperInvariant() ?? "CHARACTER STATS"
+        b.Text["Root"] = id == "stats" ? (lead is null ? null : player.ShownName(lead).ToUpperInvariant()) ?? "CHARACTER STATS"
             : id == "bag" ? lead?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach") is { } bag
                 ? player.ShownItemName(bag.Record, bag.Name, bag.ModTag).ToUpperInvariant()
                 : "BACKPACK"
-            : id == "limbs" ? "LIMBS" : lead?.Name.ToUpperInvariant() ?? "INVENTORY";
+            : id == "limbs" ? "LIMBS" : (lead is null ? null : player.ShownName(lead).ToUpperInvariant()) ?? "INVENTORY";
         if (id == "limbs")
         {
             b.Text["lbLeftArm"] = "-ARMS-";
