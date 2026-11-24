@@ -6244,3 +6244,11 @@ msgstr "尸体上方的苍蝇只有在近处才能听到，不会传遍整个基
 #. machine-translated
 msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
 msgstr "尸体苍蝇能被听到的距离，相对于游戏中的距离：调低则听到得更少，调高则更多。"
+
+#. machine-translated
+msgid "Guards give up lost suspects"
+msgstr "守卫放弃跟丢的嫌疑人"
+
+#. machine-translated
+msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
+msgstr "跟丢了正在逮捕的角色的守卫会放弃并回到自己的职责。原版游戏会让他无论角色在哪里都重新开始战斗，因此他可能径直跑向躲在视线之外的人。"

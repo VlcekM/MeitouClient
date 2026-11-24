@@ -5411,3 +5411,11 @@ msgstr "死体にたかるハエの羽音は近くでのみ聞こえ、拠点の
 #. machine-translated
 msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
 msgstr "死体のハエが聞こえる距離（ゲームの距離に対する割合）：下げると聞こえにくく、上げると遠くまで聞こえます。"
+
+#. machine-translated
+msgid "Guards give up lost suspects"
+msgstr "見失った容疑者を衛兵があきらめる"
+
+#. machine-translated
+msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
+msgstr "逮捕しようとしていたキャラクターを見失った衛兵は、あきらめて持ち場に戻ります。ゲームではキャラクターがどこにいても戦いを再開するため、見えない場所に隠れている相手のもとへまっすぐ走っていくことがあります。"

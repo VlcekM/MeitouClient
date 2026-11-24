@@ -200,6 +200,10 @@ msgid "A guard picks up a knocked-out prisoner only when a cage is free for them
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "A key of the mod {1}: {2}."
 msgstr ""
 
@@ -2083,6 +2087,10 @@ msgstr ""
 
 #: src/Meitou.Game/Building/BuildingDescriptions.cs
 msgid "Grows riceweed indoors, safe from the weather. Needs power and water."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Guards give up lost suspects"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs

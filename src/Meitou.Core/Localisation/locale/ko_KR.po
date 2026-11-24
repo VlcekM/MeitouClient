@@ -5411,3 +5411,11 @@ msgstr "시체 위 파리 소리가 가까이에서만 들리고 기지 반대�
 #. machine-translated
 msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
 msgstr "시체 파리 소리가 들리는 거리(게임 거리 대비): 낮추면 덜 들리고, 높이면 더 멀리서 들립니다."
+
+#. machine-translated
+msgid "Guards give up lost suspects"
+msgstr "경비병이 놓친 용의자를 포기"
+
+#. machine-translated
+msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
+msgstr "체포하던 캐릭터를 놓친 경비병은 포기하고 원래 임무로 돌아갑니다. 게임에서는 캐릭터가 어디에 있든 다시 싸움을 시작하므로, 보이지 않는 곳에 숨은 사람에게 곧장 달려갈 수 있습니다."

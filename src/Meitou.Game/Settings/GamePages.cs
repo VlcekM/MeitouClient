@@ -632,6 +632,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end.",
             Toggle: new("Guards stop passing bodies", () => menu.Config.FixArrestLifts, v => menu.Config.FixArrestLifts = v, Remaster: true,
                 OnOff: true)));
+        result.Add(new("Guards give up lost suspects",
+            "A guard who loses sight of the character he was arresting gives up and goes back to his duties. "
+            + "The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight.",
+            Toggle: new("Guards give up lost suspects", () => menu.Config.FixArrestChases, v => menu.Config.FixArrestChases = v, Remaster: true,
+                OnOff: true)));
         result.Add(new("Door break sound",
             "Doors and gates make their breaking sound when they are bashed or broken open. "
             + "The game never picks which breaking sound to play, so it plays none.",

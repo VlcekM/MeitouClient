@@ -394,6 +394,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixArrestLifts { get; set; } = true;
     /// <summary>
+    /// An arrest's guard who lost his target (his senses hold none of it once his fight stopped) gives the arrest up (Fixes settings; off: he takes
+    /// the fight up again however far the target is, as the game does; read at load; <c>ArrestSettings.LostFix</c>).
+    /// </summary>
+    public bool FixArrestChases { get; set; } = true;
+    /// <summary>
     /// Wild animals and homeless squads keep their characters while their area is unloaded (Advanced settings; Faithful off: removed and made anew,
     /// as the game does).
     /// </summary>

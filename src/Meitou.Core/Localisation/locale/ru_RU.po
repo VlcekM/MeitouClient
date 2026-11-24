@@ -5415,3 +5415,11 @@ msgstr "Мух над трупами слышно только вблизи, а 
 #. machine-translated
 msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
 msgstr "Как далеко слышно мух над трупами, от расстояния в игре: ниже — слышно меньше, выше — больше."
+
+#. machine-translated
+msgid "Guards give up lost suspects"
+msgstr "Стражники отказываются от потерянных подозреваемых"
+
+#. machine-translated
+msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
+msgstr "Стражник, потерявший из виду персонажа, которого арестовывал, сдаётся и возвращается к своим обязанностям. В игре он снова вступает в бой, где бы ни был персонаж, и может прибежать прямо к тому, кто прячется вне поля зрения."

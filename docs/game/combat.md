@@ -741,7 +741,7 @@ which its next update (`FUN_14050d920` → `FUN_14050d7d0`) consumes by dropping
   - the chaser has no sense entry for the target → give up;
   - the target is neither seen nor heard (entry `+0x38`/`+0x39`) and its last sighting is older than 12 units, or the chaser
     stands within 60 of where it was last sensed (squared 3600) → give up.
-  - Giving up ends the task, fires dialogue event 60 GIVE_UP_CHASE from the chaser at the target and resets the AI's plan. Meitou (`AggroSystem.ResetPlan`): both resets clear the chaser's plan and commitment and ask for a new think; `vfunc_1` is `FUN_14033a800`, called from the `Task_MeleeAttack` update `FUN_14034ca40` (not `FUN_14034c7c0`, `Task_PlayerTalkto`).
+  - Giving up ends the task, fires dialogue event 60 GIVE_UP_CHASE from the chaser at the target and resets the AI task system (`FUN_1405074a0`, both resets, **Verified** decompile of `FUN_14034ca40` and `FUN_14033a800`: it empties the order queue `+0x38` and the second list `+0x70`/`+0x78` and force-clears the current goal `+0x1c0`, so an ordered chase, an arrest's, leaves with its order). Meitou (`AggroSystem.ResetPlan` → `PlayerOrders.Wipe`): both resets clear the chaser's orders, second list, plan, commitment and goal and ask for a new think; `vfunc_1` is `FUN_14033a800`, called from the `Task_MeleeAttack` update `FUN_14034ca40` (not `FUN_14034c7c0`, `Task_PlayerTalkto`).
 - Time: the world clock is in game hours; the sense-age unit is hours × 3600 / 33 × 0.5 (`FUN_140852150`, `FUN_14033a170`),
   so 12 = 13.2 game minutes, about 24 s real at 1x ([game loop](game-loop.md#the-three-time-values)).
 - So a player's character never gives up a path chase by this rule, and an NPC on open ground (no path chase) keeps

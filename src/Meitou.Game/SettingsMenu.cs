@@ -1644,6 +1644,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Player.FixLockpickLabel = Config.FixLockpickLabel = true;
         Config.FixRaidClocks = true;
         Config.FixArrestLifts = true;
+        Config.FixArrestChases = true;
         Config.FixGround = true;
         OffscreenChanged?.Invoke();
         Config.Audio = new();

@@ -2933,15 +2933,16 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
 
         s.ChaseStart = -1;
-        ResetPlan(cold);   // the caller ends the task and resets the plan (FUN_14034ca40:36-48): the next think plans afresh
+        ResetPlan(cold);   // the caller ends the task and resets the AI task system (FUN_14034ca40:36-48): the next think plans afresh
         world.Defer(new StopCommand([table.IdOf(i)]) { Tick = world.Tick + 1 });
         world.Defer(new Dialogue.DialogueEvent(table.IdOf(i), table.IdOf(t), 60) { Tick = world.Tick + 1 });
     }
 
     /// <summary>
-    /// The plan reset (<c>FUN_1405074a0</c>): the pending steps and the committed goal are dropped, so the next think chooses again.
+    /// The AI task system's reset (<c>FUN_1405074a0</c>, <b>Verified</b>): the order queue, the second list, the pending steps and the current goal
+    /// go (<see cref="PlayerOrders.Wipe"/>), so the next think chooses again; an order's chase (an arrest's) leaves with its order.
     /// </summary>
-    static void ResetPlan(CharacterCold cold) => cold.Ai?.ResetPlan();
+    static void ResetPlan(CharacterCold cold) => PlayerOrders.Wipe(cold);
 
     #endregion
 

@@ -56,6 +56,11 @@ public sealed record ArrestSettings
     /// </summary>
     public bool LiftFix { get; init; } = true;
     /// <summary>
+    /// Fixes option (Meitou, on by default): an arrest whose fight stopped while the guard's senses hold no entry of the target gives up
+    /// (<see cref="ArrestSystem.LostTarget"/>, #1312). Off: the fight starts again however far the target is, as the game does.
+    /// </summary>
+    public bool LostFix { get; init; } = true;
+    /// <summary>
     /// Keep a <see cref="ArrestSystem.Log"/> (tests).
     /// </summary>
     public bool RecordLog { get; init; }
@@ -1151,18 +1156,27 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// The fight: once the target is down the guard lifts it; a fight that stopped with the target still up starts again, however far it is. The
     /// order stays queued and is planned again each update (<c>FUN_140510920</c> pops it only on its desire or its done test; a failed step pops
     /// the front only when it is the order's own row, <c>FUN_140506b10</c> comparing the task type, so the fight row 4 ending pops nothing,
-    /// <b>Verified</b>), and its need 7 plans the fight again. Only the town needs (113, 95) or a new order stop it.
+    /// <b>Verified</b>), and its need 7 plans the fight again. Only the town needs (113, 95) or a new order stop it; with the Fixes option
+    /// <see cref="ArrestSettings.LostFix"/> also a target the guard lost (<see cref="LostTarget"/>).
     /// </summary>
     bool StepFight(World world, Arrest a, int g, int t, CharacterCold gc, CharacterCold tc, ref CharacterHot gn, float dt)
     {
         if (tc.Medical is { Incapacitated: true }) return StepTargetDown(world, a, g, gc, dt);
-        if (gn.Task != (byte)CharacterTask.Attack && !gc.InCombat && a.Time >= 1)
-        {
-            a.Time = 0;
-            Attack(world, g, t);
-        }
+        if (gn.Task == (byte)CharacterTask.Attack || gc.InCombat || a.Time < 1) return true;
+        if (LostTarget(world, g, a.Target)) return End(world, a, ArrestEventKind.GaveUp);
+
+        a.Time = 0;
+        Attack(world, g, t);
         return true;
     }
+
+    /// <summary>
+    /// Whether the Fixes option <see cref="ArrestSettings.LostFix"/> ends the arrest of <paramref name="target"/> by the guard at <paramref name="g"/>:
+    /// his senses hold no entry of it (<see cref="CharacterFacts.Knows"/>, the test that ended his fight, <c>CombatSystem.NothingLeft</c>). Meitou fix
+    /// (#1312): the original plans the fight again at any distance, and with Meitou's end of a fight on a lost target the guard ran straight to a
+    /// culprit who had slipped away unseen; now the order leaves the queue and he goes back to his routine.
+    /// </summary>
+    bool LostTarget(World world, int g, CharacterId target) => Settings.LostFix && !CharacterFacts.Knows(world, g, target);
 
     /// <summary>
     /// The target is down: the guard lifts it, weapons and all (the order's list B has no 118 TARGET_IS_UNARMED), giving up after 10 s of failed

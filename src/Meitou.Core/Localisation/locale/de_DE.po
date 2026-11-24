@@ -5413,3 +5413,11 @@ msgstr "Die Fliegen über Leichen sind nur in ihrer Nähe zu hören, nicht quer 
 #. machine-translated
 msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
 msgstr "Wie weit die Leichenfliegen zu hören sind, gemessen an der Entfernung im Spiel: niedriger, um sie weniger zu hören, höher für mehr."
+
+#. machine-translated
+msgid "Guards give up lost suspects"
+msgstr "Wachen geben verlorene Verdächtige auf"
+
+#. machine-translated
+msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
+msgstr "Eine Wache, die den Charakter aus den Augen verliert, den sie verhaften wollte, gibt auf und kehrt zu ihren Aufgaben zurück. Im Spiel nimmt sie den Kampf wieder auf, wo immer der Charakter ist, und kann so geradewegs zu jemandem laufen, der sich außer Sicht versteckt."

@@ -5413,3 +5413,11 @@ msgstr "Le mosche sopra i cadaveri si sentono solo da vicino, non da un capo all
 #. machine-translated
 msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
 msgstr "Fin dove si sentono le mosche dei cadaveri, rispetto alla distanza del gioco: più basso per sentirle meno, più alto per sentirle di più."
+
+#. machine-translated
+msgid "Guards give up lost suspects"
+msgstr "Le guardie rinunciano ai sospetti persi"
+
+#. machine-translated
+msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
+msgstr "Una guardia che perde di vista il personaggio che stava arrestando rinuncia e torna ai suoi compiti. Il gioco le fa riprendere lo scontro ovunque si trovi il personaggio, così può correre dritta verso qualcuno nascosto fuori vista."

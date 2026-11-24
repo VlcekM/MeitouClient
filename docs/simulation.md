@@ -1355,7 +1355,10 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   stopping with the target up (it ran off, the guard lost it) starts it again at any distance: the order stays queued and is planned again each update,
   its need 7 planning the fight anew (the order step `FUN_140510920` pops it only on its desire or done test; a failed step pops the front only when it
   is the order's own row, `FUN_140506b10` comparing the task type, so the fight row ending pops nothing, **Verified**); only 113 / 95 above or a new order
-  stop it. The downed target is lifted whether or not a cage is free (240's list B and desire ask for none) and snatched from any carrier outside the
+  stop it. Meitou fix, Fixes option **Guards give up lost suspects** (`ArrestSettings.LostFix`, on by default, read at load): a fight that stopped
+  while the guard's senses hold no entry of the target (the test `CombatSystem.NothingLeft` ended it by) ends the arrest and the order leaves the queue,
+  so a culprit who slipped away unseen is not run down by a guard who knows nowhere to look (#1312); off starts the fight again as the original does.
+  The downed target is lifted whether or not a cage is free (240's list B and desire ask for none) and snatched from any carrier outside the
   guard's squad, of his faction too; while a member of his own squad carries it, 240's desire (AI slot 59, `FUN_14059e1a0`: the carrier hand's
   container id and serial, `+0xc` / `+0x10` as `FUN_1400d1c20` writes them, are the guard's platoon's) is 0 and the order leaves the queue, then the 112 behind it with nothing carried (**Verified**). So at a full station
   guards can pass one body round. Meitou fix, Fixes option **Guards stop passing bodies** (`ArrestSettings.LiftFix`, on by default, read at load):

@@ -5413,3 +5413,11 @@ msgstr "Les mouches au-dessus des cadavres ne s'entendent que de près, pas d'un
 #. machine-translated
 msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
 msgstr "Jusqu'où s'entendent les mouches des cadavres, par rapport à la distance du jeu : plus bas pour les entendre moins, plus haut pour plus."
+
+#. machine-translated
+msgid "Guards give up lost suspects"
+msgstr "Les gardes abandonnent les suspects perdus"
+
+#. machine-translated
+msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
+msgstr "Un garde qui perd de vue le personnage qu'il arrêtait abandonne et retourne à ses tâches. Le jeu lui fait reprendre le combat où que soit le personnage, si bien qu'il peut courir droit vers quelqu'un caché hors de sa vue."
