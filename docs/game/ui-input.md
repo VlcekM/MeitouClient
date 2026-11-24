@@ -433,7 +433,7 @@ hover and clicks share one pick.
 **Ray** (**Observed**, `FUN_1409b3910`, `FUN_1409b37a0`): a PhysX raycast through all shapes from the camera through the cursor, group mask
 `0xffffde7f` (every [collision group](../formats/collision.md#collision-groups-observed-fun_14055f6e0-and-the-loaders) except 7, 8 and 13, the
 interior-mask hulls); the hits are sorted nearest first (**Verified**, comparator `FUN_1409b1820` by disassembly: ascending distance at hit
-+0x24). Buildings are therefore picked by their collision shapes; a part without collision cannot be clicked. The walk over the hits
++0x24). Buildings are therefore picked by their collision shapes, which hang on the building's node with its whole turn ([collision](../formats/collision.md#placement-and-groups)), a slope it was placed at included; a part without collision cannot be clicked. Meitou picks a tilted site by its collision so turned (`WorldPicking.Tilted`, `TiltedBuildingRayT`; #1334: a Defensive Wall Ramp III placed at a 14 degree slope, picked upright, could not be clicked where it was drawn). The walk over the hits
 (`FUN_140800250`, **Observed**) stops at the first decisive one:
 
 | Hit groups | Result |
