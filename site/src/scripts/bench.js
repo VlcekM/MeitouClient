@@ -797,6 +797,7 @@
     const items = keys.map((k) => machineData(k, lines[k], metric));
     sortMachines(items);
 
+    const showRes = state.version === 0;
     const cols = [
       { id: "machine", label: "Machine", cls: "", num: false },
       { id: "platform", label: "Platform", cls: "l", num: false },
@@ -804,11 +805,12 @@
       { id: "gpu", label: "GPU", cls: "l", num: false },
       { id: "ram", label: "RAM", cls: "", num: true },
       { id: "os", label: "OS", cls: "l", num: false },
-      { id: "res", label: "Resolution", cls: "", num: true },
+      ...(showRes ? [{ id: "res", label: "Resolution", cls: "", num: true }] : []),
       { id: "builds", label: "Builds", cls: "", num: true },
       { id: "newest", label: "Newest", cls: "l", num: true },
       { id: "metric", label: metric.label, cls: "", num: true }
     ];
+    if (!showRes && state.sort.col === "res") state.sort = { col: null, dir: 1 };
 
     const wrap = el("div", { class: "tablewrap" }), table = el("table", { class: "mtable" });
     const thead = el("thead"), headRow = el("tr"), body = el("tbody");
@@ -816,7 +818,7 @@
 
     function syncRows() {
       sortMachines(items);
-      body.replaceChildren(...items.map((item) => machineRow(item, metric)));
+      body.replaceChildren(...items.map((item) => machineRow(item, metric, showRes)));
       headerCells.forEach(({ col, th, btn, ind }) => {
         const active = state.sort.col === col.id;
         th.setAttribute("aria-sort", active ? (state.sort.dir > 0 ? "ascending" : "descending") : "none");
@@ -900,7 +902,7 @@
     });
   }
 
-  function machineRow(item, metric) {
+  function machineRow(item, metric, showRes) {
     const key = item.key, entries = item.entries, newest = item.newest, m = item.m, hw = item.hw, t = item.t, ram = item.ram;
     const tr = el("tr");
     const name = el("td");
@@ -914,7 +916,7 @@
       [str(m.gpu || hw.gpu), "l", hw.driver ? "Driver " + str(hw.driver) : ""],
       [ram != null ? ram + " GB" : "", ""],
       [str(m.os || hw.os), "l", hw.kernel ? "Kernel " + str(hw.kernel) : ""],
-      [item.res, ""],
+      ...(showRes ? [[item.res, ""]] : []),
       [String(entries.length), ""],
       [t ? t.label : newest.target, "l", t ? targetTitle(t) : ""],
       [valueText(newest, metric), ""]
