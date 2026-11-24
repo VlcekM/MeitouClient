@@ -700,6 +700,12 @@ holds refuses the second mod.
   stats, look, trade, looting, locks), and shows in the character and loot windows as a copy of the belt slot at (`x`, `y`) layout pixels
   (UI scale 1) from the window's top-left corner, clipped to the window: the mod picks a free spot; the window does not grow. Animals get none.
   Saves keep the section name ([save](formats/save.md#compatibility-exceptions)). Races' `no hats`-style closing never applies.
+- **Layout replacements:** `AddLayoutReplacement(layout, file)` on `ModContext` (`ModLayouts`, `src/Meitou.Game/Ui`) makes the interface read
+  its MyGUI layout `layout` (a file name such as `Kenshi_InventoryCharacterWindow.layout`; `.layout` may be left out) from `file` (an existing
+  `.layout`, relative to the mod's folder or full) wherever it loads it (screens, HUD, row layouts), for the process. One mod per layout, the
+  first in load order; a later one's is logged and left out. A mod slot whose section names a widget of the character window takes that
+  widget's place (its corner; the slot keeps its cell size) instead of its `X`/`Y`. The layout must keep the widgets the game binds by name;
+  missing ones behave as in a UI mod's layout. Engine API, not in the original. Not seen in a running game.
 - **Wear rules:** `AddWearRule((item, race, animal) => bool)` (`WearRules`, `src/Meitou.Data/Gameplay`) answers "may a wearer of this race
   wear this item?" with the item's record id, the wearer's RACE id and whether it is an animal, after the item's own `races` / `races exclude`
   lists pass ([RaceLimiter](game/ui-screens.md#6-inventory-trade-dialogue-build)). False refuses the item wherever those lists are checked:
@@ -951,6 +957,15 @@ holds refuses the second mod.
   on the host's thread like any action; a throw is reported each time and leaves the press held until the release. With no overlay node
   nothing changes. Engine API, not in the original. **Observed** (scratch program, headless UiHost and MyGuiScreenHost): `Buttons`,
   `ScrollTo`/`ScrollOffset` with clamping, `Focus` once per request and `Submit`; no test, not seen in a running game.
+  `Tint` (RGBA, each 0 to 1) is multiplied into a node's picture (image, portrait) and skin, as MyGUI's `Widget::setColour`; its text keeps
+  `TextColour`. `PortraitOf = characterId` on an image node draws that character's live portrait as the squad bar does (current gear and
+  pose): the cell the host already draws it in (squad bar, squads screen, character trade row), else a free one after those and before the
+  conversation's; a character not in the snapshot or past the free cells shows nothing. A root of `UiSlots.Overlay` picks its layer with
+  `Layer` (`UiOverlayLayer`): `Hud` (default: over the HUD, under the windows), `Back` (under the HUD and windows, over the name tags,
+  floaters and speech; the original's `Back` layer) or `Popup` (over the windows, under the right-click menu and tooltips); input follows the
+  drawing order. `UiFrameContext.Measure(text, font, scale)` (also `UiScreenContext.Frame`) answers a caption's size in pixels as the painter
+  draws it at that `TextScale` (widest line, lines' height), zero on a host without a painter. Engine API, not in the original. **Observed**
+  only by building; not seen in a running game.
 - **Fallback fonts:** `registration.AddFallbackFont(path)` (`UiRegistration`, in `IUiExtension.Register`) adds a TrueType or OpenType font
   file that every interface text draws a character from when its own font lacks it (Chinese, Japanese or other scripts, symbols, letters with
   marks the game's fonts do not have), after the files added before, ahead of the font's substitute glyph; the font's own glyph still comes
@@ -1003,6 +1018,8 @@ holds refuses the second mod.
   At most 256 controls of all sources per screen (the rest left out, logged once per screen); a source that throws or lays
   out a node not finite is logged once and dropped; an action that throws is logged. Engine API, not in the original. **Observed** with the
   installed HUD and stats layouts headless (placement, clicks, disposal); no test yet, not seen in a running game.
+  `UiScreens.SquadCells` on the overview builds once per squad box its Squads tab shows (anchor: the box's root widget, at most 128), with
+  `UiScreenContext.Squad` the squad's id (as `SquadView.Id`). Not seen in a running game.
 - **Screen overrides:** in `Register`, `registration.AddScreenOverrides(screen, widgetPattern, context => override)` changes a faithful screen's
   or the HUD's own widgets (screen as for screen controls). Each time the screen is arranged, after its own content and before the extensions'
   screen controls, the source is asked for each arranged widget whose name matches `widgetPattern` (exact, or `*` and `?` wildcards; at most
@@ -1017,6 +1034,8 @@ holds refuses the second mod.
   changes nothing that frame and is logged once and dropped. Without a source the screens are as before. Engine API, not in the original.
   **Observed** (scratch program, headless UiHost with stats-like controls, and screen-control drags and buttons); no test, not seen in a
   running game.
+  `Bounds` (a `UiRect` on screen, finite, size not below 0) places the widget: its skin's template parts (`TemplateOwner`) move with its corner,
+  its child widgets do not (match them too), its clip stays its parent's; clicks follow it. Not seen in a running game.
 - **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
   (the snapshot the map is drawn from and its zoom level, 0 for the whole map to 2) on the host's thread each frame the map shows, so it
   must not touch the world, and returns `UiMapMarker`s: a world point (X, Z), an image group of the game's map marker set
@@ -1053,6 +1072,12 @@ holds refuses the second mod.
   menu Pick Up plus the rows; a quick click still picks up) and `WorldPoint` (the ground under the cursor, `Position` the point; an untitled
   menu of the rows; a quick click still moves there). A target that gets no rows behaves as without the mod. Engine API, not in the original.
   **Observed** headless (rows, faults; not the menus in a running game).
+  A `UiMenuVerb` takes `Colour` (RGB 0 to 1, clamped; an unavailable row stays greyed). `registration.AddMenuRowOverrides(row => override)`
+  changes any menu's rows, the game's and the mods', as the menu is built (also each frame a target is under the cursor: cheap, no world):
+  `UiMenuRowContext` gives the title, the row's own label untranslated (`Pick Up`, `Steal`) and chance column, its index, the `Target` the
+  mods' rows were asked for (null for menus without one: turret, town machine; for a cage, its building) and the selection;
+  `UiMenuRowOverride` answers `Caption` (translated as the game's, chance kept; at most 200), `TextColour` or `Visible` false. Sources apply in
+  registration order, each seeing the last caption; a throw or a bad answer drops the source (logged once). Not seen in a running game.
 - **World map input:** `registration.AddMapInput(input => taken)` gets `UiMapInput`s while the overview's Map tab shows: `Press` (a mouse
   button down over the map image or its markers, not over a mod's own control, which its screen takes), `Key` (a key no text box took;
   `Typing` says whether one has the keys) and `Closed` (the map stopped showing; every handler hears it). Each carries `Button` or `Key`,
@@ -1150,6 +1175,9 @@ holds refuses the second mod.
   "Line style"). At most 8 lines from all sources together; a label or value is put on one line and cut to 80
   characters, a blank value is none. A source that throws or gives a line without a label is reported once and dropped for the session.
   **Verified** by `ItemTooltipLinesTests` (order, the context, disposal, the cap and cut, a throwing and an unlabelled source dropped).
+  `After` (an init property) places a line right after the game's row with that label: the row's key as the tooltip builds it, its English
+  label for most rows (`Sell value`, `Value`, `Weight`; a price row's leading `-` ignored), in the game's language for the few it translates
+  as it builds them; the last such row, lines placed there keep their order; no such row: the default place. Not seen in a running game.
 - **Town panel lines:** in `Register`, `registration.AddTownPanelLines(context => lines)` adds lines to the HUD's town panel (the outpost the
   camera is in: name, Open to public, Research, Power, Battery charge; [town panel](game/ui-screens.md#town-panel)) under the game's own, in
   registration order (mods in load order), so several mods share it. A `UiTownLine` has a `Label` (in the labels' column, drawn as the game's
@@ -1196,6 +1224,10 @@ holds refuses the second mod.
   that would keep less room than it gives up shows no buttons. **Verified** by `CharacterPanelLinesTests` (order, context, disposal, caps and cuts, faulty
   sources dropped; with the installed HUD layout: placement under `StatsText`, the list lowered and restored, presses for the shown
   character). Not yet seen in a running game. Engine API, not in the original.
+  A `UiCharacterLine` with `Divider` draws a rule across its row (one UI pixel, the stats labels' colour or `Style.Label`, half opacity;
+  label may be empty, value, bar and press unused); it counts as a line. A `UiJobButton` takes `Skin` (a MyGUI skin the interface's resources
+  hold, else `Kenshi_Button1Skin`), `Silent` (no click on a press; the mod posts its own sound) and `Style` (`Label` the caption's colour,
+  `Icon` a marker in a square at the button's start). Not seen in a running game.
 - **Line style:** item tooltip lines, character panel lines and town panel lines take `Style = new UiLineStyle(Label, Value, Icon)` (an init
   property): `Label` and `Value` are text colours (RGB 0 to 1, alpha not used; not finite: none; clamped) over the panel's own (a button's
   caption takes the colour of the text it shows), and `Icon` an image file path (as a `UiNode`'s `Image`, e.g.

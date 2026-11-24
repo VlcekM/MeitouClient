@@ -13,6 +13,12 @@ public sealed record UiCharacterLine(string Label, string? Value = null, float? 
     /// The line's colours and icon (<see cref="UiLineStyle"/>); null: the panel's own look.
     /// </summary>
     public UiLineStyle? Style { get; init; }
+
+    /// <summary>
+    /// The line is a divider: a rule across its row in the stats labels' colour (or <see cref="UiLineStyle.Label"/>), between the game's stats and
+    /// the lines after it; its label may be empty and its value, bar, tooltip and press are not used.
+    /// </summary>
+    public bool Divider { get; init; }
 }
 
 /// <summary>
@@ -25,6 +31,23 @@ public sealed record UiJobButton(string Caption, string? Tooltip, Action Press)
     /// The button shows lit (the skin's selected state), as for the tab a character is on.
     /// </summary>
     public bool Lit { get; init; }
+
+    /// <summary>
+    /// The MyGUI skin the button is drawn with instead of the game's neutral <c>Kenshi_Button1Skin</c> (a skin the interface's resources hold); null
+    /// or an unknown skin: the neutral one.
+    /// </summary>
+    public string? Skin { get; init; }
+
+    /// <summary>
+    /// A press plays no click (the mod plays one itself when it wants, <c>ModContext.PostInterfaceSound</c>).
+    /// </summary>
+    public bool Silent { get; init; }
+
+    /// <summary>
+    /// The caption's colour and an icon (a marker) before it (<see cref="UiLineStyle"/>: <c>Label</c> and <c>Icon</c>; <c>Value</c> unused); null:
+    /// the panel's look.
+    /// </summary>
+    public UiLineStyle? Style { get; init; }
 }
 
 /// <summary>
@@ -197,9 +220,10 @@ sealed class CharacterPanelHooks
         Collect(_buttons, context, MaxButtons, "job panel buttons", ValidButton, (owner, b) => ShownButton(owner, b, guard), report);
 
     /// <summary>
-    /// Whether a line has a label and, when it has a bar, a finite one.
+    /// Whether a line has a label (or is a divider) and, when it has a bar, a finite one.
     /// </summary>
-    static bool ValidLine(UiCharacterLine? l) => l is not null && !string.IsNullOrWhiteSpace(l.Label) && (l.Bar is not { } bar || float.IsFinite(bar));
+    static bool ValidLine(UiCharacterLine? l) =>
+        l is not null && (l.Divider || !string.IsNullOrWhiteSpace(l.Label)) && (l.Bar is not { } bar || float.IsFinite(bar));
 
     /// <summary>
     /// Whether a button has a caption and a press.
@@ -211,6 +235,8 @@ sealed class CharacterPanelHooks
     /// </summary>
     static UiCharacterLine ShownLine(string owner, UiCharacterLine line, PressGuard guard)
     {
+        if (line.Divider) return new UiCharacterLine("") { Divider = true, Style = UiLineStyle.Shown(line.Style) };
+
         string label = UiHost.OneLine(line.Label);
         string? value = string.IsNullOrWhiteSpace(line.Value) ? null : UiHost.OneLine(line.Value);
         float? bar = line.Bar is { } b ? Math.Clamp(b, 0, 1) : null;
@@ -224,7 +250,13 @@ sealed class CharacterPanelHooks
     static UiJobButton ShownButton(string owner, UiJobButton button, PressGuard guard)
     {
         string caption = UiHost.OneLine(button.Caption);
-        return new UiJobButton(caption, Tooltip(button.Tooltip), guard(owner, "job panel button " + caption, button.Press)) { Lit = button.Lit };
+        return new UiJobButton(caption, Tooltip(button.Tooltip), guard(owner, "job panel button " + caption, button.Press))
+        {
+            Lit = button.Lit,
+            Skin = string.IsNullOrWhiteSpace(button.Skin) ? null : button.Skin,
+            Silent = button.Silent,
+            Style = UiLineStyle.Shown(button.Style),
+        };
     }
 
     /// <summary>

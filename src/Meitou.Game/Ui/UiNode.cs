@@ -414,9 +414,48 @@ public sealed class UiNode(string id, UiNodeKind kind = UiNodeKind.Panel)
     public bool Focus { get; init; }
 
     /// <summary>
+    /// The node's tint (RGBA, each 0 to 1) multiplied into its picture (an image, a portrait) and its skin, as MyGUI's <c>Widget::setColour</c>;
+    /// null: none. Its text keeps <see cref="TextColour"/>.
+    /// </summary>
+    public Vector4? Tint { get; init; }
+
+    /// <summary>
+    /// An image node's picture instead of <see cref="Image"/>: the live portrait of a character in the snapshot on screen, drawn as the squad bar
+    /// draws it (its current gear, pose and camera). Null: none. A character not in the snapshot, or one past the free portrait cells, shows nothing.
+    /// </summary>
+    public Simulation.CharacterId? PortraitOf { get; init; }
+
+    /// <summary>
+    /// On a contribution's root in <see cref="UiSlots.Overlay"/>: where it is drawn among the game's own interface (<see cref="UiOverlayLayer"/>);
+    /// over the HUD and under the game's windows by default.
+    /// </summary>
+    public UiOverlayLayer Layer { get; init; }
+
+    /// <summary>
     /// The child nodes.
     /// </summary>
     public List<UiNode> Children { get; } = [];
+}
+
+/// <summary>
+/// Where an overlay contribution is drawn among the game's own interface (<see cref="UiNode.Layer"/>); more layers may follow.
+/// </summary>
+public enum UiOverlayLayer
+{
+    /// <summary>
+    /// Over the HUD, under the game's windows (the default).
+    /// </summary>
+    Hud,
+
+    /// <summary>
+    /// Under the HUD and the windows, over the world and its name tags, floaters and speech (the original's <c>Back</c> layer).
+    /// </summary>
+    Back,
+
+    /// <summary>
+    /// Over the game's windows, under the right-click menu, the tooltips and the pointer (the original's <c>Popup</c> layer).
+    /// </summary>
+    Popup,
 }
 
 /// <summary>

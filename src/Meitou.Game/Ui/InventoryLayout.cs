@@ -289,8 +289,8 @@ sealed class InventoryLayout(PlayerInterface player)
 
     /// <summary>
     /// Adds the mods' equipment slots (<see cref="ModSlots"/>, docs/modding.md "Equipment slots") to a character window that has the belt slot: each
-    /// a copy of the belt slot's widget, named by its section, sized in cells and placed at its offset from the window's top-left corner, clipped
-    /// to the window.
+    /// a copy of the belt slot's widget, named by its section, sized in cells and placed at its offset from the window's top-left corner (or at the
+    /// layout's own widget of that name, which it replaces), clipped to the window.
     /// </summary>
     internal void AddModSlots(List<UiControl> controls)
     {
@@ -306,11 +306,28 @@ sealed class InventoryLayout(PlayerInterface player)
         var clip = window.Clip is { } c ? window.Bounds.Intersect(c) : window.Bounds;
         foreach (var slot in ModSlots.All)
         {
-            var bounds = new UiRect(window.Bounds.X + slot.X * player.UiScale, window.Bounds.Y + slot.Y * player.UiScale, slot.Width * cell,
-                slot.Height * player.InventoryCellHeight);
+            var at = PlacedSlot(controls, slot.Section, ref belt)
+                ?? new(window.Bounds.X + slot.X * player.UiScale, window.Bounds.Y + slot.Y * player.UiScale);
+            var bounds = new UiRect(at.X, at.Y, slot.Width * cell, slot.Height * player.InventoryCellHeight);
             var properties = new Dictionary<string, string>(template.Properties) { ["TileSize"] = tile, ["State"] = "normal" };
             controls.Insert(++belt, template with { Name = slot.Section, Bounds = bounds, Clip = clip, Properties = properties });
         }
+    }
+
+    /// <summary>
+    /// The top-left corner of the window's own widget named <paramref name="section"/> (a replaced layout's place for a mod slot,
+    /// docs/modding.md "Layout replacements"), which the slot takes the place of (removed, <paramref name="belt"/> kept on the belt); null when
+    /// the layout has none.
+    /// </summary>
+    static System.Numerics.Vector2? PlacedSlot(List<UiControl> controls, string section, ref int belt)
+    {
+        int i = controls.FindIndex(c => c.Name == section);
+        if (i < 0) return null;
+
+        var at = new System.Numerics.Vector2(controls[i].Bounds.X, controls[i].Bounds.Y);
+        controls.RemoveAt(i);
+        if (i < belt) belt--;
+        return at;
     }
 
     /// <summary>

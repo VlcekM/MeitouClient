@@ -520,8 +520,8 @@ sealed partial class GameHost
     internal long DrawKey(CharacterId id) => (((long)id.Slot << 32 | (uint)id.Generation) + 1) | (long)Saves.WorldEpoch << 56;
 
     /// <summary>
-    /// The portraits for the renderer to draw this frame: the squad bar's and the squads screen's members, the character trading window's rows and
-    /// the conversation's two in their cells (docs/character-renderer.md "Portraits").
+    /// The portraits for the renderer to draw this frame: the squad bar's and the squads screen's members, the character trading window's rows, the
+    /// code mods' live portraits and the conversation's two in their cells (docs/character-renderer.md "Portraits").
     /// </summary>
     void FillPortraits()
     {
@@ -535,6 +535,8 @@ sealed partial class GameHost
             for (int i = 0; i < members.Count; i++)
                 characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(members[i].Id), i, members[i].PortraitSerial));
             foreach (var (id, cell) in Player.TradeWindows.CharacterTradePortraits())
+                characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(id), cell, Player.PortraitBar.PortraitSerial(id)));
+            foreach (var (id, cell) in Player.RecordPortraits.Live)
                 characters.PortraitRequests.Add(new PortraitRequest(PortraitKey(id), cell, Player.PortraitBar.PortraitSerial(id)));
             RecordLooks.AddRequests(characters);
         }

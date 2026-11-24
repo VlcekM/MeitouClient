@@ -1,3 +1,4 @@
+using System.Numerics;
 using Meitou.Data.Ui;
 
 namespace Meitou.Game.Ui;
@@ -264,6 +265,11 @@ public sealed record UiMenuVerb(string Caption, Action Choose)
     /// so it can set up a job for later); on Faithful the row is drawn and chosen as any other.
     /// </summary>
     public bool Unavailable { get; init; }
+
+    /// <summary>
+    /// The caption's colour (RGB, 0 to 1 each, clamped; alpha not used); null: the menu's own. An unavailable row stays greyed.
+    /// </summary>
+    public System.Numerics.Vector4? Colour { get; init; }
 }
 
 /// <summary>
@@ -327,6 +333,20 @@ public sealed class UiFrameContext
     /// A registered control <paramref name="id"/> as its owner made it, without overrides.
     /// </summary>
     public UiNode CreateBaseControl(string id) => _host.CreateControl(id, this, useOverrides: false);
+
+    /// <summary>
+    /// The size in pixels <paramref name="text"/> takes as a node's caption in font resource <paramref name="font"/> at text scale
+    /// <paramref name="scale"/> (a node's <see cref="UiNode.TextScale"/>, finite and above 0; 1 is a style's default): its widest line and its lines'
+    /// height, line breaks kept, colour tags measured as drawn. Zero without an interface that draws text (a headless host). Host thread.
+    /// </summary>
+    public Vector2 Measure(string text, string font = "Kenshi_StandardFont_Medium", float scale = 1)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentException.ThrowIfNullOrWhiteSpace(font);
+        if (!float.IsFinite(scale) || scale <= 0 || scale > UiHost.MaxTextScale) throw new ArgumentOutOfRangeException(nameof(scale));
+
+        return text.Length == 0 || _host.Measurer is not { } measure ? Vector2.Zero : measure(font, text, scale);
+    }
 }
 
 /// <summary>
@@ -340,6 +360,12 @@ public sealed partial class UiHost
     /// The extension API version the host provides; an extension must ask for it.
     /// </summary>
     public const int ApiVersion = 1;
+
+    /// <summary>
+    /// Measures a caption (font resource, text, text scale) as the interface's painter draws it (<see cref="UiFrameContext.Measure"/>); null
+    /// without one.
+    /// </summary>
+    internal Func<string, string, float, Vector2>? Measurer { get; set; }
 
     /// <summary>
     /// The styles by id, with their owners.
@@ -431,6 +457,11 @@ public sealed partial class UiHost
     /// The extensions' right-click menu rows for any target (<see cref="UiRegistration.AddMenuVerbs"/>).
     /// </summary>
     internal MenuTargetVerbs TargetVerbs { get; } = new();
+
+    /// <summary>
+    /// The extensions' changes to right-click menu rows (<see cref="UiRegistration.AddMenuRowOverrides"/>).
+    /// </summary>
+    internal MenuRowOverrides MenuRows { get; } = new();
 
     /// <summary>
     /// The extensions' world map input handlers (<see cref="UiRegistration.AddMapInput"/>).
@@ -609,6 +640,7 @@ public sealed partial class UiHost
         ScreenOverrides.Remove(owner);
         Replies.Remove(owner);
         TargetVerbs.Remove(owner);
+        MenuRows.Remove(owner);
         Map.Remove(owner);
         foreach (string id in _styles.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _styles.Remove(id);
         foreach (string id in _controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _controls.Remove(id);
@@ -670,6 +702,16 @@ public sealed partial class UiHost
     /// character rows' rules: a failing source reported once and dropped, a row's action that throws reported each time.
     /// </summary>
     public IReadOnlyList<UiMenuVerb> MenuVerbs(UiMenuTargetContext context) => TargetVerbs.For(context, Guarded, Diagnostic);
+
+    /// <summary>
+    /// Whether any extension changes right-click menu rows (<see cref="MenuRowOverride"/>).
+    /// </summary>
+    public bool HasMenuRowOverrides => MenuRows.Any;
+
+    /// <summary>
+    /// The extensions' changes to <paramref name="row"/> (<see cref="MenuRowOverrides.For"/>); null for none.
+    /// </summary>
+    public UiMenuRowOverride? MenuRowOverride(UiMenuRowContext row) => MenuRows.For(row, Diagnostic);
 
     /// <summary>
     /// Whether any extension handles world map input (<see cref="MapInput"/>).
@@ -1108,7 +1150,7 @@ public sealed partial class UiHost
                 into.Owner = contribution.Owner;
                 var local = new List<UiControl>();
                 ArrangeNode(root!, parent, new NodeScope(parent, true, 1, -1), into, local);
-                result.AddRange(local);
+                result.AddRange(contribution.Slot == UiSlots.Overlay ? OnLayer(local, root!.Layer) : local);
             }
             catch (Exception e)
             {
@@ -1117,6 +1159,29 @@ public sealed partial class UiHost
             }
         }
     }
+
+    /// <summary>
+    /// The property that puts an overlay control on another layer than the HUD's (<see cref="UiNode.Layer"/>): <c>Back</c> or <c>Popup</c>.
+    /// </summary>
+    public const string LayerProperty = "ModLayer";
+
+    /// <summary>
+    /// <paramref name="controls"/> marked for <paramref name="layer"/>; as they are on the HUD's layer.
+    /// </summary>
+    static IEnumerable<UiControl> OnLayer(List<UiControl> controls, UiOverlayLayer layer)
+    {
+        if (layer == UiOverlayLayer.Hud) return controls;
+
+        string name = layer.ToString();
+        return controls.Select(c =>
+            c with { Properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { [LayerProperty] = name } });
+    }
+
+    /// <summary>
+    /// The layer an arranged overlay control is drawn on (<see cref="LayerProperty"/>).
+    /// </summary>
+    public static UiOverlayLayer LayerOf(UiControl c) =>
+        c.Properties.TryGetValue(LayerProperty, out string? name) && Enum.TryParse(name, out UiOverlayLayer layer) ? layer : UiOverlayLayer.Hud;
 
     /// <summary>
     /// What a node is laid out within: the clip its parent leaves, whether its parent takes clicks, the opacity it inherits and its parent's index
@@ -1219,7 +1284,8 @@ public sealed partial class UiHost
             ["FontName"] = style.FontName,
             ["TextPadding"] = style.TextPadding.ToString(),
         };
-        if (image && node.Portrait.Length > 0) properties[RecordPortraits.Property] = node.Portrait;
+        if (image && node.PortraitOf is { } live) properties[RecordPortraits.LiveProperty] = live.ToString();
+        else if (image && node.Portrait.Length > 0) properties[RecordPortraits.Property] = node.Portrait;
         else if (image && node.Image.Length > 0) properties["ImageTexture"] = Rendering.Ui.UiPainter.IconTexture(node.Image);
 
         bool textBox = node.Kind == UiNodeKind.TextBox;
@@ -1592,6 +1658,19 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(verbs);
         _host.TargetVerbs.Add(Id, verbs);
+    }
+
+    /// <summary>
+    /// Changes the rows of right-click menus, the game's own and the mods' (docs/modding.md "Right-click menu rows"): <paramref name="over"/> is
+    /// asked for each row of a menu as it is built (<see cref="UiMenuRowContext"/>: the title, the row's own label, the target), which can be
+    /// each frame a target is under the cursor, so it must be cheap and must not touch the world; it answers the row's caption, colour or
+    /// visibility (null: keep).
+    /// </summary>
+    public void AddMenuRowOverrides(Func<UiMenuRowContext, UiMenuRowOverride?> over)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(over);
+        _host.MenuRows.Add(Id, over);
     }
 
     /// <summary>

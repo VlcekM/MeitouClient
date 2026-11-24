@@ -338,6 +338,26 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Replaces the game's interface layout <paramref name="layout"/> (a MyGUI layout file name such as
+    /// <c>Kenshi_InventoryCharacterWindow.layout</c>; <c>.layout</c> may be left out) with <paramref name="file"/> (a <c>.layout</c> file, relative to
+    /// the mod's folder or a full path) wherever the interface loads it (docs/modding.md "Layout replacements"). The first mod in load order to
+    /// replace a layout keeps it; a later one's is left out and logged.
+    /// </summary>
+    public void AddLayoutReplacement(string layout, string file)
+    {
+        CheckOpen();
+        ArgumentException.ThrowIfNullOrWhiteSpace(file);
+        string name = Game.Ui.ModLayouts.FileName(layout) ?? throw new ArgumentException("A layout is named by its file name.", nameof(layout));
+        string path = Path.GetFullPath(Path.IsPathRooted(file) ? file : Path.Combine(Folder, file));
+        if (!path.EndsWith(".layout", StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
+            throw new ArgumentException($"A layout replacement is an existing .layout file: {path}", nameof(file));
+        if (Pending.Layouts.Any(l => string.Equals(l.Layout, name, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException($"The mod already replaces {name}.", nameof(layout));
+
+        Pending.Layouts.Add((name, path));
+    }
+
+    /// <summary>
     /// A rule asked whether a wearer may wear an item (docs/modding.md "Wear rules"): <paramref name="rule"/> gets the item's record id, the
     /// wearer's RACE id and whether it is an animal, after the item's own race lists pass, and false refuses the item everywhere a race limit
     /// applies. It may run on any thread, so it must be quick, read no world state and answer the same for the same arguments. A throw counts as

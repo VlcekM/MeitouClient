@@ -158,8 +158,22 @@ sealed class JobModButtons(PlayerInterface player)
         for (int k = 0; k < _shown.Count; k++)
         {
             var bounds = Place(list.Bounds, k);
-            if (Inside(panel.Bounds, bounds)) controls.Add(Button(k, bounds, panel.Bounds));
+            if (!Inside(panel.Bounds, bounds)) continue;
+
+            controls.Add(Button(k, bounds, panel.Bounds));
+            AddMarker(controls, k, bounds, panel.Bounds);
         }
+    }
+
+    /// <summary>
+    /// Button <paramref name="k"/>'s style icon (a marker) in a square at the start of its caption, over the button; nothing without one.
+    /// </summary>
+    void AddMarker(List<UiControl> controls, int k, UiRect bounds, UiRect clip)
+    {
+        if (_shown[k].Style?.Icon is null) return;
+
+        var inset = new UiRect(bounds.X + 3, bounds.Y + 3, bounds.Width - 6, bounds.Height - 6);
+        UiLineStyle.PlaceIcon(controls, "JobsPanel-mod-" + k.ToString(CultureInfo.InvariantCulture), _shown[k].Style, inset, clip);
     }
 
     /// <summary>
@@ -186,7 +200,8 @@ sealed class JobModButtons(PlayerInterface player)
 
     /// <summary>
     /// Button <paramref name="k"/> in <paramref name="bounds"/> (inset a pixel on each side): the game's neutral button with its caption in the
-    /// orders panel's painted face and the main colour, its tooltip the HUD's Fixed tooltip; a lit one in the skin's selected state.
+    /// orders panel's painted face and the main colour (its own skin and caption colour when it names them), its tooltip the HUD's Fixed tooltip; a
+    /// lit one in the skin's selected state.
     /// </summary>
     UiControl Button(int k, UiRect bounds, UiRect? clip)
     {
@@ -195,7 +210,7 @@ sealed class JobModButtons(PlayerInterface player)
         {
             ["FontName"] = "Kenshi_PaintedTextFont_Small",
             ["TextAlign"] = "Center",
-            ["TextColour"] = PlayerInterface.MainColour,
+            ["TextColour"] = UiLineStyle.Ink(button.Style?.Label) ?? PlayerInterface.MainColour,
         };
         if (button.Lit)
         {
@@ -208,12 +223,14 @@ sealed class JobModButtons(PlayerInterface player)
 
         var inset = new UiRect(bounds.X + 1, bounds.Y + 1, bounds.Width - 2, bounds.Height - 2);
         string name = "JobsPanel-mod-" + k.ToString(CultureInfo.InvariantCulture);
-        return new(name, "Button", inset, Loc.Tr(button.Caption), ButtonAction, "Kenshi_Button1Skin", true, properties, Vector4.Zero,
+        string skin = button.Skin is { } own && player.UiResources.Skins.ContainsKey(own) ? own : "Kenshi_Button1Skin";
+        return new(name, "Button", inset, Loc.Tr(button.Caption), ButtonAction, skin, true, properties, Vector4.Zero,
             Pickable: true, Argument: k.ToString(CultureInfo.InvariantCulture), Clip: clip);
     }
 
     /// <summary>
-    /// A press of button <paramref name="argument"/> (its index): runs it with the click sound while the jobs list still shows the character it was
+    /// A press of button <paramref name="argument"/> (its index): runs it with the click sound (none for a silent one) while the jobs list still
+    /// shows the character it was
     /// laid out for.
     /// </summary>
     internal void Press(string argument)
@@ -221,7 +238,7 @@ sealed class JobModButtons(PlayerInterface player)
         if (!int.TryParse(argument, NumberStyles.Integer, CultureInfo.InvariantCulture, out int k) || (uint)k >= (uint)_shown.Count) return;
         if ((player.Selected().FirstOrDefault() ?? player.Lead())?.Id != _shownFor) return;
 
-        player.InterfaceSounds.Sound("General_Click");
+        if (!_shown[k].Silent) player.InterfaceSounds.Sound("General_Click");
         _shown[k].Press();
     }
 }

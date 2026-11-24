@@ -74,6 +74,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModSlot> Slots { get; } = [];
     /// <summary>
+    /// The layout replacements: the layout file name and the full path of the mod's file, in registration order.
+    /// </summary>
+    public List<(string Layout, string Path)> Layouts { get; } = [];
+    /// <summary>
     /// The wear rules, in registration order.
     /// </summary>
     public List<Data.Gameplay.WearRule> WearRules { get; } = [];
@@ -385,6 +389,11 @@ sealed class ModRegistry
             Simulation.TaskOwners[type] = mod;
         }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
+        foreach (var (layout, path) in r.Layouts)
+        {
+            if (!Game.Ui.ModLayouts.Add(mod, layout, path))
+                Console.Error.WriteLine($"mod       {mod}: layout {layout} is replaced by another mod already; its replacement is left out");
+        }
         foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);
         foreach (var source in r.LookRows) Data.Characters.ModLooks.AddRows(mod, source);
         foreach (var roll in r.LookRolls) Data.Characters.ModLooks.AddRoll(mod, roll);
