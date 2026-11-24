@@ -269,6 +269,8 @@ public sealed partial class World : IDisposable
             CombatDefenceFilters.Register(this._systems[k], k);
             ArrangeFilters.Register(this._systems[k], k);
             TargetScoreFilters.Register(this._systems[k], k);
+            BedFilters.Register(this._systems[k], k);
+            PartMaxFilters.Register(this._systems[k], k);
         }
         for (int k = 0; k < this._systems.Count; k++) RegisterTasks(this._systems[k], k);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) Decisions.RegisterFrom(owner);
@@ -635,6 +637,14 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Combat.TargetScoreFilters TargetScoreFilters { get; } = new();
     /// <summary>
+    /// The systems asked about the beds the bed search weighs (<see cref="Locks.IBedFilter"/>).
+    /// </summary>
+    internal Locks.BedFilters BedFilters { get; } = new();
+    /// <summary>
+    /// The systems asked about the body parts' maximum health (<see cref="Bodies.IPartMaxFilter"/>).
+    /// </summary>
+    internal Bodies.PartMaxFilters PartMaxFilters { get; } = new();
+    /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
     public CameraViewCommand? View { get; internal set; }
@@ -908,6 +918,8 @@ public sealed partial class World : IDisposable
         CombatDefenceFilters.Register(system, _systems.Count - 1);
         ArrangeFilters.Register(system, _systems.Count - 1);
         TargetScoreFilters.Register(system, _systems.Count - 1);
+        BedFilters.Register(system, _systems.Count - 1);
+        PartMaxFilters.Register(system, _systems.Count - 1);
         RegisterTasks(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner);
         Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
@@ -1594,6 +1606,8 @@ public sealed partial class World : IDisposable
         CombatDefenceFilters.HashFaults(ref h);
         ArrangeFilters.HashFaults(ref h);
         TargetScoreFilters.HashFaults(ref h);
+        BedFilters.HashFaults(ref h);
+        PartMaxFilters.HashFaults(ref h);
         Decisions.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
     }
