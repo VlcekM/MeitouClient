@@ -1292,22 +1292,24 @@ holds refuses the second mod.
   goes on one of those placed at the point; an interface event on an unplaced object of the mods' own. A character event plays only while the
   character is near enough to have a sound object (`CharacterSounds.TrackRadius`) and within 1000 units of the camera, a point event within
   the same 1000 units. The pooled objects are shared by every mod and reused round robin, and a switch stays on an object until changed, so
-  set the switch on every post that needs one. Every call answers a `SoundHandle`: `Stop(fadeSeconds = 0)` (0 to 10; any thread) ends that
-  playback alone, a loop too, its sounds tagged as Wwise's playing ids are (`WwisePlayer.NewPlaying` / `StopPlaying`), fading over the
-  seconds; stopped before the host plays it, it never starts; again, or once it ended, it does nothing. `Queued` (also the handle as a
-  bool) is false when nothing was queued (no world, no audio, a rejected request: `SoundHandle.None`), `Stopped` once stopped. A loop on a
-  pooled object can still be moved by a later post; one on the character's own object follows it. An unknown name plays nothing (the
-  player gives up on it after ten seconds). Several mods post freely. An empty name or a
-  point that is not finite throws, also before the first world; an empty character id plays nothing. Engine API, not in the original.
+  set the switch on every post that needs one. Each call has an overload with `out SoundHandle handle` after its required arguments
+  (`PostSound(eventName, characterId, out handle, switchGroup, switchValue)`, `PostSound(sound, anchor, out handle, volume)`, ...; on
+  `World` and `ModContext`): `handle.Stop(fadeSeconds = 0)` (0 to 10; any thread) ends that playback alone, a loop too, its sounds tagged
+  as Wwise's playing ids are (`WwisePlayer.NewPlaying` / `StopPlaying`), fading over the seconds; stopped before the host plays it, it never
+  starts; again, or once it ended, it does nothing. `Queued` is false when nothing was queued (no world, no audio, a rejected request:
+  `SoundHandle.None`), `Stopped` once stopped. A loop on a pooled object can still be moved by a later post; one on the character's own
+  object follows it. An unknown name plays nothing (the player gives up on it after ten seconds). Several mods post freely. An empty name or
+  a point that is not finite throws, also before the first world; an empty character id plays nothing. Engine API, not in the original.
   On `ModContext` a name ending in `.wav` is a loose file under the mod's folder (a relative path; one outside it or missing plays nothing,
   logged once), a 16-bit PCM WAV of at most 20 s, read once by the host: it plays as one Wwise sound made for it, on the mods' interface
   object or on a pooled object at the point or the character's place (it does not follow), through the SFX bus `59927CD0` when placed (the
   SFX slider and the pause ducking take it) with Meitou's attenuation (linear from full at the object to silence at 1000 units), on the
   master bus on the interface (no slider). `PostSound(sound, EffectAnchor at, volume = 1)` plays an event or loose file on an anchor: a
   point there, a bone or weapon on its character, a building or bolt where it is drawn now (host thread only); `volume` (0 to 4) scales a
-  loose file, a bank event keeps its level; its handle is false when nothing was queued. **Observed** by a scratch program mixing a synthetic
-  WAV offline (heard at the listener, distance attenuation, volume), not heard in the game; the handle's stop (one playback ended among
-  others on the object, a stop before the host plays it, the fade) **Observed** by a scratch program against `WwisePlayer` with a loose WAV.
+  loose file, a bank event keeps its level; false when nothing was queued (true with no world or audio). **Observed** by a scratch program mixing
+  a synthetic WAV offline (heard at the listener, distance attenuation, volume), not heard in the game; the handle's stop (one playback ended
+  among others on the object, a stop before the host plays it, the fade) **Observed** by a scratch program against `WwisePlayer` with a loose
+  WAV.
 - **Status effects:** `AddStatusEffect(new StatusEffect(id, name) { Description, Tone, Stacking, MaxStacks, Modifiers })` (`StatusEffects`,
   `src/Meitou.Simulation/Bodies`) adds a named effect (a poison, a drug, a blessing) the mod's systems put on a character with `effect.Apply(world,
   character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(world, character)` or `On(stats)`

@@ -125,8 +125,8 @@ public sealed record PostedSound(string Event, string? SwitchGroup = null, strin
 }
 
 /// <summary>
-/// A code mod's posted sound (docs/modding.md "Sounds"), returned by every <c>PostSound</c> call: <see cref="Stop"/> ends that one playback
-/// (a loop too) and nothing else on its object. Any thread. Display only: the simulation never reads it.
+/// A code mod's posted sound (docs/modding.md "Sounds"), given by the <c>PostSound</c> overloads with an <c>out SoundHandle</c>:
+/// <see cref="Stop"/> ends that one playback (a loop too) and nothing else on its object. Any thread. Display only: the simulation never reads it.
 /// </summary>
 public sealed class SoundHandle
 {
@@ -213,11 +213,6 @@ public sealed class SoundHandle
             return true;
         }
     }
-
-    /// <summary>
-    /// <see cref="Queued"/>, so a mod may test the call as the bool the anchor overload used to answer.
-    /// </summary>
-    public static implicit operator bool(SoundHandle? handle) => handle?.Queued == true;
 }
 
 /// <summary>
@@ -295,47 +290,68 @@ public sealed partial class World
     /// switch <paramref name="switchGroup"/> at <paramref name="switchValue"/> when both are given (set on an object of the mods' own at the
     /// character's place, never on the character's). Display only: queued for the host like the game's own sounds (nothing while
     /// <see cref="Sounds"/> is null, as without audio), never read by the simulation; the host plays it while the character is near enough to have
-    /// a sound object. Callable from any thread; the answer stops it (<see cref="SoundHandle.Stop"/>). Throws for an empty name; an empty
-    /// <paramref name="on"/> plays nothing.
+    /// a sound object. Callable from any thread. Throws for an empty name; an empty <paramref name="on"/> plays nothing.
     /// </summary>
-    public SoundHandle PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null)
+    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null) =>
+        PostSound(eventName, on, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostSound(string, CharacterId, string?, string?)"/>, giving the <paramref name="handle"/> that stops it
+    /// (<see cref="SoundHandle.None"/> when nothing was queued).
+    /// </summary>
+    public void PostSound(string eventName, CharacterId on, out SoundHandle handle, string? switchGroup = null, string? switchValue = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(eventName);
-        if (on.IsNone) return SoundHandle.None;
-
-        return PostModSound(SoundKind.Posted, eventName, on, Vector3.Zero, switchGroup, switchValue);
+        handle = on.IsNone ? SoundHandle.None : PostModSound(SoundKind.Posted, eventName, on, Vector3.Zero, switchGroup, switchValue);
     }
 
     /// <summary>
     /// A code mod plays the named event <paramref name="eventName"/> at the world point <paramref name="at"/>, on a pooled object placed there,
     /// with an optional switch; otherwise as <see cref="PostSound(string, CharacterId, string?, string?)"/>.
     /// </summary>
-    public SoundHandle PostSound(string eventName, Vector3 at, string? switchGroup = null, string? switchValue = null) =>
-        PostModSound(SoundKind.Posted, eventName, CharacterId.None, at, switchGroup, switchValue);
+    public void PostSound(string eventName, Vector3 at, string? switchGroup = null, string? switchValue = null) =>
+        PostSound(eventName, at, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostSound(string, Vector3, string?, string?)"/>, giving the <paramref name="handle"/> that stops it.
+    /// </summary>
+    public void PostSound(string eventName, Vector3 at, out SoundHandle handle, string? switchGroup = null, string? switchValue = null) =>
+        handle = PostModSound(SoundKind.Posted, eventName, CharacterId.None, at, switchGroup, switchValue);
 
     /// <summary>
     /// A code mod plays the named event <paramref name="eventName"/> on the interface's object (heard alike wherever the camera is), with an
     /// optional switch; otherwise as <see cref="PostSound(string, CharacterId, string?, string?)"/>.
     /// </summary>
-    public SoundHandle PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null) =>
-        PostModSound(SoundKind.PostedInterface, eventName, CharacterId.None, Vector3.Zero, switchGroup, switchValue);
+    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null) =>
+        PostInterfaceSound(eventName, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostInterfaceSound(string, string?, string?)"/>, giving the <paramref name="handle"/> that stops it.
+    /// </summary>
+    public void PostInterfaceSound(string eventName, out SoundHandle handle, string? switchGroup = null, string? switchValue = null) =>
+        handle = PostModSound(SoundKind.PostedInterface, eventName, CharacterId.None, Vector3.Zero, switchGroup, switchValue);
 
     /// <summary>
     /// A code mod plays <paramref name="sound"/> (a bank event or a loose file, <see cref="PostedSound.Loose"/>) on <paramref name="on"/> when it
     /// is a character, else at <paramref name="at"/>, or on the interface when <paramref name="onInterface"/>; otherwise as
     /// <see cref="PostSound(string, CharacterId, string?, string?)"/>.
     /// </summary>
-    public SoundHandle PostSound(PostedSound sound, CharacterId on, Vector3 at, bool onInterface = false)
+    public void PostSound(PostedSound sound, CharacterId on, Vector3 at, bool onInterface = false) => PostSound(sound, on, at, out _, onInterface);
+
+    /// <summary>
+    /// <see cref="PostSound(PostedSound, CharacterId, Vector3, bool)"/>, giving the <paramref name="handle"/> that stops it.
+    /// </summary>
+    public void PostSound(PostedSound sound, CharacterId on, Vector3 at, out SoundHandle handle, bool onInterface = false)
     {
         ArgumentNullException.ThrowIfNull(sound);
         ArgumentException.ThrowIfNullOrEmpty(sound.Event);
         if (!float.IsFinite(at.X + at.Y + at.Z)) throw new ArgumentOutOfRangeException(nameof(at), at, "A sound's point must be finite.");
-        if (_sounds is not { } queue) return SoundHandle.None;
+        handle = SoundHandle.None;
+        if (_sounds is not { } queue) return;
 
         var kind = onInterface ? SoundKind.PostedInterface : SoundKind.Posted;
-        var handle = new SoundHandle(true);
+        handle = new SoundHandle(true);
         queue.Enqueue(new SoundEvent(kind, onInterface ? CharacterId.None : on, CharacterId.None, at) { Posted = sound, Handle = handle });
-        return handle;
     }
 
     /// <summary>
