@@ -21,8 +21,8 @@ namespace Meitou.Game.Ui;
 /// (<see cref="PutInMachine"/>, <see cref="TakeFromMachine"/>).</item>
 /// <item>The site menu has Operate for a machine characters work; a quick right click on one gives it.</item>
 /// <item>The overview's research tab: TYPES lists the categories, BLUEPRINTS the research of the selected category that can be queued (a click queues
-/// it), QUEUE the queue (click to remove, drag to reorder), DESCRIPTION the hovered or last clicked research. The original's row widgets and colours are
-/// <b>Unknown</b>; Meitou draws plain text rows.</item>
+/// it), QUEUE the queue (each row the original's list item, <see cref="QueueRow"/>: its X removes it, a drag reorders), DESCRIPTION the hovered or
+/// last clicked research.</item>
 /// </list>
 /// </summary>
 sealed class ProductionWindows(PlayerInterface player)
@@ -1694,8 +1694,8 @@ sealed class ProductionWindows(PlayerInterface player)
 
     // The overview's Craft tab (docs/game/ui-screens.md "Selected building", docs/game/buildings-production.md "Crafting"): STATIONS lists the
     // player's crafting benches, ITEMS what the selected one can craft (a click queues one; locked or too advanced rows are red and do nothing),
-    // QUEUE its queue (a click takes one off), Repeat Queue its repeat toggle, DESCRIPTION the hovered or last clicked craft's time and inputs. The
-    // original's row widgets and colours are <b>Unknown</b>; Meitou draws plain text rows like the research tab.
+    // QUEUE its queue (the original's list items, QueueRow: the X takes one off), Repeat Queue its repeat toggle, DESCRIPTION the hovered or last
+    // clicked craft's time and inputs.
     /// <summary>
     /// The Craft tab's index in the overview's tabs.
     /// </summary>
