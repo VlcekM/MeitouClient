@@ -33,7 +33,9 @@ legacy, data jsonb, summary). A session is one scenario at one tier benchmarked 
 - `GET /bench/data` → `{sessions: [{id, at, handle, machine, platform, scenario, target, tier, version, fingerprint, legacy, data}]}`, newest
   first, cached 60 s (a write clears it).
 - `GET /bench/targets` → `{targets: [{tag, version, kind, publishedAt}]}`, newest first: every full release (`release`) and every nightly
-  whose notes start with `Daily build` (`daily`, the 16:00 UTC run of nightly.yml); `503 {error}` while GitHub was never read.
+  whose notes start with `Daily build` and that was published at 16:00 UTC or later (`daily`, the 16:00 UTC run of nightly.yml; a
+  `Daily build` published earlier that day is not that run); `503 {error}` while GitHub was never read. The benchmarks page hides
+  sessions on other builds (off target) until its Builds toggle is set to All builds; legacy kit commits are always shown.
 - Both GETs send `Access-Control-Allow-Origin` for `https://meitou.kenshi.wiki` and `http://localhost:4321` (`Vary: Origin`).
 - Admin `POST /admin/bench/legacy` `{sessions: [...]}` (as `/bench/data` lists them, the id ignored; at most 64 MB) replaces every
   legacy session in one transaction → `{imported}`. `meitou-tools bench-import [--commit 1e317e343~1] (--url <service> --token <admin>
