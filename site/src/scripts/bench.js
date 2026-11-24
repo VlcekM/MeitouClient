@@ -811,32 +811,42 @@
     ];
 
     const wrap = el("div", { class: "tablewrap" }), table = el("table", { class: "mtable" });
-    const thead = el("thead"), headRow = el("tr");
+    const thead = el("thead"), headRow = el("tr"), body = el("tbody");
+    const headerCells = [];
+
+    function syncRows() {
+      sortMachines(items);
+      body.replaceChildren(...items.map((item) => machineRow(item, metric)));
+      headerCells.forEach(({ col, th, btn, ind }) => {
+        const active = state.sort.col === col.id;
+        th.setAttribute("aria-sort", active ? (state.sort.dir > 0 ? "ascending" : "descending") : "none");
+        btn.classList.toggle("is-active", active);
+        ind.textContent = active ? (state.sort.dir > 0 ? "▲" : "▼") : "⇅";
+      });
+    }
+
     cols.forEach((c) => {
-      const active = state.sort.col === c.id;
-      const thAttrs = c.cls ? { class: c.cls } : {};
-      thAttrs["aria-sort"] = active ? (state.sort.dir > 0 ? "ascending" : "descending") : "none";
-      const th = el("th", thAttrs);
-      const btn = el("button", { type: "button", class: active ? "sort-btn is-active" : "sort-btn" });
+      const th = el("th", c.cls ? { class: c.cls } : {});
+      const btn = el("button", { type: "button", class: "sort-btn" });
       btn.appendChild(document.createTextNode(c.label));
-      btn.appendChild(el("span", { class: "sort-ind", "aria-hidden": "true" }, active ? (state.sort.dir > 0 ? "▲" : "▼") : "⇅"));
+      const ind = el("span", { class: "sort-ind", "aria-hidden": "true" }, "⇅");
+      btn.appendChild(ind);
       btn.addEventListener("click", () => {
         if (state.sort.col === c.id) state.sort.dir = -state.sort.dir;
         else {
           state.sort.col = c.id;
           state.sort.dir = c.id === "metric" ? (metric.higher ? -1 : 1) : (c.num ? -1 : 1);
         }
-        renderMachines();
+        syncRows();
       });
       th.appendChild(btn);
       headRow.appendChild(th);
+      headerCells.push({ col: c, th: th, btn: btn, ind: ind });
     });
     thead.appendChild(headRow);
     table.appendChild(thead);
-
-    const body = el("tbody");
-    items.forEach((item) => body.appendChild(machineRow(item, metric)));
     table.appendChild(body);
+    syncRows();
     wrap.appendChild(table);
     host.appendChild(wrap);
     const note = "Values: run 2 (run 1 in brackets), at the machine's newest build for this scenario and tier.";
