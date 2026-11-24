@@ -29,7 +29,7 @@ public class ProductionTests
 {
     const string Water = "50-t", Crop = "51-t", Book = "52-t", Gadget = "53-t", Well = "60-t", Farm = "61-t", Bench = "62-t", Workshop = "63-t",
         Study = "70-t", Fuel = "54-t", Generator = "64-t", Battery = "65-t", Lamp = "66-t", BigLamp = "67-t", PoweredWorkshop = "68-t",
-        Tank = "69-t", Mill = "90-t", Bin = "91-t";
+        Tank = "69-t", Mill = "90-t", Bin = "91-t", Tinkering = "71-t";
     /// <summary>
     /// The stat that gives skill factor 1: lerp(0.5, 1.4, x/100) = 1.
     /// </summary>
@@ -57,7 +57,7 @@ public class ProductionTests
     {
         var file = new FcsFile();
         file.Records.AddRange([Item(Water, "Water"), Item(Crop, "Crop"), Item(Book, "Book"), WellFunction(), FarmFunction(), BenchFunction(),
-            FarmData(), Building(Well, "Test Well", "80-t"), FarmBuilding(), BenchBuilding(), StudyResearch(), GadgetItem(), WorkshopFunction(),
+            FarmData(), Building(Well, "Test Well", "80-t"), FarmBuilding(), BenchBuilding(), StudyResearch(), TinkeringResearch(), GadgetItem(), WorkshopFunction(),
             Building(Workshop, "Test Workshop", "84-t"), Item(Fuel, "Fuel"), GeneratorFunction(), Function("86-t", MachineData.BatteryFunction, 0),
             Function("87-t", 15, 0), Powered(Building(Generator, "Test Generator", "85-t"), 20),
             Powered(Building(Battery, "Test Battery", "86-t"), 10, 30), Powered(Building(Lamp, "Lamp", "87-t"), -4),
@@ -195,6 +195,17 @@ public class ProductionTests
     }
 
     /// <summary>
+    /// The research that enables the gadget, finished from the start (a bench makes only what a finished research enabled).
+    /// </summary>
+    static FcsRecord TinkeringResearch()
+    {
+        var tinkering = Rec(Tinkering, FcsRecordType.Research, "Test Tinkering");
+        tinkering.Ints["level"] = 1;
+        tinkering.References["enable item"] = [new FcsReference(Gadget, 0, 0, 0)];
+        return tinkering;
+    }
+
+    /// <summary>
     /// The gadget: 1 crop, crafted in 1 h.
     /// </summary>
     static FcsRecord GadgetItem()
@@ -293,7 +304,7 @@ public class ProductionTests
                     ? [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production]
                     : [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production, new PopulationSystem(population)]);
             World.Player.Faction = PlayerFaction;
-            World.Research.Set(db, []);
+            World.Research.Set(db, [Tinkering]);
             for (int i = 0; i < records.Length; i++)
             {
                 // 30 apart: a character at one building is within the trading range (40) of the next.
