@@ -353,7 +353,7 @@ public sealed class Fixture
     public bool WantsLock { get; set; }
     /// <summary>
     /// Doors: the door's own construction progress (Building +0x164, as a fraction of <see cref="DoorTarget"/>, 1 when whole; docs/game/locks.md
-    /// "Bash door"): blows take it down, at 0 the door breaks. Not among the zone save's door keys, so not saved; hashed only while under 1.
+    /// "Bash door"): blows take it down, at 0 or below the door breaks (the breaking blow's excess stays). Not among the zone save's door keys, so not saved; hashed only while under 1.
     /// </summary>
     public float DoorProgress { get; set; } = 1;
     /// <summary>
@@ -537,9 +537,11 @@ public sealed record BedDetail(string Name, string? Town, int Cost, float Healin
 
 /// <summary>
 /// One door for the panel: open (open or opening: where it is heading), effectively locked, whether it wants its lock, its lock's level (0..100),
-/// whether the door is broken, and its BUILDING record (its Door Condition row).
+/// whether the door is broken, its BUILDING record and its construction progress as a fraction of the record's target, below 0 after the breaking
+/// blow (its Door Condition row).
 /// </summary>
-public readonly record struct DoorDetail(bool Open, bool Locked, int Level, bool Broken, string Record = "", bool WantsLock = false);
+public readonly record struct DoorDetail(bool Open, bool Locked, int Level, bool Broken, string Record = "", bool WantsLock = false,
+    float Progress = 1);
 
 /// <summary>
 /// Where the simulation tells navigation that a building's doors are shut for paths (the game host forwards it to the navmesh's door table). Serial

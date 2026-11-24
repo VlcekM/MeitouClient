@@ -41,6 +41,16 @@ static class SolidHits
     }
 
     /// <summary>
+    /// The fraction of <paramref name="seg"/> from <paramref name="from"/> where it first meets a building's collision, -1 for none;
+    /// <paramref name="ready"/> false while some of it is still being read.
+    /// </summary>
+    public static float BuildingHit(IRagdollEnvironment buildings, Vector3 from, Vector3 seg, out bool ready)
+    {
+        ready = true;
+        return Buildings(buildings, from, seg, 1, false, ref ready);
+    }
+
+    /// <summary>
     /// The fraction of the segment where it goes under the terrain, -1 when it stays above (sampled every <paramref name="step"/> units).
     /// </summary>
     static float Terrain(IWalkability walk, Vector3 from, Vector3 seg, float step)

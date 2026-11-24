@@ -278,6 +278,7 @@ public sealed partial class LockSystem
 
             if (c.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the work
             job.Work += world.TickSeconds;
+            StampLockWork(world, c, job.Work, job.Lock);
             if (job.Work < LockWorkSeconds) continue;
             c.DoorJob = null;
             if (job.Lock && door.Kind == FixtureKind.Door)
@@ -290,6 +291,17 @@ public sealed partial class LockSystem
             world.Fixtures.SetLocked(door, job.Lock);
             world.EmitSound(job.Lock ? SoundKind.Locked : SoundKind.Unlocked, s, n.Position);
         }
+    }
+
+    /// <summary>
+    /// Records a lock worker's bar for this tick (<see cref="CharacterCold.LockWork"/>): Task_LockDoor's fill rises from 0 and Task_UnlockDoor's
+    /// falls from 1, by 0.3 per game second (<c>FUN_140337670</c>, <c>FUN_14033d420</c>, <b>Verified</b>: the task's <c>+0x80</c> handed to the
+    /// bar each update).
+    /// </summary>
+    static void StampLockWork(World world, CharacterCold c, float worked, bool locking)
+    {
+        float done = Math.Clamp(worked / LockWorkSeconds, 0, 1);
+        c.LockWork = (world.Tick, locking ? done : 1 - done, locking);
     }
 
     /// <summary>

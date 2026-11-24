@@ -99,7 +99,7 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   <div class="bn" id="bench-root" data-service={service}>
     <header>
       <h1>Meitou benchmarks</h1>
-      <p>Meitou releases and daily builds benchmarked on players' machines. Lower is better, except fps.</p>
+      <p>Meitou releases and daily builds benchmarked on players' machines — always rendered at 1080p (1920×1080). Lower is better, except fps.</p>
     </header>
 
     <section id="charts-sec">
@@ -243,8 +243,9 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .muted{color:var(--muted)}
   .small{font-size:.9rem;margin:.4rem 0 .2rem}
   .box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px 18px;margin:16px 0}
-  #charts-sec{min-height:540px}
-  .box.is-loading{display:flex;align-items:center;justify-content:center;min-height:460px}
+  #charts-sec{min-height:660px}
+  #machines{min-height:220px}
+  .box.is-loading{display:flex;align-items:center;justify-content:center;min-height:600px;margin:12px 0 0}
   .spinner{width:36px;height:36px;border-radius:50%;border:3px solid color-mix(in srgb,var(--line) 85%,transparent);border-top-color:var(--accent);animation:bn-spin .75s cubic-bezier(.5,.15,.5,.85) infinite}
   & > section > h2{margin-top:2rem}
   .setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px;margin:.6rem 0}
@@ -275,9 +276,14 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   th:first-child,td:first-child{text-align:left;white-space:normal}
   th{color:var(--muted);font-weight:600;font-size:.8rem}
   td.l,th.l{text-align:left}
-  .tablewrap{overflow-x:auto}
+  .tablewrap{overflow-x:auto;overflow-y:hidden}
   .mtable td:first-child{min-width:12rem}
   .mtable td.l{white-space:normal}
+  .sort-btn{display:inline-flex;align-items:center;gap:4px;font:inherit;color:inherit;background:none;border:0;padding:2px 0;cursor:pointer;white-space:nowrap}
+  .sort-btn:hover,.sort-btn.is-active{color:var(--text)}
+  .sort-ind{display:inline-block;width:1em;text-align:center;font-size:.7rem;opacity:.32}
+  .sort-btn:hover .sort-ind{opacity:.75}
+  .sort-btn.is-active .sort-ind{opacity:1;color:var(--accent)}
   .groups td{text-align:left;white-space:normal;vertical-align:top}
   .groups td:first-child{width:9rem;color:var(--muted)}
   .groups td:first-child strong{color:var(--text)}
@@ -330,7 +336,7 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
     tbody tr>*,summary,.seg button,.seg .seg-n,.mchip{transition:background-color .14s cubic-bezier(.22,1,.36,1),border-color .14s ease,color .14s ease,opacity .14s ease,transform .14s cubic-bezier(.22,1,.36,1)}
     .seg button:active{transform:scale(.97)}
     .chart .guide{transition:opacity .1s ease}
-    .chart,.mtable,.caveat{animation:bn-pop .24s cubic-bezier(.22,1,.36,1) both}
+    .chart,.caveat{animation:bn-pop .24s cubic-bezier(.22,1,.36,1) both}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
   }

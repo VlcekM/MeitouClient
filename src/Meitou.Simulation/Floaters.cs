@@ -31,8 +31,8 @@ public enum FloaterKind : byte
     /// </summary>
     StealthMiss,
     /// <summary>
-    /// A building's damage number (<see cref="Floater.Part"/>, the int of the clamped damage) at the point hit, grey (<c>FUN_14029d2b0</c>: a door's
-    /// bashing blow; a wall's is not built).
+    /// A building's damage number (<see cref="Floater.Part"/>, the int of the clamped damage) at the door's origin, which is its building's
+    /// (<c>FUN_14029d2b0</c>, <b>Verified</b>: the door is made at its building's position), grey: a door's bashing blow; a wall's is not built.
     /// </summary>
     Building,
     /// <summary>

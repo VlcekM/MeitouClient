@@ -2,6 +2,10 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.21.1
+
+- Benchmark page: added a "Benchmark settings" tooltip in the header listing the fixed display, quality, and isolation settings used during every benchmark run
+
 ## v1.21.0
 
 - Benchmark page: single framed results table with scenario and tier tabs (including an All tiers overview whose rows open each tier's groups)

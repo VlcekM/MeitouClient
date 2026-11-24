@@ -701,6 +701,9 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     "All necessary materials are ready." or, in Title, "{1} more 'Building Materials' will be needed to complete this construction." with the
     missing amount (the number in Title, the rest in the default ink). A row's tooltip is set on its `LifeBarNTooltip` (`FUN_1407228a0`, the type 0
     setter). 7 gives nothing for buildings.
+    A door's own rows (DoorStuff `FUN_140304120` section 4, **Verified**) come first: `Door Condition`, the number int(progress) and the bar
+    progress / target (`FUN_140547200`), tooltip "The door is in good condition." while the progress is 0 or more, else (below 0, after the
+    breaking blow) the number in Title and "The door is damaged.". Meitou: `BuildingSelection.DoorConditionRow` from `DoorDetail.Progress`.
   **Observed** (the owner's screenshot of a town house, base game): the header word (`Normal`) and `LifeBar` rows `Door Condition` 10 and
   `Building Condition` 5, full yellow bars: the targets of the door and the house (their materials, all delivered). The name bar read the
   state's own name ("Big Shop") left and the owner faction ("Swampers") right; the info panel `Type:` (the record's name, "Swamp Shack") and
@@ -1190,8 +1193,11 @@ Overview tab 2 (`ResearchTab`), part of `ManagementScreen` (constructor `FUN_140
 - **Queue drag** (**Verified**, Kenshi 1.0.68, `FUN_1404b13b0`, `FUN_14049f320`, `FUN_1404c8dd0`): drop onto another queue row to move there.
   The drop check tests every queued item's unmet requirements by swapping the two endpoints for the lookup. Each unmet requirement must be found
   before the dependent's original index in that lookup. An accepted drop removes the dragged entry and reinserts it at the target index, keeping its progress.
-- Meitou: `ResearchQueueList` rows are plain text; a click on a blueprint queues it and a click on a queue row takes it off. Drag between queue rows
-  to reorder them. The wheel scrolls the blueprint lines a line per notch (no bar drawn). The description lines use the DatapanelGUI row geometry,
+- `ResearchQueueList` (**Verified**, decompile): an `ItemBox` of `ReorderableListItem<TechItemViewData>` cells (`FUN_1404c72d0`, `Kenshi_ItemListItem.layout`): a
+  `Kenshi_Button1` frame over 0.9 of the cell, `ItemName` (the research's name, left), `ItemValue` (its time left, `getValue` = `FUN_140831550` as above,
+  right-aligned), `Progress` (`Kenshi_LifeBarSkin`) and `RemoveButton` ("X" in red, 0.9 to 1 of the cell). Each draw (`FUN_1404bbfe0`) cuts the name short of the
+  time's text and sets the bar's width to the share done times `ItemValue`'s width. The X takes the research off the queue (`researchRemoved`).
+- Meitou: a click on a blueprint queues it; a queue row draws as above (`ResearchQueueRow`), its X takes it off, and a drag between queue rows reorders them. The wheel scrolls the blueprint lines a line per notch (no bar drawn). The description lines use the DatapanelGUI row geometry,
   and the DESCRIPTION captions are inset 8 px at 1080 (engine choice).
 
 ### Craft tab
@@ -1630,7 +1636,7 @@ the obedience job row (item 28, **Verified** `_setHightlightCoords` `FUN_140972a
 
 ### 8. Damage floaters
 
-**Building damage number** (`FUN_14029d2b0`, **Verified**; wall `FUN_14029d560`, door `FUN_14029d690`): a blow on a building not yet destroyed shows `{1,num}` of int(f), f the clamped damage (door: clamp(2 blunt + 0.5 cut, 20, 60); wall: clamp((hit1 x 2 + hit0 x 0.5) x 0.5, 10, 60), 0.003 x f off its health fraction, destroyed at 0 with the Wwise event `Break`), only while the floaters option is on, at the building point lifted by a fixed height and jittered at random in x, y and z, one uniform grey, through the same floating-text factory (`FUN_14073faf0`, mode 2). Meitou: doors only (`FloaterKind.Building`, queued by `LockSystem`; walls take no damage here).
+**Building damage number** (`FUN_14029d2b0`, **Verified**; wall `FUN_14029d560`, door `FUN_14029d690`): a blow on a building not yet destroyed shows `{1,num}` of int(f), f the clamped damage (door: clamp(2 blunt + 0.5 cut, 20, 60); wall: clamp((hit1 x 2 + hit0 x 0.5) x 0.5, 10, 60), 0.003 x f off its health fraction, destroyed at 0 with the Wwise event `Break`), only while the floaters option is on, at the struck object's creation point (a door's is its building's position: `FUN_140557280` makes each `doors` entry at the building's position and orientation) + (U(-20, 20), 15 + U(0, 10), U(-20, 20)) (`FUN_1409b1c80`, `rand()` scaled), one uniform grey, through the same floating-text factory (`FUN_14073faf0`, mode 2). Meitou: doors only (`FloaterKind.Building` at `Fixture.Position`, the building's, queued by `LockSystem`; the offsets in `DamageFloaters.Jittered`; walls take no damage here).
 
 The options `floaters` (Off 0, Simple info 1 default, Full info 2; [settings](../formats/settings.md)) control the numbers that
 float over a character when a blow lands. Tooltip: damage "and in brackets the amount of damage that was stopped by armour";
@@ -1645,7 +1651,7 @@ Full info "separate numbers for each damage type". Built at the end of `MedicalS
 - **Full**: the hit part's name, `": "`, then `C` = cut (cut + pierce when pierce is above 1) with ` (-a)` when its stopped amount
   is above 0; when blunt is 1 or more also `" + "`, `B` = blunt + stun and its own ` (-b)`. Numbers are truncated to integers.
 - **Placement**: the label follows the character, 15 units above its node. Colour (0.9, 0.9, 0.9) by default (**Verified**, `FUN_1406508d0` end). Two tests follow, the second winning (**Verified**: `FUN_1406508d0`'s 6th argument is the attacker, whose position the blood direction is taken from; the other character is the part's owner `+0xe0`): green (0.11, 0.6, 0.11) when the ATTACKER's faction is a player faction (`+0x250` set) or the active squad's memory holds the short-term tag TEMP ENEMY (bit 4) on the hit character (`FUN_140678830`, [squad memory](dialogue.md#squad-memory)); red (1, 0.31, 0.31) when the HIT character's faction is a player faction (`FUN_1407916d0`) or the memory holds TEMP ALLY (bit 3) on it. So a player's character is red, a blow by a player green, a TEMP ENEMY green, a TEMP ALLY red, else grey. The memory is `+0x98` of the object at `+0x1d8` of `FUN_1407f5520(DAT_142134690)` (the active squad, `PlayerState.Squad`); Meitou reads the active squad's `SquadMemory` when the hit lands (`CombatSystem.FloatHit`). The label is only made while the GUI global `DAT_142133ae0` is set and the target's data `+0x1a9` flag is set.
-- Wall (building) damage uses the same label with a plain `{1,num}` number, random scatter of +-20 units (`FUN_14029d2b0`).
+- Wall (building) damage uses the same label and placement with a plain `{1,num}` number (`FUN_14029d2b0`).
 - **Look and motion** (**Verified**, `ScreenLabel` update `FUN_1406ea9f0`, constants read from the binary): a plain MyGUI TextBox (template
   `Kenshi_TextboxStandardText`, so no shadow) on the `Dialog` layer, font from a table by the creator's 4th argument (0 `Kenshi_FloaterFont_Small`,
   1 `_Medium`, 2 `_Large`; `FUN_14157ff60`); a hit passes 1 when the option is Simple info, else 0. Its size is the text's plus 20 x the UI scale; its

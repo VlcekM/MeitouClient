@@ -208,9 +208,11 @@ sealed class WorldPicking(PlayerInterface player)
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
             var hull = footprint.Place(site.Position, yaw);
             float y = site.Position.Y;
-            if (mesh.Count == 0 || BuildMode.RayPrism(origin, direction, hull, y + footprint.YMin, y + footprint.YMax) is null) continue;
+            bool tilted = Tilted(site.Rotation);
+            if (mesh.Count == 0 || !tilted && BuildMode.RayPrism(origin, direction, hull, y + footprint.YMin, y + footprint.YMax) is null) continue;
 
-            if (RayMeshHit((origin, direction), mesh, site.Position, yaw) is { } hit && hit.T < limit)
+            // A tilted site's collision stands with its whole turn (the original's shapes hang on the building's node).
+            if (RayMeshHit((origin, direction), mesh, site.Position, tilted ? site.Rotation : yaw) is { } hit && hit.T < limit)
                 yield return new StaticHit(hit.T, hit.Normal, footprint, site.Position, yaw);
         }
     }
@@ -629,6 +631,11 @@ sealed class WorldPicking(PlayerInterface player)
     readonly Dictionary<(string Record, bool Destroyed), IReadOnlyList<int>> _collisionDoors = [];
 
     /// <summary>
+    /// The up axis's height below which a placement counts as tilted (<see cref="Tilted"/>): cos 0.8 degrees.
+    /// </summary>
+    const float TiltedUp = 0.9999f;
+
+    /// <summary>
     /// The collision triangles of building record <paramref name="record"/>, intact or <paramref name="destroyed"/> (a ruin's: no doors), read once
     /// (empty without collision files).
     /// </summary>
@@ -651,6 +658,23 @@ sealed class WorldPicking(PlayerInterface player)
         var doors = player.Build.Services?.Placement.CollisionMeshDoors(record, destroyed) ?? [];
         _collisionDoors[(record, destroyed)] = doors;
         return doors;
+    }
+
+    /// <summary>
+    /// Whether a placement's turn tilts it away from upright (more than about 0.8 degrees), so its upright footprint prism no longer holds its
+    /// collision.
+    /// </summary>
+    internal static bool Tilted(Quaternion rotation) =>
+        rotation.LengthSquared() > 1e-12f && Vector3.Transform(Vector3.UnitY, Quaternion.Normalize(rotation)).Y < TiltedUp;
+
+    /// <summary>
+    /// Where the ray meets building record <paramref name="record"/>'s collision placed at <paramref name="position"/> with its whole
+    /// <paramref name="rotation"/>; null when it has none or the ray misses it.
+    /// </summary>
+    internal float? TiltedBuildingRayT((Vector3 Origin, Vector3 Direction) ray, string record, Vector3 position, Quaternion rotation)
+    {
+        var mesh = CollisionMeshOf(record, destroyed: false);
+        return mesh.Count == 0 ? null : RayMesh(ray, mesh, position, rotation);
     }
 
     /// <summary>

@@ -430,7 +430,7 @@ public sealed partial class FixtureRegistry
         var doorList = list.Where(f => f.Kind == FixtureKind.Door).OrderBy(f => f.DoorIndex)
             .Select(f
                     => new DoorDetail(f.Motion is DoorMotion.Open or DoorMotion.Opening, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0,
-                            f.DoorBroken, f.RecordId, f.WantsLock)).ToArray();
+                            f.DoorBroken, f.RecordId, f.WantsLock, f.DoorProgress)).ToArray();
         return new BuildingDetail(instance, doorList, OwnsBuilding(instance, faction), PublicOf(instance))
         {
             SalePrice = SalePrice(instance, faction),

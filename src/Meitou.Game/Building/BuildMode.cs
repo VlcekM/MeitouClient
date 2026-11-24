@@ -1440,6 +1440,11 @@ sealed class BuildMode(PlayerInterface player)
             && player.Production.Machine(site.Id)?.Function is TownBuildings.ChairFunction or TownBuildings.ThroneFunction;
         if (invisible && host.Parts(site.Record).Count == 0) return null;
 
+        // A tilted site's collision stands with its whole turn, as the original's shapes hang on the building's node: picked by it alone, the
+        // upright prism around the footprint not holding it (#1334: a wall ramp placed at a slope).
+        if (bounds is not null && WorldPicking.Tilted(site.Rotation) && player.Picking.TiltedBuildingRayT(ray, site.Record, site.Position, site.Rotation) is { } t)
+            return t;
+
         return bounds is { } footprint
             ? player.Picking.BuildingRayT(ray, footprint.Place(site.Position, yaw), footprint.YMin, footprint.YMax, site.Record, site.Position,
                 site.Position.Y, yaw)

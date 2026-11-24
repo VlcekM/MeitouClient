@@ -2160,6 +2160,18 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     string ShownItemName(string record) => _items.Info(record) is { } info ? ShownText.Record(record, info.Name) : record;
 
     /// <summary>
+    /// A queued research as the host shows it: its id, name (as the mods' text sources show it), the share done and its hours at the current
+    /// repeat (0 for one the data lost).
+    /// </summary>
+    (string Id, string Name, float Progress, float Hours) QueueEntry(ResearchState state, string id, float seconds)
+    {
+        if (Research(id) is not { } d) return (id, id, 0, 0);
+
+        float hours = d.Hours(_constants, Settings.ResearchOption, state.Times(id));
+        return (id, ShownText.Record(id, d.Name), Math.Clamp(seconds / (hours * (MachineData.DaySeconds / 24)), 0, 1), hours);
+    }
+
+    /// <summary>
     /// The research state for the host (rebuilt when it or the machines changed).
     /// </summary>
     public ResearchSnapshot ResearchView(World world)
@@ -2185,10 +2197,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         _shownRevision = ShownText.Revision;
         _allResearch ??= ResearchData.LoadAll(_db);
         var state = world.Research;
-        var queue = state.Queue.Select(q => (q.Id, Research(q.Id) is { } named ? ShownText.Record(q.Id, named.Name) : q.Id,
-            Research(q.Id) is { } d
-                ? Math.Clamp(q.Seconds / (d.Hours(_constants, Settings.ResearchOption, state.Times(q.Id)) * (MachineData.DaySeconds / 24)), 0, 1)
-                : 0)).ToArray();
+        var queue = state.Queue.Select(q => QueueEntry(state, q.Id, q.Seconds)).ToArray();
         var available = _allResearch.Where(r => Available(world, r))
             .Select(r => new ResearchOption(r.Id, ShownText.Record(r.Id, r.Name), ShownText.Record(r.Id, r.Category, "category"),
                 r.LevelAt(state.Times(r.Id)),

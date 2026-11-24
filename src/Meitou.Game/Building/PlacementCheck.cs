@@ -338,7 +338,7 @@ public static class PlacementCheck
         {
             return PlacementFailure.InsideIncomplete;
         }
-        var centre = CentreBlock(q, at, parent);
+        var centre = CentreBlock(q, at, hull, parent);
         if (Refused(q, centre)) return centre;
 
         // Interior-only furniture must stand on a building's floor; what may also stand outside (exterior furniture or a node) goes either way.
@@ -367,7 +367,7 @@ public static class PlacementCheck
     /// <summary>
     /// A building under the ghost's centre <paramref name="at"/> that blocks it; None when there is none.
     /// </summary>
-    static PlacementFailure CentreBlock(PlacementQuery q, Vector2 at, string? parent)
+    static PlacementFailure CentreBlock(PlacementQuery q, Vector2 at, Vector2[]? hull, string? parent)
     {
         var ghostFootprint = q.Services.Footprint(q.Building.Id);
         // A building under the ghost's centre (the one it stands in aside): another town's or the level's (not ours), or an unfinished site of ours.
@@ -378,7 +378,8 @@ public static class PlacementCheck
                 && !q.Passes(site.Record, site.Position, site.Rotation)
                 && q.Services.Footprint(site.Record) is { } siteFootprint
                 && (q.SnappedOn is null && !site.Outside || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, site.Position.Y, siteFootprint))
-                && Contains(siteFootprint.Place(site.Position, site.Rotation), at))
+                && Contains(siteFootprint.Place(site.Position, site.Rotation), at)
+                && Reaches(q, hull, siteFootprint, site.Position, site.Rotation))
                 return site.Complete ? PlacementFailure.TooCloseToBuilding : PlacementFailure.InsideIncomplete;
         }
         foreach (var other in q.Services.StaticAround(at, 20))
@@ -406,7 +407,11 @@ public static class PlacementCheck
         var ghostFootprint = q.Services.Footprint(q.Building.Id);
         float reach = hull.Max(p => Vector2.Distance(p, at)) + 150;
         foreach (var other in q.Services.StaticAround(at, reach))
-            if (Blocks(q, other, parent) && Overlap(hull, other.Hull)) return PlacementFailure.TooCloseToBuilding;
+        {
+            if (Blocks(q, other, parent) && Overlap(hull, other.Hull) && Reaches(q, hull, q.Services.Footprint(other.Record), other.Position, other.Rotation))
+                return PlacementFailure.TooCloseToBuilding;
+        }
+
         foreach (var site in q.Sites)
         {
             if (site.Id != parent
@@ -414,7 +419,8 @@ public static class PlacementCheck
                 && !q.Passes(site.Record, site.Position, site.Rotation)
                 && q.Services.Footprint(site.Record) is { } f
                 && (q.SnappedOn is null && !site.Outside || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, site.Position.Y, f))
-                && Overlap(hull, f.Place(site.Position, site.Rotation)))
+                && Overlap(hull, f.Place(site.Position, site.Rotation))
+                && Reaches(q, hull, f, site.Position, site.Rotation))
                 return PlacementFailure.TooCloseToBuilding;
         }
         foreach (var queued in q.Queued)
@@ -476,6 +482,36 @@ public static class PlacementCheck
         float floor = q.Position.Y + MathF.Max(footprint.YMin, 0);
         float top = q.Position.Y + footprint.YMax - StructureClearance;
         return Cuts(on.Structure, hull, floor + StructureClearance, top) || Cuts(on.Roof, hull, floor + RoofClearance, top);
+    }
+
+    /// <summary>
+    /// Whether another building whose footprint overlaps the ghost's blocks it: on a building's floor, only when one of its collision triangles
+    /// (<paramref name="other"/> placed at <paramref name="position"/> / <paramref name="rotation"/>) cuts into the ghost's prism, as the original
+    /// tests the ghost's node boxes against the physics shapes in 3D (a companion building at the same origin, such as Forgotten Buildings' citadel
+    /// ramp, whose ramp runs round the inside wall, does not block the floor it encloses, #1297); elsewhere always (the 2D stand-in), and when
+    /// its triangles are not known.
+    /// </summary>
+    static bool Reaches(PlacementQuery q, Vector2[]? hull, BuildingFootprint? other, Vector3 position, Quaternion rotation)
+    {
+        if (q.On is null || hull is null || other is not { Triangles.Length: > 0 } || q.Services.Footprint(q.Building.Id) is not { } footprint)
+            return true;
+
+        // A flat ghost (a rug) still has a sliver over the floor to meet a wall with.
+        float bottom = q.Position.Y + MathF.Max(footprint.YMin, 0) + StructureClearance;
+        float top = MathF.Max(q.Position.Y + footprint.YMax - StructureClearance, bottom + StructureTolerance);
+
+        var prism = new FootprintPrism(hull, bottom, top);
+        var place = Matrix4x4.CreateFromQuaternion(Normalised(rotation)) * Matrix4x4.CreateTranslation(position);
+        var corners = other.Triangles;
+        for (int i = 0; i + 2 < corners.Length; i += 3)
+        {
+            var a = Vector3.Transform(corners[i], place);
+            var b = Vector3.Transform(corners[i + 1], place);
+            var c = Vector3.Transform(corners[i + 2], place);
+            if (prism.Cuts(a, b, c, StructureTolerance)) return true;
+        }
+
+        return false;
     }
 
     /// <summary>
