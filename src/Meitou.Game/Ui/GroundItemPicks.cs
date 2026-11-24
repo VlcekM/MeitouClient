@@ -265,36 +265,40 @@ sealed class GroundItemPicks(PlayerInterface player)
         _labelNames.Clear();
         if (HighlightFocus is not { } focus || player.UiPainter is not { } painter || player.CharacterEditor.EditorOpen) return;
 
-        float scale = player.UiScale;
-        float height = player.Height * 0.0259259f;
-        float em = 20 * 50f / 72f * scale;
         var near = NearLabelItems(focus);
-        near.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-        var placed = new List<(int Id, UiRect Rect)>();
-        foreach (var (g, _, at) in near)
-        {
-            string label = LabelName(g);
-            _labelNames.Add(label);
-            float width = MathF.Ceiling(LabelTextWidth(painter, label)) + em;
-            var rect = new UiRect(at.X - width / 2, at.Y - 6 * scale - height, width, height);
-            for (bool moved = true; moved;)
-            {
-                moved = false;
-                foreach (var (_, other) in placed)
-                {
-                    if (rect.Intersect(other) is { Width: > 0, Height: > 0 })
-                    {
-                        rect = rect with { Y = other.Y - height - 1 };
-                        moved = true;
-                    }
-                }
-            }
+        if (near.Count == 0) return;
 
-            placed.Add((g.Id, rect));
+        near.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+        float height = player.Height * 0.0259259f;
+        foreach (var (item, _, at) in near) PlaceLabel(painter, item, at, height);
+
+        AddLabelControls(controls, near);
+    }
+
+    /// <summary>
+    /// Fits the label to its name and lifts it above any nearer label it would overlap.
+    /// </summary>
+    void PlaceLabel(Rendering.Ui.UiPainter painter, Simulation.Items.GroundItemSnapshot item, Vector2 at, float height)
+    {
+        string label = LabelName(item);
+        _labelNames.Add(label);
+        float scale = player.UiScale;
+        float width = MathF.Ceiling(LabelTextWidth(painter, label)) + 20 * 50f / 72f * scale;
+        var rect = new UiRect(at.X - width / 2, at.Y - 6 * scale - height, width, height);
+
+        for (bool moved = true; moved;)
+        {
+            moved = false;
+            foreach (var (_, other) in _itemLabels)
+            {
+                if (rect.Intersect(other) is not { Width: > 0, Height: > 0 }) continue;
+
+                rect = rect with { Y = other.Y - height - 1 };
+                moved = true;
+            }
         }
 
-        _itemLabels.AddRange(placed);
-        AddLabelControls(controls, near, placed);
+        _itemLabels.Add((item.Id, rect));
     }
 
     /// <summary>
@@ -348,14 +352,13 @@ sealed class GroundItemPicks(PlayerInterface player)
     /// <summary>
     /// Adds the plate and the text of each placed label, drawn far to near so the nearer labels lie on top.
     /// </summary>
-    void AddLabelControls(List<UiControl> controls, List<(Simulation.Items.GroundItemSnapshot Item, float Distance, Vector2 At)> near,
-        List<(int Id, UiRect Rect)> placed)
+    void AddLabelControls(List<UiControl> controls, List<(Simulation.Items.GroundItemSnapshot Item, float Distance, Vector2 At)> near)
     {
         int? hovered = PickGroundItem(player.Mouse);
         // Drawn far to near so the nearer labels lie on top.
-        for (int i = placed.Count - 1; i >= 0; i--)
+        for (int i = _itemLabels.Count - 1; i >= 0; i--)
         {
-            var (id, rect) = placed[i];
+            var (id, rect) = _itemLabels[i];
             bool stealing = Stealing(near[i].Item);
             string item = ItemLabelColour(near[i].Item);
             string selected = stealing ? "1 0.4 0.4" : "0.4 1 0.4";

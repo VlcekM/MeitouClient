@@ -1471,6 +1471,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public float? ShownInteriorHit(Vector3 origin, Vector3 direction, float maxDistance)
     {
+        if (InteriorView.Count == 0) return null;
+
         float? best = null;
         foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)
