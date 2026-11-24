@@ -104,8 +104,11 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
 
     <section id="charts-sec">
       <h2>Over builds</h2>
-      <div id="controls" class="controls"></div>
-      <p id="group-desc" class="muted small" hidden></p>
+      <div id="toolbar" class="toolbar" hidden>
+        <div id="controls" class="tb-controls"></div>
+        <p id="group-desc" class="tb-desc muted small" hidden></p>
+        <div id="filter-bar" class="tb-filter"></div>
+      </div>
       <div id="caveat"></div>
       <div id="status" class="box is-loading" role="status" aria-label="Loading benchmark results"><span class="spinner" aria-hidden="true"></span></div>
       <div id="chart"></div>
@@ -249,11 +252,13 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .setup dd{margin:0}
   summary{cursor:pointer;font-weight:600}
   select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
-  .msearch{display:block;width:min(320px,100%);margin:.5rem 0;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
-  .legend{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:.9rem;color:var(--muted);margin:.5rem 0}
+  .msearch{display:block;width:min(260px,100%);margin:0;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 65%,transparent);color:var(--text);font:inherit;font-size:.88rem;flex:0 0 auto}
+  .msearch::placeholder{color:var(--muted)}
+  .chart-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 16px;padding:2px 6px 6px}
+  .legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin:0}
   .legend svg{vertical-align:-3px}
-  .chart{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:10px 10px 4px;min-width:0}
-  .chart h3{font-size:.95rem;padding:0 4px}
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:12px 12px 6px;min-width:0}
+  .chart h3{font-size:.98rem;padding:0}
   .chart svg{display:block;overflow:visible;max-width:100%;height:auto}
   .chart text{fill:var(--muted);font-size:12.5px;font-family:inherit}
   .chart .grid{stroke:var(--grid);stroke-width:1}
@@ -282,18 +287,25 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   #tip{position:fixed;z-index:10;pointer-events:none;background:var(--panel)!important;color:var(--text);border:1px solid var(--line);
     border-radius:8px;padding:6px 10px;font-size:.85rem;box-shadow:0 4px 14px rgba(0,0,0,.2);max-width:300px}
   .dot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.35em;vertical-align:baseline}
-  .controls{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:12px 0}
-  .ctl{display:inline-flex;align-items:center;gap:8px;font-size:.9rem;color:var(--muted)}
+  .toolbar{background:color-mix(in srgb,var(--panel) var(--panel-a),transparent);backdrop-filter:blur(2px);border:1px solid var(--line);border-radius:16px;padding:12px 16px;margin:12px 0 14px;display:flex;flex-direction:column;gap:10px}
+  .tb-controls{display:flex;flex-direction:column;gap:8px}
+  .tb-row{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+  .tb-metric{margin-left:auto}
+  .tb-desc{margin:0;font-size:.85rem}
+  .tb-filter{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding-top:10px;border-top:1px solid var(--line)}
+  .ctl{display:inline-flex;align-items:center;gap:8px;font-size:.86rem;color:var(--muted)}
   .caveat{border:1px solid var(--bad);border-radius:20px;padding:8px 14px;background:var(--panel);margin:8px 0}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--panel) 72%,transparent)}
-  .seg button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:.88rem;color:var(--muted);background:transparent;border:0;padding:4px 12px;cursor:pointer}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--bg) 55%,transparent)}
+  .seg button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:.86rem;color:var(--muted);background:transparent;border:0;padding:4px 12px;cursor:pointer}
   .seg button[aria-pressed="true"]{background:var(--accent);color:var(--bg);font-weight:600}
   .seg .seg-n{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;font-size:.72rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;background:color-mix(in srgb,var(--line) 85%,transparent);color:var(--text)}
   .seg button[aria-pressed="true"] .seg-n{background:rgba(28,22,19,.24);color:var(--bg)}
   .seg .seg-n.is-zero{opacity:.42}
-  .mpick{display:inline-flex;flex-wrap:wrap;gap:4px 14px}
-  .mchip{display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:.88rem}
-  .mchip input{margin:0 4px 0 0}
+  .mpick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:1 1 auto;min-width:0}
+  .mchip{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:.82rem;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,transparent);color:var(--text);user-select:none}
+  .mchip input{position:absolute;opacity:0;pointer-events:none;width:0;height:0}
+  .mchip.is-off{opacity:.45;color:var(--muted);text-decoration:line-through}
+  @media (max-width:700px){.tb-metric{margin-left:0}}
   .method h3{margin:1.2rem 0 .3rem}
   .method > summary{font-size:1.05rem;padding:2px 0}
   .plain{margin:18px 0;padding:8px 0 0;border-top:1px solid var(--line)}
@@ -311,10 +323,11 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
     tbody tr:hover>*{background:color-mix(in srgb,var(--accent) 20%,transparent)}
     summary:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px}
     .seg button[aria-pressed="false"]:hover{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--text)}
+    .mchip:hover{border-color:var(--accent)}
     .chart .hit:hover{fill:color-mix(in srgb,var(--accent) 25%,transparent);stroke:var(--accent);stroke-width:2.5}
   }
   @media (prefers-reduced-motion:no-preference){
-    tbody tr>*,summary,.seg button,.seg .seg-n{transition:background-color .14s cubic-bezier(.22,1,.36,1),color .14s ease,transform .14s cubic-bezier(.22,1,.36,1)}
+    tbody tr>*,summary,.seg button,.seg .seg-n,.mchip{transition:background-color .14s cubic-bezier(.22,1,.36,1),border-color .14s ease,color .14s ease,opacity .14s ease,transform .14s cubic-bezier(.22,1,.36,1)}
     .seg button:active{transform:scale(.97)}
     .chart .guide{transition:opacity .1s ease}
     .chart,.mtable,.caveat{animation:bn-pop .24s cubic-bezier(.22,1,.36,1) both}

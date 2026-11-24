@@ -440,8 +440,10 @@
   function groupDesc(g) { return own(GROUP_DESC, g) ? GROUP_DESC[g] : ""; }
 
   function render() {
+    document.getElementById("toolbar").hidden = false;
     renderControls();
     renderGroupDesc();
+    renderFilterBar();
     renderCaveat();
     renderChart();
     renderMachines();
@@ -451,16 +453,24 @@
     const host = document.getElementById("controls");
     host.innerHTML = "";
     const groups = groupsOf();
-    host.appendChild(control("Benchmark", versionSelect()));
-    host.appendChild(control("Scenario", segmented(scenariosOf(), state.scenario, scenarioName, selectScenario, null, countForScenario)));
-    if (fingerprints().length > 1) host.appendChild(control("Fingerprint", fingerprintSelect()));
-    host.appendChild(control("Tier", segmented(tiersOf(), state.tier, tierName, pickTier, null,
+
+    const row1 = el("div", { class: "tb-row" });
+    row1.appendChild(control("Scenario", segmented(scenariosOf(), state.scenario, scenarioName, selectScenario, null, countForScenario)));
+    row1.appendChild(control("Tier", segmented(tiersOf(), state.tier, tierName, pickTier, null,
       (t) => countFor(state.scenario, state.fingerprint, t, state.group))));
+    row1.appendChild(control("Benchmark", versionSelect()));
+    if (fingerprints().length > 1) row1.appendChild(control("Fingerprint", fingerprintSelect()));
+    const metric = control("Metric", metricSelect());
+    metric.classList.add("tb-metric");
+    row1.appendChild(metric);
+    host.appendChild(row1);
+
     if (groups.length > 1) {
-      host.appendChild(control("Segments", segmented(groups, state.group, groupName, pickGroup, groupDesc,
+      const row2 = el("div", { class: "tb-row" });
+      row2.appendChild(control("Segments", segmented(groups, state.group, groupName, pickGroup, groupDesc,
         (g) => countFor(state.scenario, state.fingerprint, state.tier, g))));
+      host.appendChild(row2);
     }
-    host.appendChild(control("Metric", metricSelect()));
   }
 
   function renderGroupDesc() {
@@ -561,54 +571,64 @@
     if (!D) return;
     const rows = selected().filter((e) => !state.hidden[e.line] && matches(e.line));
     const targets = D.targets.filter((t) => rows.some((e) => e.target === t.id));
-    host.appendChild(searchBox());
-    host.appendChild(picker());
     if (!rows.some((e) => shownRun(e, state.metric) >= 0)) {
       host.appendChild(el("p", { class: "box muted" }, "No results for this selection."));
       return;
     }
-    host.appendChild(legend());
     chart(host, rows, targets);
   }
 
-  /** Lines that can be hidden: every machine+platform of the version with results for this tier and group. */
-  function picker() {
-    const keys = dict(), box = el("div", { class: "mpick", role: "group", "aria-label": "Machines shown" });
+  /** Persistent search box + machine toggle chips inside the toolbar; typing never replaces the input or drops focus. */
+  function renderFilterBar() {
+    const host = document.getElementById("filter-bar");
+    let box = host.querySelector(".msearch");
+    if (!box) {
+      box = el("input", { type: "search", class: "msearch", placeholder: "Filter machines (GPU, CPU, user)…", "aria-label": "Filter machines" });
+      box.addEventListener("input", () => {
+        state.search = box.value;
+        renderControls();
+        renderFilterChips();
+        renderChart();
+        renderMachines();
+      });
+      host.appendChild(box);
+      host.appendChild(el("div", { class: "mpick", role: "group", "aria-label": "Machines shown" }));
+    }
+    if (box.value !== state.search) box.value = state.search;
+    renderFilterChips();
+  }
+
+  /** Clickable machine toggle chips matching the current search. */
+  function renderFilterChips() {
+    const box = document.querySelector("#filter-bar .mpick");
+    if (!box) return;
+    box.innerHTML = "";
+    const keys = dict();
     selected().forEach((e) => { keys[e.line] = 1; });
     D.lines.filter((l) => keys[l.key] && matches(l.key)).forEach((l) => {
-      const lab = el("label", { class: "mchip" }), cb = el("input", { type: "checkbox" });
-      cb.checked = !state.hidden[l.key];
+      const off = !!state.hidden[l.key];
+      const lab = el("label", { class: off ? "mchip is-off" : "mchip" }), cb = el("input", { type: "checkbox" });
+      cb.checked = !off;
       cb.addEventListener("change", () => {
         state.hidden[l.key] = !cb.checked;
+        lab.classList.toggle("is-off", !cb.checked);
         renderControls();
         renderChart();
+        renderMachines();
       });
       lab.appendChild(cb);
       lab.insertAdjacentHTML("beforeend", ldot(l.key) + esc(lname(l)));
       box.appendChild(lab);
     });
-    return box;
   }
 
-  /** Whether machine+platform line <key> matches the search text (case-insensitive, in its name). */
+  /** Whether machine+platform line <key> matches the search text (machine id, platform, handle, CPU, GPU or OS). */
   function matches(key) {
     const q = state.search.trim().toLowerCase();
-    return !q || lname(lineOf(key)).toLowerCase().indexOf(q) >= 0;
-  }
-
-  /** The machine search: narrows the chips and the chart's lines; keeps its focus and caret across the redraw it causes. */
-  function searchBox() {
-    const box = el("input", { type: "search", class: "msearch", placeholder: "Search machines", "aria-label": "Search machines" });
-    box.value = state.search;
-    box.addEventListener("input", () => {
-      state.search = box.value;
-      renderControls();
-      renderChart();
-      const again = document.querySelector("#chart .msearch");
-      again.focus();
-      again.setSelectionRange(again.value.length, again.value.length);
-    });
-    return box;
+    if (!q) return true;
+    const line = lineOf(key), m = line.machine || {};
+    const text = [lname(line), line.handle, m.cpu, m.gpu, m.os].join(" ").toLowerCase();
+    return text.indexOf(q) >= 0;
   }
 
   function legend() {
@@ -622,7 +642,10 @@
 
   function chart(host, rows, targets) {
     const metric = metricDef(), box = el("div", { class: "chart" });
-    box.appendChild(el("h3", {}, metric.label + " - " + chartTitle()));
+    const head = el("div", { class: "chart-head" });
+    head.appendChild(el("h3", {}, metric.label + " - " + chartTitle()));
+    head.appendChild(legend());
+    box.appendChild(head);
     host.appendChild(box);
     const g = geometry(box, targets.length, maxOf(rows, metric.key));
     const svg = sv("svg", { width: g.W, height: g.H, viewBox: "0 0 " + g.W + " " + g.H, role: "img", "aria-label": metric.label + " per build" });
@@ -758,15 +781,18 @@
 
   // #region Machines
 
-  /** One row per machine+platform of the selected version, with its newest session's hardware and the metric at its newest target. */
+  /** One row per machine+platform of the selected version matching the active filter, with its newest session's hardware and metric. */
   function renderMachines() {
     const host = document.getElementById("machines");
     host.innerHTML = "";
     if (!D) return;
     const rows = selected(), metric = metricDef(), lines = dict();
     rows.forEach((e) => { (lines[e.line] = lines[e.line] || []).push(e); });
-    const keys = D.lines.map((l) => l.key).filter((k) => lines[k]);
-    if (!keys.length) return;
+    const keys = D.lines.map((l) => l.key).filter((k) => lines[k] && !state.hidden[k] && matches(k));
+    if (!keys.length) {
+      if (rows.length) host.appendChild(el("p", { class: "muted small" }, "No machines match this filter."));
+      return;
+    }
     const wrap = el("div", { class: "tablewrap" }), table = el("table", { class: "mtable" });
     table.innerHTML = "<thead><tr><th>Machine</th><th class=\"l\">Platform</th><th class=\"l\">CPU</th><th class=\"l\">GPU</th><th>RAM</th>" +
       "<th class=\"l\">OS</th><th>Resolution</th><th>Builds</th><th class=\"l\">Newest</th><th>" + esc(metric.label) + "</th></tr></thead>";
