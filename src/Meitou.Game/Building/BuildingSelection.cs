@@ -614,12 +614,12 @@ sealed class BuildingSelection(PlayerInterface player)
     /// <summary>
     /// The Put priority button's tooltip.
     /// </summary>
-    static string PutTip => Loc.Tr("Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower.");
+    static string PutTip => Loc.Tr("Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower.");
 
     /// <summary>
     /// The Take priority button's tooltip.
     /// </summary>
-    static string TakeTip => Loc.Tr("Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower.");
+    static string TakeTip => Loc.Tr("Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower.");
 
     /// <summary>
     /// One priority button line: the level's name, coloured bad for Forbidden, good above Normal.
@@ -1090,7 +1090,7 @@ sealed class BuildingSelection(PlayerInterface player)
             player.Say(new Simulation.Production.IncinerateFurnace(id) { Tick = player.Session.World.Tick });
         }
         else if (action is "building-put-priority" or "building-take-priority" && player.Production.Machine(id) is { IsStorage: true } storage)
-            SetPriority(id, storage, action == "building-put-priority");
+            SetPriority(id, storage, action == "building-put-priority", player.SlowModifier);
         else if (action == "building-pause" && site is { Complete: false })
             player.Say(new Simulation.Construction.PauseSite(id, !site.Paused) { Tick = player.Session.World.Tick });
         else if (action == "building-doors") player.Say(new Simulation.Locks.ToggleDoorsOrder(id) { Tick = player.Session.World.Tick });
@@ -1098,12 +1098,26 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
-    /// A press of a storage's Put or Take priority button: the next level up, or down with Shift, with the click sound.
+    /// A right press on the HUD control <paramref name="action"/> names: a storage's Put or Take priority button goes one level down (a left
+    /// click raises it). False for any other control.
     /// </summary>
-    void SetPriority(string id, Simulation.Production.MachineSnapshot storage, bool put)
+    internal bool PriorityRightClick(string action)
+    {
+        if (action.StartsWith("meitou:", StringComparison.Ordinal)) action = action["meitou:".Length..];
+        if (action is not ("building-put-priority" or "building-take-priority")) return false;
+        if (BuildingFocus()?.SiteId is not { } id || player.Production.Machine(id) is not { IsStorage: true } storage) return false;
+
+        SetPriority(id, storage, action == "building-put-priority", down: true);
+        return true;
+    }
+
+    /// <summary>
+    /// A press of a storage's Put or Take priority button: the next level up, or down (<paramref name="down"/>), with the click sound.
+    /// </summary>
+    void SetPriority(string id, Simulation.Production.MachineSnapshot storage, bool put, bool down)
     {
         var use = put ? Simulation.Items.StorageUse.Put : Simulation.Items.StorageUse.Take;
-        var level = NextPriority(put ? storage.PutPriority : storage.TakePriority, player.SlowModifier);
+        var level = NextPriority(put ? storage.PutPriority : storage.TakePriority, down);
         player.InterfaceSounds.Sound("General_Click");
         player.Say(new Simulation.Production.SetStoragePriority(id, use, level) { Tick = player.Session.World.Tick });
     }

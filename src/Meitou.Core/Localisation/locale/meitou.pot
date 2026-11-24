@@ -2238,7 +2238,7 @@ msgid "Hardware must be probed before submitting."
 msgstr ""
 
 #: src/Meitou.Game/Building/BuildingSelection.cs
-msgid "Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower."
+msgid "Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
 msgstr ""
 
 #: src/Meitou.Game/Ui/HudPanels.cs
@@ -6338,7 +6338,7 @@ msgid "Workers"
 msgstr ""
 
 #: src/Meitou.Game/Building/BuildingSelection.cs
-msgid "Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower."
+msgid "Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs

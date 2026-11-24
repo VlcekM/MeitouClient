@@ -905,6 +905,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     }
 
     /// <summary>
+    /// A right press on a storage's Put or Take priority button in the building panel: the level goes down (Meitou's).
+    /// </summary>
+    bool PriorityRightDown(Vector2 p) =>
+        UiVisible && MyGuiPresentation.HitTest(ArrangeUi(), p.X, p.Y) is { } c && BuildingSelection.PriorityRightClick(c.Action);
+
+    /// <summary>
     /// Returns true when the click belonged to the HUD or the interface (the camera input should not see it).
     /// </summary>
     public bool MouseDown(MouseButton button, Vector2 p, bool shift, bool ctrl = false, bool alt = false)
@@ -931,6 +937,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         // A right press on a squad bar portrait held 0.25 s opens the member's context menu; a quicker release over it selects the member and
         // focuses the camera on it, as the double click (FUN_140413d80, FUN_140415630, docs/game/ui-input.md "Squad bar portraits").
         if (button == MouseButton.Right && PortraitBar.SquadBarMemberAt(p) is { } member) return PortraitRightDown(p, member, shift);
+        if (button == MouseButton.Right && PriorityRightDown(p)) return true;
         if (button == MouseButton.Middle && UiVisible && WorldMap.MapPointerDown(p, MouseButton.Middle)) return true;
         if (button == MouseButton.Right && !OverHud(p)) return WorldRightDown(p, shift, ctrl, alt);
         return OverHud(p);
