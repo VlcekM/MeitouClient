@@ -9,7 +9,7 @@ namespace Meitou.Data.World;
 /// <summary>
 /// The indoor volume of a placed building (docs/formats/zones.md, "Interior view"): the collision of its <c>interior mask</c> parts placed with the
 /// building's node (position, rotation, <c>scale</c>), kept as the convex footprint of the hull on the ground plane and its height range, and per
-/// trigger shape its own footprint and height range. A point inside a shape's footprint and height range is indoors.
+/// trigger shape its own footprint, height range and (a convex shape) face planes. A point inside a shape is indoors.
 /// </summary>
 /// <param name="PlacementId">The building's <see cref="BuildingKey"/> (what <see cref="PlacedMesh.PlacementId"/> carries for its parts).</param>
 /// <param name="Footprint">Convex polygon of the hull in world X/Z, counter-clockwise.</param>
@@ -75,8 +75,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     }
 
     /// <summary>
-    /// Whether <paramref name="p"/> is inside a shape's footprint and height range, both widened by <paramref name="margin"/> (a volume made by
-    /// hand: its one footprint and range). A shape is tested on its own: the hull of all of them also takes in what lies between them, as the yard in
+    /// Whether <paramref name="p"/> is inside a shape (a convex one by its faces, a triangle mesh by its footprint and height range), widened by
+    /// <paramref name="margin"/> (a volume made by hand: its one footprint and range). A shape is tested on its own: the hull of all of them also takes in what lies between them, as the yard in
     /// an L-shaped house's corner, and a roof shape's footprint at ground level.
     /// </summary>
     public bool Contains(Vector3 p, float margin = 0)
@@ -113,23 +113,42 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     Piece[] _pieces = [];
 
     /// <summary>
-    /// One shape of the trigger hull (a box, capsule or convex mesh): the convex footprint of its corners and their height range.
+    /// One shape of the trigger hull (a box, capsule or convex mesh): the convex footprint of its corners and their height range, and for a convex
+    /// shape its faces' planes (<see cref="Planes"/>), which a point must be inside of all: the game's trigger is the shape itself, so a tilted
+    /// building's hull does not take in the water or ground beside it that its upright footprint and height range would.
     /// </summary>
     sealed record Piece(FootprintEdges Edges, float YMin, float YMax)
     {
         /// <summary>
-        /// Whether the ground point <paramref name="q"/> at height <paramref name="y"/> is inside, both widened by <paramref name="margin"/>.
+        /// The convex shape's face planes (outward unit normal xyz, offset w: a point p is outside when dot(n, p) - w is above 0); null for a
+        /// triangle mesh, which only its footprint and height range bound.
         /// </summary>
-        public bool Holds(Vector2 q, float y, float margin) => y >= YMin - margin && y <= YMax + margin && Edges.Holds(q, margin);
+        public Vector4[]? Planes { get; init; }
 
         /// <summary>
-        /// The piece of the world-space corners <paramref name="corners"/>, or null when their footprint has no area.
+        /// Whether the ground point <paramref name="q"/> at height <paramref name="y"/> is inside, widened by <paramref name="margin"/>.
         /// </summary>
-        public static Piece? Of(IReadOnlyList<Vector3> corners)
+        public bool Holds(Vector2 q, float y, float margin)
+        {
+            if (y < YMin - margin || y > YMax + margin || !Edges.Holds(q, margin)) return false;
+            if (Planes is null) return true;
+
+            var p = new Vector3(q.X, y, q.Y);
+            foreach (var plane in Planes)
+                if (Vector3.Dot(new Vector3(plane.X, plane.Y, plane.Z), p) - plane.W > margin) return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// The piece of the world-space corners <paramref name="corners"/> with the convex shape's face <paramref name="planes"/> (null for none), or
+        /// null when their footprint has no area.
+        /// </summary>
+        public static Piece? Of(IReadOnlyList<Vector3> corners, Vector4[]? planes)
         {
             var hull = ConvexHull2([.. corners.Select(c => new Vector2(c.X, c.Z))]);
             if (hull.Length < 3) return null;
-            return new Piece(FootprintEdges.Of(hull), corners.Min(c => c.Y), corners.Max(c => c.Y));
+            return new Piece(FootprintEdges.Of(hull), corners.Min(c => c.Y), corners.Max(c => c.Y)) { Planes = planes };
         }
     }
 
@@ -462,8 +481,38 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         {
             int end = s + 1 < starts.Length ? starts[s + 1] : mesh.Vertices.Length;
             var placed = mesh.Vertices[starts[s]..end].Select(v => Vector3.Transform(v, node)).ToArray();
-            if (Piece.Of(placed) is { } piece) yield return piece;
+            if (Piece.Of(placed, ConvexPlanes(mesh, starts[s], end, node)) is { } piece) yield return piece;
         }
+    }
+
+    /// <summary>
+    /// The face planes of the shape whose vertices are <paramref name="start"/> to <paramref name="end"/> (exclusive), placed with
+    /// <paramref name="node"/>, each turned away from the shape's centre; null when the shape is a triangle mesh (not wound outward, so not taken as
+    /// convex) or has no face.
+    /// </summary>
+    static Vector4[]? ConvexPlanes(CollisionMesh mesh, int start, int end, Matrix4x4 node)
+    {
+        var planes = new List<Vector4>();
+        var centre = Vector3.Zero;
+        for (int v = start; v < end; v++) centre += Vector3.Transform(mesh.Vertices[v], node);
+        centre /= Math.Max(1, end - start);
+
+        for (int t = 0; t + 2 < mesh.Indices.Length; t += 3)
+        {
+            int i = mesh.Indices[t], j = mesh.Indices[t + 1], k = mesh.Indices[t + 2];
+            if (i < start || i >= end || j < start || j >= end || k < start || k >= end) continue;
+            if (!mesh.Outward[t / 3]) return null;
+
+            var a = Vector3.Transform(mesh.Vertices[i], node);
+            var n = Vector3.Cross(Vector3.Transform(mesh.Vertices[j], node) - a, Vector3.Transform(mesh.Vertices[k], node) - a);
+            if (n.LengthSquared() < 1e-12f) continue;
+
+            n = Vector3.Normalize(n);
+            if (Vector3.Dot(n, centre - a) > 0) n = -n;
+            planes.Add(new Vector4(n, Vector3.Dot(n, a)));
+        }
+
+        return planes.Count >= 4 ? [.. planes] : null;
     }
 
     /// <summary>

@@ -6324,3 +6324,211 @@ msgstr "添加到应用菜单"
 #. machine-translated
 msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
 msgstr "在桌面的应用启动器中显示 Meitou Launcher 及其图标。"
+
+#. machine-translated
+msgid "Benchmarks site"
+msgstr "基准测试网站"
+
+#. machine-translated
+msgid "~{1} min per tier"
+msgstr "每档约 {1} 分钟"
+
+#. machine-translated
+msgid "Recommended for this computer"
+msgstr "推荐用于此电脑"
+
+#. machine-translated
+msgid "Recommended"
+msgstr "推荐"
+
+#. machine-translated
+msgid "Submit results automatically when done"
+msgstr "完成后自动提交结果"
+
+#. machine-translated
+msgid "Applies to target builds only."
+msgstr "仅适用于目标构建。"
+
+#. machine-translated
+msgid "Submit your results to the Meitou benchmarks site automatically when the benchmark finishes? Hardware specs, timings and your optional handle are sent; your computer name is not."
+msgstr "基准测试完成后是否自动将结果提交到 Meitou 基准测试网站？仅发送硬件配置、耗时数据和可选署名，不会发送您的计算机名称。"
+
+#. machine-translated
+msgid "You can change this anytime on the Benchmark page."
+msgstr "您可以随时在基准测试页面更改此设置。"
+
+#. machine-translated
+msgid "Don't submit"
+msgstr "不提交"
+
+#. machine-translated
+msgid "Submit benchmark results?"
+msgstr "提交基准测试结果？"
+
+#. machine-translated
+msgid "Wait for the current submission to finish."
+msgstr "请等待当前提交完成。"
+
+#. machine-translated
+msgid "Open this build's benchmark results folder"
+msgstr "打开此构建的基准测试结果文件夹"
+
+#. machine-translated
+msgid "1 session"
+msgstr "1 组结果"
+
+#. machine-translated
+msgid "{1} sessions"
+msgstr "{1} 组结果"
+
+#. machine-translated
+msgid "1 session · submitted"
+msgstr "1 组结果 · 已提交"
+
+#. machine-translated
+msgid "{1} sessions · all submitted"
+msgstr "{1} 组结果 · 全部已提交"
+
+#. machine-translated
+msgid "{1} of {2} submitted"
+msgstr "已提交 {1}/{2}"
+
+#. machine-translated
+msgid "All tiers"
+msgstr "全部档位"
+
+#. machine-translated
+msgid "Submitted (#{1})"
+msgstr "已提交（#{1}）"
+
+#. machine-translated
+msgid "Incomplete ({1} of {2} runs)"
+msgstr "未完成（{1}/{2} 次运行）"
+
+#. machine-translated
+msgid "Built by {1}, not {2}"
+msgstr "由 {1} 生成，而非 {2}"
+
+#. machine-translated
+msgid "Not a target build"
+msgstr "非目标构建"
+
+#. machine-translated
+msgid "Ready to submit"
+msgstr "可提交"
+
+#. machine-translated
+msgid "Submit results"
+msgstr "提交结果"
+
+#. machine-translated
+msgid "Submit all ({1})"
+msgstr "全部提交（{1}）"
+
+#. machine-translated
+msgid "Submit all again"
+msgstr "全部重新提交"
+
+#. machine-translated
+msgid "All {1} sessions submitted."
+msgstr "全部 {1} 组结果已提交。"
+
+#. machine-translated
+msgid "1 session ready to submit ({1} incomplete skipped)."
+msgstr "1 组结果可提交（已跳过 {1} 组未完成）。"
+
+#. machine-translated
+msgid "{1} sessions ready to submit ({2} incomplete skipped)."
+msgstr "{1} 组结果可提交（已跳过 {2} 组未完成）。"
+
+#. machine-translated
+msgid "{1} of {2} sessions not yet submitted."
+msgstr "{2} 组结果中有 {1} 组尚未提交。"
+
+#. machine-translated
+msgid "1 session ready to submit."
+msgstr "1 组结果可提交。"
+
+#. machine-translated
+msgid "{1} sessions ready to submit."
+msgstr "{1} 组结果可提交。"
+
+#. machine-translated
+msgid "Submitting {1} of {2}..."
+msgstr "正在提交第 {1}/{2} 组..."
+
+#. machine-translated
+msgid "Submitted 1 session."
+msgstr "已提交 1 组结果。"
+
+#. machine-translated
+msgid "Submitted {1} sessions."
+msgstr "已提交 {1} 组结果。"
+
+#. machine-translated
+msgid "Submission failed."
+msgstr "提交失败。"
+
+#. machine-translated
+msgid "Submitted {1} of {2} sessions; {3} failed: {4}"
+msgstr "已提交 {1}/{2} 组结果；{3} 组失败：{4}"
+
+#. machine-translated
+msgid "Bases"
+msgstr "据点"
+
+#. machine-translated
+msgid "Shark fly-by"
+msgstr "Shark 飞越"
+
+#. machine-translated
+msgid "The play bench on a save"
+msgstr "基于存档的游玩测试"
+
+#. machine-translated
+msgid "A new game, flying round Shark"
+msgstr "新游戏，绕 Shark 飞行"
+
+#. machine-translated
+msgid "Tier"
+msgstr "档位"
+
+#. machine-translated
+msgid "Run {1} · Whole run"
+msgstr "第 {1} 次 · 完整运行"
+
+#. machine-translated
+msgid "Run {1}"
+msgstr "第 {1} 次"
+
+#. machine-translated
+msgid "FPS"
+msgstr "FPS"
+
+#. machine-translated
+msgid "99% ms"
+msgstr "99% ms"
+
+#. machine-translated
+msgid "Over 33 ms"
+msgstr "超过 33 ms"
+
+#. machine-translated
+msgid "Status"
+msgstr "状态"
+
+#. machine-translated
+msgid "Click to view groups for {1}"
+msgstr "点击查看 {1} 的分组详情"
+
+#. machine-translated
+msgid "Hardware must be probed before submitting."
+msgstr "提交前必须先检测硬件。"
+
+#. machine-translated
+msgid "Generated when hardware is probed."
+msgstr "检测硬件时自动生成。"
+
+#. machine-translated
+msgid "Generated for this computer so the site keeps your results together."
+msgstr "为此电脑自动生成，以便网站将您的结果归集在一起。"

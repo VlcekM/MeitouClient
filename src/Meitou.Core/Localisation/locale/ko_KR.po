@@ -5491,3 +5491,211 @@ msgstr "앱 메뉴에 추가"
 #. machine-translated
 msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
 msgstr "Meitou Launcher를 아이콘과 함께 데스크톱의 앱 실행기에 표시합니다."
+
+#. machine-translated
+msgid "Benchmarks site"
+msgstr "벤치마크 사이트"
+
+#. machine-translated
+msgid "~{1} min per tier"
+msgstr "등급당 약 {1}분"
+
+#. machine-translated
+msgid "Recommended for this computer"
+msgstr "이 컴퓨터에 권장됨"
+
+#. machine-translated
+msgid "Recommended"
+msgstr "권장"
+
+#. machine-translated
+msgid "Submit results automatically when done"
+msgstr "완료 후 결과 자동 제출"
+
+#. machine-translated
+msgid "Applies to target builds only."
+msgstr "대상 빌드에만 적용됩니다."
+
+#. machine-translated
+msgid "Submit your results to the Meitou benchmarks site automatically when the benchmark finishes? Hardware specs, timings and your optional handle are sent; your computer name is not."
+msgstr "벤치마크가 끝나면 결과를 Meitou 벤치마크 사이트에 자동으로 제출할까요? 하드웨어 사양, 측정 시간, 선택 입력 이름만 전송되며 컴퓨터 이름은 전송되지 않습니다."
+
+#. machine-translated
+msgid "You can change this anytime on the Benchmark page."
+msgstr "벤치마크 페이지에서 언제든지 변경할 수 있습니다."
+
+#. machine-translated
+msgid "Don't submit"
+msgstr "제출 안 함"
+
+#. machine-translated
+msgid "Submit benchmark results?"
+msgstr "벤치마크 결과를 제출할까요?"
+
+#. machine-translated
+msgid "Wait for the current submission to finish."
+msgstr "현재 제출이 끝날 때까지 기다려 주세요."
+
+#. machine-translated
+msgid "Open this build's benchmark results folder"
+msgstr "이 빌드의 벤치마크 결과 폴더 열기"
+
+#. machine-translated
+msgid "1 session"
+msgstr "세션 1개"
+
+#. machine-translated
+msgid "{1} sessions"
+msgstr "세션 {1}개"
+
+#. machine-translated
+msgid "1 session · submitted"
+msgstr "세션 1개 · 제출됨"
+
+#. machine-translated
+msgid "{1} sessions · all submitted"
+msgstr "세션 {1}개 · 모두 제출됨"
+
+#. machine-translated
+msgid "{1} of {2} submitted"
+msgstr "{2}개 중 {1}개 제출됨"
+
+#. machine-translated
+msgid "All tiers"
+msgstr "모든 등급"
+
+#. machine-translated
+msgid "Submitted (#{1})"
+msgstr "제출됨(#{1})"
+
+#. machine-translated
+msgid "Incomplete ({1} of {2} runs)"
+msgstr "미완료({2}회 중 {1}회)"
+
+#. machine-translated
+msgid "Built by {1}, not {2}"
+msgstr "{2}이(가) 아니라 {1}에서 측정됨"
+
+#. machine-translated
+msgid "Not a target build"
+msgstr "대상 빌드 아님"
+
+#. machine-translated
+msgid "Ready to submit"
+msgstr "제출 준비됨"
+
+#. machine-translated
+msgid "Submit results"
+msgstr "결과 제출"
+
+#. machine-translated
+msgid "Submit all ({1})"
+msgstr "모두 제출({1})"
+
+#. machine-translated
+msgid "Submit all again"
+msgstr "모두 다시 제출"
+
+#. machine-translated
+msgid "All {1} sessions submitted."
+msgstr "세션 {1}개가 모두 제출되었습니다."
+
+#. machine-translated
+msgid "1 session ready to submit ({1} incomplete skipped)."
+msgstr "제출 가능한 세션 1개(미완료 {1}개 제외)."
+
+#. machine-translated
+msgid "{1} sessions ready to submit ({2} incomplete skipped)."
+msgstr "제출 가능한 세션 {1}개(미완료 {2}개 제외)."
+
+#. machine-translated
+msgid "{1} of {2} sessions not yet submitted."
+msgstr "{2}개 중 {1}개 세션이 아직 제출되지 않았습니다."
+
+#. machine-translated
+msgid "1 session ready to submit."
+msgstr "제출 가능한 세션 1개."
+
+#. machine-translated
+msgid "{1} sessions ready to submit."
+msgstr "제출 가능한 세션 {1}개."
+
+#. machine-translated
+msgid "Submitting {1} of {2}..."
+msgstr "{2}개 중 {1}번째 제출 중..."
+
+#. machine-translated
+msgid "Submitted 1 session."
+msgstr "세션 1개를 제출했습니다."
+
+#. machine-translated
+msgid "Submitted {1} sessions."
+msgstr "세션 {1}개를 제출했습니다."
+
+#. machine-translated
+msgid "Submission failed."
+msgstr "제출에 실패했습니다."
+
+#. machine-translated
+msgid "Submitted {1} of {2} sessions; {3} failed: {4}"
+msgstr "{2}개 중 {1}개 제출, {3}개 실패: {4}"
+
+#. machine-translated
+msgid "Bases"
+msgstr "기지"
+
+#. machine-translated
+msgid "Shark fly-by"
+msgstr "Shark 비행"
+
+#. machine-translated
+msgid "The play bench on a save"
+msgstr "저장 파일에서 하는 플레이 벤치"
+
+#. machine-translated
+msgid "A new game, flying round Shark"
+msgstr "새 게임에서 Shark 주위를 비행"
+
+#. machine-translated
+msgid "Tier"
+msgstr "등급"
+
+#. machine-translated
+msgid "Run {1} · Whole run"
+msgstr "실행 {1} · 전체 실행"
+
+#. machine-translated
+msgid "Run {1}"
+msgstr "실행 {1}"
+
+#. machine-translated
+msgid "FPS"
+msgstr "FPS"
+
+#. machine-translated
+msgid "99% ms"
+msgstr "99% ms"
+
+#. machine-translated
+msgid "Over 33 ms"
+msgstr "33ms 초과"
+
+#. machine-translated
+msgid "Status"
+msgstr "상태"
+
+#. machine-translated
+msgid "Click to view groups for {1}"
+msgstr "클릭하여 {1}의 그룹 보기"
+
+#. machine-translated
+msgid "Hardware must be probed before submitting."
+msgstr "제출하기 전에 하드웨어를 감지해야 합니다."
+
+#. machine-translated
+msgid "Generated when hardware is probed."
+msgstr "하드웨어가 감지될 때 생성됩니다."
+
+#. machine-translated
+msgid "Generated for this computer so the site keeps your results together."
+msgstr "사이트에서 결과를 함께 묶어 두도록 이 컴퓨터용으로 생성됩니다."

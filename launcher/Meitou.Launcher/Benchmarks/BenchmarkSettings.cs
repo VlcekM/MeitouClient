@@ -17,14 +17,9 @@ public sealed class BenchmarkSettings
     public string Handle { get; set; } = "";
 
     /// <summary>
-    /// The machine record's id, which the benchmarks site groups results by.
+    /// The auto-generated machine id (hardware slug + per-PC hash), which the benchmarks site groups results by.
     /// </summary>
     public string MachineId { get; set; } = "";
-
-    /// <summary>
-    /// The machine record's display name.
-    /// </summary>
-    public string MachineName { get; set; } = "";
 
     /// <summary>
     /// The machine record's free notes (cooling, power plan, ...).
@@ -35,6 +30,11 @@ public sealed class BenchmarkSettings
     /// Whether a session was submitted with the machine record, which then can no longer be edited (the site would split its results).
     /// </summary>
     public bool MachineLocked { get; set; }
+
+    /// <summary>
+    /// Whether completed sessions are submitted automatically after a benchmark finishes: null until asked before the first target benchmark.
+    /// </summary>
+    public bool? AutoSubmit { get; set; }
 
     /// <summary>
     /// The last <c>--benchmark-probe</c> record as the game wrote it (JSON), null before the first probe.

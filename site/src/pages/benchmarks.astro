@@ -107,7 +107,7 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
       <div id="controls" class="controls"></div>
       <p id="group-desc" class="muted small" hidden></p>
       <div id="caveat"></div>
-      <div id="status" class="box" role="status">Loading benchmark results...</div>
+      <div id="status" class="box is-loading" role="status" aria-label="Loading benchmark results"><span class="spinner" aria-hidden="true"></span></div>
       <div id="chart"></div>
     </section>
 
@@ -240,6 +240,9 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .muted{color:var(--muted)}
   .small{font-size:.9rem;margin:.4rem 0 .2rem}
   .box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px 18px;margin:16px 0}
+  #charts-sec{min-height:540px}
+  .box.is-loading{display:flex;align-items:center;justify-content:center;min-height:460px}
+  .spinner{width:36px;height:36px;border-radius:50%;border:3px solid color-mix(in srgb,var(--line) 85%,transparent);border-top-color:var(--accent);animation:bn-spin .75s cubic-bezier(.5,.15,.5,.85) infinite}
   & > section > h2{margin-top:2rem}
   .setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px;margin:.6rem 0}
   .setup dt{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
@@ -282,9 +285,12 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .controls{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:12px 0}
   .ctl{display:inline-flex;align-items:center;gap:8px;font-size:.9rem;color:var(--muted)}
   .caveat{border:1px solid var(--bad);border-radius:20px;padding:8px 14px;background:var(--panel);margin:8px 0}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
-  .seg button{font:inherit;font-size:.88rem;color:var(--muted);background:transparent;border:0;padding:3px 14px;cursor:pointer}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--panel) 72%,transparent)}
+  .seg button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:.88rem;color:var(--muted);background:transparent;border:0;padding:4px 12px;cursor:pointer}
   .seg button[aria-pressed="true"]{background:var(--accent);color:var(--bg);font-weight:600}
+  .seg .seg-n{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;font-size:.72rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;background:color-mix(in srgb,var(--line) 85%,transparent);color:var(--text)}
+  .seg button[aria-pressed="true"] .seg-n{background:rgba(28,22,19,.24);color:var(--bg)}
+  .seg .seg-n.is-zero{opacity:.42}
   .mpick{display:inline-flex;flex-wrap:wrap;gap:4px 14px}
   .mchip{display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:.88rem}
   .mchip input{margin:0 4px 0 0}
@@ -304,13 +310,18 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   @media (hover:hover){
     tbody tr:hover>*{background:color-mix(in srgb,var(--accent) 20%,transparent)}
     summary:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px}
+    .seg button[aria-pressed="false"]:hover{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--text)}
     .chart .hit:hover{fill:color-mix(in srgb,var(--accent) 25%,transparent);stroke:var(--accent);stroke-width:2.5}
   }
   @media (prefers-reduced-motion:no-preference){
-    tbody tr>*,summary{transition:background-color .12s ease}
+    tbody tr>*,summary,.seg button,.seg .seg-n{transition:background-color .14s cubic-bezier(.22,1,.36,1),color .14s ease,transform .14s cubic-bezier(.22,1,.36,1)}
+    .seg button:active{transform:scale(.97)}
     .chart .guide{transition:opacity .1s ease}
+    .chart,.mtable,.caveat{animation:bn-pop .24s cubic-bezier(.22,1,.36,1) both}
   }
-  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
   }
+  @keyframes bn-pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes bn-spin{to{transform:rotate(360deg)}}
   @media (max-width: 700px) { .bn h1 { font-size: 1.8rem; } }
 </style>

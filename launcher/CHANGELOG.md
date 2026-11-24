@@ -2,6 +2,13 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.21.0
+
+- Benchmark page: single framed results table with scenario and tier tabs (including an All tiers overview whose rows open each tier's groups)
+- Benchmark page: one Submit all button for all ready sessions, plus a first-time auto-submit prompt and saved "Submit results automatically when done" option (on by default)
+- Benchmark page: machine id is now generated automatically per PC (hardware slug + per-PC hash, not editable) and the Machine name field is removed
+- Benchmark page: Install works without ticking a benchmark or tier first, wider build dropdown, per-tier duration estimates, Recommended / All tier links, launch progress bar, and links to the benchmarks site and results folder
+
 ## v1.20.0
 
 - Linux: first-start setup and Settings can add the AppImage to the app menu

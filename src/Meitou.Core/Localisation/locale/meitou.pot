@@ -103,6 +103,22 @@ msgstr ""
 msgid "1 post"
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "1 session"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "1 session ready to submit ({1} incomplete skipped)."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "1 session ready to submit."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "1 session · submitted"
+msgstr ""
+
 #: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/LookBar.cs
 msgid "1 unsaved change"
 msgstr ""
@@ -129,6 +145,10 @@ msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "8 nearest"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTable.cs
+msgid "99% ms"
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
@@ -229,6 +249,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "A mod"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkScenario.cs
+msgid "A new game, flying round Shark"
 msgstr ""
 
 #: src/Meitou.Game/Building/BuildingDescriptions.cs
@@ -421,7 +445,7 @@ msgstr ""
 msgid "Air scattering density; zero removes air scattering."
 msgstr ""
 
-#: src/Meitou.Game/Settings/GamePages.cs
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs src/Meitou.Game/Settings/GamePages.cs
 msgid "All"
 msgstr ""
 
@@ -439,6 +463,14 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "All gameplay changes"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "All tiers"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "All {1} sessions submitted."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -527,6 +559,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "App menu"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Applies to target builds only."
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml launcher/Meitou.Launcher/MainWindow.axaml.cs launcher/Meitou.Launcher/ModsFromSave.cs
@@ -698,6 +734,10 @@ msgid "Balanced: more resident detail than Safe, with some headroom for macOS an
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkScenario.cs
+msgid "Bases"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkScenario.cs
 msgid "Bases: the play bench on a save"
 msgstr ""
 
@@ -727,6 +767,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
 msgid "Benchmarks"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Benchmarks site"
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
@@ -845,6 +889,10 @@ msgstr ""
 msgid "Buildings, rocks and characters block the lamps' light. Needs ray tracing."
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Built by {1}, not {2}"
+msgstr ""
+
 #: launcher/Meitou.Launcher/Rows.cs
 msgid "Built for Meitou {1} (checked when the game starts)"
 msgstr ""
@@ -923,10 +971,6 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Camera: you hear the world where the camera is. Character: you hear it where your first selected character stands (from the camera while nobody is selected)."
-msgstr ""
-
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Can be edited until the first session is submitted; then it is kept, so the site keeps your results together."
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs launcher/Meitou.Launcher/GraphicsPage.cs launcher/Meitou.Launcher/MainWindow.axaml.cs launcher/Meitou.Launcher/ModsFromSave.cs src/Meitou.Game/Editor/EditorBodyFiles.cs src/Meitou.Game/Host/Photo/PhotoPanel.cs src/Meitou.Game/Settings/PresetNamingDialog.cs src/Meitou.Game/Settings/SettingsCanvas.cs src/Meitou.Game/Title/FrontendScreens.cs src/Meitou.Game/Ui/FeedbackPanel.cs src/Meitou.Game/Ui/TradeWindows.cs
@@ -1095,6 +1139,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Click to install"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTable.cs
+msgid "Click to view groups for {1}"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/SettingsMenu.cs src/Meitou.Game/Ui/ContextMenuWindow.cs src/Meitou.Game/Ui/FeedbackPanel.cs
@@ -1445,6 +1493,10 @@ msgstr ""
 msgid "Don't offer this version again; a newer one will be"
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Don't submit"
+msgstr ""
+
 #: src/Meitou.Game/Ui/ContextMenuWindow.cs src/Meitou.Game/Ui/FurnitureUse.cs
 msgid "Door"
 msgstr ""
@@ -1633,6 +1685,10 @@ msgstr ""
 msgid "FENCING ITEM"
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTable.cs
+msgid "FPS"
+msgstr ""
+
 #: src/Meitou.Game/Rendering/Upscalers/FrameGenerationSetup.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/SettingsMenu.cs
 msgid "FSR 3"
 msgstr ""
@@ -1739,10 +1795,6 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Fights far away"
-msgstr ""
-
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Fill in the machine's id to submit."
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
@@ -1949,6 +2001,14 @@ msgstr ""
 msgid "Gear sway"
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Generated for this computer so the site keeps your results together."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Generated when hardware is probed."
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "German"
 msgstr ""
@@ -2151,6 +2211,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Hardware mouse"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Hardware must be probed before submitting."
 msgstr ""
 
 #: src/Meitou.Game/Ui/HudPanels.cs
@@ -2479,6 +2543,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/Rows.cs
 msgid "Incompatible with {1}"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Incomplete ({1} of {2} runs)"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
@@ -2976,14 +3044,6 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
 msgid "Machine"
-msgstr ""
-
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Machine id (letters, digits, dashes)"
-msgstr ""
-
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Machine name (optional)"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -3582,6 +3642,10 @@ msgid "Not a Kenshi folder: data/gamedata.base not found."
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Not a target build"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
 msgid "Not a target build: its results can be seen here but not submitted."
 msgstr ""
 
@@ -3685,7 +3749,7 @@ msgstr ""
 msgid "Open bags at once"
 msgstr ""
 
-#: launcher/Meitou.Launcher/MainWindow.axaml
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs launcher/Meitou.Launcher/MainWindow.axaml
 msgid "Open folder"
 msgstr ""
 
@@ -3749,6 +3813,10 @@ msgstr ""
 msgid "Open the world map, or close it."
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Open this build's benchmark results folder"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Open {1} pages"
 msgstr ""
@@ -3787,6 +3855,10 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/ProductionWindows.cs
 msgid "Output:"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTable.cs
+msgid "Over 33 ms"
 msgstr ""
 
 #: src/Meitou.Data/Textures/TextureQuality.cs
@@ -4157,6 +4229,18 @@ msgstr ""
 msgid "Ready to harvest"
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Ready to submit"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Recommended"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Recommended for this computer"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Reduce visible colour bands in smooth gradients."
 msgstr ""
@@ -4321,16 +4405,12 @@ msgstr ""
 msgid "Run the simulation at normal speed."
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Run {1}: 99% ms"
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTable.cs
+msgid "Run {1}"
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Run {1}: FPS"
-msgstr ""
-
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Run {1}: over 33 ms"
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTable.cs
+msgid "Run {1} · Whole run"
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
@@ -4670,6 +4750,10 @@ msgid "Share"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkScenario.cs
+msgid "Shark fly-by"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkScenario.cs
 msgid "Shark fly-by: a new game, flying round Shark"
 msgstr ""
 
@@ -4917,6 +5001,10 @@ msgstr ""
 msgid "Started {1}"
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTable.cs
+msgid "Status"
+msgstr ""
+
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Stays"
 msgstr ""
@@ -4986,6 +5074,10 @@ msgid "Streaming"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submission failed."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
 msgid "Submit"
 msgstr ""
 
@@ -4994,11 +5086,55 @@ msgid "Submit again"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submit all ({1})"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submit all again"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Submit benchmark results?"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submit results"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Submit results automatically when done"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Submit your results to the Meitou benchmarks site automatically when the benchmark finishes? Hardware specs, timings and your optional handle are sent; your computer name is not."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submitted (#{1})"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
 msgid "Submitted (#{1})."
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submitted 1 session."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
 msgid "Submitted by"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submitted {1} of {2} sessions; {3} failed: {4}"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submitted {1} sessions."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "Submitting {1} of {2}..."
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
@@ -5429,6 +5565,10 @@ msgstr ""
 msgid "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay."
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkScenario.cs
+msgid "The play bench on a save"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "The plugins of these RE_Kenshi mods do not run in Meitou."
 msgstr ""
@@ -5555,6 +5695,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Tick every mod the search shows"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTable.cs
+msgid "Tier"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
@@ -5941,6 +6085,10 @@ msgstr ""
 msgid "WASD move    Q / E down, up    Right mouse look    Ctrl + left click focus    Wheel zoom    Alt + wheel fly speed    Shift fast    Ctrl slow    Z / X roll    V level    "
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Wait for the current submission to finish."
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Wait for the download to finish first."
 msgstr ""
@@ -6113,6 +6261,10 @@ msgstr ""
 msgid "World tick alongside drawing"
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "You can change this anytime on the Benchmark page."
+msgstr ""
+
 #: src/Meitou.Simulation/Dialogue/CharacterTrading.cs
 msgid "You can only hire {1} more characters"
 msgstr ""
@@ -6133,7 +6285,7 @@ msgstr ""
 msgid "Your display's brightest level, in nits."
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
 msgid "Your name on the benchmarks site (optional)"
 msgstr ""
 
@@ -6791,10 +6943,6 @@ msgstr ""
 msgid "{1} and {2} more"
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "{1} at {2}"
-msgstr ""
-
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
 msgid "{1} at {2}: run {3} of {4}, launch {5} of {6}"
 msgstr ""
@@ -6873,6 +7021,14 @@ msgstr ""
 msgid "{1} of {2} mods shown, {3} enabled"
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "{1} of {2} sessions not yet submitted."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "{1} of {2} submitted"
+msgstr ""
+
 #: src/Meitou.Simulation/Crime/ArrestSystem.Bounties.cs
 msgid "{1} paid a bail of c.{2} for {3}"
 msgstr ""
@@ -6913,6 +7069,22 @@ msgstr ""
 
 #: src/Meitou.Game/Building/BuildingSelection.cs
 msgid "{1} seconds"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "{1} sessions"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "{1} sessions ready to submit ({2} incomplete skipped)."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "{1} sessions ready to submit."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
+msgid "{1} sessions · all submitted"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkRunner.cs
@@ -6973,4 +7145,8 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/GraphicsPage.cs
 msgid "{1}: {2} settings"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "~{1} min per tier"
 msgstr ""

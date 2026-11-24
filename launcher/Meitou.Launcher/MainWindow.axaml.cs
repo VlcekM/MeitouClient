@@ -555,7 +555,8 @@ public sealed partial class MainWindow : Window
     void AttachBenchmark()
     {
         BenchmarkPage.Attach(new Benchmarks.BenchmarkHost(Http, _installer, _config, () => _allReleases, () => _install, BenchmarkDetectGame,
-            () => _running is { HasExited: false }));
+            () => _running is { HasExited: false },
+            (title, body, choices) => ChooseAsync(title, body, choices, cancel: null)));
     }
 
     /// <summary>

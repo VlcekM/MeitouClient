@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Meitou.Content;
 
@@ -9,10 +10,11 @@ namespace Meitou.Launcher.Benchmarks;
 
 /// <summary>
 /// What the Benchmark page takes from the window: the shared HTTP client, installer and settings, the release list, the Kenshi folder, the
-/// game Play would start with its preset detection flag (for the recommended tier), and whether that game runs.
+/// game Play would start with its preset detection flag (for the recommended tier), whether that game runs, and the modal choice dialog.
 /// </summary>
 sealed record BenchmarkHost(HttpClient Http, ReleaseInstaller Installer, LauncherConfig Config, Func<IReadOnlyList<Release>> Releases,
-    Func<GameInstall?> Kenshi, Func<(string Exe, string Flag)?> DetectGame, Func<bool> GameRunning);
+    Func<GameInstall?> Kenshi, Func<(string Exe, string Flag)?> DetectGame, Func<bool> GameRunning,
+    Func<string, IReadOnlyList<Control>, IReadOnlyList<(string Label, bool? Value)>, Task<bool?>> Choose);
 
 /// <summary>
 /// The Benchmark page (docs/launcher.md "Benchmark"): choose a build, benchmarks, tiers and platform, run them (two launches per session) and
@@ -22,6 +24,16 @@ sealed record BenchmarkHost(HttpClient Http, ReleaseInstaller Installer, Launche
 public sealed class BenchmarkPage : UserControl, IBenchmarkView
 {
     #region Page
+
+    /// <summary>
+    /// Width of the right-hand control column on configuration rows (matching Settings).
+    /// </summary>
+    const int ControlWidth = 460;
+
+    /// <summary>
+    /// Public benchmarks site URL.
+    /// </summary>
+    const string BenchmarksSiteUrl = "https://meitou.kenshi.wiki/benchmarks";
 
     /// <summary>
     /// The window's services, null until <see cref="Attach"/>.
@@ -39,7 +51,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     BenchmarkRunner? _runner;
 
     /// <summary>
-    /// The sessions and the Submit buttons.
+    /// The results tabs, single table and Submit all card.
     /// </summary>
     BenchmarkResultsPanel? _results;
 
@@ -89,7 +101,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     static string Tr(string text, params object?[] args) => LauncherText.Translate(text, args);
 
     /// <summary>
-    /// The page's whole content: the header, the choices, the run controls and the results.
+    /// The page's whole content: the header, the choices, the run controls, live progress and the results.
     /// </summary>
     void Rebuild()
     {
@@ -102,7 +114,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
         rows.Children.Add(RunRow());
         rows.Children.Add(ProgressBlock());
 
-        // The results panel keeps its answers across rebuilds, so it moves from the old content to the new.
+        // The results panel keeps its selected tabs and submit state across rebuilds, so it moves from the old content to the new.
         if (_results!.Parent is Panel old) old.Children.Remove(_results);
         rows.Children.Add(_results);
         Content = new ScrollViewer { Classes = { "page" }, Content = rows };
@@ -110,13 +122,23 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     }
 
     /// <summary>
-    /// The page's title bar, with the targets' state at its right.
+    /// The page's title bar, with the targets' count and a link to the public benchmarks site at its right.
     /// </summary>
     Border Header()
     {
         string aside = _targets is null ? _targetsProblem ?? Tr("Loading the target builds...") : Tr("{1} target builds", _targets.Count);
+        var site = new Button { Classes = { "aside" }, Content = Tr("Benchmarks site") };
+        ToolTip.SetTip(site, BenchmarksSiteUrl);
+        site.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(this) is { } top) await top.Launcher.LaunchUriAsync(new Uri(BenchmarksSiteUrl));
+        };
+
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
+        right.Children.Add(new TextBlock { Classes = { "aside" }, Text = aside, VerticalAlignment = VerticalAlignment.Center });
+        right.Children.Add(site);
+
         var dock = new DockPanel();
-        var right = new TextBlock { Classes = { "aside" }, Text = aside };
         DockPanel.SetDock(right, Dock.Right);
         dock.Children.Add(right);
         dock.Children.Add(new TextBlock { Text = Tr("Benchmark") });
@@ -205,7 +227,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     }
 
     /// <summary>
-    /// The build choice: each game release, marked target or not; Install fetches the chosen one and its benchmark list.
+    /// The build choice: each game release, marked target or not; Install is shown beside it only when the chosen build is not installed yet.
     /// </summary>
     Border BuildRow()
     {
@@ -219,15 +241,20 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
             Dispatcher.UIThread.Post(Rebuild);
         };
 
-        var install = BenchmarkLayout.Button(Tr("Install"), () => _ = InstallAsync());
-        install.IsEnabled = !Running && _release is not null && Platform.FindGame(_release.Version) is null;
-        ToolTip.SetTip(install, Tr("Download the build into the benchmark's own folder and list its benchmarks"));
-        var dock = new DockPanel();
-        DockPanel.SetDock(install, Dock.Right);
-        dock.Children.Add(install);
-        dock.Children.Add(box);
+        Control control = box;
+        if (_release is not null && Platform.FindGame(_release.Version) is null)
+        {
+            var install = BenchmarkLayout.Button(Tr("Install"), () => _ = InstallAsync());
+            install.IsEnabled = !Running;
+            ToolTip.SetTip(install, Tr("Download the build into the benchmark's own folder and list its benchmarks"));
+            var dock = new DockPanel();
+            DockPanel.SetDock(install, Dock.Right);
+            dock.Children.Add(install);
+            dock.Children.Add(box);
+            control = dock;
+        }
         string description = Tr("Target builds (full releases and the daily nightlies) count for comparisons; others can be run but not submitted.");
-        return BenchmarkLayout.Row(Tr("Build"), description, dock, 420);
+        return BenchmarkLayout.Row(Tr("Build"), description, control, ControlWidth);
     }
 
     /// <summary>
@@ -256,7 +283,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
             Dispatcher.UIThread.Post(Rebuild);
         };
         string description = Tr("Proton runs the Windows build, with its own prefix in the launcher's folder.");
-        return BenchmarkLayout.Row(Tr("Platform"), description, box, 420);
+        return BenchmarkLayout.Row(Tr("Platform"), description, box, ControlWidth);
     }
 
     #endregion
@@ -289,22 +316,52 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     List<BenchmarkScenario>? Listed => _release is null ? null : BenchmarkScenario.ReadList(Platform.BuildFolder(_release.Version));
 
     /// <summary>
-    /// A check box per benchmark the build lists (only the default one before it is installed).
+    /// A check box per benchmark the build lists (only the default one before it is installed), with its short name, estimate and subtitle.
     /// </summary>
     Border ScenarioRow()
     {
         var listed = Listed;
         var ids = listed?.Select(scenario => scenario.Id).ToList() ?? [BenchmarkScenario.Default];
-        var boxes = new WrapPanel { ItemSpacing = 12, LineSpacing = 6 };
-        foreach (string id in ids) boxes.Children.Add(Tick(BenchmarkScenario.Label(id), _scenarios.Contains(id), on => Toggle(_scenarios, id, on)));
+        var boxes = new StackPanel { Spacing = 6 };
+        foreach (string id in ids)
+        {
+            var listedScenario = listed?.FirstOrDefault(s => s.Id == id);
+            boxes.Children.Add(ScenarioOption(id, listedScenario));
+        }
         string description = listed is null
             ? Tr("Install the build to see all the benchmarks it has.")
             : Tr("Each ticked benchmark is run at each ticked tier.");
-        return BenchmarkLayout.Row(Tr("Benchmarks"), description, boxes, 420);
+        return BenchmarkLayout.Row(Tr("Benchmarks"), description, boxes, ControlWidth);
     }
 
     /// <summary>
-    /// A check box per tier; Ultra and Extreme greyed when the last probe found no ray queries.
+    /// One scenario checkbox showing its short name, optional duration per tier and description.
+    /// </summary>
+    CheckBox ScenarioOption(string id, BenchmarkScenario? listed)
+    {
+        var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        heading.Children.Add(new TextBlock { Text = BenchmarkScenario.ShortLabel(id), VerticalAlignment = VerticalAlignment.Center });
+        if (listed is not null)
+        {
+            int mins = (int)Math.Ceiling(listed.RunMinutes * BenchmarkTiers.RunsPerTier);
+            heading.Children.Add(new TextBlock
+            {
+                Classes = { "desc" }, Text = Tr("~{1} min per tier", mins), VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+
+        var content = new StackPanel { Spacing = 1 };
+        content.Children.Add(heading);
+        string desc = BenchmarkScenario.Description(id);
+        if (desc.Length > 0) content.Children.Add(BenchmarkLayout.Description(desc));
+
+        var box = new CheckBox { Content = content, IsChecked = _scenarios.Contains(id), IsEnabled = !Running };
+        box.IsCheckedChanged += (_, _) => Toggle(_scenarios, id, box.IsChecked == true);
+        return box;
+    }
+
+    /// <summary>
+    /// A check box per tier (Ultra and Extreme greyed when the last probe found no ray queries) plus quick Recommended / All links.
     /// </summary>
     Border TierRow()
     {
@@ -320,12 +377,49 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
             });
             box.IsEnabled = !blocked && !Running;
             if (blocked) ToolTip.SetTip(box, Tr("Needs ray tracing"));
+            else if (tier == _recommended) ToolTip.SetTip(box, Tr("Recommended for this computer"));
             boxes.Children.Add(box);
         }
+
+        var quick = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new(0, 4, 0, 0) };
+        quick.Children.Add(QuickLink(Tr("Recommended"), () => SelectTiers(all: false, noRayQueries)));
+        quick.Children.Add(QuickLink(Tr("All"), () => SelectTiers(all: true, noRayQueries)));
+
+        var right = new StackPanel { Children = { boxes, quick } };
         string description = _recommended is { } recommended
             ? Tr("Medium and {1}, recommended for this computer, are ticked first.", BenchmarkTiers.Label(recommended))
             : Tr("The game's quality presets.");
-        return BenchmarkLayout.Row(Tr("Tiers"), description, boxes, 420);
+        return BenchmarkLayout.Row(Tr("Tiers"), description, right, ControlWidth);
+    }
+
+    /// <summary>
+    /// A subtle text link button disabled while running.
+    /// </summary>
+    Button QuickLink(string caption, Action click)
+    {
+        var link = new Button { Classes = { "link" }, Content = new TextBlock { Text = caption }, IsEnabled = !Running };
+        link.Click += (_, _) => click();
+        return link;
+    }
+
+    /// <summary>
+    /// Ticks either every available tier or the recommended defaults (Medium + recommended).
+    /// </summary>
+    void SelectTiers(bool all, bool noRayQueries)
+    {
+        _tiersChanged = true;
+        _tiers.Clear();
+        if (all)
+        {
+            foreach (string tier in BenchmarkTiers.All)
+                if (!noRayQueries || !BenchmarkTiers.NeedsRayQueries(tier)) _tiers.Add(tier);
+        }
+        else
+        {
+            _tiers.Add(BenchmarkTiers.Default);
+            if (_recommended is { } tier && (!noRayQueries || !BenchmarkTiers.NeedsRayQueries(tier))) _tiers.Add(tier);
+        }
+        Rebuild();
     }
 
     /// <summary>
@@ -402,9 +496,9 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     DateTime? _runStarted;
 
     /// <summary>
-    /// The download's share done, null when none runs.
+    /// The current progress bar value (0..1) for either a download or launches in progress; null hides the bar.
     /// </summary>
-    double? _downloaded;
+    double? _progressValue;
 
     /// <summary>
     /// The notices and the result of the last Start, newest last.
@@ -412,7 +506,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     readonly List<string> _notices = [];
 
     /// <summary>
-    /// The estimate line, the step line, the run line, the notices and the progress bar of the page as last built.
+    /// The estimate line, the step line, the run line, the notices, the progress card and the progress bar of the page as last built.
     /// </summary>
     TextBlock _estimate = new(), _stepLine = new(), _runLine = new();
 
@@ -422,7 +516,12 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     StackPanel _noticePanel = new();
 
     /// <summary>
-    /// The download's progress bar of the page as last built.
+    /// The framed card holding progress and notices, hidden while idle with no notices.
+    /// </summary>
+    Border _progressCard = new();
+
+    /// <summary>
+    /// The download / launch progress bar of the page as last built.
     /// </summary>
     ProgressBar _progress = new();
 
@@ -441,7 +540,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     }
 
     /// <summary>
-    /// Start (or Cancel while running) with the estimate and the warning beside it.
+    /// Start (or Cancel while running) beside the estimate, warning and auto-submit preference.
     /// </summary>
     Border RunRow()
     {
@@ -452,11 +551,28 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
             else _ = StartAsync();
         };
         _estimate = BenchmarkLayout.Description(EstimateText());
+
+        var autoSubmit = new CheckBox
+        {
+            Content = new TextBlock { Classes = { "desc" }, Text = Tr("Submit results automatically when done") },
+            IsChecked = _host!.Config.Benchmark.AutoSubmit ?? true,
+            IsEnabled = !Running,
+            Margin = new(0, 4, 0, 0),
+        };
+        if (!IsTarget) ToolTip.SetTip(autoSubmit, Tr("Applies to target builds only."));
+        autoSubmit.IsCheckedChanged += (_, _) =>
+        {
+            _host.Config.Benchmark.AutoSubmit = autoSubmit.IsChecked == true;
+            _host.Config.Save();
+        };
+
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new(0, 0, 16, 0) };
         texts.Children.Add(new TextBlock { Classes = { "name" }, Text = Tr("Run") });
         texts.Children.Add(_estimate);
         texts.Children.Add(new TextBlock { Classes = { "warn" }, Text = Tr("Do not use the computer while it runs."), Margin = new(0, 4, 0, 0) });
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        texts.Children.Add(autoSubmit);
+
+        var grid = new Grid { ColumnDefinitions = [new ColumnDefinition(1, GridUnitType.Star), new ColumnDefinition(GridLength.Auto)] };
         grid.Children.Add(texts);
         Grid.SetColumn(button, 1);
         button.VerticalAlignment = VerticalAlignment.Center;
@@ -469,28 +585,40 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     /// </summary>
     string EstimateText()
     {
+        int sessions = _scenarios.Count * _tiers.Count;
+        if (sessions == 0) return Tr("Tick at least one benchmark and one tier.");
+
         var listed = Listed;
         double perTier = _scenarios.Sum(id => listed?.FirstOrDefault(scenario => scenario.Id == id)?.RunMinutes ?? BenchmarkTiers.MinutesPerRun);
         int minutes = (int)Math.Ceiling(perTier * _tiers.Count * BenchmarkTiers.RunsPerTier);
-        int sessions = _scenarios.Count * _tiers.Count;
         return Tr("Sessions: {1}, two runs each, about {2} minutes.", sessions, minutes);
     }
 
     /// <summary>
-    /// The step, the running launch with its elapsed time, the download's progress and the notices.
+    /// The framed status card: current step, running launch with elapsed time, progress bar and notices (hidden when empty).
     /// </summary>
-    StackPanel ProgressBlock()
+    Border ProgressBlock()
     {
         _stepLine = BenchmarkLayout.Line("name");
         _runLine = BenchmarkLayout.Line();
-        _progress = new ProgressBar { Minimum = 0, Maximum = 1, MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left };
+        _progress = new ProgressBar { Minimum = 0, Maximum = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
         _noticePanel = new StackPanel { Spacing = 4 };
         BenchmarkLayout.SetLine(_stepLine, _step);
         ShowElapsed();
-        ShowDownload();
+        ShowProgress();
         foreach (string notice in _notices) _noticePanel.Children.Add(NoticeLine(notice));
-        return new StackPanel { Spacing = 6, Margin = new(0, 10, 0, 0), Children = { _stepLine, _runLine, _progress, _noticePanel } };
+
+        var stack = new StackPanel { Spacing = 6, Children = { _stepLine, _runLine, _progress, _noticePanel } };
+        _progressCard = new Border { Classes = { "post" }, Margin = new(0, 12, 0, 0), Padding = new(16, 12), Child = stack };
+        UpdateProgressVisibility();
+        return _progressCard;
     }
+
+    /// <summary>
+    /// Shows the progress card only while a task runs or notices are displayed.
+    /// </summary>
+    void UpdateProgressVisibility() =>
+        _progressCard.IsVisible = Running || _step is not null || _runText is not null || _notices.Count > 0;
 
     /// <summary>
     /// A notice as a line of the notices' panel.
@@ -514,32 +642,93 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     }
 
     /// <summary>
-    /// The download's progress bar, hidden while none runs.
+    /// The progress bar, hidden when no fraction is reported.
     /// </summary>
-    void ShowDownload()
+    void ShowProgress()
     {
-        _progress.IsVisible = _downloaded is not null;
-        _progress.Value = _downloaded ?? 0;
+        _progress.IsVisible = _progressValue is not null;
+        _progress.Value = _progressValue ?? 0;
     }
 
     /// <summary>
     /// Shows the sessions of the chosen build and platform.
     /// </summary>
-    void ShowResults() => _results!.Show(_release?.Version, _platforms.Count > 0 ? Platform.Wire : "", IsTarget);
+    void ShowResults() => _results!.Show(_release?.Version, _platforms.Count > 0 ? Platform.Wire : "", IsTarget, Running);
 
     /// <summary>
-    /// Runs the ticked sessions.
+    /// Runs the ticked sessions; asks once before the first target benchmark whether to submit results automatically on completion.
     /// </summary>
     async Task StartAsync()
     {
-        if (Problem() is { } problem)
+        if (Problem(requireSelection: true) is { } problem)
         {
             Say(problem);
             return;
         }
+        if (_host!.Config.Benchmark.AutoSubmit is null && IsTarget && !await AskAutoSubmitAsync()) return;
+
         var job = Job();
         var scenarios = _scenarios.ToList();
-        await GuardAsync(ct => _runner!.RunAsync(job with { Scenarios = scenarios, Tiers = OrderedTiers() }, this, ct), Tr("Benchmark finished."));
+        bool target = IsTarget;
+        _results!.ClearAnswers(job.Release.Version, job.Platform.Wire);
+
+        await GuardAsync(async ct =>
+        {
+            await _runner!.RunAsync(job with { Scenarios = scenarios, Tiers = OrderedTiers() }, this, ct);
+            if ((_host.Config.Benchmark.AutoSubmit ?? true) && target)
+            {
+                string? summary = await _results.SubmitPendingAsync(job.Release.Version, job.Platform.Wire, target,
+                    step => ((IBenchmarkView)this).Step(step), ct);
+                if (summary is not null) ((IBenchmarkView)this).Notice(summary);
+            }
+        }, Tr("Benchmark finished."));
+    }
+
+    /// <summary>
+    /// First-time prompt before starting a target benchmark: asks whether to submit results automatically when finished and lets the player set
+    /// an optional handle. Returns false when cancelled so Start does not run.
+    /// </summary>
+    async Task<bool> AskAutoSubmitAsync()
+    {
+        var settings = _host!.Config.Benchmark;
+        var handleBox = new TextBox
+        {
+            Text = settings.Handle, PlaceholderText = Tr("Your name on the benchmarks site (optional)"),
+        };
+        Control[] body =
+        [
+            new TextBlock
+            {
+                Text = Tr("Submit your results to the Meitou benchmarks site automatically when the benchmark finishes? Hardware specs, timings and your optional handle are sent; your computer name is not."),
+                TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.Medium,
+            },
+            new StackPanel
+            {
+                Spacing = 4, Margin = new(0, 12, 0, 0),
+                Children =
+                {
+                    new TextBlock { Classes = { "desc" }, Text = Tr("Submitted by") },
+                    handleBox,
+                },
+            },
+            new TextBlock
+            {
+                Classes = { "desc" }, Margin = new(0, 8, 0, 0), Text = Tr("You can change this anytime on the Benchmark page."),
+            },
+        ];
+
+        var choices = new (string Label, bool? Value)[]
+        {
+            (Tr("Cancel"), null), (Tr("Don't submit"), false), (Tr("Submit"), true),
+        };
+        bool? answer = await _host.Choose(Tr("Submit benchmark results?"), body, choices);
+        if (answer is null) return false;
+
+        settings.AutoSubmit = answer.Value;
+        string typedHandle = handleBox.Text?.Trim() ?? "";
+        if (typedHandle.Length > 0 || settings.Handle.Length > 0) settings.Handle = typedHandle;
+        _host.Config.Save();
+        return true;
     }
 
     /// <summary>
@@ -547,7 +736,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     /// </summary>
     async Task InstallAsync()
     {
-        if (Problem() is { } problem)
+        if (Problem(requireSelection: false) is { } problem)
         {
             Say(problem);
             return;
@@ -567,15 +756,17 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     List<string> OrderedTiers() => [.. BenchmarkTiers.All.Where(_tiers.Contains)];
 
     /// <summary>
-    /// Why nothing can start now, null when it can.
+    /// Why nothing can start now, null when it can. <paramref name="requireSelection"/> is false for Install, which lists the build's
+    /// benchmarks before the player has to tick any.
     /// </summary>
-    string? Problem()
+    string? Problem(bool requireSelection)
     {
         if (Running) return Tr("A benchmark is already running.");
+        if (_results?.Submitting == true) return Tr("Wait for the current submission to finish.");
         if (_host!.Kenshi() is null) return Tr("Set the Kenshi folder first (Settings).");
         if (_host.GameRunning()) return Tr("Meitou is running: close it before benchmarking.");
         if (_release is null) return Tr("Choose a build first.");
-        if (_scenarios.Count == 0 || _tiers.Count == 0) return Tr("Tick at least one benchmark and one tier.");
+        if (requireSelection && (_scenarios.Count == 0 || _tiers.Count == 0)) return Tr("Tick at least one benchmark and one tier.");
         return null;
     }
 
@@ -621,7 +812,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
         _cancel?.Dispose();
         _cancel = null;
         _timer.Stop();
-        (_step, _runText, _runStarted, _downloaded) = (null, null, null, null);
+        (_step, _runText, _runStarted, _progressValue) = (null, null, null, null);
         _notices.Add(last);
         Rebuild();
     }
@@ -641,15 +832,16 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     #region Runner reports
 
     /// <summary>
-    /// A step began: shown, the download bar hidden until it reports.
+    /// A step began: shown, the progress bar hidden until a download or launch reports progress.
     /// </summary>
     void IBenchmarkView.Step(string text)
     {
-        (_step, _runText, _runStarted, _downloaded) = (text, null, null, null);
+        (_step, _runText, _runStarted, _progressValue) = (text, null, null, null);
         _timer.Stop();
         BenchmarkLayout.SetLine(_stepLine, text);
         ShowElapsed();
-        ShowDownload();
+        ShowProgress();
+        UpdateProgressVisibility();
     }
 
     /// <summary>
@@ -657,8 +849,8 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     /// </summary>
     void IBenchmarkView.Download(long done, long total)
     {
-        _downloaded = total > 0 ? (double)done / total : 0;
-        ShowDownload();
+        _progressValue = total > 0 ? (double)done / total : 0;
+        ShowProgress();
     }
 
     /// <summary>
@@ -667,18 +859,19 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     void IBenchmarkView.ScenariosListed(IReadOnlyList<BenchmarkScenario> scenarios) => Rebuild();
 
     /// <summary>
-    /// A launch started: its line, with the elapsed time ticking.
+    /// A launch started: its line, launch progress bar and elapsed timer ticking.
     /// </summary>
     void IBenchmarkView.RunStarted(BenchmarkScenario scenario, string tier, int run, int index, int count)
     {
-        string name = BenchmarkScenario.Label(scenario.Id), tierName = BenchmarkTiers.Label(tier);
+        string name = BenchmarkScenario.ShortLabel(scenario.Id), tierName = BenchmarkTiers.Label(tier);
         _step = Tr("Benchmarking: the game window opens and closes by itself.");
         _runText = Tr("{1} at {2}: run {3} of {4}, launch {5} of {6}", name, tierName, run, BenchmarkTiers.RunsPerTier, index, count);
         _runStarted = DateTime.UtcNow;
-        _downloaded = null;
+        _progressValue = count > 0 ? (double)(index - 1) / count : 0;
         BenchmarkLayout.SetLine(_stepLine, _step);
         ShowElapsed();
-        ShowDownload();
+        ShowProgress();
+        UpdateProgressVisibility();
         _timer.Start();
     }
 
@@ -689,14 +882,16 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     {
         _notices.Add(text);
         _noticePanel.Children.Add(NoticeLine(text));
+        UpdateProgressVisibility();
     }
 
     /// <summary>
-    /// The probed hardware kept in <c>launcher.json</c> (the ray tiers are greyed from it on).
+    /// The probed hardware kept in <c>launcher.json</c> (the ray tiers are greyed and the default machine id filled from it).
     /// </summary>
     void IBenchmarkView.HardwareProbed(JsonObject hardware)
     {
         _host!.Config.Benchmark.Hardware = hardware.ToJsonString();
+        _results!.EnsureMachineId();
         _host.Config.Save();
     }
 

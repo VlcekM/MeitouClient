@@ -679,5 +679,53 @@
       <Setter Property="Foreground" Value="#8a8270" />
     </Style>
 
+    <!-- Benchmark results: a framed dark table plate with shaded headers, alternating rows, a highlighted total row and compact series tabs -->
+    <Style Selector="Border.table">
+      <Setter Property="Background" Value="{StaticResource Field}" />
+      <Setter Property="BorderBrush" Value="{StaticResource PlateRim}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.table-head">
+      <Setter Property="Background" Value="#1a1715" />
+      <Setter Property="BorderBrush" Value="{StaticResource PlateRim}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+    <Style Selector="Border.table-row">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="#14afa68b" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+    <Style Selector="Border.table-row.alt">
+      <Setter Property="Background" Value="#08afa68b" />
+    </Style>
+    <Style Selector="Border.table-row.last">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Border.table-row.total">
+      <Setter Property="Background" Value="#18816635" />
+      <Setter Property="BorderBrush" Value="{StaticResource PlateRim}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <Style Selector="Border.table-row.clickable">
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Border.table-row.clickable:pointerover">
+      <Setter Property="Background" Value="#18afa68b" />
+    </Style>
+    <Style Selector="ToggleButton.tab">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="ToggleButton.tab:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.tab:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#241e18" />
+      <Setter Property="BorderBrush" Value="{StaticResource BrassLight}" />
+      <Setter Property="BorderThickness" Value="1,1,1,2" />
+      <Setter Property="BoxShadow" Value="inset 0 2 4 0 #CC000000" />
+      <Setter Property="Foreground" Value="{StaticResource PaperLight}" />
+    </Style>
+
   </Application.Styles>
 </Application>

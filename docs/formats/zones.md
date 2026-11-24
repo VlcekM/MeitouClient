@@ -31,8 +31,9 @@ on one side the body reaches about 96 from the center and the outer wall (`Storm
 **Observed** (original 1.0.68, plain game): a player character on the sand at the Sho-Battai Watchtower's outer foot, below the capsule and
 outside the body, leaves the tower closed.
 
-Meitou: `InteriorVolume.Contains` tests each shape's own footprint and height range, so ground between shapes, or below a roof shape, is not
-indoors; the volume's `Footprint` stays the convex hull of all of them. `ContainsGround` ignores height and holds a point under any shape's
+Meitou: `InteriorVolume.Contains` tests each shape on its own, a convex one (box, capsule, convex mesh) by its faces as the trigger does, a
+triangle mesh by its footprint and height range, so ground between shapes, below a roof shape, or beside a tilted building (the sunken
+`Outpost s-I` of 24.18, #1316: water its upright prism took in) is not indoors; the volume's `Footprint` stays the convex hull of all of them. `ContainsGround` ignores height and holds a point under any shape's
 footprint, as a ray cast down from above hits the shape.
 
 **Verified** (probe: placed part bounds, zone 20.33 in the `Newwworld` and `rebirth` layers, which agree): the Hub's two

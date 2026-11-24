@@ -5495,3 +5495,211 @@ msgstr "Добавить в меню приложений"
 #. machine-translated
 msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
 msgstr "Meitou Launcher со значком в меню приложений вашего рабочего стола."
+
+#. machine-translated
+msgid "Benchmarks site"
+msgstr "Сайт бенчмарков"
+
+#. machine-translated
+msgid "~{1} min per tier"
+msgstr "~{1} мин на уровень"
+
+#. machine-translated
+msgid "Recommended for this computer"
+msgstr "Рекомендуется для этого компьютера"
+
+#. machine-translated
+msgid "Recommended"
+msgstr "Рекомендуемые"
+
+#. machine-translated
+msgid "Submit results automatically when done"
+msgstr "Автоматически отправлять результаты после завершения"
+
+#. machine-translated
+msgid "Applies to target builds only."
+msgstr "Применяется только к целевым сборкам."
+
+#. machine-translated
+msgid "Submit your results to the Meitou benchmarks site automatically when the benchmark finishes? Hardware specs, timings and your optional handle are sent; your computer name is not."
+msgstr "Отправлять результаты на сайт бенчмарков Meitou автоматически после завершения теста? Отправляются характеристики оборудования, тайминги и ваш необязательный псевдоним; имя компьютера не отправляется."
+
+#. machine-translated
+msgid "You can change this anytime on the Benchmark page."
+msgstr "Вы можете изменить это в любое время на странице «Бенчмарк»."
+
+#. machine-translated
+msgid "Don't submit"
+msgstr "Не отправлять"
+
+#. machine-translated
+msgid "Submit benchmark results?"
+msgstr "Отправлять результаты бенчмарка?"
+
+#. machine-translated
+msgid "Wait for the current submission to finish."
+msgstr "Дождитесь завершения текущей отправки."
+
+#. machine-translated
+msgid "Open this build's benchmark results folder"
+msgstr "Открыть папку с результатами бенчмарка этой сборки"
+
+#. machine-translated
+msgid "1 session"
+msgstr "1 сессия"
+
+#. machine-translated
+msgid "{1} sessions"
+msgstr "Сессий: {1}"
+
+#. machine-translated
+msgid "1 session · submitted"
+msgstr "1 сессия · отправлена"
+
+#. machine-translated
+msgid "{1} sessions · all submitted"
+msgstr "Сессий: {1} · все отправлены"
+
+#. machine-translated
+msgid "{1} of {2} submitted"
+msgstr "Отправлено {1} из {2}"
+
+#. machine-translated
+msgid "All tiers"
+msgstr "Все уровни"
+
+#. machine-translated
+msgid "Submitted (#{1})"
+msgstr "Отправлено (№{1})"
+
+#. machine-translated
+msgid "Incomplete ({1} of {2} runs)"
+msgstr "Не завершено ({1} из {2} прогонов)"
+
+#. machine-translated
+msgid "Built by {1}, not {2}"
+msgstr "Собрано на {1}, не {2}"
+
+#. machine-translated
+msgid "Not a target build"
+msgstr "Не целевая сборка"
+
+#. machine-translated
+msgid "Ready to submit"
+msgstr "Готово к отправке"
+
+#. machine-translated
+msgid "Submit results"
+msgstr "Отправить результаты"
+
+#. machine-translated
+msgid "Submit all ({1})"
+msgstr "Отправить все ({1})"
+
+#. machine-translated
+msgid "Submit all again"
+msgstr "Отправить все снова"
+
+#. machine-translated
+msgid "All {1} sessions submitted."
+msgstr "Все {1} сессий отправлены."
+
+#. machine-translated
+msgid "1 session ready to submit ({1} incomplete skipped)."
+msgstr "1 сессия готова к отправке (пропущено неполных: {1})."
+
+#. machine-translated
+msgid "{1} sessions ready to submit ({2} incomplete skipped)."
+msgstr "Готово к отправке сессий: {1} (пропущено неполных: {2})."
+
+#. machine-translated
+msgid "{1} of {2} sessions not yet submitted."
+msgstr "{1} из {2} сессий ещё не отправлены."
+
+#. machine-translated
+msgid "1 session ready to submit."
+msgstr "1 сессия готова к отправке."
+
+#. machine-translated
+msgid "{1} sessions ready to submit."
+msgstr "Готово к отправке сессий: {1}."
+
+#. machine-translated
+msgid "Submitting {1} of {2}..."
+msgstr "Отправка {1} из {2}..."
+
+#. machine-translated
+msgid "Submitted 1 session."
+msgstr "Отправлена 1 сессия."
+
+#. machine-translated
+msgid "Submitted {1} sessions."
+msgstr "Отправлено сессий: {1}."
+
+#. machine-translated
+msgid "Submission failed."
+msgstr "Не удалось отправить."
+
+#. machine-translated
+msgid "Submitted {1} of {2} sessions; {3} failed: {4}"
+msgstr "Отправлено {1} из {2} сессий; ошибок {3}: {4}"
+
+#. machine-translated
+msgid "Bases"
+msgstr "Базы"
+
+#. machine-translated
+msgid "Shark fly-by"
+msgstr "Облёт Шарка"
+
+#. machine-translated
+msgid "The play bench on a save"
+msgstr "Игровой тест на сохранении"
+
+#. machine-translated
+msgid "A new game, flying round Shark"
+msgstr "Новая игра, полёт вокруг Шарка"
+
+#. machine-translated
+msgid "Tier"
+msgstr "Уровень"
+
+#. machine-translated
+msgid "Run {1} · Whole run"
+msgstr "Прогон {1} · Весь прогон"
+
+#. machine-translated
+msgid "Run {1}"
+msgstr "Прогон {1}"
+
+#. machine-translated
+msgid "FPS"
+msgstr "FPS"
+
+#. machine-translated
+msgid "99% ms"
+msgstr "99% мс"
+
+#. machine-translated
+msgid "Over 33 ms"
+msgstr "Дольше 33 мс"
+
+#. machine-translated
+msgid "Status"
+msgstr "Статус"
+
+#. machine-translated
+msgid "Click to view groups for {1}"
+msgstr "Нажмите, чтобы посмотреть группы для «{1}»"
+
+#. machine-translated
+msgid "Hardware must be probed before submitting."
+msgstr "Перед отправкой необходимо определить оборудование."
+
+#. machine-translated
+msgid "Generated when hardware is probed."
+msgstr "Создаётся при определении оборудования."
+
+#. machine-translated
+msgid "Generated for this computer so the site keeps your results together."
+msgstr "Создаётся для этого компьютера, чтобы сайт объединял ваши результаты."
