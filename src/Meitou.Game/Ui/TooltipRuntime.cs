@@ -1209,7 +1209,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     TooltipLine StolenRow(ItemTip t)
     {
-        var owner = t.StolenOwner is { } robbed ? player.ShownName("character", "", robbed) : player.ShownFactionName(t.StolenFrom);
+        var owner = t.StolenOwner ?? player.ShownFactionName(t.StolenFrom);
 
         return owner is { Length: > 0 }
             ? new("Stolen from:", owner, TooltipTone.Bad, TooltipTone.Bad)
