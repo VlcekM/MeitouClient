@@ -1276,7 +1276,7 @@ sealed partial class GameHost(
             : d.Relations.IsAlly(mine, town) ? MapStanding.Ally
             : relation < -30 ? MapStanding.Enemy
             : MapStanding.Neutral;
-        return new MapFaction(faction.Name, relation, standing, faction.NotReal);
+        return new MapFaction(FactionNameOf(town) ?? faction.Name, relation, standing, faction.NotReal);
     }
 
     /// <summary>
