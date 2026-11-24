@@ -1190,8 +1190,11 @@ Overview tab 2 (`ResearchTab`), part of `ManagementScreen` (constructor `FUN_140
 - **Queue drag** (**Verified**, Kenshi 1.0.68, `FUN_1404b13b0`, `FUN_14049f320`, `FUN_1404c8dd0`): drop onto another queue row to move there.
   The drop check tests every queued item's unmet requirements by swapping the two endpoints for the lookup. Each unmet requirement must be found
   before the dependent's original index in that lookup. An accepted drop removes the dragged entry and reinserts it at the target index, keeping its progress.
-- Meitou: `ResearchQueueList` rows are plain text; a click on a blueprint queues it and a click on a queue row takes it off. Drag between queue rows
-  to reorder them. The wheel scrolls the blueprint lines a line per notch (no bar drawn). The description lines use the DatapanelGUI row geometry,
+- `ResearchQueueList` (**Verified**, decompile): an `ItemBox` of `ReorderableListItem<TechItemViewData>` cells (`FUN_1404c72d0`, `Kenshi_ItemListItem.layout`): a
+  `Kenshi_Button1` frame over 0.9 of the cell, `ItemName` (the research's name, left), `ItemValue` (its time left, `getValue` = `FUN_140831550` as above,
+  right-aligned), `Progress` (`Kenshi_LifeBarSkin`) and `RemoveButton` ("X" in red, 0.9 to 1 of the cell). Each draw (`FUN_1404bbfe0`) cuts the name short of the
+  time's text and sets the bar's width to the share done times `ItemValue`'s width. The X takes the research off the queue (`researchRemoved`).
+- Meitou: a click on a blueprint queues it; a queue row draws as above (`ResearchQueueRow`), its X takes it off, and a drag between queue rows reorders them. The wheel scrolls the blueprint lines a line per notch (no bar drawn). The description lines use the DatapanelGUI row geometry,
   and the DESCRIPTION captions are inset 8 px at 1080 (engine choice).
 
 ### Craft tab
