@@ -6,7 +6,8 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation;
 
 /// <summary>
-/// The world's orders: whether an order could start, giving one (<see cref="GiveOrder"/>), and the system that owns its row.
+/// The world's orders: whether an order could start, giving one (<see cref="GiveOrder(CharacterId, TaskType, OrderOptions)"/>), and the system that
+/// owns its row.
 /// </summary>
 public sealed partial class World
 {
@@ -48,17 +49,28 @@ public sealed partial class World
     /// order (nothing is queued then).
     /// </summary>
     public OrderCheck GiveOrder(CharacterId actor, TaskType row, CharacterId? target = null, string? site = null, Vector3 point = default,
-        bool queued = false)
+        bool queued = false) =>
+        GiveOrder(actor, row, new OrderOptions { Target = target, Site = site, Point = point, Queued = queued });
+
+    /// <summary>
+    /// <see cref="GiveOrder(CharacterId, TaskType, CharacterId?, string?, Vector3, bool)"/> with the order's parts and options in
+    /// <paramref name="options"/>: its <see cref="OrderOptions.Reach"/> goes with the order (<see cref="OrderEntry.Reach"/>). Throws for a reach
+    /// that is not a finite number of 0 or more.
+    /// </summary>
+    public OrderCheck GiveOrder(CharacterId actor, TaskType row, OrderOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.Reach is { } reach && !(float.IsFinite(reach) && reach >= 0))
+            throw new ArgumentOutOfRangeException(nameof(options), "An order's reach must be a finite number of 0 or more.");
         if (Characters.Phase == TablePhase.Parallel) throw new InvalidOperationException("Orders are given in the serial phases only.");
-        if (Characters.Phase != TablePhase.Outside) return Give(actor, row, target, site, point, queued);
+        if (Characters.Phase != TablePhase.Outside) return Give(actor, row, options);
 
         // Between ticks the order's start writes the state the next tick computes from, as the paused step's commands do.
         Characters.BeginTick();
         Characters.Phase = TablePhase.Inputs;
         try
         {
-            return Give(actor, row, target, site, point, queued);
+            return Give(actor, row, options);
         }
         finally
         {
@@ -68,16 +80,16 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// <see cref="GiveOrder"/> in a serial phase.
+    /// <see cref="GiveOrder(CharacterId, TaskType, OrderOptions)"/> in a serial phase.
     /// </summary>
-    OrderCheck Give(CharacterId actor, TaskType row, CharacterId? target, string? site, Vector3 point, bool queued)
+    OrderCheck Give(CharacterId actor, TaskType row, OrderOptions o)
     {
         if (!Characters.TryResolveNext(actor, out int slot) || Characters.Cold(slot) is null) return OrderCheck.Gone;
-        if (row == TaskType.MoveCusOrdered && SystemOf<MovementSystem>() is { } movement) return movement.GiveMove(this, slot, point, queued);
-        if (EntryOf(row, actor, target ?? CharacterId.None, site, point) is not { } entry) return OrderCheck.Gone;
+        if (row == TaskType.MoveCusOrdered && SystemOf<MovementSystem>() is { } movement) return movement.GiveMove(this, slot, o.Point, o.Queued);
+        if (EntryOf(row, actor, o.Target ?? CharacterId.None, o.Site, o.Point, o.Reach) is not { } entry) return OrderCheck.Gone;
 
         entry.Owner.Restored(this, entry);
-        return PlayerOrders.Give(this, slot, entry, queued);
+        return PlayerOrders.Give(this, slot, entry, o.Queued);
     }
 
     /// <summary>
@@ -85,12 +97,12 @@ public sealed partial class World
     /// (<see cref="OrderOwnerOf"/>), with the detail its owner gives a saved order of that row (<see cref="IOrderOwner.LoadDetail"/>, its plain
     /// kind: a lock order's walk with its row's work, the player's pick of an attack); null for a row no system owns as an order.
     /// </summary>
-    OrderEntry? EntryOf(TaskType row, CharacterId actor, CharacterId target, string? site, Vector3 point)
+    OrderEntry? EntryOf(TaskType row, CharacterId actor, CharacterId target, string? site, Vector3 point, float? reach = null)
     {
         if (OrderOwnerOf(row, site is not null) is not { } owner) return null;
 
         var detail = owner.LoadDetail(this, actor, row, 0, target);
-        return new OrderEntry(row, owner) { Target = target, Site = site, Point = point, Detail = detail };
+        return new OrderEntry(row, owner) { Target = target, Site = site, Point = point, Detail = detail, Reach = reach };
     }
 
     /// <summary>

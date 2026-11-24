@@ -980,10 +980,13 @@ holds refuses the second mod.
 - **Character save fields:** `world.SaveFields` (`CharacterSaveFields`, `Meitou.Simulation.Saving`) keeps a mod's per-character values in
   the vanilla save, under keys of its choosing (an original plugin's own, so a save taken to the original keeps them):
   `SetInt`/`SetFloat`/`SetBool`/`SetString(character, CharacterSaveRecord, key, value)` and `Remove`, read back with `Int`/`Float`/`Bool`/
-  `String` (null: none). `CharacterSaveRecord.Orders` is the character's GAMESTATE_AI `ai` record (the original's `OrdersReceiver`); more
-  records may come. A value set or removed is written into the record with every save, after the game's own keys; a key not set reads what the
-  loaded save held (while the character keeps its link to that save: read at World ready and set what you keep). The game's keys (`jobs`,
-  `pjob<i>`, `pjobT<i>…`, `tjob<i>`, `tjobP<i>`, `tjobT<i>…`, `meitou …`; `CharacterSaveFields.IsEngineKey`) throw, as does a set in a
+  `String` (null: none). `CharacterSaveRecord.Orders` is the character's GAMESTATE_AI `ai` record (the original's `OrdersReceiver`),
+  `CharacterSaveRecord.Stats` its STATS record (an original plugin's `kills`, `kos`, `limbs` floats; **Observed** written into a captured
+  save and read from a loaded one, 2026-11-24 scratch check); more records may come. A value set or removed is written into the record
+  with every save, after the game's own keys; a key not set reads what the
+  loaded save held (while the character keeps its link to that save: read at World ready and set what you keep). The game's keys (orders: `jobs`,
+  `pjob<i>`, `pjobT<i>…`, `tjob<i>`, `tjobP<i>`, `tjobT<i>…`; stats: the 44 floats every saved STATS record has, the
+  [STATS record keys](formats/save.md#compatibility-exceptions); both: `meitou …`; `CharacterSaveFields.IsEngineKey`) throw, as does a set in a
   parallel phase or during a save; set values are hashed. Without a set value nothing is hashed or written. Engine API, not in the original.
 - **Work sites:** `WorldSnapshot.WorkSites` lists, once each, every site a living player character's job names (`WorkSiteSnapshot`: `Id` as
   jobs and commands name it, BUILDING `Record`, `Name`, `Kind`, `Owner`, `Position`): `WorkSiteKind.Building` (also in `Buildings`),
@@ -1356,7 +1359,11 @@ holds refuses the second mod.
   `<folder>/locale/<language>/LC_MESSAGES/<domain>.mo` (else `.po`) of that language: the folder named by the code ignoring case, else the first
   of the same language part (`de` of `de_DE`); English reads `en_GB` when there is one. `folder` is the mod's own when null, a relative path is
   under it, and a full path may name another, such as an installed original's mod folder ([catalogue layout](formats/localisation.md#code-mods-catalogues)).
-  False when there is none or it cannot be read (logged). Catalogues are looked up by the English text in the order added. Then the mod's
+  False when there is none or it cannot be read (logged). `context.AddTranslations(language, messages, context = null)` adds translations given
+  directly (English text to translation pairs, such as texts read at runtime from an original's DLL, under one `msgctxt` when given; an empty
+  translation is left out) as such a catalogue, kept only when `language` is the game's (the same code ignoring case, else the same part before
+  `_`; false otherwise; **Observed**, 2026-11-24 scratch check of `ModTranslations`). Catalogues are looked up by the English text in the
+  order added. Then the mod's
   `UiNode` texts (not a text box's), right-click menu rows, squad AI options and building panel buttons (captions and tooltips), its settings'
   labels, hints, sub-groups, buttons and choices (a choice is still saved by its own text) and its key actions' labels show through them, the
   game's own lookup after as before; other texts the mod passes through `context.Tr(english)` (the mod's catalogues, then the game's and
@@ -1758,7 +1765,13 @@ holds refuses the second mod.
   only); gone once it carries a weapon or nothing is found; one find per order. `TaskType.EatTargetAlive` (220, a target) eats a live caged
   occupant at its cage, or a body down or dead on the ground where it lies, through the cannibal goals' own job (bites, barks, limb loss, death
   report), for any character; it stays the queue's front while the meal goes on, another order ends the meal, and an order's meal resets no
-  town's kill timer. Carrying is the lift orders (`LiftPersonPlayerOrder`, `KidnapOrder`).
+  town's kill timer. Carrying is the lift orders (`LiftPersonPlayerOrder`, `KidnapOrder`). `world.GiveOrder(actor, row, OrderOptions)` gives
+  the same with the parts in an options record (`Target`, `Site`, `Point`, `Queued`; room for more) and per-order options: `Reach`, the distance from
+  the target within which the order's job starts its work (at a cage, past its `use range`) in place of the row's own; read by 220 (the meal's
+  `CaptiveSettings.Reach`, 15), the other rows keep theirs. A reach not finite or below 0 throws. It goes with the order (`OrderEntry.Reach`), is
+  hashed with the queue and the job, and is saved as `meitou tjobR<i>` ([order queue](formats/save.md#order-queue)); an original plugin's widened
+  eating trigger (50) is such a reach. **Observed** (2026-11-24, scratch check on a vanilla save: a downed body 45 away, eaten from 45 with
+  `Reach = 50`, from 16.8 without; the reach saved and read back; the same state hash on 1 and 4 threads).
 - **Moving from the old hooks** (the hooks are gone; a mod built on them gets the notice under [Versioning](#versioning)):
   - `IDecisionOwner` with `DecisionSystem.Register(source)`: a chooser goal (`ChooserRegistry.Goal`) or an order (`World.GiveOrder`);
     `DecisionSystem.RegisterJob(type, source)`: `ChooserRegistry.Jobs(type, source)`.

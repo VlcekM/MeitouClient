@@ -262,6 +262,10 @@ public sealed class CaptiveJob
     /// </summary>
     internal bool Ordered { get; init; }
     /// <summary>
+    /// An order's own reach (<see cref="Player.OrderEntry.Reach"/>) in place of <see cref="CaptiveSettings.Reach"/>; null: the settings'.
+    /// </summary>
+    internal float? Reach { get; init; }
+    /// <summary>
     /// The provenance of the job's walks: an order's job walks as its order, a goal's as its goal.
     /// </summary>
     internal TaskSource Source => Ordered ? TaskSource.Order : TaskSource.Goal;
@@ -286,6 +290,7 @@ public sealed class CaptiveJob
         h.Add(NextBark);
         if (Beats != 0) h.Add(Beats);
         if (Ordered) h.Add(0x4F726472);
+        if (Reach is { } reach) h.Add(reach);
     }
 }
 
@@ -653,6 +658,12 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (j.Cage == cage) return true;
         return false;
     }
+
+    /// <summary>
+    /// The distance from its target within which the job starts its work (at a cage, past the cage's <c>use range</c>): its order's own
+    /// (<see cref="CaptiveJob.Reach"/>), else <see cref="CaptiveSettings.Reach"/>.
+    /// </summary>
+    float ReachOf(CaptiveJob j) => j.Reach ?? Settings.Reach;
 
     /// <summary>
     /// Whether the worker walks the job's own walk: a GoTo whose running row is the job's (<see cref="RowOf"/>). A walk it was on when the job
@@ -1296,7 +1307,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// The walk to the cage: within its <c>use range</c> + <see cref="CaptiveSettings.Reach"/> it has arrived, or when a walk ended within
+    /// The walk to the cage: within its <c>use range</c> + the job's reach (<see cref="ReachOf"/>) it has arrived, or when a walk ended within
     /// <see cref="CaptiveSettings.Slack"/>; a walk that ended farther counts against <see cref="CaptiveSettings.Walks"/>. Its own faction's shut
     /// doors on the way are unlocked first (the lock rounds' "keys", engine choice). False: give up.
     /// </summary>
@@ -1306,7 +1317,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         ref var n = ref table.Next[w];
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(cage.Position.X, cage.Position.Z));
         bool walking = WalksOwn(table, w, j);
-        arrived = d <= cage.UseRange + Settings.Reach || !walking && j.Walks > 0 && d <= Settings.Slack;
+        arrived = d <= cage.UseRange + ReachOf(j) || !walking && j.Walks > 0 && d <= Settings.Slack;
         if (arrived || walking) return true;
         if (Lost(j, new IgnoreKey(cage.Id, default))) return false;
         if (++j.Walks > Settings.Walks)
@@ -1444,7 +1455,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (j.Phase == CaptivePhase.Walk)
         {
             bool walking = WalksOwn(table, w, j);
-            if (d > Settings.Reach && !(!walking && j.Walks > 0 && d <= Settings.Slack))
+            if (d > ReachOf(j) && !(!walking && j.Walks > 0 && d <= Settings.Slack))
             {
                 if (walking) return true;
                 if (Lost(j, IgnoreKey.Of(j.Captive)) || ++j.Walks > Settings.Walks)

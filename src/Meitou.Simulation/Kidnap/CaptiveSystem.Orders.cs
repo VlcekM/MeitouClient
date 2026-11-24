@@ -29,7 +29,7 @@ public sealed partial class CaptiveSystem : IOrderOwner, IOrderSteps
 
     /// <summary>
     /// Starts 220's job: the meal at the target's cage, or on the body where it lies; the eater sheathes (220's <c>!hasWeaponEquipped</c>). An
-    /// order's job resets no town's kill timer.
+    /// order's job resets no town's kill timer; it starts eating within the order's <see cref="OrderEntry.Reach"/> when it has one.
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
@@ -44,6 +44,7 @@ public sealed partial class CaptiveSystem : IOrderOwner, IOrderSteps
         {
             Kind = kind, Worker = worker, Captive = order.Target, Cage = kind == CaptiveJobKind.Eat ? cc.InWhat! : "", Faction = cold.Faction,
             Goal = TaskType.EatTargetAlive, Target = PlanTarget.OfCharacter(order.Target, table.Next[c].Position), Ordered = true,
+            Reach = order.Reach,
         });
     }
 

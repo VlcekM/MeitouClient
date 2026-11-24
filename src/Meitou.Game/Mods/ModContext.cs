@@ -850,8 +850,8 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// The mod's gettext catalogues (docs/modding.md "Translations"), added by <see cref="AddTranslations"/>; its interface texts, menu rows,
-    /// settings and key action labels are shown through them.
+    /// The mod's gettext catalogues (docs/modding.md "Translations"), added by <see cref="AddTranslations(string, string?)"/> (or given directly);
+    /// its interface texts, menu rows, settings and key action labels are shown through them.
     /// </summary>
     internal Localisation.ModTranslations Texts { get; } = new();
 
@@ -876,6 +876,22 @@ public sealed class ModContext
 
         string root = folder is null ? Folder : Path.GetFullPath(folder, Folder);
         return Texts.Add(root, domain, Language);
+    }
+
+    /// <summary>
+    /// Adds translations given directly, as a catalogue <see cref="AddTranslations(string, string?)"/> reads would: <paramref name="messages"/>, each
+    /// English source text to its translation in <paramref name="language"/> (a locale code, <c>ru_RU</c> or <c>ru</c>), under the message context
+    /// <paramref name="context"/> when given (as <see cref="TrIn"/> looks them up). Kept only when <paramref name="language"/> is the game's
+    /// <see cref="Language"/> (the same code ignoring case, else the same part before <c>_</c>); false otherwise. Looked up with the file catalogues
+    /// in the order added. During <see cref="IMod.Initialize"/>.
+    /// </summary>
+    public bool AddTranslations(string language, IEnumerable<KeyValuePair<string, string>> messages, string? context = null)
+    {
+        CheckOpen();
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentNullException.ThrowIfNull(messages);
+
+        return Texts.Add(language, Language, messages, context);
     }
 
     /// <summary>

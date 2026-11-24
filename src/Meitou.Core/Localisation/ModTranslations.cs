@@ -34,6 +34,28 @@ public sealed class ModTranslations
     }
 
     /// <summary>
+    /// Adds the messages given directly (<see cref="GettextCatalog.Of"/>) as a catalogue of <paramref name="language"/>, when that is the game's
+    /// <paramref name="gameLanguage"/>: the same code ignoring case, or the same language part before <c>_</c> (<c>de</c> of <c>de_DE</c>), as a
+    /// catalogue folder is picked. False (nothing added) for another language.
+    /// </summary>
+    public bool Add(string language, string gameLanguage, IEnumerable<KeyValuePair<string, string>> messages, string? context = null)
+    {
+        var catalog = GettextCatalog.Of(messages, context);
+        if (!SameLanguage(language, gameLanguage)) return false;
+
+        _catalogs = [.. _catalogs, catalog];
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the locale code <paramref name="language"/> stands for <paramref name="gameLanguage"/>: the same code, else the same language part,
+    /// case ignored.
+    /// </summary>
+    static bool SameLanguage(string language, string gameLanguage) =>
+        language.Equals(gameLanguage, StringComparison.OrdinalIgnoreCase)
+        || language.Split('_')[0].Equals(gameLanguage.Split('_')[0], StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The translation of <paramref name="english"/> in the catalogues (first that has it), or null.
     /// </summary>
     public string? Find(string english, string? context = null)

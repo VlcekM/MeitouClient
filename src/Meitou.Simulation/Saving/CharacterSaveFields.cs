@@ -13,6 +13,10 @@ public enum CharacterSaveRecord : byte
     /// order queue.
     /// </summary>
     Orders,
+    /// <summary>
+    /// The stats record: the character's STATS record <c>stats</c>, which holds its skill levels as floats.
+    /// </summary>
+    Stats,
 }
 
 /// <summary>
@@ -111,13 +115,28 @@ public sealed partial class CharacterSaveFields
     /// <summary>
     /// Whether <paramref name="key"/> is one of the game's own keys of <paramref name="record"/>, which no mod may set: of the orders record
     /// <c>jobs</c>, the job list's <c>pjob&lt;i&gt;</c> and <c>pjobT&lt;i&gt;</c> handle parts, the order queue's <c>tjob&lt;i&gt;</c>,
-    /// <c>tjobP&lt;i&gt;</c> and <c>tjobT&lt;i&gt;</c>, and every key starting <c>meitou </c>.
+    /// <c>tjobP&lt;i&gt;</c> and <c>tjobT&lt;i&gt;</c>; of the stats record the 44 floats every saved STATS record has (<see cref="StatsKeys"/>);
+    /// of both, every key starting <c>meitou </c>.
     /// </summary>
     public static bool IsEngineKey(CharacterSaveRecord record, string key) => record switch
     {
-        CharacterSaveRecord.Orders => key == "jobs" || key.StartsWith("meitou ", StringComparison.Ordinal) || OrdersKey().IsMatch(key),
+        _ when key.StartsWith("meitou ", StringComparison.Ordinal) => true,
+        CharacterSaveRecord.Orders => key == "jobs" || OrdersKey().IsMatch(key),
+        CharacterSaveRecord.Stats => StatsKeys.Contains(key),
         _ => true,
     };
+
+    /// <summary>
+    /// The game's own keys of the stats record: the floats every STATS record of the vanilla saves surveyed holds (docs/formats/save.md
+    /// "Character save fields"), Meitou's stat fields and legacy keys among them.
+    /// </summary>
+    static readonly HashSet<string> StatsKeys =
+    [
+        "armour smith", "arrow defence", "assassin", "athletics", "attack", "bluff", "blunt", "bow", "bow smith", "climbing", "cooking", "defence",
+        "dexterity", "doctor", "dodge", "endurance", "engineer", "farming", "ff", "free attribute points", "hackers", "heavy weapons", "katana",
+        "labouring", "lockpicking", "mass combat", "medic", "perception", "poles", "robotics", "sabres", "science", "stealth", "strength",
+        "survival", "swimming", "thievery", "toughness2", "tracking", "turrets", "unarmed", "warrior spirit", "weapon smith", "xp",
+    ];
 
     /// <summary>
     /// The job list's and order queue's numbered keys of the orders record.
@@ -140,6 +159,7 @@ public sealed partial class CharacterSaveFields
     FcsRecord? Loaded(CharacterId character, CharacterSaveRecord record) => record switch
     {
         CharacterSaveRecord.Orders => Cold(character)?.Save?.Source.Ai,
+        CharacterSaveRecord.Stats => Cold(character)?.Save?.Source.Stats,
         _ => null,
     };
 
@@ -182,21 +202,22 @@ public sealed partial class CharacterSaveFields
     }
 
     /// <summary>
-    /// Writes <paramref name="cold"/>'s fields of the orders record into <paramref name="ai"/>, after the game's own keys (a save).
+    /// Writes <paramref name="cold"/>'s fields of <paramref name="which"/> into its saved <paramref name="target"/>, after the game's own keys (a
+    /// save).
     /// </summary>
-    internal static void Write(FcsRecord ai, CharacterCold cold)
+    internal static void Write(FcsRecord target, CharacterCold cold, CharacterSaveRecord which)
     {
         if (cold.SaveFields is not { } fields) return;
 
         foreach (var ((record, key), value) in fields)
         {
-            if (record != CharacterSaveRecord.Orders) continue;
+            if (record != which) continue;
 
-            ai.Ints.Remove(key);
-            ai.Floats.Remove(key);
-            ai.Bools.Remove(key);
-            ai.Strings.Remove(key);
-            Put(ai, key, value);
+            target.Ints.Remove(key);
+            target.Floats.Remove(key);
+            target.Bools.Remove(key);
+            target.Strings.Remove(key);
+            Put(target, key, value);
         }
     }
 
