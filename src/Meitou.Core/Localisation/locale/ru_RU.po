@@ -5375,3 +5375,19 @@ msgstr "Шанс взлома на указателе"
 #. machine-translated
 msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr "При наведении на замок, который слишком сложно взломать, показывается 0%, как в пункте меню «Взломать замок», ведь персонаж не может его взломать. Игра показывает там шанс без учёта этого предела, например 3% для замка, которому меню даёт 0%."
+
+#. machine-translated
+msgid "Mute corpse flies"
+msgstr "Заглушить мух над трупами"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings"
+msgstr "Заглушить мух над трупами в настройках звука"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr "Заглушить мух над трупами в настройках звука включено"
+
+#. machine-translated
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr "Убирает жужжание мух над трупами; сами мухи по-прежнему видны (в игре: выкл.)."

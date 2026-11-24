@@ -5373,3 +5373,19 @@ msgstr "Chance de crochetage sur le pointeur"
 #. machine-translated
 msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr "Pointer une serrure trop difficile à crocheter affiche 0 %, comme son entrée Crocheter du menu, puisque le personnage ne peut pas la crocheter. Le jeu y affiche la chance avant cette limite, par exemple 3 % pour une serrure à laquelle le menu donne 0 %."
+
+#. machine-translated
+msgid "Mute corpse flies"
+msgstr "Couper les mouches des cadavres"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings"
+msgstr "Couper les mouches des cadavres dans les réglages Audio"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr "Couper les mouches des cadavres dans les réglages Audio est activé"
+
+#. machine-translated
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr "Fait taire le bourdonnement des mouches au-dessus des cadavres ; les mouches restent affichées (le jeu : désactivé)."

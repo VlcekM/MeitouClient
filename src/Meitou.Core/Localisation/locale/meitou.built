@@ -86,7 +86,6 @@ Your look as it is now: {menu.LookPresets.ActiveLook.Name}{suffix}. What it does
 [Mods] Failed to load core mod: {ModName(entry)}
 [Mods] Failed to load mod: {ModName(entry)}{(IsWorkshop(entry, install) ? " (*)" : "")}
 a game data change it made cannot be applied: {problem}
-a {type.Name} can't be a setting (bool, int, float, double, an enum, or a string with Options).
 and {dropped} stack(s) lie on the ground by the squads.
 bloom {bloom}, depth of field {focus}, lamp shadows {lamps}, gi hybrid {(GiHybrid ? GiHybridParts : "off")}, 
 building panel button {a.Caption}

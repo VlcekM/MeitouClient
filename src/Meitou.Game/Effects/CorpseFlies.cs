@@ -91,11 +91,19 @@ sealed class CorpseFlies(GameHost host)
     }
 
     /// <summary>
-    /// With the world audio: the Corpse Flies emitter at each corpse that has its effect.
+    /// With the world audio: the Corpse Flies emitter at each corpse that has its effect; none while Mute corpse flies is on.
     /// </summary>
     internal void UpdateCorpseFlyEmitters(WorldEmitters emitters)
     {
         if (_flySound is not { } sound) return;
+
+        if (host.Config.MuteCorpseFlies)
+        {
+            foreach (var id in _flyCorpses.Keys)
+                emitters.Remove(FlyKey(id));
+            return;
+        }
+
         foreach (var (id, at) in _flyCorpses)
         {
             string key = FlyKey(id);

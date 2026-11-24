@@ -521,7 +521,7 @@ sealed class GamePages(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The Audio page: the volumes, music frequency, voices and range, and where the listener is.
+    /// The Audio page: the volumes, music frequency, voices and range, where the listener is, and the corpse flies' sound.
     /// </summary>
     internal void AudioRows(List<SettingsMenu.Entry> result)
     {
@@ -545,6 +545,8 @@ sealed class GamePages(SettingsMenu menu)
             + "nobody is selected).",
             Toggle: new("Hear from", () => menu.Config.HearFromSelected, v => menu.Config.HearFromSelected = v,
                 Text: () => menu.Config.HearFromSelected ? "Character" : "Camera")));
+        result.Add(new("Mute corpse flies", "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off).",
+            Toggle: new("Mute corpse flies", () => menu.Config.MuteCorpseFlies, v => menu.Config.MuteCorpseFlies = v, OnOff: true)));
     }
 
     /// <summary>

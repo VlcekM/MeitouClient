@@ -5371,3 +5371,19 @@ msgstr "포인터의 자물쇠 따기 확률"
 #. machine-translated
 msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr "따기 너무 어려운 자물쇠를 가리키면 메뉴의 자물쇠 따기 항목처럼 0%가 표시됩니다. 캐릭터가 그 자물쇠를 딸 수 없기 때문입니다. 게임은 그 자리에 그 한계를 적용하기 전의 확률을 보여 주어, 메뉴가 0%로 표시하는 자물쇠도 3% 등으로 나옵니다."
+
+#. machine-translated
+msgid "Mute corpse flies"
+msgstr "시체 파리 음소거"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings"
+msgstr "오디오 설정의 시체 파리 음소거"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr "오디오 설정의 시체 파리 음소거 켜짐"
+
+#. machine-translated
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr "시체 위 파리의 윙윙거리는 소리를 없앱니다. 파리는 계속 보입니다(게임: 꺼짐)."

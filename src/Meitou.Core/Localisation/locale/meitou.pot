@@ -677,12 +677,12 @@ msgstr ""
 msgid "Balanced: more resident detail than Safe, with some headroom for macOS and other apps."
 msgstr ""
 
-#: src/Meitou.Game/Settings/GamePages.cs
-msgid "Beds used as seats"
-msgstr ""
-
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkScenario.cs
 msgid "Bases: the play bench on a save"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Beds used as seats"
 msgstr ""
 
 #: src/Meitou.Game/Building/BuildingSelection.cs
@@ -3294,6 +3294,18 @@ msgstr ""
 msgid "Music frequency"
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Mute corpse flies"
+msgstr ""
+
+#: src/Meitou.Core/Content/CoveredMods.cs
+msgid "Mute corpse flies in the Audio settings"
+msgstr ""
+
+#: src/Meitou.Game/Mods/BuiltInMods.cs
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr ""
+
 #: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/PresetNamingDialog.cs
 msgid "My look"
 msgstr ""
@@ -4641,6 +4653,10 @@ msgstr ""
 msgid "Sideways"
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr ""
+
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
 msgid "Simple terrain shading"
 msgstr ""
@@ -5233,6 +5249,10 @@ msgstr ""
 msgid "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near and soft cascades further away (both need ray tracing and turn on global illumination)."
 msgstr ""
 
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "The game's quality presets."
+msgstr ""
+
 #: src/Meitou.Game/Building/BuildingDescriptions.cs
 msgid "The gate for Defensive Wall II."
 msgstr ""
@@ -5243,10 +5263,6 @@ msgstr ""
 
 #: src/Meitou.Game/Building/BuildingDescriptions.cs
 msgid "The gate for Defensive Wall IV."
-msgstr ""
-
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
-msgid "The game's quality presets."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -5409,12 +5425,12 @@ msgstr ""
 msgid "This build did not report the hardware (exit code {1}): it may be older than launcher benchmarks."
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPlatform.cs
-msgid "This computer's build"
-msgstr ""
-
 #: src/Meitou.Game/Ui/ProductionWindows.cs
 msgid "This building stands outside every outpost's build limit, so no generator can power it. Dismantle it and build it again inside the red ring."
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPlatform.cs
+msgid "This computer's build"
 msgstr ""
 
 #: src/Meitou.Game/Ui/ProductionWindows.cs

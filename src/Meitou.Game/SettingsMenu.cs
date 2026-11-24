@@ -1648,6 +1648,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         OffscreenChanged?.Invoke();
         Config.Audio = new();
         AudioChanged?.Invoke();
+        Config.MuteCorpseFlies = false;
         GamePages.SetGameplay(new());
         Config.HardwareMouse = false;
         Config.EnhancedHardwareMouse = true;

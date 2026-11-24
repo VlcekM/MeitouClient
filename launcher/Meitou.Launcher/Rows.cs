@@ -82,10 +82,10 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public Uri? WorkshopPage => CoveredMods.WorkshopId(Mod) is { } id ? CoveredMods.WorkshopPage(id) : null;
 
     /// <summary>
-    /// The entry that has the mod built into Meitou (<see cref="CoveredMods.BuiltInOf(string, string?)"/>), by name or code mod id (the id the
-    /// game reads, found even when <c>meitou.json</c> does not parse); null when none does.
+    /// The entry that has the mod built into Meitou (<see cref="CoveredMods.BuiltInOf(ModInfo, string?)"/>), by name, code mod id (the id the
+    /// game reads, found even when <c>meitou.json</c> does not parse) or workshop item; null when none does.
     /// </summary>
-    public BuiltInMod? BuiltIn => CoveredMods.BuiltInOf(Mod.Name, Code.Id);
+    public BuiltInMod? BuiltIn => CoveredMods.BuiltInOf(Mod, Code.Id);
 
     /// <summary>
     /// The endorsed port of this RE_Kenshi mod on the Steam workshop (<see cref="CoveredMods.PortOf"/>); null when it has none.

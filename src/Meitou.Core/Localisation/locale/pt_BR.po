@@ -5800,3 +5800,19 @@ msgstr "Chance de arrombamento no ponteiro"
 #. machine-translated
 msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr "Apontar para uma fechadura difícil demais de arrombar mostra 0%, como a opção Arrombar fechadura do menu, já que o personagem não consegue arrombá-la. O jogo mostra ali a chance antes desse limite, como 3% para uma fechadura à qual o menu dá 0%."
+
+#. machine-translated
+msgid "Mute corpse flies"
+msgstr "Silenciar moscas dos cadáveres"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings"
+msgstr "Silenciar moscas dos cadáveres nas configurações de Áudio"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr "Silenciar moscas dos cadáveres nas configurações de Áudio está ativado"
+
+#. machine-translated
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr "Silencia o zumbido das moscas sobre os cadáveres; as moscas continuam visíveis (o jogo: desativado)."

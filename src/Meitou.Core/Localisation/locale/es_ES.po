@@ -5373,3 +5373,19 @@ msgstr "Probabilidad de forzar en el puntero"
 #. machine-translated
 msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr "Al señalar una cerradura demasiado difícil de forzar se muestra 0 %, como en su opción Forzar cerradura del menú, ya que el personaje no puede forzarla. El juego muestra ahí la probabilidad antes de ese límite, como un 3 % para una cerradura a la que el menú da 0 %."
+
+#. machine-translated
+msgid "Mute corpse flies"
+msgstr "Silenciar moscas de cadáveres"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings"
+msgstr "Silenciar moscas de cadáveres en los ajustes de Audio"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr "Silenciar moscas de cadáveres en los ajustes de Audio está activado"
+
+#. machine-translated
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr "Silencia el zumbido de las moscas sobre los cadáveres; las moscas se siguen mostrando (el juego: desactivado)."

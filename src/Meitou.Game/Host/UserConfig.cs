@@ -667,6 +667,10 @@ sealed class UserConfig
     /// </summary>
     public bool HearFromSelected { get; set; }
     /// <summary>
+    /// The corpse flies make no sound (Audio settings; Meitou only, default off: they buzz, as in the game); the mute-flies mods' feature.
+    /// </summary>
+    public bool MuteCorpseFlies { get; set; }
+    /// <summary>
     /// The Windows cursor instead of the game's drawn pointer (the original's <c>hardware_mouse</c>, default off; Interface settings).
     /// </summary>
     public bool HardwareMouse { get; set; }

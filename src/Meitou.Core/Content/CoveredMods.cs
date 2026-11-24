@@ -6,8 +6,9 @@ namespace Meitou.Content;
 public sealed record MatchedItem(ulong Id, long Updated);
 
 /// <summary>
-/// A mod whose feature Meitou has built in (docs/formats/rekenshi.md): its <c>.mod</c> name or its code mod's id, the Meitou setting the
-/// feature became, and the workshop items it was matched against (none when it is matched by its code mod id, whatever its version).
+/// A mod whose feature Meitou has built in (docs/formats/rekenshi.md): its <c>.mod</c> name or its code mod's id (or neither: matched by its
+/// workshop items alone), the Meitou setting the feature became, and the workshop items it was matched against (none when it is matched by its
+/// code mod id, whatever its version).
 /// </summary>
 public sealed record BuiltInMod(string? ModName, string? CodeId, string Setting, MatchedItem[] Items);
 
@@ -50,9 +51,16 @@ public static class CoveredMods
         new("Character Highlight", null, "Hover outline in the Advanced settings", [new(3688641949, 1782253588)]);
 
     /// <summary>
+    /// The data mods that mute the corpse flies, matched by their workshop items: "Flies Are Muted" (1173024319, its 2017-10-18 update),
+    /// "Silent Corpse Flies" (1661152630, its 2019-02-20 update) and "Removes fly buzzing sound" (3249760334, its 2024-05-19 update).
+    /// </summary>
+    public static readonly BuiltInMod MuteFlies = new(null, null, "Mute corpse flies in the Audio settings",
+        [new(1173024319, 1508336963), new(1661152630, 1550624826), new(3249760334, 1716139203)]);
+
+    /// <summary>
     /// The mods Meitou has built in.
     /// </summary>
-    public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort, SwampTurtleFix, CharacterHighlight];
+    public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort, SwampTurtleFix, CharacterHighlight, MuteFlies];
 
     /// <summary>
     /// Emkej's "Loot-Scoot-Execute" (workshop 3675700748, matched against its 2026-04-26 update, and its "MCM fork" 3813852124, its 2026-11-13
@@ -318,16 +326,21 @@ public static class CoveredMods
     public static Uri Wishlist { get; } = new("https://docs.google.com/spreadsheets/d/1h6HXRgT1MbioPtgj3enuXIdevj2JWaRU8qSz-99Haoo/edit?gid=0#gid=0");
 
     /// <summary>
-    /// The entry that has <paramref name="mod"/> built in, by its <c>.mod</c> name or its code mod's id; null when none does.
+    /// The entry that has <paramref name="mod"/> built in, by its <c>.mod</c> name, its code mod's id or its workshop item; null when none does.
     /// </summary>
-    public static BuiltInMod? BuiltInOf(ModInfo mod) => BuiltInOf(mod.Name, mod.HasCode ? CodeModManifest.TryReadId(mod.CodeManifestPath) : null);
+    public static BuiltInMod? BuiltInOf(ModInfo mod) => BuiltInOf(mod, mod.HasCode ? CodeModManifest.TryReadId(mod.CodeManifestPath) : null);
 
     /// <summary>
-    /// The entry that has the mod named <paramref name="modName"/>, with code mod id <paramref name="codeId"/> (null: no code mod), built in;
-    /// null when none does.
+    /// The entry that has <paramref name="mod"/>, with code mod id <paramref name="codeId"/> (null: no code mod), built in, by its <c>.mod</c>
+    /// name, that id or its workshop item; null when none does.
     /// </summary>
-    public static BuiltInMod? BuiltInOf(string modName, string? codeId) =>
-        BuiltIn.FirstOrDefault(c => c.ModName == modName || (codeId is not null && c.CodeId == codeId));
+    public static BuiltInMod? BuiltInOf(ModInfo mod, string? codeId)
+    {
+        ulong? item = WorkshopId(mod);
+        return BuiltIn.FirstOrDefault(c => c.ModName == mod.Name
+            || (codeId is not null && c.CodeId == codeId)
+            || (item is { } id && c.Items.Any(i => i.Id == id)));
+    }
 
     /// <summary>
     /// The endorsed port of <paramref name="mod"/>, an RE_Kenshi plugin without code of its own, by its <c>.mod</c> name or its workshop item;

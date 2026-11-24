@@ -5371,3 +5371,19 @@ msgstr "ポインターの解錠確率"
 #. machine-translated
 msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr "解錠が難しすぎる錠を指すと、メニューの「解錠」項目と同じく 0% と表示されます。キャラクターはその錠を解錠できないためです。ゲームではそこにその下限を適用する前の確率が表示され、メニューが 0% とする錠でも 3% などと表示されます。"
+
+#. machine-translated
+msgid "Mute corpse flies"
+msgstr "死体のハエを消音"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings"
+msgstr "オーディオ設定の死体のハエを消音"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr "オーディオ設定の死体のハエを消音がオン"
+
+#. machine-translated
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr "死体にたかるハエの羽音を消します。ハエ自体は表示されたままです（ゲーム：オフ）。"

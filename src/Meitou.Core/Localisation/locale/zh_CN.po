@@ -6204,3 +6204,19 @@ msgstr "指针上的撬锁几率"
 #. machine-translated
 msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr "指向难度过高、无法撬开的锁时显示 0%，与其菜单中的“撬锁”一项一致，因为角色撬不开它。游戏在那里显示的是应用该下限之前的几率，例如菜单给出 0% 的锁会显示 3%。"
+
+#. machine-translated
+msgid "Mute corpse flies"
+msgstr "尸体苍蝇静音"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings"
+msgstr "音频设置中的尸体苍蝇静音"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr "音频设置中的尸体苍蝇静音已开启"
+
+#. machine-translated
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr "消除尸体上方苍蝇的嗡嗡声；苍蝇仍会显示（游戏：关）。"

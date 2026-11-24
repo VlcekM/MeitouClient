@@ -5373,3 +5373,19 @@ msgstr "Probabilità di scasso sul puntatore"
 #. machine-translated
 msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr "Puntare una serratura troppo difficile da scassinare mostra 0%, come la sua voce Scassina del menu, perché il personaggio non può scassinarla. Il gioco vi mostra la probabilità prima di quel limite, ad esempio 3% per una serratura a cui il menu dà 0%."
+
+#. machine-translated
+msgid "Mute corpse flies"
+msgstr "Silenzia le mosche dei cadaveri"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings"
+msgstr "Silenzia le mosche dei cadaveri nelle impostazioni Audio"
+
+#. machine-translated
+msgid "Mute corpse flies in the Audio settings is on"
+msgstr "Silenzia le mosche dei cadaveri nelle impostazioni Audio è attivo"
+
+#. machine-translated
+msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
+msgstr "Zittisce il ronzio delle mosche sopra i cadaveri; le mosche restano visibili (il gioco: disattivato)."
