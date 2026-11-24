@@ -45,6 +45,10 @@ sealed class CorpseFlies(GameHost host)
     /// The flies' sound; null when the data has no such record.
     /// </summary>
     AmbientSound? _flySound;
+    /// <summary>
+    /// The sound the emitters were made with: <see cref="_flySound"/>, its range scaled while Quiet corpse flies is on; null before the first.
+    /// </summary>
+    AmbientSound? _playedSound;
 
     /// <summary>
     /// The key of a corpse's effect and emitter.
@@ -91,17 +95,24 @@ sealed class CorpseFlies(GameHost host)
     }
 
     /// <summary>
-    /// With the world audio: the Corpse Flies emitter at each corpse that has its effect; none while Mute corpse flies is on.
+    /// With the world audio: the Corpse Flies emitter at each corpse that has its effect; none while Mute corpse flies is on. A changed range
+    /// (Quiet corpse flies) makes them again.
     /// </summary>
     internal void UpdateCorpseFlyEmitters(WorldEmitters emitters)
     {
-        if (_flySound is not { } sound) return;
+        if (_flySound is null) return;
 
         if (host.Config.MuteCorpseFlies)
         {
-            foreach (var id in _flyCorpses.Keys)
-                emitters.Remove(FlyKey(id));
+            RemoveFlyEmitters(emitters);
             return;
+        }
+
+        var sound = PlayedSound(_flySound);
+        if (!Equals(sound, _playedSound))
+        {
+            RemoveFlyEmitters(emitters);
+            _playedSound = sound;
         }
 
         foreach (var (id, at) in _flyCorpses)
@@ -110,5 +121,26 @@ sealed class CorpseFlies(GameHost host)
             if (!emitters.Contains(key)) emitters.Add(new PlacedEmitter(key, sound, at));
             else emitters.Move(key, at);
         }
+    }
+
+    /// <summary>
+    /// <paramref name="sound"/> as the Audio settings play it: its range times Corpse flies range while Quiet corpse flies is on (Meitou only;
+    /// the Immersive Flies mod's feature); the same record when it does not change.
+    /// </summary>
+    AmbientSound PlayedSound(AmbientSound sound)
+    {
+        if (!host.Config.QuietCorpseFlies) return sound;
+
+        float cutoff = sound.Cutoff * host.Config.CorpseFlyRange;
+        return _playedSound is { } played && played.Cutoff == cutoff && played.Id == sound.Id ? played : sound with { Cutoff = cutoff };
+    }
+
+    /// <summary>
+    /// Removes the emitter of every corpse with flies.
+    /// </summary>
+    void RemoveFlyEmitters(WorldEmitters emitters)
+    {
+        foreach (var id in _flyCorpses.Keys)
+            emitters.Remove(FlyKey(id));
     }
 }

@@ -5389,3 +5389,27 @@ msgstr "Couper les mouches des cadavres dans les réglages Audio est activé"
 #. machine-translated
 msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
 msgstr "Fait taire le bourdonnement des mouches au-dessus des cadavres ; les mouches restent affichées (le jeu : désactivé)."
+
+#. machine-translated
+msgid "Quiet corpse flies"
+msgstr "Mouches des cadavres discrètes"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings"
+msgstr "Mouches des cadavres discrètes dans les réglages Audio"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings is on"
+msgstr "Mouches des cadavres discrètes dans les réglages Audio est activé"
+
+#. machine-translated
+msgid "Corpse flies range"
+msgstr "Portée des mouches des cadavres"
+
+#. machine-translated
+msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
+msgstr "Les mouches au-dessus des cadavres ne s'entendent que de près, pas d'un bout à l'autre de la base (le jeu : désactivé)."
+
+#. machine-translated
+msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
+msgstr "Jusqu'où s'entendent les mouches des cadavres, par rapport à la distance du jeu : plus bas pour les entendre moins, plus haut pour plus."

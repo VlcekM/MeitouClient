@@ -1185,6 +1185,10 @@ msgstr ""
 msgid "Copying the save..."
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Corpse flies range"
+msgstr ""
+
 #: launcher/Meitou.Launcher/GraphicsPage.cs
 msgid "Could not delete the preset: {1}"
 msgstr ""
@@ -2283,6 +2287,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "How far shadows are drawn; zero disables them."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -3985,6 +3993,18 @@ msgstr ""
 msgid "Quarter resolution"
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Quiet corpse flies"
+msgstr ""
+
+#: src/Meitou.Core/Content/CoveredMods.cs
+msgid "Quiet corpse flies in the Audio settings"
+msgstr ""
+
+#: src/Meitou.Game/Mods/BuiltInMods.cs
+msgid "Quiet corpse flies in the Audio settings is on"
+msgstr ""
+
 #: launcher/Meitou.Launcher/Rows.cs
 msgid "RE_Kenshi file rebinds: applied to the map files"
 msgstr ""
@@ -5195,6 +5215,10 @@ msgstr ""
 
 #: src/Meitou.Game/Building/BuildingSelection.cs
 msgid "The door will lock when it closes."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs launcher/Meitou.Launcher/SetupOverlay.axaml.cs

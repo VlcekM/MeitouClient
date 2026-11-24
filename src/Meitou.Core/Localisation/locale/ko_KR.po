@@ -5387,3 +5387,27 @@ msgstr "오디오 설정의 시체 파리 음소거 켜짐"
 #. machine-translated
 msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
 msgstr "시체 위 파리의 윙윙거리는 소리를 없앱니다. 파리는 계속 보입니다(게임: 꺼짐)."
+
+#. machine-translated
+msgid "Quiet corpse flies"
+msgstr "시체 파리 조용히"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings"
+msgstr "오디오 설정의 시체 파리 조용히"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings is on"
+msgstr "오디오 설정의 시체 파리 조용히 켜짐"
+
+#. machine-translated
+msgid "Corpse flies range"
+msgstr "시체 파리 소리 범위"
+
+#. machine-translated
+msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
+msgstr "시체 위 파리 소리가 가까이에서만 들리고 기지 반대편에서는 들리지 않습니다(게임: 꺼짐)."
+
+#. machine-translated
+msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
+msgstr "시체 파리 소리가 들리는 거리(게임 거리 대비): 낮추면 덜 들리고, 높이면 더 멀리서 들립니다."

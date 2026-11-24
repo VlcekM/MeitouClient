@@ -5391,3 +5391,27 @@ msgstr "Заглушить мух над трупами в настройках 
 #. machine-translated
 msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
 msgstr "Убирает жужжание мух над трупами; сами мухи по-прежнему видны (в игре: выкл.)."
+
+#. machine-translated
+msgid "Quiet corpse flies"
+msgstr "Тихие мухи над трупами"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings"
+msgstr "Тихие мухи над трупами в настройках звука"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings is on"
+msgstr "Тихие мухи над трупами в настройках звука включено"
+
+#. machine-translated
+msgid "Corpse flies range"
+msgstr "Дальность мух над трупами"
+
+#. machine-translated
+msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
+msgstr "Мух над трупами слышно только вблизи, а не через всю базу (в игре: выкл.)."
+
+#. machine-translated
+msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
+msgstr "Как далеко слышно мух над трупами, от расстояния в игре: ниже — слышно меньше, выше — больше."

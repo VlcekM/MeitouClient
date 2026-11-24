@@ -5816,3 +5816,27 @@ msgstr "Silenciar moscas dos cadáveres nas configurações de Áudio está ativ
 #. machine-translated
 msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
 msgstr "Silencia o zumbido das moscas sobre os cadáveres; as moscas continuam visíveis (o jogo: desativado)."
+
+#. machine-translated
+msgid "Quiet corpse flies"
+msgstr "Moscas dos cadáveres discretas"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings"
+msgstr "Moscas dos cadáveres discretas nas configurações de Áudio"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings is on"
+msgstr "Moscas dos cadáveres discretas nas configurações de Áudio está ativado"
+
+#. machine-translated
+msgid "Corpse flies range"
+msgstr "Alcance das moscas dos cadáveres"
+
+#. machine-translated
+msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
+msgstr "As moscas sobre os cadáveres só são ouvidas de perto, não do outro lado da base (o jogo: desativado)."
+
+#. machine-translated
+msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
+msgstr "Até onde as moscas dos cadáveres são ouvidas, em relação à distância do jogo: mais baixo para ouvi-las menos, mais alto para mais."

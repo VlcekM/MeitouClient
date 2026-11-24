@@ -28,6 +28,7 @@ disabled), so the feature never applies twice, and a save made while it ran does
 | Swamp Turtle FIX (ikahurula, data mod, workshop 2237731365) | Swamp turtle attacks (Fixes) | its 2020-09-24 update | the fix is switched on. Its data still loads: it sets the Swamp Turtle's `weapon` to `_elephant type` (and its unread `attack type`), so its turtles use the elephant moves and that weapon's damage and reach ([animals](../game/animals.md) "Natural weapon") |
 | Character Highlight (BFrizFoShiz, RE_Kenshi plugin, `Character Highlight`, workshop 3688641949) | Hover outline (Advanced) | its 2026-06-23 update | the outline is switched on. Alt then outlines the characters near ([ui-input](../game/ui-input.md#hover-outline)), coloured by the right-click order on each, not by the plugin's relation colours |
 | The mute-flies data mods, by workshop item: Flies Are Muted (1173024319), Silent Corpse Flies (1661152630), Removes fly buzzing sound (3249760334) | Mute corpse flies (Audio) | their 2017-10-18, 2019-02-20 and 2024-05-19 updates | the mute is switched on. **Observed** (their workshop descriptions): each silences the buzzing of the corpse flies and keeps the flies; their data still loads |
+| Immersive Flies (data mod, by workshop item 2385009404) | Quiet corpse flies (Audio) | its 2021-02-05 update | Quiet is switched on. **Observed** (its workshop description): the corpse flies are heard from less far; its data still loads |
 
 ## Endorsed ports
 

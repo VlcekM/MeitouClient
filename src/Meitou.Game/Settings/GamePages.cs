@@ -50,6 +50,10 @@ sealed class GamePages(SettingsMenu menu)
     /// The Shift pan multiplier slider, made on first use.
     /// </summary>
     Slider? _shiftPanMultiplier;
+    /// <summary>
+    /// The Corpse flies range slider, made on first use.
+    /// </summary>
+    Slider? _corpseFlyRange;
 
     /// <summary>
     /// The audio sliders, made on first use.
@@ -135,6 +139,19 @@ sealed class GamePages(SettingsMenu menu)
     Slider ShiftPanMultiplier => _shiftPanMultiplier ??= new("Shift pan speed", UserConfig.MinShiftPanMultiplier,
         UserConfig.MaxShiftPanMultiplier, () => menu.Config.ShiftPanMultiplier, SetShiftPanMultiplier, "0.00", Text: v => $"{v * 100:0}%",
         Meitou: UserConfig.DefaultShiftPanMultiplier, Scale: 100, Step: 0.25f);
+
+    /// <summary>
+    /// The Corpse flies range slider in 5% steps, marked at Meitou's 30%.
+    /// </summary>
+    Slider CorpseFlyRange => _corpseFlyRange ??= new("Corpse flies range", UserConfig.MinCorpseFlyRange, UserConfig.MaxCorpseFlyRange,
+        () => menu.Config.CorpseFlyRange, SetCorpseFlyRange, "0.00", Text: v => $"{v * 100:0}%", Meitou: UserConfig.DefaultCorpseFlyRange,
+        Scale: 100, Step: 0.05f);
+
+    /// <summary>
+    /// The corpse flies' range, rounded to 5% and clamped, into the config.
+    /// </summary>
+    void SetCorpseFlyRange(float v) =>
+        menu.Config.CorpseFlyRange = Math.Clamp(MathF.Round(v * 20) / 20, UserConfig.MinCorpseFlyRange, UserConfig.MaxCorpseFlyRange);
 
     /// <summary>
     /// The Shift pan multiplier, rounded to 25% and clamped, into the config and the camera.
@@ -521,7 +538,7 @@ sealed class GamePages(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The Audio page: the volumes, music frequency, voices and range, where the listener is, and the corpse flies' sound.
+    /// The Audio page: the volumes, music frequency, voices and range, where the listener is, and the corpse flies' sound and range.
     /// </summary>
     internal void AudioRows(List<SettingsMenu.Entry> result)
     {
@@ -547,6 +564,13 @@ sealed class GamePages(SettingsMenu menu)
                 Text: () => menu.Config.HearFromSelected ? "Character" : "Camera")));
         result.Add(new("Mute corpse flies", "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off).",
             Toggle: new("Mute corpse flies", () => menu.Config.MuteCorpseFlies, v => menu.Config.MuteCorpseFlies = v, OnOff: true)));
+        result.Add(new("Quiet corpse flies", "The flies over corpses are heard only close to them, not from across the base (the game: off).",
+            Toggle: new("Quiet corpse flies", () => menu.Config.QuietCorpseFlies, v => menu.Config.QuietCorpseFlies = v, OnOff: true)));
+        if (menu.Config.QuietCorpseFlies)
+        {
+            result.Add(new(CorpseFlyRange.Label, "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more.",
+                Slider: CorpseFlyRange, Depth: 1));
+        }
     }
 
     /// <summary>

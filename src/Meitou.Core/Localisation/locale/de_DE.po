@@ -5389,3 +5389,27 @@ msgstr "Leichenfliegen stumm in den Audio-Einstellungen ist an"
 #. machine-translated
 msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
 msgstr "Bringt das Summen der Fliegen über Leichen zum Schweigen; die Fliegen sind weiterhin zu sehen (das Spiel: aus)."
+
+#. machine-translated
+msgid "Quiet corpse flies"
+msgstr "Leise Leichenfliegen"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings"
+msgstr "Leise Leichenfliegen in den Audio-Einstellungen"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings is on"
+msgstr "Leise Leichenfliegen in den Audio-Einstellungen ist an"
+
+#. machine-translated
+msgid "Corpse flies range"
+msgstr "Reichweite der Leichenfliegen"
+
+#. machine-translated
+msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
+msgstr "Die Fliegen über Leichen sind nur in ihrer Nähe zu hören, nicht quer durch die Basis (das Spiel: aus)."
+
+#. machine-translated
+msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
+msgstr "Wie weit die Leichenfliegen zu hören sind, gemessen an der Entfernung im Spiel: niedriger, um sie weniger zu hören, höher für mehr."

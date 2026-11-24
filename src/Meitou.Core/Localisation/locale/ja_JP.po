@@ -5387,3 +5387,27 @@ msgstr "オーディオ設定の死体のハエを消音がオン"
 #. machine-translated
 msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
 msgstr "死体にたかるハエの羽音を消します。ハエ自体は表示されたままです（ゲーム：オフ）。"
+
+#. machine-translated
+msgid "Quiet corpse flies"
+msgstr "死体のハエを静かに"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings"
+msgstr "オーディオ設定の死体のハエを静かに"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings is on"
+msgstr "オーディオ設定の死体のハエを静かにがオン"
+
+#. machine-translated
+msgid "Corpse flies range"
+msgstr "死体のハエの聞こえる範囲"
+
+#. machine-translated
+msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
+msgstr "死体にたかるハエの羽音は近くでのみ聞こえ、拠点の反対側からは聞こえません（ゲーム：オフ）。"
+
+#. machine-translated
+msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
+msgstr "死体のハエが聞こえる距離（ゲームの距離に対する割合）：下げると聞こえにくく、上げると遠くまで聞こえます。"

@@ -6220,3 +6220,27 @@ msgstr "音频设置中的尸体苍蝇静音已开启"
 #. machine-translated
 msgid "Silences the buzzing of the flies over corpses; the flies are still shown (the game: off)."
 msgstr "消除尸体上方苍蝇的嗡嗡声；苍蝇仍会显示（游戏：关）。"
+
+#. machine-translated
+msgid "Quiet corpse flies"
+msgstr "尸体苍蝇减弱"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings"
+msgstr "音频设置中的尸体苍蝇减弱"
+
+#. machine-translated
+msgid "Quiet corpse flies in the Audio settings is on"
+msgstr "音频设置中的尸体苍蝇减弱已开启"
+
+#. machine-translated
+msgid "Corpse flies range"
+msgstr "尸体苍蝇声音范围"
+
+#. machine-translated
+msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
+msgstr "尸体上方的苍蝇只有在近处才能听到，不会传遍整个基地（游戏：关）。"
+
+#. machine-translated
+msgid "How far the corpse flies are heard, of the game's distance: lower to hear them less, higher for more."
+msgstr "尸体苍蝇能被听到的距离，相对于游戏中的距离：调低则听到得更少，调高则更多。"

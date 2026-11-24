@@ -132,6 +132,10 @@ sealed class UserConfig
     /// The range and default of <see cref="ShiftPanMultiplier"/>.
     /// </summary>
     public const float MinShiftPanMultiplier = 1.25f, MaxShiftPanMultiplier = 5, DefaultShiftPanMultiplier = 2;
+    /// <summary>
+    /// The range and default of <see cref="CorpseFlyRange"/>: 10% to 200% of the game's range; 30% (150 units) is Meitou's choice.
+    /// </summary>
+    public const float MinCorpseFlyRange = 0.1f, MaxCorpseFlyRange = 2, DefaultCorpseFlyRange = 0.3f;
 
     /// <summary>
     /// The file's layout: <see cref="CurrentVersion"/>, or the newer one of a later release whose file this is (kept, so that release does not
@@ -670,6 +674,16 @@ sealed class UserConfig
     /// The corpse flies make no sound (Audio settings; Meitou only, default off: they buzz, as in the game); the mute-flies mods' feature.
     /// </summary>
     public bool MuteCorpseFlies { get; set; }
+    /// <summary>
+    /// The corpse flies are heard only within <see cref="CorpseFlyRange"/> of their range (Audio settings; Meitou only, default off: the full 500
+    /// units); the Immersive Flies mod's feature.
+    /// </summary>
+    public bool QuietCorpseFlies { get; set; }
+    /// <summary>
+    /// With <see cref="QuietCorpseFlies"/>: the corpse flies' range, of the game's (Audio settings, <see cref="MinCorpseFlyRange"/> …
+    /// <see cref="MaxCorpseFlyRange"/>).
+    /// </summary>
+    public float CorpseFlyRange { get; set; } = DefaultCorpseFlyRange;
     /// <summary>
     /// The Windows cursor instead of the game's drawn pointer (the original's <c>hardware_mouse</c>, default off; Interface settings).
     /// </summary>

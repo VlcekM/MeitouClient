@@ -47,6 +47,7 @@ static class BuiltInMods
         new(CoveredMods.SwampTurtleFix, "Swamp turtle attacks on the Fixes page is on", (config, _, _) => config.FixAnimalMoves = true),
         new(CoveredMods.CharacterHighlight, "Hover outline in the Advanced settings is on", (config, _, _) => config.HoverOutline = true),
         new(CoveredMods.MuteFlies, "Mute corpse flies in the Audio settings is on", (config, _, _) => config.MuteCorpseFlies = true),
+        new(CoveredMods.ImmersiveFlies, "Quiet corpse flies in the Audio settings is on", (config, _, _) => config.QuietCorpseFlies = true),
     ];
 
     /// <summary>

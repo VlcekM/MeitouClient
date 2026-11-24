@@ -1649,6 +1649,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.Audio = new();
         AudioChanged?.Invoke();
         Config.MuteCorpseFlies = false;
+        Config.QuietCorpseFlies = false;
+        Config.CorpseFlyRange = UserConfig.DefaultCorpseFlyRange;
         GamePages.SetGameplay(new());
         Config.HardwareMouse = false;
         Config.EnhancedHardwareMouse = true;

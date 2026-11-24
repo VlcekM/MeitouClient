@@ -58,9 +58,17 @@ public static class CoveredMods
         [new(1173024319, 1508336963), new(1661152630, 1550624826), new(3249760334, 1716139203)]);
 
     /// <summary>
+    /// The data mod "Immersive Flies" (workshop 2385009404, matched by its item against its 2021-02-05 update): the corpse flies are heard from
+    /// less far.
+    /// </summary>
+    public static readonly BuiltInMod ImmersiveFlies =
+        new(null, null, "Quiet corpse flies in the Audio settings", [new(2385009404, 1612536455)]);
+
+    /// <summary>
     /// The mods Meitou has built in.
     /// </summary>
-    public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort, SwampTurtleFix, CharacterHighlight, MuteFlies];
+    public static IReadOnlyList<BuiltInMod> BuiltIn { get; } =
+        [RekenshiXp, XpPort, SwampTurtleFix, CharacterHighlight, MuteFlies, ImmersiveFlies];
 
     /// <summary>
     /// Emkej's "Loot-Scoot-Execute" (workshop 3675700748, matched against its 2026-04-26 update, and its "MCM fork" 3813852124, its 2026-11-13
