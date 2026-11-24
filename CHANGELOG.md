@@ -29,12 +29,12 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - HUD & UI: carried squad name tags, hull-height tags, greyed-out menu rows, fallback mod fonts
 - Full localisations for all nine Kenshi languages and build-time translation checks
 - Saves: Wine prefix discovery (Heroic, Lutris, Bottles), navmesh-first loads, atomic configs
-- Performance: faster WorkerPool, pooled navmesh builds, staggered ticks, 5x & UI/publish cache
+- Performance: pooled texture buffers (lower RAM), faster WorkerPool, staggered ticks, 5x cache
 - Code mods (API v3): NuGet refs, cross-version binding, IModData pre-build data phase
 - Code mods (API v3): chooser/AI, observers, world states, UI/shown-text, FX, glow & audio hooks
 - Data mods & RE_Kenshi: crossbow ammo lists, custom weapon attacks/skills, 36 more ports
 - Launcher (v1.16-v1.21): redesigned Mods page, Linux AppImage install, built-in benchmarks
-- 164+ bugs fixed since v0.22.1 across AI, combat, crime, slavery, jobs, navmesh, UI, and saves
+- 169+ bugs fixed since v0.22.1 across AI, combat, crime, slavery, jobs, navmesh, UI, and saves
 
 ## v0.22.1
 
