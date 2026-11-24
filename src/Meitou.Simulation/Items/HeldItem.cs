@@ -201,7 +201,8 @@ public sealed record RotateItem(CharacterId Character, InventoryItemToken Item) 
 /// A right click on an item of a player character's own window with no other owner's window open (<c>FUN_140714a20</c>): a money item (function 14)
 /// is turned into cats; a grid item goes to the slot that takes it (equipped), a worn one to the grid, else a prosthetic to its limb, else between
 /// the grid and the bag (<see cref="BagOpen"/>). One unit, all with <see cref="All"/>. With <see cref="Into"/> (another player character's window
-/// open, a pinned one) it moves there instead, as into a loot (<see cref="InventoryCommands.MoveInto"/>).
+/// open, a pinned one) it moves there instead, as into a loot (<see cref="InventoryCommands.MoveInto"/>), when within the item move's reach
+/// (<see cref="ItemMoveReach.CharactersNear"/>).
 /// </summary>
 public sealed record QuickMoveItem(CharacterId Character, InventoryItemToken Item, bool All, bool BagOpen) : SimCommand
 {

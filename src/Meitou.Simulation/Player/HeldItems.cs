@@ -383,8 +383,9 @@ sealed class HeldItems(PopulationData? data)
     }
 
     /// <summary>
-    /// The target of a placement the trade allows; null (the item goes back) when it refuses. The stock trades with its customer only: stock goes
-    /// into the customer's windows, the customer's own items onto the stock; a player's other character window takes the trade over in reach.
+    /// The target of a placement the trade and the item move's reach allow; null (the item goes back) when one refuses. The stock trades with its
+    /// customer only: stock goes into the customer's windows, the customer's own items onto the stock; a player's other character window takes the
+    /// trade over in reach. Between two player characters' windows the two must be in reach (<see cref="CharactersNear"/>).
     /// </summary>
     Target? Reached(World world, HeldItem held, PlaceHeld place, bool buy, bool sell, Trading.TradeSystem? trade)
     {
@@ -394,7 +395,25 @@ sealed class HeldItems(PopulationData? data)
         if ((buy || sell) && !PassTrade(world, trade!, buy ? into : held.From, ref customer)) return null;
         if (buy && into != ItemOwner.Of(customer) || sell && held.From != ItemOwner.Of(customer) || Resolve(world, held, place) is not { } target)
             return null;
+        if (!CharactersNear(world, held.From, into)) return null;
+
         return target;
+    }
+
+    /// <summary>
+    /// Whether a placement from one player character's window into another's is within the item move's reach (<c>FUN_140715560</c>,
+    /// <see cref="ItemMoveReach.CharactersNear"/>, "Out of trading range."); true for any other placement, which keeps its own rules (the loot,
+    /// containers, machines and the stock).
+    /// </summary>
+    bool CharactersNear(World world, ItemOwner from, ItemOwner into)
+    {
+        if (from.Holder != ItemHolder.Character || into.Holder != ItemHolder.Character || from.Character == into.Character) return true;
+
+        var table = world.Characters;
+        if (!table.TryResolveNext(from.Character, out int s) || !table.TryResolveNext(into.Character, out int t)) return true;
+        if (table.Cold(s) is not { IsPlayer: true } || table.Cold(t) is not { IsPlayer: true }) return true;
+
+        return ItemMoveReach.CharactersNear(data, world, s, t);
     }
 
     /// <summary>

@@ -2319,21 +2319,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     #region Items in and out
 
     /// <summary>
-    /// The X/Z reach of an item move between two inventories that is not flagged (<c>FUN_14070d290</c>, <b>Verified</b>: 1000, stored squared).
-    /// </summary>
-    public const float ItemMoveRange = 1000;
-
-    /// <summary>
-    /// The relation at or below which a public town counts as hostile for <see cref="RestrictsMoves"/> (<c>FUN_1406b26d0</c>: -30).
-    /// </summary>
-    const float HostileRelation = -30;
-
-    /// <summary>
     /// Whether the player character may move items between its inventory and the site, the site's or the character's being the source
     /// (<paramref name="fromSite"/>), else posts "Out of trading range." (<c>FUN_14070d290</c>, <b>Verified</b>; docs/game/economy.md "Trading range").
-    /// Between the player's own windows the move is unflagged: the two positions within <see cref="ItemMoveRange"/> on the X/Z plane (#1361). It is
-    /// flagged for a site not the player's (the stealing test <c>FUN_140711740</c>), an imprisoned character, or a source standing in a town that
-    /// restricts (<see cref="RestrictsMoves"/>); then <see cref="ProductionSettings.TransferReach"/> of the footprint or
+    /// Between the player's own windows the move is unflagged: the two positions within <see cref="ItemMoveReach.Range"/> on the X/Z plane (#1361).
+    /// It is flagged for a site not the player's (the stealing test <c>FUN_140711740</c>), an imprisoned character, or a source standing in a town
+    /// that restricts (<see cref="ItemMoveReach.Restricts"/>); then <see cref="ProductionSettings.TransferReach"/> of the footprint or
     /// <see cref="ContainerAccess.TradingRange"/> of the position, so a small storage is never stricter than the original (#505; engine reading of
     /// the original's same place and floor, 60 or the bounds radius + 40).
     /// </summary>
@@ -2347,33 +2337,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var at = table.Next[slot].Position;
         float centre = Vector2.Distance(new Vector2(at.X, at.Z), new Vector2(site.Position.X, site.Position.Z));
         bool flagged = site.Owner != world.Player.Faction || c.InSomething == Locks.HeldState.Imprisoned
-            || RestrictsMoves(world, fromSite ? site.Position : at);
-        if (flagged ? GapTo(site, at) <= Settings.TransferReach || centre <= ContainerAccess.TradingRange : centre <= ItemMoveRange) return true;
+            || ItemMoveReach.Restricts(_towns, world, fromSite ? site.Position : at);
+        bool near = flagged ? GapTo(site, at) <= Settings.TransferReach || centre <= ContainerAccess.TradingRange : centre <= ItemMoveReach.Range;
+        if (near) return true;
 
         world.Post("Out of trading range.");
         return false;
-    }
-
-    /// <summary>
-    /// Whether the town at <paramref name="at"/> flags an item move whose source stands there (Town slot 0x260 <c>FUN_140926fc0</c>, <b>Verified</b>):
-    /// none when its faction is the player's or an ally (relation 50 or more); else a public town (<c>is public</c>) not hostile (relation above -30)
-    /// only when it is a prison, any other town always. No town: none.
-    /// </summary>
-    bool RestrictsMoves(World world, Vector3 at)
-    {
-        if (_towns is not { } data || AiSystem.TownAt(data, world, at) is not { Site: >= 0 } town || town.Site >= data.SiteFactions.Count)
-            return false;
-
-        int player = world.Player.Faction;
-        int faction = data.SiteFactions[town.Site];
-        if (faction < 0 || player < 0) return true;
-        if (faction == player) return false;
-
-        float relation = data.Relations.Get(faction, player);
-        if (relation >= FactionRelations.AllyThreshold) return false;
-
-        var info = data.Sites[town.Site].Town;
-        return !info.IsPublic || relation <= HostileRelation || info.Type == TownType.Prison;
     }
 
     /// <summary>
