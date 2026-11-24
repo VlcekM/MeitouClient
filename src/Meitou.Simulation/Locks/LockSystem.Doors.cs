@@ -591,6 +591,21 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
+    /// An owner's door unlocked and opened on its way (Task_UnlockDoor, then Task_OpenDoor): the unlock's end clears the unlocker's squad's house flag
+    /// when the door is its home's (<c>FUN_14033d420</c>, <b>Verified</b>), and the opening clears it as <see cref="NoteDoorOpened"/>.
+    /// </summary>
+    void UnlockAndOpen(World world, int slot, CharacterCold c, Fixture door)
+    {
+        world.Fixtures.SetLocked(door, false);
+        FixtureRegistry.OpenDoor(door);
+        world.EmitSound(SoundKind.Unlocked, slot, world.Characters.Next[slot].Position);
+
+        var squad = world.Squads.Find(c.SquadId);
+        if ((squad?.Ai?.OwnHome ?? squad?.HomeBuilding)?.Key == door.Building) _houseLocked.Remove(door.Building);
+        NoteDoorOpened(world, door, c.Faction);
+    }
+
+    /// <summary>
     /// The open amount from which a door lets walkers through (the original's navmesh treats it as open from 0.6, docs/game/locks.md "Navigation").
     /// </summary>
     public const float PassableOpen = 0.6f;

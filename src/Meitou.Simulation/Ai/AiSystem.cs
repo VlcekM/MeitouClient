@@ -3187,6 +3187,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// The height 156 Entering building walks to: the home's own (its ground floor), so the walk ends in its room and not on a level over the home's
+    /// point that is no indoor volume, where 107 never holds (<b>engine choice</b>; <b>Observed</b>, #1369's save: a Bughouse member stood there all
+    /// night, its lock-up never started). Null for the other walks home.
+    /// </summary>
+    static float? EnterFloor(AiMind mind, TownBuilding home) => mind.Step == TaskType.EnterBuilding ? home.Position.Y : null;
+
+    /// <summary>
     /// Where a goal is acted out: a node of the home building by goal (shopkeeper, guard, throne, general; any node when the home has none of that
     /// kind), a bed for sleep (the home itself when it has no bed), the home or the town for going home; else (no home, or its spots kept failing)
     /// the character's post. True in <c>Home</c> when the spot is the home's; <c>Floor</c> is the height of a node or bed (so the walk ends on the
@@ -3202,7 +3209,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (type is TaskType.RetreatHometown or TaskType.RunAwayHometown && RetreatPoint(mind.Squad) is { } waypoint)
                 return (waypoint, true, null, null, false);
 
-            if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, null, null, false);
+            if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, EnterFloor(mind, h), null, false);
             if (HomePlace(world, board) is { } town) return (town.Centre, true, null, null, false);
             return (mind.Squad.HomeCentre, true, null, null, false);
         }

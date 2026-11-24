@@ -2437,7 +2437,7 @@ act-out does the walk and the goal's own action; steps of their own are getting 
 then dropped from the plan, so a plan a committed goal keeps goes on to its next step instead of repeating it), putting a carried body down (69
 `Task_PutDownObject`, the only provider of `!47`: the serial step starts the put-down order's task, `AiSystem.PutDownForSteps`; the step ends by
 its list A once the hands are empty), going home (19, the GoHome walk),
-entering its home building (156, the same walk), leaving it (200, to A + (A − B) × 1.1 of the home's first door,
+entering its home building (156, the same walk at the home's own height, so it ends on the ground floor's room and not on an upper level over the home's point that is no indoor volume, where 107 never held: engine choice, **Observed** on #1369's save), leaving it (200, to A + (A − B) × 1.1 of the home's first door,
 the outer point taken as the side away from the building's origin, until outside), getting near a target (40, a walk to within 10) and the way
 through a locked door the walk meets (80 / 78 unlock, 287 / 81 bash, 76 pick, 285 cut; `AiSystem.TakeDoorStep`, worked by the lock system, its list A
 on the door, `RowStates` 52 / 54 / 56; [locks](game/locks.md#doors)). A plan
