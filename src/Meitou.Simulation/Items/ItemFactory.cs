@@ -297,7 +297,7 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
             foreach (var c in loadout.Clothing)
                 if (Create(c.Record.StringId, 1, c.Quality) is { } cloth)
                 {
-                    cloth.Section = SectionOf(c.Record);
+                    cloth.Section = c.Section ?? SectionOf(c.Record);
                     cloth.MaterialId = c.Material?.StringId ?? "";
                     if (c.Colour is { } colour) cloth.ColourId = colour.StringId;
                     inventory.Items.Add(cloth);

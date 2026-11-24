@@ -28,13 +28,28 @@ public enum GoalDesireKind : byte
     /// as a job that cannot run, and the next job is tried.
     /// </summary>
     Job,
+
+    /// <summary>
+    /// The current goal's whole score as the goal scorer holds it this think (after the list's weight, crowding, the continuity and the
+    /// commitment), asked for the current goal only, with <see cref="GoalDesireAsk.HeldScore"/> the score it was given at its last think; the
+    /// answer is the score it competes with and is held for the next think (the original's AI keeps its current goal's score, which a
+    /// <c>Tasker::score</c> hook may rewrite: the SquadAutonomy patrol rule's max(0.0001, held x 0.95)). 0 or below drops it this think.
+    /// </summary>
+    HeldScore,
 }
 
 /// <summary>
 /// A desire the chooser is about to use (<see cref="IGoalDesireFilter"/>): the world's tick, the character, the task type (the goal's, the row's,
 /// the order's or the job's), the kind, the desire as the game computed it and, for a job, its index in the character's job list (-1 otherwise).
 /// </summary>
-public readonly record struct GoalDesireAsk(long Tick, CharacterId Character, TaskType Type, GoalDesireKind Kind, float Desire, int Job = -1);
+public readonly record struct GoalDesireAsk(long Tick, CharacterId Character, TaskType Type, GoalDesireKind Kind, float Desire, int Job = -1)
+{
+    /// <summary>
+    /// For <see cref="GoalDesireKind.HeldScore"/>: the score the current goal was held at after its last think's filters (NaN for its first think as
+    /// the current goal, after a load, or for another kind).
+    /// </summary>
+    public float HeldScore { get; init; } = float.NaN;
+}
 
 /// <summary>
 /// A filter on the chooser's desires (docs/modding.md "Chooser goals and jobs", desire filters), registered with
@@ -70,14 +85,15 @@ sealed class GoalDesireFilters
     /// <summary>
     /// <paramref name="desire"/> after every filter not faulted before this tick, each seeing the one before's answer. Any thread.
     /// </summary>
-    internal float Pass(World world, CharacterId character, TaskType type, GoalDesireKind kind, float desire, int job = -1)
+    internal float Pass(World world, CharacterId character, TaskType type, GoalDesireKind kind, float desire, int job = -1,
+        float held = float.NaN)
     {
         long tick = world.Tick;
         for (int i = 0; i < Hooks.Count; i++)
         {
             if (!Hooks.Asked(i, tick)) continue;
 
-            desire = Ask(world, i, new GoalDesireAsk(tick, character, type, kind, desire, job));
+            desire = Ask(world, i, new GoalDesireAsk(tick, character, type, kind, desire, job) { HeldScore = held });
         }
 
         return desire;

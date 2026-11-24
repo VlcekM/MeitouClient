@@ -178,6 +178,10 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// </summary>
     GateGoals? _gateGoals;
     /// <summary>
+    /// The doors to close behind a squad that closes them (<see cref="SquadConduct.CloseDoors"/>).
+    /// </summary>
+    readonly CloseBehindDoors _closeBehind = new();
+    /// <summary>
     /// The arrest system, looked up once (null: none).
     /// </summary>
     Crime.ArrestSystem? _arrests;
@@ -609,6 +613,7 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
         }
 
         _gateGoals?.Hash(ref hasher);
+        _closeBehind.Hash(ref hasher);
         _wardens?.Hash(ref hasher);
         _escapes?.Hash(ref hasher);
     }

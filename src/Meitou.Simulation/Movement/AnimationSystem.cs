@@ -380,6 +380,16 @@ public sealed class AnimationSystem(
     static bool Swinging(CharacterCold cold, long tick) => cold.BashSwing >= tick - 1;
 
     /// <summary>
+    /// Whether the character picked a lock this update or the last: a cage's or a container's, a door's on the way, or shackles (its own or
+    /// another's).
+    /// </summary>
+    static bool Picking(CharacterCold cold, long tick)
+    {
+        bool picks = cold.PickingLock is not null || cold.DoorWay is not null || cold.Shackles is { Work: Locks.ShackleWork.Pick };
+        return picks && cold.PickWork.Tick >= tick - 1;
+    }
+
+    /// <summary>
     /// The swing clip's time from the basher's phase (<see cref="CharacterCold.BashTime"/>, seconds into the cycle): the clip runs at its play
     /// speed, a human's <c>stonemine</c> at its record's and an animal's technique at its <c>anim speed mult</c>, so the blow lands at 0.6 of it
     /// (<c>FUN_140348c10</c>).
@@ -472,7 +482,7 @@ public sealed class AnimationSystem(
         _ when Swinging(cold, tick) && DismantlingClip >= 0 => DismantlingClip,
         // The lock picker plays the cage's `animation lockpick`, else the medic clip every update it picks
         // (Task_PickLock, FUN_140359160; the crawler's kneeling clip is chosen in Crawl).
-        _ when (cold.PickingLock is not null || cold.DoorWay is not null) && cold.PickWork.Tick >= tick - 1
+        _ when Picking(cold, tick)
             => (cold.PickWork.Clip is { } pick ? SitClipOf(pick) : -1) is >= 0 and var picking ? picking : TreatingClip,
         CharacterTask.Build or CharacterTask.DeliverMaterials or CharacterTask.Prospect => TreatingClip,
         // A medic kneels only at a patient keeping still (Task_FirstAid's update plays the clip; FirstAidSystem);
@@ -741,7 +751,8 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// The clip index and progress of the technique or crossbow pose the character plays, else of a mod's move (<see cref="CombatSystem.ModMove"/>;
-    /// not while carried or getting up); -1 and 0 when none.
+    /// not while carried or getting up); -1 and 0 when none. <see cref="CombatSystem.ModMoveBlockOf"/> answers the same tests for mods: keep the
+    /// two in step.
     /// </summary>
     (int Technique, float Progress) TechniqueOf(World world, CharacterId id, CharacterCold cold, float tickSeconds)
     {
@@ -1174,7 +1185,7 @@ public sealed class AnimationSystem(
 
         // Picking its cage's lock from inside: the cage's `animation lockpick`, else `medic` (FUN_140520bc0, Verified: the Prisoner Cage names none),
         // at the picking rate (#359).
-        else if (pose.InCage && technique < 0 && cold.PickingLock is not null && cold.PickWork.Tick >= tick - 1
+        else if (pose.InCage && technique < 0 && Picking(cold, tick)
             && HeldClip(pose.Task, cold, tick) is >= 0 and var picking)
         {
             (a.HeldIndex, a.HeldRate) = (picking, cold.PickWork.Rate);
@@ -1437,7 +1448,7 @@ public sealed class AnimationSystem(
     {
         if (cold.StandingUp && held == SquatClip) return -1;
         if (held == SquatClip && CrouchGoal(cold) != 0) return CrouchGoal(cold);
-        if ((cold.PickingLock is not null || cold.DoorWay is not null) && cold.PickWork.Tick >= tick - 1) return cold.PickWork.Rate;
+        if (Picking(cold, tick)) return cold.PickWork.Rate;
 
         bool seated = task == CharacterTask.Rest && cold.Ai?.SitClip is not null;
         return task == CharacterTask.Operate || seated ? OperateRateOf(task, cold) : 1;

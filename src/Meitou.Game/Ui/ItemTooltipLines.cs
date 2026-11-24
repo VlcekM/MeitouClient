@@ -10,6 +10,13 @@ public sealed record UiItemTooltipLine(string Label, string? Value = null)
     /// The line's colours (<see cref="UiLineStyle"/>; its icon is not drawn in tooltips); null: the tooltip's own.
     /// </summary>
     public UiLineStyle? Style { get; init; }
+
+    /// <summary>
+    /// The label of the game's row the line goes right after (its own English label, untranslated, as <c>Sell value</c> or <c>Weight</c>; the last
+    /// such row when several have it), after the lines placed there before it; null, or a label the tooltip has no row of: after the game's rows,
+    /// before the record's description, as without it.
+    /// </summary>
+    public string? After { get; init; }
 }
 
 /// <summary>
@@ -123,7 +130,11 @@ sealed class ItemTooltipLines
     /// A line as the tooltip shows it: label and value on one line and cut, a blank value none.
     /// </summary>
     static UiItemTooltipLine Shown(UiItemTooltipLine line) =>
-        new(Text(line.Label), string.IsNullOrWhiteSpace(line.Value) ? null : Text(line.Value)) { Style = UiLineStyle.Shown(line.Style) };
+        new(Text(line.Label), string.IsNullOrWhiteSpace(line.Value) ? null : Text(line.Value))
+        {
+            Style = UiLineStyle.Shown(line.Style),
+            After = string.IsNullOrWhiteSpace(line.After) ? null : line.After.Trim(),
+        };
 
     /// <summary>
     /// <paramref name="text"/> cut to <see cref="MaxText"/> characters and put on one line.

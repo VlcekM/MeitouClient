@@ -157,7 +157,7 @@ public static class CharacterEditing
                 .Any(g => g.Races.Any(r => r.StringId == proposedRace.StringId));
             if (!playable && !sameRace)
             {
-                world.Post($"{proposedRace.Name} is not a playable race.");
+                world.Post($"{proposedRace.ShownName()} is not a playable race.");
                 return false;
             }
 

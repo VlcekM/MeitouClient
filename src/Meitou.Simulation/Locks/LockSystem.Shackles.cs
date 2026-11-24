@@ -256,14 +256,15 @@ public sealed partial class LockSystem
                     // The sound of the original's drop onto the armour slot (the interface's Item_Drop); only the player's order has one.
                     if (c.IsPlayer)
                     {
-                        world.Post(Loc.Tr("{1} put {2} on {3}", c.Name, item.Name, wearer.Name));
+                        world.Post(Loc.Tr("{1} put {2} on {3}", world.ShownName(c), item.ShownName(), world.ShownName(wearer)));
                         world.EmitSound(SoundKind.ShacklesOn, s, next[s].Position, item.Record);
                     }
                 }
-                else if (c.IsPlayer) world.Post(Loc.Tr("{1} already wears something in that slot", wearer.Name));
+                else if (c.IsPlayer)
+                    world.Post(Loc.Tr("{1} already wears something in that slot", world.ShownName(wearer)));
                 break;
             case ShackleWork.Pick:
-                switch (Picking.StepShackles(world, s, job.Wearer, item, world.TickSeconds, Crimes))
+                switch (PickShackles(world, s, c, job.Wearer, item))
                 {
                     case PickOutcome.Open:
                         c.Shackles = null;
@@ -305,6 +306,19 @@ public sealed partial class LockSystem
                 else if (c.IsPlayer) Say(world, c, "I'm not strong enough to do that");
                 break;
         }
+    }
+
+    /// <summary>
+    /// One update of picking the shackles with the pick's clip and rate (Task_PickLock_Shackles' update FUN_140359d90 runs Task_PickLock's
+    /// FUN_140359160 first, <b>Verified</b>): a caged picker plays its cage's <c>animation lockpick</c>, any other <c>medic</c>; an update spent
+    /// putting a weapon away plays none.
+    /// </summary>
+    PickOutcome PickShackles(World world, int s, CharacterCold c, CharacterId wearer, Items.ItemInstance item)
+    {
+        var work = (world.Tick, c.IsImprisoned ? c.CageClips.Lockpick : null, PickPlayRate(Lockpicking.Skill(c)));
+        var outcome = Picking.StepShackles(world, s, wearer, item, world.TickSeconds, Crimes);
+        if (outcome != PickOutcome.Sheathing) c.PickWork = work;
+        return outcome;
     }
 
     /// <summary>

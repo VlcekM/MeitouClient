@@ -109,14 +109,14 @@ public sealed class KidnapSystem : ITickSystem, IStateHashed, IDutyGoalOwner
 
     /// <summary>
     /// Whether the character in <paramref name="slot"/> may be kidnapped by one of <paramref name="faction"/> (the finder of goal 132, carry-loot.md
-    /// 3.2, <c>FUN_1408cd2d0</c> with the bed allowed, <b>Verified</b>): alive, of a carriable race, not carried, not an animal, and either lying in
-    /// a bed (awake or not: the lift is then a kidnap that rolls) or down and not caged; and not of the faction or an ally of it (<b>engine
-    /// reading</b> of the sensed-class masks).
+    /// 3.2, <c>FUN_1408cd2d0</c> with the bed allowed, <b>Verified</b>): alive, of a carriable race that is not a robot (the exclude mask's
+    /// bit 11, #1366), not carried, not an animal, and either lying in a bed (awake or not: the lift is then a kidnap that rolls) or down and not
+    /// caged; and not of the faction or an ally of it (<b>engine reading</b> of the sensed-class masks).
     /// </summary>
     public bool IsVictim(World world, int slot, int faction)
     {
         var table = world.Characters;
-        if (!table.Next[slot].Alive || table.Cold(slot) is not { Race: { Carriable: true }, Medical: { Dead: false } medical } c)
+        if (!table.Next[slot].Alive || table.Cold(slot) is not { Race: { Carriable: true, IsRobot: false }, Medical: { Dead: false } medical } c)
             return false;
 
         if (c.IsImprisoned || !c.CarriedBy.IsNone || c.Fighter is { IsAnimal: true }) return false;

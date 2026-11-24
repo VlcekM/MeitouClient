@@ -25,15 +25,15 @@ public sealed partial class PopulationSystem
                 // Phase 2 is Meitou's ending phase (the original's RETREATING and VICTORY are left out).
                 if (inst.Phase == 2 || player < 0 || inst.Enemy != player) continue;
 
-                lines.Add(new(FactionInfoKind.Name, CampaignOf(inst.CampaignId)?.DisplayName ?? inst.CampaignId));
-                string where = Exists(world, inst.Target) ? NameOf(world, inst.Target) : "???";
+                lines.Add(new(FactionInfoKind.Name, CampaignOf(inst.CampaignId) is { } running ? Shown(running) : inst.CampaignId));
+                string where = Exists(world, inst.Target) ? ShownNameOf(world, inst.Target) : "???";
                 lines.Add(new(FactionInfoKind.Detail, "Target:", (factionName(inst.Enemy) ?? "") + "- " + where));
                 lines.Add(new(FactionInfoKind.Spacer, ""));
             }
 
             foreach (var request in war.Requests)
             {
-                lines.Add(new(FactionInfoKind.Queued, CampaignOf(request.CampaignId)?.DisplayName ?? request.CampaignId, "",
+                lines.Add(new(FactionInfoKind.Queued, CampaignOf(request.CampaignId) is { } queued ? Shown(queued) : request.CampaignId, "",
                     request.Due - world.GameHours));
             }
         }

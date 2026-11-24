@@ -135,9 +135,22 @@ public sealed class HealthPart(BodyPartTemplate template, int hitWeight, float b
     };
 
     /// <summary>
-    /// M = base x multiplier x scale - wear: the effective maximum HP.
+    /// M = base x multiplier x scale - wear: the effective maximum HP, times the factor the max-health filters set (<see cref="IPartMaxFilter"/>; 1
+    /// without one), as every read of the original's <c>maxHealth</c> getter sees a hook on it.
     /// </summary>
-    public float MaxHp => EffectiveBaseHp * HpMultiplier * BodyScale - Wear;
+    public float MaxHp => StoredMaxHp * MaxFactor;
+
+    /// <summary>
+    /// base x multiplier x scale - wear: the maximum as the game stores and saves its terms (<c>HealthPartStatus::maxHealth</c>,
+    /// <c>FUN_140296c70</c>, <b>Verified</b> decompile), before the max-health filters.
+    /// </summary>
+    public float StoredMaxHp => EffectiveBaseHp * HpMultiplier * BodyScale - Wear;
+
+    /// <summary>
+    /// The max-health filters' factor on <see cref="StoredMaxHp"/> from the owner's last body step (<see cref="PartMaxFilters"/>; 1 without a
+    /// filter). Derived each step, not saved; hashed through what it changes.
+    /// </summary>
+    internal float MaxFactor { get; set { if (field != value) { field = value; Version++; } } } = 1;
 
     /// <summary>
     /// The health fraction <c>((h - s) + extra) / M</c> (<c>+0x60</c>); -1 when the maximum has worn away.

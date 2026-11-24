@@ -533,6 +533,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             return cold.Medical is { Incapacitated: false } ? OrderCheck.Run : OrderCheck.Blocked();
         }
         if (order.Row == TaskType.LootAnimalsJob) return ForageEntryCheck(world, slot, cold);
+        if (order.Row == TaskType.FindWeapon) return FindWeaponCheck(world, slot, cold);
         if (!table.TryResolveNext(order.Target, out int target) || target == slot) return OrderCheck.Gone;
         var tc = table.Cold(target)!;
         switch (order.Row)
@@ -563,6 +564,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         }
         switch (order.Row)
         {
+            case TaskType.FindWeapon:
+                StartFindWeapon(world, slot, cold);
+                break;
             case TaskType.PutDownObject:
                 BeginPutDown(world, slot, TaskSource.Order);
                 break;
@@ -1332,11 +1336,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         bool seen = Looted(world, table, i, t, taken, left, crime: true);
         if (cold.IsPlayer)
         {
+            string looter = world.ShownName(cold), body = world.ShownName(victim);
             string report = left > 0
-                ? $"{cold.Name} took {taken} items from {victim.Name}; {left} did not fit"
-                : $"{cold.Name} took {taken} items from {victim.Name}";
+                ? $"{looter} took {taken} items from {body}; {left} did not fit"
+                : $"{looter} took {taken} items from {body}";
             world.Post(report);
-            if (seen) world.Post($"{cold.Name} was seen looting {victim.Name}");
+            if (seen) world.Post($"{looter} was seen looting {body}");
         }
         End(world, i);
     }
@@ -1483,7 +1488,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (owner.Items.Contains(item)) item.Mark = mark;   // what stays keeps its mark
         if (moved == 0)
         {
-            if (cold.IsPlayer) world.Post($"{cold.Name} has no room for {item.Name}.");
+            if (cold.IsPlayer) world.Post($"{world.ShownName(cold)} has no room for {item.ShownName()}.");
             return;
         }
         Crime.GoodsTakenObservers.Report(world, table.IdOf(i), victim.Faction, table.IdOf(t), "", record, moved, caught: false);
@@ -1515,7 +1520,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         }
 
         if (npcOwner) Crimes?.PendPickpocket(world, looter, body, kind);
-        if (cold.IsPlayer) world.Post($"{cold.Name} has no room for {item.Name}.");
+        if (cold.IsPlayer) world.Post($"{world.ShownName(cold)} has no room for {item.ShownName()}.");
         return true;
     }
 
@@ -1563,7 +1568,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         bool first = _seenLoot != world.Player.OpenLoot;
         if (Looted(world, table, looter, body, 1, left, crime: false))
         {
-            if (first && table.Cold(looter)!.IsPlayer) world.Post($"{table.Cold(looter)!.Name} was seen looting {table.Cold(body)!.Name}");
+            if (first && table.Cold(looter)!.IsPlayer)
+                world.Post($"{world.ShownName(table.Cold(looter)!)} was seen looting {world.ShownName(table.Cold(body)!)}");
             _seenLoot = world.Player.OpenLoot;
         }
     }
@@ -1587,7 +1593,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         {
             medical.Butcher();
             DeathObservers.Report(world, t, world.Characters.IdOf(i), DeathSite.Butchered);
-            world.Post($"{victim.Name} has been butchered");
+            world.Post($"{world.ShownName(victim)} has been butchered");
         }
         Seen(world, i, t, 0);
     }
@@ -1614,7 +1620,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (victim.Medical is not { Dead: false } medical || !CharacterFacts.Down(victim) || DeathUnits(victim.Inventory!) >= before) return;
         medical.Butcher();
         DeathObservers.Report(world, body, table.IdOf(looter), DeathSite.Butchered);
-        if (table.Cold(looter)!.IsPlayer || victim.IsPlayer) world.Post($"{victim.Name} has been butchered");
+        if (table.Cold(looter)!.IsPlayer || victim.IsPlayer)
+            world.Post($"{world.ShownName(victim)} has been butchered");
     }
 
     /// <summary>

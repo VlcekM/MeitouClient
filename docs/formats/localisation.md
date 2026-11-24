@@ -56,7 +56,8 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   combo items), HUD `AddLines`, context-menu verbs, `Notice`, `Confirm`/`UpperTr`, `PlaceTooltip` (keys and values; bracketed headings by their
   inside), stat help (`StatHelpCatalog`), the loading tip, the day text, and the interpolated simulation messages (relations, bounties, research,
   campaigns, construction, fixtures, discoveries, crime names ([economy 11.2](../game/economy.md#112-how-a-bounty-is-gained)), crimes, arrests, bail,
-  locks, shackles, trade; the host's save/load notices). The simulation keeps its English markers (the dialogue's engine `[Leave]` choice,
+  locks, shackles, trade; the host's save/load notices). After the catalogs, code mods' text sources may change the text
+  ([modding](../modding.md) "Shown text"; Meitou's own, not in the original). The simulation keeps its English markers (the dialogue's engine `[Leave]` choice,
   matched by that text) and translates only the text it publishes or posts; the world hash and saves never contain translated text. Layout
   captions the original leaves English stay English.
 - **Meitou's own texts** (`MeitouTranslations`): the launcher, the title menu (`UpperTr`) and the settings menu's drawn captions, hints and choices
@@ -89,3 +90,13 @@ Addresses are `kenshi_x64.exe` (1.0.68).
 - **Fonts, tips, names**: through the overlay folder (`OgreScriptResources.ForInstall`) and `Loc.FindTextFile`.
 - **New-game option help**: `NewGameHelpCatalog` reads the installed English `main.pot` source references and passes the exact msgid through `Loc.Tr`; no paraphrases or translated paragraphs are embedded. Missing translations fall back to the original English; a missing template leaves help empty. Font resources use the active locale overlay.
 - All text files are read and written as UTF-8, except `settings.cfg`: without a byte order mark it is edited as Latin-1, so its bytes are kept.
+
+## Code mods' catalogues
+
+- **Observed** (installed KenshiLib plugin mods BetterLooting, BuildingSearchBar, JobManagement, MapMarkers, SquadAutonomy, read with a
+  scratch `.mo` dump): each ships its own gettext domain as `<mod>/locale/<code>/LC_MESSAGES/<domain>.mo` (some with the `.po` beside it),
+  e.g. `better_looting`, `search_bar`, `kenshi_job_management`, `map_markers`, `SquadAutonomy`. Msgids are the English texts; an `en_GB`
+  catalogue may reword them (MapMarkers), folder case varies (SquadAutonomy's `de_De`), and a `.mo` may hold less than its `.po`
+  (BuildingSearchBar de_DE: the `.mo` has only "SEARCH", the `.po` also "Search").
+- **Unknown**: how those plugins choose the catalogue's language (the plugin library's lookup was not read). Meitou's reader
+  (`ModTranslations`, [modding](../modding.md) "Translations") takes the game's code ignoring case, else the same language part.

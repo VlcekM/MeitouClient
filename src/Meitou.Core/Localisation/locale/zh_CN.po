@@ -6556,3 +6556,37 @@ msgstr "• 仅在超高和极致档位启用光线追踪"
 #. machine-translated
 msgid "• Your saved graphics settings and mods are ignored and never modified"
 msgstr "• 您保存的图形设置与模组将被忽略，且绝不会被修改"
+
+msgid "Settings window opacity"
+msgstr "设置窗口不透明度"
+
+msgid "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings)."
+msgstr "游戏内设置窗口的不透明度（调低后可在调整设置时看到背后的游戏画面）。"
+
+msgid "No mod matches the filter."
+msgstr "没有符合筛选条件的模组。"
+
+msgid "Issues"
+msgstr "问题"
+
+msgid "Name A-Z"
+msgstr "名称 A-Z"
+
+msgid "Filter mods"
+msgstr "筛选模组"
+
+msgid "Show"
+msgstr "显示"
+
+msgid "Opacity"
+msgstr "不透明度"
+
+msgid "Restore"
+msgstr "还原"
+
+msgid "{1} of {2}"
+msgstr "{1} / {2}"
+
+msgid "{1} mod"
+msgid_plural "{1} mods"
+msgstr[0] "{1} 个模组"

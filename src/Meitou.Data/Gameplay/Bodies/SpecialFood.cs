@@ -15,8 +15,9 @@ public static class SpecialFood
     /// <summary>
     /// The row's value (<b>Verified</b>, <c>FUN_1407ae130</c> after the function-15 label): the RACE records whose <c>special food</c> list holds
     /// <paramref name="item"/>, in the database's order (<b>Observed</b>: the original walks its record store; Meitou walks the loaded order). Each
-    /// race is named, except that a race group all of whose races are listed is named once, at its first listed race. Names are joined by ", " and
-    /// one line break is inserted before the first name that would take the text past 25 characters. Empty when no race eats it.
+    /// race is named (as the mods' text sources show it), except that a race group all of whose races are listed is named once, at its first listed
+    /// race. Names are joined by ", " and one line break is inserted before the first name that would take the text past 25 characters. Empty
+    /// when no race eats it.
     /// </summary>
     public static string EatenBy(GameDatabase db, string item)
     {
@@ -35,13 +36,13 @@ public static class SpecialFood
         bool mayBreak = true;
         foreach (var race in eaters)
         {
-            string name = race.Name;
+            string name = race.ShownName();
             if (groupOf.TryGetValue(race.StringId, out var group) && listed[group.StringId] is var count && count != 0)
             {
                 if (count == group.GetReferences("races").Count)
                 {
                     listed[group.StringId] = 0;
-                    name = group.Name;
+                    name = group.ShownName();
                 }
             }
             else if (group is not null) continue;

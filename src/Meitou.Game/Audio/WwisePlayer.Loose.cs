@@ -59,18 +59,19 @@ public sealed partial class WwisePlayer
     /// <summary>
     /// Plays <paramref name="sound"/> (read by <see cref="ReadLoose"/>, kept by <paramref name="key"/>, its file) once on
     /// <paramref name="gameObject"/>, <paramref name="volumeDb"/> louder or softer: placed at the object and attenuated by distance when
-    /// <paramref name="placed"/>, else heard at the listener (any thread; run at the next block).
+    /// <paramref name="placed"/>, else heard at the listener (any thread; run at the next block); tagged with <paramref name="playing"/>
+    /// (<see cref="NewPlaying"/>, 0 none) for <see cref="StopPlaying"/>.
     /// </summary>
-    public void PostLoose(string key, WwisePcm sound, ulong gameObject, float volumeDb, bool placed)
+    public void PostLoose(string key, WwisePcm sound, ulong gameObject, float volumeDb, bool placed, uint playing = 0)
     {
         ObjectState(gameObject);
-        _commands.Enqueue(() => PlayLoose(key, sound, gameObject, volumeDb, placed));
+        _commands.Enqueue(() => PlayLoose(key, sound, gameObject, volumeDb, placed, playing));
     }
 
     /// <summary>
     /// On the audio thread: files the samples once, then plays them as a new sound node on the object.
     /// </summary>
-    void PlayLoose(string key, WwisePcm sound, ulong gameObject, float volumeDb, bool placed)
+    void PlayLoose(string key, WwisePcm sound, ulong gameObject, float volumeDb, bool placed, uint playing)
     {
         if (!_looseMedia.TryGetValue(key, out uint media))
         {
@@ -82,6 +83,7 @@ public sealed partial class WwisePlayer
 
         var node = new WwiseSound(_nextLoose++, new WwiseSource(0x00010001, 0, media, 0, 0, 0, 0, []), LooseNode(volumeDb, placed));
         _postingObject = gameObject;
+        _postingPlay = playing;
         try
         {
             if (Create(node, null) is not { } instance) return;
@@ -92,6 +94,7 @@ public sealed partial class WwisePlayer
         finally
         {
             _postingObject = 0;
+            _postingPlay = 0;
         }
     }
 

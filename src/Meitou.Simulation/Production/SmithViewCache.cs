@@ -37,6 +37,11 @@ sealed class SmithViewCache(GameDatabase db)
     IReadOnlyDictionary<string, CraftSmithView>? _published;
 
     /// <summary>
+    /// The shown text revision (<see cref="ShownText.Revision"/>) the published view was built at: its names are rebuilt when a mod's text changes.
+    /// </summary>
+    int _shownRevision;
+
+    /// <summary>
     /// The entries of <see cref="_published"/>'s views, by site.
     /// </summary>
     readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
@@ -58,9 +63,15 @@ sealed class SmithViewCache(GameDatabase db)
     public IReadOnlyDictionary<string, CraftSmithView> Of(World world)
     {
         var machines = (world.Machines.Version, world.Machines.Worked);
-        if (_published is not null && _version == machines) return _published;
+        if (_published is not null && _version == machines && _shownRevision == ShownText.Revision) return _published;
 
         _version = machines;
+        if (_shownRevision != ShownText.Revision)
+        {
+            // Every entry's view holds shown names: make them all again.
+            _entries.Clear();
+            _shownRevision = ShownText.Revision;
+        }
         bool changed = Collect(world);
         if (_published is not null && !changed) return _published;
         return _published = Published();
@@ -87,7 +98,7 @@ sealed class SmithViewCache(GameDatabase db)
                 continue;
             }
 
-            var view = new CraftSmithView(cold.Name, (int)level, penalty, Predictions(m, bench, state, level));
+            var view = new CraftSmithView(world.ShownName(cold), (int)level, penalty, Predictions(m, bench, state, level));
             _fresh.Add((m.Site, new Entry(m, m.Smith, cold.Name, level, penalty, [.. state.Queue.Select(j => j.Option)], view)));
             changed = true;
         }
@@ -141,7 +152,7 @@ sealed class SmithViewCache(GameDatabase db)
                 var model = ProductionSystem.WeaponModel(bench, option, level, false);
                 return none with
                 {
-                    Model = model.Model is { } id ? db.Find(id)?.Name ?? id : "",
+                    Model = model.Model is { } id ? db.Find(id)?.ShownName() ?? id : "",
                     ModelChanged = model.Model != option.Model,
                     MaterialCost = db.Find(option.Item)?.GetInt("material cost", 4) ?? 4,
                     Critical = critical,

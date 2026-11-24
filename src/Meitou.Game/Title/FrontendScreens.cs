@@ -751,7 +751,7 @@ sealed class FrontendScreens(PlayerInterface player)
         {
             Enable(b, "LeftButton", "RightButton", "BeginButton");
             var start = _starts[_startIndex];
-            b.Text["TitleTextBox"] = start.Name;
+            b.Text["TitleTextBox"] = ShownText.Record(start.Id, start.Name);
         }
     }
 
@@ -1039,9 +1039,10 @@ sealed class FrontendScreens(PlayerInterface player)
         var start = _starts[_startIndex];
         AddDatapanel(controls, "DescriptionPanel",
         [
-            (Loc.Tr("Difficulty:"), start.Difficulty), (Loc.Tr("Cash:"), "c." + start.Money.ToString(CultureInfo.InvariantCulture)),
-            (Loc.Tr("Play Style:"), start.Style),
-            (start.Description, ""),
+            (Loc.Tr("Difficulty:"), ShownText.Record(start.Id, start.Difficulty, "difficulty")),
+            (Loc.Tr("Cash:"), "c." + start.Money.ToString(CultureInfo.InvariantCulture)),
+            (Loc.Tr("Play Style:"), ShownText.Record(start.Id, start.Style, "style")),
+            (ShownText.Record(start.Id, start.Description, "description"), ""),
         ], lastWraps: true, rows: 40);
     }
 

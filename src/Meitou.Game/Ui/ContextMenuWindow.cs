@@ -51,6 +51,12 @@ sealed class ContextMenuWindow(PlayerInterface player)
     internal ContextMenu? OpenMenu;
 
     /// <summary>
+    /// The target the code mods' rows were last asked for (<see cref="PlayerInterface.ModTargetVerbs"/>), for the menu being built; the next
+    /// <see cref="Menu"/> takes it, and a menu built for a press starts without one.
+    /// </summary>
+    internal UiMenuTarget? RowsTarget;
+
+    /// <summary>
     /// A right press on a target that has verbs: its menu (built again when the hold ends), where, when, the hold that opens it and the order a quick
     /// click gives (null: none).
     /// </summary>
@@ -224,7 +230,37 @@ sealed class ContextMenuWindow(PlayerInterface player)
         var list = kept.Select((v, i) => (v, i)).OrderBy(x => OrderOf(x.v.Caption) ?? int.MaxValue).ThenBy(x => x.i).Select(x => x.v).ToList();
         if (offered is not null) list.AddRange(offered);
 
+        var target = RowsTarget;
+        RowsTarget = null;
+        if (player.HasModMenuRows) list = OverriddenRows(title, list, target);
+
         return list.Count == 0 ? null : new ContextMenu(title, at, list);
+    }
+
+    /// <summary>
+    /// <paramref name="rows"/> as the code mods' row overrides change them (<see cref="UiRegistration.AddMenuRowOverrides"/>): captions replaced
+    /// (the chance column kept), colours set, rows left out.
+    /// </summary>
+    List<(string Caption, Action Give)> OverriddenRows(string title, List<(string Caption, Action Give)> rows, UiMenuTarget? target)
+    {
+        var selected = player.SelectedIds();
+        var kept = new List<(string Caption, Action Give)>(rows.Count);
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var (caption, chance) = SplitChance(rows[i].Caption);
+            if (player.ModMenuRow(new UiMenuRowContext(title, caption, chance, i, target, selected)) is not { } over)
+            {
+                kept.Add(rows[i]);
+                continue;
+            }
+
+            if (over.Visible == false) continue;
+
+            string shown = over.Caption is { } replaced ? replaced + rows[i].Caption[caption.Length..] : rows[i].Caption;
+            kept.Add(Inked((shown, rows[i].Give), over.TextColour));
+        }
+
+        return kept;
     }
 
     /// <summary>
@@ -344,9 +380,49 @@ sealed class ContextMenuWindow(PlayerInterface player)
         available || !player.GreyUnavailableVerbs ? (caption, give) : (caption, new UnavailableVerb(player, give).Choose);
 
     /// <summary>
-    /// Whether a row's action is an unavailable row's (<see cref="Available"/>).
+    /// Whether a row's action is an unavailable row's (<see cref="Available"/>), itself or under its colour (<see cref="Inked"/>).
     /// </summary>
-    static bool IsUnavailable(Action give) => give.Target is UnavailableVerb;
+    static bool IsUnavailable(Action give) => give.Target is UnavailableVerb || give.Target is InkedVerb inked && IsUnavailable(inked.Give);
+
+    /// <summary>
+    /// A row whose caption takes a colour of its own (a code mod's row's <see cref="UiMenuVerb.Colour"/>, a row override's): choosing it gives its
+    /// action.
+    /// </summary>
+    sealed class InkedVerb(Vector4 ink, Action give)
+    {
+        /// <summary>
+        /// The caption's colour.
+        /// </summary>
+        public Vector4 Ink { get; } = ink;
+
+        /// <summary>
+        /// The row's own action.
+        /// </summary>
+        public Action Give { get; } = give;
+
+        /// <summary>
+        /// The row chosen: its own action.
+        /// </summary>
+        public void Choose() => Give();
+    }
+
+    /// <summary>
+    /// <paramref name="row"/> with its caption in <paramref name="colour"/> (RGB clamped to 0..1, alpha 1; null or not finite: as it is).
+    /// </summary>
+    internal static (string Caption, Action Give) Inked((string Caption, Action Give) row, Vector4? colour)
+    {
+        if (colour is not { } c || !float.IsFinite(c.X + c.Y + c.Z)) return row;
+
+        var ink = new Vector4(Math.Clamp(c.X, 0, 1), Math.Clamp(c.Y, 0, 1), Math.Clamp(c.Z, 0, 1), 1);
+        var give = row.Give.Target is InkedVerb inked ? inked.Give : row.Give;
+        return (row.Caption, new InkedVerb(ink, give).Choose);
+    }
+
+    /// <summary>
+    /// A row's caption colour: greyed when unavailable, its own (<see cref="Inked"/>), else <paramref name="ink"/>.
+    /// </summary>
+    static Vector4 RowInk(Action give, Vector4 ink) =>
+        IsUnavailable(give) ? UnavailableInk : give.Target is InkedVerb inked ? inked.Ink : ink;
 
     /// <summary>
     /// A caged character: Talk To (12) and Loot (26). Meitou points at an occupied cage with occupant selection as its occupant and shows one menu,
@@ -374,7 +450,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
         if (prison.Locked)
         {
-            if (!down && !ownCage)
+            // Another faction's locked cage has Pick Lock whatever the state of its occupant (FUN_1407a6bc0's cage rows test only its lock and
+            // owner; a knocked-out prisoner's cage too, #1357).
+            if (!ownCage)
             {
                 verbs.Add((prison.LockLevel < 0 ? "Pick Lock" : PickLockCaption(target.Position, prison.LockLevel, false),
                     () => player.Say(new PickLockOrder(selection, id) { Tick = player.Session.World.Tick })));
@@ -808,18 +886,26 @@ sealed class ContextMenuWindow(PlayerInterface player)
         return ContextPressOn(p, CharacterMenu, quick);
 
         ContextMenu? CharacterMenu(Vector2 at) =>
-            player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } target ? Menu(target.Name, at, Verbs(target)) : null;
+            player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } target
+                ? Menu(player.ShownName(target), at, Verbs(target))
+                : null;
     }
 
     /// <summary>
-    /// A right press on a target whose <paramref name="menu"/> has verbs (true): the hold timer starts, the menu opens after <paramref name="hold"/>
+    /// A right press on a target whose <paramref name="build"/> has verbs (true): the hold timer starts, the menu opens after <paramref name="hold"/>
     /// seconds (<see cref="ContextHoldSeconds"/> by default) and <paramref name="quick"/> waits for the release.
     /// </summary>
-    internal bool ContextPressOn(Vector2 p, Func<Vector2, ContextMenu?> menu, Action? quick, double hold = ContextHoldSeconds)
+    internal bool ContextPressOn(Vector2 p, Func<Vector2, ContextMenu?> build, Action? quick, double hold = ContextHoldSeconds)
     {
-        if (menu(p) is null) return false;
+        ContextMenu? Fresh(Vector2 at)
+        {
+            RowsTarget = null;
+            return build(at);
+        }
 
-        _contextPending = (menu, p, System.Diagnostics.Stopwatch.GetTimestamp(), hold, quick);
+        if (Fresh(p) is null) return false;
+
+        _contextPending = (Fresh, p, System.Diagnostics.Stopwatch.GetTimestamp(), hold, quick);
         return true;
     }
 
@@ -920,7 +1006,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         {
             var (caption, chance) = SplitChance(menu.Verbs[i].Caption);
             float rowY = y + titleH + i * optionH + optionH * 0.0512821f, rowH = optionH * 0.897436f;
-            var rowInk = IsUnavailable(menu.Verbs[i].Give) ? UnavailableInk : ink;
+            var rowInk = RowInk(menu.Verbs[i].Give, ink);
             controls.Add(new($"context-verb-{i}", "Button", new(x + w * 0.0208333f, rowY, buttonW, rowH), Loc.Tr(caption),
                 "meitou:context", "Kenshi_Button1Skin", true,
                 new Dictionary<string, string> { ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" },

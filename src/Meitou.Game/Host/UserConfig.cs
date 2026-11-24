@@ -125,6 +125,10 @@ sealed class UserConfig
     /// </summary>
     public const float MinInterfaceScale = 0.5f, MaxInterfaceScale = 2;
     /// <summary>
+    /// The lowest <see cref="SettingsOpacity"/> (25%).
+    /// </summary>
+    public const float MinSettingsOpacity = 0.25f;
+    /// <summary>
     /// The ranges of <see cref="CameraMoveSpeed"/> (150 … 1000) and <see cref="CameraZoomSpeed"/> (10 … 200), the original's.
     /// </summary>
     public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
@@ -264,6 +268,10 @@ sealed class UserConfig
     /// larger than the window height alone makes it.
     /// </summary>
     public float InterfaceScale { get; set; } = 1;
+    /// <summary>
+    /// The opacity of the in-game settings window (25% … 100%, default 100%; header bar and Interface settings).
+    /// </summary>
+    public float SettingsOpacity { get; set; } = 1;
     /// <summary>
     /// The damage floaters (Interface settings): the original's <c>floaters</c> option, Simple by default; Meitou also floats a green "+N" over a
     /// player character that heals.
@@ -819,6 +827,11 @@ sealed class UserConfig
     /// </summary>
     public Dictionary<string, Dictionary<string, string>> ModSettings { get; set; } = [];
     /// <summary>
+    /// The code mods' named setting presets (docs/modding.md "Settings"): mod id to preset name to setting key to the value as text; Restore
+    /// defaults keeps them.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, Dictionary<string, string>>> ModSettingPresets { get; set; } = [];
+    /// <summary>
     /// The feedback form's ticks and Discord name, as last used; null until the form first opens.
     /// </summary>
     public FeedbackSettings? Feedback { get; set; }
@@ -1174,6 +1187,16 @@ sealed class UserConfig
     }
 
     /// <summary>
+    /// Keeps a mod's setting presets in <see cref="ModSettingPresets"/> (none: the mod's entry dropped); written with the rest of the config.
+    /// </summary>
+    public void KeepModPresets(ModSettingsGroup group)
+    {
+        var presets = group.PresetValues();
+        if (presets.Count == 0) ModSettingPresets.Remove(group.ModId);
+        else ModSettingPresets[group.ModId] = presets;
+    }
+
+    /// <summary>
     /// Keeps a hand-edited or older config inside the values the Metal path can use.
     /// </summary>
     void Normalize()
@@ -1184,6 +1207,7 @@ sealed class UserConfig
         if (MetalUpscaler is MetalUpscalerMode.Temporal or MetalUpscalerMode.Spatial) MetalRenderScale = Math.Clamp(MetalRenderScale, 0.4f, 1f);
         MetalRenderDivisor = Math.Clamp(MetalRenderDivisor, 1, MetalRenderDivisorMax);
         ModSettings ??= [];
+        ModSettingPresets ??= [];
         AdoptedMods ??= [];
         SquadXp = float.IsFinite(SquadXp) ? Math.Clamp(SquadXp, MinXpRate, MaxXpRate) : 1;
         OthersXp = float.IsFinite(OthersXp) ? Math.Clamp(OthersXp, MinXpRate, MaxXpRate) : 1;

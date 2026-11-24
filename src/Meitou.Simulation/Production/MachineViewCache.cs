@@ -33,6 +33,11 @@ sealed class MachineViewCache
     MachineSnapshot? _view;
 
     /// <summary>
+    /// The shown text revision (<see cref="ShownText.Revision"/>) the published view was built at: its names are rebuilt when a mod's text changes.
+    /// </summary>
+    int _shownRevision;
+
+    /// <summary>
     /// The view of <paramref name="m"/> now: the last one while nothing it shows changed, else a new one. Its storage's items are recorded and
     /// published only while <paramref name="shown"/>; an unshown storage is reused whatever its items, by its size and emptiness alone.
     /// </summary>
@@ -41,10 +46,11 @@ sealed class MachineViewCache
         _nextValues.Clear();
         _nextRefs.Clear();
         Record(m, shown);
-        if (_view is not null && Unchanged()) return _view;
+        if (_view is not null && _shownRevision == ShownText.Revision && Unchanged()) return _view;
 
         (_values, _nextValues) = (_nextValues, _values);
         (_refs, _nextRefs) = (_nextRefs, _refs);
+        _shownRevision = ShownText.Revision;
         return _view = MachineSnapshot.Of(m, items, shown);
     }
 

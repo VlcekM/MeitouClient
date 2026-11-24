@@ -230,8 +230,11 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The name of the player town a worked rock joined (null: none, the original's NO_TOWN, which the panel's <c>Town:</c> line leaves out).
+    /// The name of the player town a worked rock joined as the mods' text sources show it (null: none, the original's NO_TOWN, which the panel's
+    /// <c>Town:</c> line leaves out).
     /// </summary>
     static string? TownNameOf(World world, BuildSite? site) =>
-        site is { Town: not 0 and var number } ? world.Buildings.Towns.FirstOrDefault(t => t.Number == number)?.Name : null;
+        site is { Town: not 0 and var number } && world.Buildings.Towns.FirstOrDefault(t => t.Number == number) is { } town
+            ? world.ShownName(town)
+            : null;
 }

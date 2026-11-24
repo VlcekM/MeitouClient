@@ -157,7 +157,12 @@ sealed class GameMods(GameHost host)
     /// </summary>
     void KeepModSettings(ModHost mods)
     {
-        foreach (var group in mods.Settings) group.Changed += host.Config.KeepModSetting;
+        foreach (var group in mods.Settings)
+        {
+            group.Changed += host.Config.KeepModSetting;
+            group.UsePresets(host.Config.ModSettingPresets.GetValueOrDefault(group.ModId));
+            group.PresetsChanged += host.Config.KeepModPresets;
+        }
     }
 
     /// <summary>
@@ -185,7 +190,7 @@ sealed class GameMods(GameHost host)
     {
         foreach (var notice in _builtInNotices) ui.Notice(notice);
         if (Mods is null) return;
-        Mods.RegisterUi((extension, folder) => ui.RegisterUiExtension(extension, folder));
+        Mods.RegisterUi((extension, folder, texts) => ui.RegisterUiExtension(extension, folder, texts));
         Mods.AttachInterface(new Game.Ui.PlayerModInterface(ui));
         if (Mods.ArrangesFactionList) ui.FactionWindow.ArrangeList = Mods.ArrangeFactionList;
         foreach (var notice in Mods.Notices) ui.Notice(notice, true);

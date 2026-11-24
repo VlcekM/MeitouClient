@@ -768,7 +768,7 @@ sealed class InventoryWindows(PlayerInterface player)
                 return section == "main" && player.Production.Machine(window.Site)?.StorageSize is { } storage ? storage : (0, 0);
             default:
                 if (InventoryCommands.IsSingleSlot(section)) return (0, 0);
-                if (section is "back" or "hip") return InventoryCommands.SectionSize(section);
+                if (InventoryCommands.LiesInCells(section)) return InventoryCommands.SectionSize(section);
 
                 var grid = snapshot.Characters.FirstOrDefault(c => c.Id == window.Character)?.ItemGrid;
                 return section == "backpack_content" ? (grid?.BagWidth ?? 0, grid?.BagHeight ?? 0) : (grid?.Width ?? 0, grid?.Height ?? 0);
@@ -868,7 +868,7 @@ sealed class InventoryWindows(PlayerInterface player)
                 h.Width * cell, h.Height * player.InventoryCellHeight);
             player.ItemCells.AddItemCell(controls, "held-item", bounds,
                 h.Record, h.Material, h.Name, h.Quantity, null, "HeldItem", 0, null, pickable: false, charge: h.Charge, colour: h.Colour,
-                rotated: h.Rotated);
+                rotated: h.Rotated, modTag: h.ModTag);
         }
 
         player.TradeWindows.AddFencePrompt(controls);

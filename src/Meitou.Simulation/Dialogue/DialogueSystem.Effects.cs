@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Text;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Dialogue;
+using Meitou.Localisation;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Factions;
@@ -77,9 +78,10 @@ public sealed partial class DialogueSystem
             int f = _data.Relations.IndexOf(factionId);
             if (f < 0 || amount == 0 || world.Player.Faction < 0) continue;
             ChangeRelation(world, f, world.Player.Faction, amount, new(RelationCauseType.Dialogue, speaker));
+            string name = World.ShownName(_data.Factions[f]);
             world.Post(amount > 0
-                ? Loc.Tr("Relations with {1} improved by {2}", _data.Factions[f].Name, amount)
-                : Loc.Tr("Relations with {1} decreased by {2}", _data.Factions[f].Name, -amount));
+                ? Loc.Tr("Relations with {1} improved by {2}", name, amount)
+                : Loc.Tr("Relations with {1} decreased by {2}", name, -amount));
         }
     }
 
@@ -449,7 +451,7 @@ public sealed partial class DialogueSystem
         foreach (var (id, count) in line.GiveItems)
         {
             if (_data.Items.Create(id, count is >= 2 and <= 49 ? count : 1) is not { } item) continue;
-            string name = item.Name;
+            string name = item.ShownName();
             if (tc.Inventory?.Add(item) != true && Position(world, target) is { } at) world.GroundItems.Drop(item, at, 0);
             world.Post($"{Loc.Tr("Received")} {name}");
         }
@@ -598,13 +600,70 @@ public sealed partial class DialogueSystem
             ? name : Said(Expand(world, new Conversation { Npc = me, Player = CharacterId.None, Event = 0 }, null, name, me, CharacterId.None));
 
     /// <summary>
-    /// The text tokens (docs/game/dialogue.md "Tokens"): <c>/NAME/</c> pairs until none is left; COST, MYNAME, YOURNAME, TARGETFACTION and
-    /// PLAYERFACTION are built in, any other name is the WORD_SWAPS record of that name (its lines chosen like a line's children, one of their texts;
-    /// none: empty). A token at the start or after ". ", "! ", "? " is capitalised.
+    /// One of <paramref name="line"/>'s texts (picked by <paramref name="who"/>'s roll), its tokens expanded for <paramref name="me"/> speaking to
+    /// <paramref name="other"/>, through the censorship: <c>Said</c> as the game says it, which every decision reads (whether a choice is offered,
+    /// how long a bubble stays), and <c>Shown</c> as the mods' text sources show it (docs/modding.md "Shown text"), which only the screen gets.
+    /// The two are the same when no mod adds a text source; the shown text's tokens take the values the said text's got, so showing never rolls,
+    /// picks or marks anything.
     /// </summary>
-    string Expand(World world, Conversation c, DialogueNode? line, string text, CharacterId me, CharacterId other, int depth = 0)
+    (string Said, string Shown) Line(World world, Conversation c, DialogueNode line, CharacterId who, CharacterId me, CharacterId other)
     {
-        if (depth > 4 || text.IndexOf('/') < 0) return text;
+        string template = PickText(world, who, line);
+        if (!ShownText.Any)
+        {
+            string text = Said(Expand(world, c, line, template, me, other));
+            return (text, text);
+        }
+
+        var tokens = new List<(string Token, string Value, string Shown)>();
+        string expanded = Expand(world, c, line, template, me, other, 0, tokens);
+        string said = Said(expanded);
+        string shown = ShownLine(line, template, expanded, tokens);
+        return (said, ReferenceEquals(shown, expanded) || string.IsNullOrWhiteSpace(shown) ? said : Said(shown));
+    }
+
+    /// <summary>
+    /// <paramref name="line"/>'s <paramref name="template"/> as the mods' text sources show it (a <see cref="ShownTextKind.DialogueLine"/>), its
+    /// tokens filled with the shown values of <paramref name="tokens"/> (the ones <paramref name="expanded"/> got, in order);
+    /// <paramref name="expanded"/> itself when neither the template nor any token's value changed.
+    /// </summary>
+    static string ShownLine(DialogueNode line, string template, string expanded, List<(string Token, string Value, string Shown)> tokens)
+    {
+        string given = ShownText.Of(ShownTextKind.DialogueLine, line.StringId, template);
+        if (given == template && tokens.TrueForAll(t => t.Value == t.Shown)) return expanded;
+        return Fill(given, tokens);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with its <c>/NAME/</c> tokens replaced as <see cref="Expand"/> does, by value instead of by rolling: each token takes
+    /// the shown value of the first unused entry of that name in <paramref name="tokens"/> (all used: the last one; none: empty), capitalised at the
+    /// start or after ". ", "! ", "? ".
+    /// </summary>
+    static string Fill(string text, List<(string Token, string Value, string Shown)> tokens)
+    {
+        if (text.IndexOf('/') < 0) return text;
+        var used = new bool[tokens.Count];
+        return Tokens(text, token =>
+        {
+            int at = -1;
+            for (int t = 0; t < tokens.Count; t++)
+            {
+                if (tokens[t].Token != token) continue;
+                at = t;
+                if (!used[t]) break;
+            }
+            if (at < 0) return "";
+            used[at] = true;
+            return tokens[at].Shown;
+        });
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with each <c>/NAME/</c> pair replaced by <paramref name="value"/> of its trimmed name, left to right (an unclosed
+    /// <c>/</c> and what follows it kept), a value at the start or after ". ", "! ", "? " capitalised.
+    /// </summary>
+    static string Tokens(string text, Func<string, string> value)
+    {
         var sb = new StringBuilder(text.Length + 16);
         int i = 0;
         while (i < text.Length)
@@ -617,29 +676,54 @@ public sealed partial class DialogueSystem
                 break;
             }
             sb.Append(text, i, open - i);
-            string token = text[(open + 1)..close];
-            string value = Token(world, c, line, token.Trim(), me, other, depth);
-            bool capital = sb.Length == 0 || sb.ToString().EndsWith(". ", StringComparison.Ordinal)
-                || sb.ToString().EndsWith("! ", StringComparison.Ordinal) || sb.ToString().EndsWith("? ", StringComparison.Ordinal);
-            if (capital && value.Length > 0) value = char.ToUpperInvariant(value[0]) + value[1..];
-            sb.Append(value);
+            string put = value(text[(open + 1)..close].Trim());
+            if (put.Length > 0 && (sb.Length == 0 || EndsWithStop(sb))) put = char.ToUpperInvariant(put[0]) + put[1..];
+            sb.Append(put);
             i = close + 1;
         }
         return sb.ToString();
     }
 
     /// <summary>
-    /// One token's text: a built-in name's value, else a line of the WORD_SWAPS record of that name, itself expanded.
+    /// Whether <paramref name="sb"/> ends with ". ", "! " or "? ".
     /// </summary>
-    string Token(World world, Conversation c, DialogueNode? line, string token, CharacterId me, CharacterId other, int depth)
+    static bool EndsWithStop(StringBuilder sb) => sb.Length >= 2 && sb[^1] == ' ' && sb[^2] is '.' or '!' or '?';
+
+    /// <summary>
+    /// The text tokens (docs/game/dialogue.md "Tokens"): <c>/NAME/</c> pairs until none is left; COST, MYNAME, YOURNAME, TARGETFACTION and
+    /// PLAYERFACTION are built in, any other name is the WORD_SWAPS record of that name (its lines chosen like a line's children, one of their texts;
+    /// none: empty). A token at the start or after ". ", "! ", "? " is capitalised. With <paramref name="tokens"/>, each token's name, value and
+    /// shown value (a word swap's line or a built-in name as the mods' text sources show it) are added to it in order, for <see cref="Fill"/>.
+    /// </summary>
+    string Expand(World world, Conversation c, DialogueNode? line, string text, CharacterId me, CharacterId other, int depth = 0,
+        List<(string Token, string Value, string Shown)>? tokens = null)
     {
+        if (depth > 4 || text.IndexOf('/') < 0) return text;
+        return Tokens(text, token =>
+        {
+            string value = Token(world, c, line, token, me, other, depth, tokens is not null, out string? swapped);
+            tokens?.Add((token, value, swapped ?? value));
+            return value;
+        });
+    }
+
+    /// <summary>
+    /// One token's text: a built-in name's value (<see cref="BuiltIn"/>), else a line of the WORD_SWAPS record of that name, itself expanded. With
+    /// <paramref name="showing"/>, a word swap's line or a built-in name as the mods' text sources show it goes in <paramref name="swapped"/>
+    /// (else, and for COST, null).
+    /// </summary>
+    string Token(World world, Conversation c, DialogueNode? line, string token, CharacterId me, CharacterId other, int depth, bool showing,
+        out string? swapped)
+    {
+        swapped = null;
         switch (token)
         {
             case "COST": return line?.Cost is { } cost ? cost.ToString("N0", CultureInfo.InvariantCulture) : "";
-            case "MYNAME": return NameOf(world, me);
-            case "YOURNAME": return Cold(world, other)?.Name ?? "you";
-            case "TARGETFACTION": return Cold(world, other) is { } o && _data.Relations.Contains(o.Faction) ? _data.Factions[o.Faction].Name : "you";
-            case "PLAYERFACTION": return _data.Relations.Contains(world.Player.Faction) ? _data.Factions[world.Player.Faction].Name : "";
+            case "MYNAME":
+            case "YOURNAME":
+            case "TARGETFACTION":
+            case "PLAYERFACTION":
+                return BuiltIn(world, token, me, other, showing, out swapped);
         }
         if (_dialogue.WordSwap(token) is not { } swap) return "";
         // The full line walk over the swap's lines (FUN_14067a530 :168-220 into FUN_14067a0c0): the target is the conversation's, or the passed one
@@ -653,7 +737,40 @@ public sealed partial class DialogueSystem
         _lastUse[p.Line.StringId] = now;
         _lastUse[swap.StringId] = now;
         if (p.Root is { } through) _lastUse[through.StringId] = now;
-        return Expand(world, c, p.Line, PickText(world, p.Speaker, p.Line), me, other, depth + 1);
+        string template = PickText(world, p.Speaker, p.Line);
+        if (!showing) return Expand(world, c, p.Line, template, me, other, depth + 1);
+        var inner = new List<(string Token, string Value, string Shown)>();
+        string value = Expand(world, c, p.Line, template, me, other, depth + 1, inner);
+        swapped = ShownLine(p.Line, template, value, inner);
+        return value;
+    }
+
+    /// <summary>
+    /// A built-in name token's text: MYNAME the speaker's name, YOURNAME the other's ("you" without one), TARGETFACTION the other's faction ("you"
+    /// without one), PLAYERFACTION the player faction's data name. With <paramref name="showing"/>, the name as the mods' text sources show it goes
+    /// in <paramref name="swapped"/>; the returned text stays the game's, which decisions read.
+    /// </summary>
+    string BuiltIn(World world, string token, CharacterId me, CharacterId other, bool showing, out string? swapped)
+    {
+        swapped = null;
+        switch (token)
+        {
+            case "MYNAME":
+                if (showing) swapped = world.ShownName(me);
+                return NameOf(world, me);
+            case "YOURNAME":
+                if (Cold(world, other) is not { } you) return "you";
+                if (showing) swapped = world.ShownName(you);
+                return you.Name;
+            case "TARGETFACTION":
+                if (Cold(world, other) is not { } o || !_data.Relations.Contains(o.Faction)) return "you";
+                if (showing) swapped = World.ShownName(_data.Factions[o.Faction]);
+                return _data.Factions[o.Faction].Name;
+            default:
+                if (!_data.Relations.Contains(world.Player.Faction)) return "";
+                if (showing) swapped = World.ShownName(_data.Factions[world.Player.Faction]);
+                return _data.Factions[world.Player.Faction].Name;
+        }
     }
 
     #endregion

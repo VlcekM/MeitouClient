@@ -86,5 +86,52 @@ public sealed partial class CarrySystem
         return (-1, dead >= 0 ? dead : down);
     }
 
+    /// <summary>
+    /// The weapon an 8 FIND_WEAPON order goes for (<see cref="FindWeapon"/> from the character): a ground weapon, or for a character that is not
+    /// the player's a body with one; a player character's order takes only the ground pass (engine choice: the player's loot of a body is a
+    /// take-all). (-1, -1): none.
+    /// </summary>
+    (int Item, int Body) OrderedWeapon(World world, int slot, CharacterCold cold)
+    {
+        if (world.SystemOf<PopulationSystem>() is not { } population) return (-1, -1);
+
+        var table = world.Characters;
+        var (item, body) = FindWeapon(world, population.Data, table, slot, cold, Looting(table), Claimed(table));
+        return cold.IsPlayer ? (item, -1) : (item, body);
+    }
+
+    /// <summary>
+    /// The 8 FIND_WEAPON order's check (docs/modding.md "Ordering characters"): gone once the character carries a weapon (or is an animal) or the
+    /// finder finds none; waits while it cannot pick up (down, caged, carried, carrying, no inventory).
+    /// </summary>
+    OrderCheck FindWeaponCheck(World world, int slot, CharacterCold cold)
+    {
+        if (HasWeapon(cold) || OrderedWeapon(world, slot, cold) is (< 0, < 0)) return OrderCheck.Gone;
+
+        bool free = cold.CarriedBy.IsNone && cold.Carrying.IsNone;
+        bool able = cold is { Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } && free;
+        return able ? OrderCheck.Run : OrderCheck.Blocked();
+    }
+
+    /// <summary>
+    /// Starts the 8 FIND_WEAPON order's step: the pick-up (row 3, <see cref="Items.PickUps"/>, which wears a weapon into a free slot) of the ground
+    /// weapon the finder picks, a walk to it or the take within reach; else the loot of the body it picks (row 8, the AI's loot).
+    /// </summary>
+    void StartFindWeapon(World world, int slot, CharacterCold cold)
+    {
+        var (item, body) = OrderedWeapon(world, slot, cold);
+        var table = world.Characters;
+        if (item >= 0)
+        {
+            var at = world.GroundItems.Find(item)!.Position;
+            var task = Items.PickUps.InReach(table.Next[slot].Position, at) ? CharacterTask.Idle : CharacterTask.GoTo;
+            TaskStart.Start(world, slot, new TaskRequest(task, TaskType.Pickup, TaskSource.Order) { Point = at, Detail = item });
+            return;
+        }
+
+        if (body >= 0)
+            Start(world, slot, CharacterTask.Loot, TaskType.FindWeapon, TaskSource.Order, table.IdOf(body), CharacterTask.Idle);
+    }
+
     #endregion
 }

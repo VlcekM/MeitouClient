@@ -158,6 +158,10 @@ World-state replacement towns and faction ownership affect both population and b
   `19.29:14` keeps its 46 entries; a reload stands `20.29:1019` with its 11 layout objects, and a second save writes the same zone files. A
   second override of the registered town (the takeover's other variant) gives the same-named homes (`20.28:97` Faction HQ, `19.29:22` Bar,
   `19.29:8` Weapon Shop) new machines for their objects, one each as before.
+- Name: the original keeps the town's own name. KenshiExtensionPlugin (RE_Kenshi plugin, workshop 3638161797; GPL source
+  `Lucius64/KenshiExtensionPlugin` `bugfix/MiscFix.cpp`, its "Fix town override" setting, on by default) adds the TOWN bool `town name override`
+  (its `fcs.def`): a replacement with it set renames the town to the replacement's name, at the override and when the town state loads
+  (**Verified** against that source). Meitou (`TownSite.Replace`) applies the field whenever the data sets it; the `unexplored name` stays the town's own.
 - `updatedTownOverrides`: while a town is in it, the check answers "repopulate" at once (no new choice), so each load trims the zone again. The pass that places
   residents after zones load (`FUN_140a0e760`, ZoneManager state 2) places them for the collected towns not of the player's faction and erases them (`FUN_140a22ef0`).
   Nothing else touches it, and it is not saved.

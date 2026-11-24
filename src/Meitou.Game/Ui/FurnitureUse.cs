@@ -159,7 +159,7 @@ sealed class FurnitureUse(PlayerInterface player)
             verbs.AddRange(player.Build.OfferedJobs(site));
         }
 
-        player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ItemName(bed.Record) ?? bed.Record, pending.At, verbs);
+        player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ShownName(bed.Record) ?? bed.Record, pending.At, verbs);
     }
 
     #endregion
@@ -317,13 +317,18 @@ sealed class FurnitureUse(PlayerInterface player)
 
     /// <summary>
     /// The cage's menu: its verbs, and for one the player built its site's (Repair 95, Dismantle 96, sorted in by order number as the original's
-    /// building rows, so the own cage reads Unlock, Dismantle, Put in; #1089) and the code mods' job offers.
+    /// building rows, so the own cage reads Unlock, Dismantle, Put in; #1089) and the code mods' job offers; any other cage gets the code mods'
+    /// furniture rows (<see cref="UiMenuTargetKind.Furniture"/>) after its own.
     /// </summary>
     internal ContextMenuWindow.ContextMenu? CageMenu(CageSpot cage, Vector2 at)
     {
         var verbs = CageVerbs(cage);
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == cage.Id) is not { } site)
+        {
+            var target = new UiMenuTarget(UiMenuTargetKind.Furniture, Loc.Tr("Cage"), cage.Position) { Id = cage.Id, Record = cage.Record };
+            verbs.AddRange(player.ModTargetVerbs(target));
             return player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, verbs);
+        }
 
         verbs.AddRange(player.Build.SiteVerbs(site));
         return player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, verbs, player.Build.OfferedJobs(site));
@@ -388,7 +393,7 @@ sealed class FurnitureUse(PlayerInterface player)
     {
         if (player.SelectedIds().Count == 0 || PickContainer(p) is not { } container) return false;
 
-        string name = player.Build.Services?.ItemName(container.Record) ?? container.Record;
+        string name = player.Build.Services?.ShownName(container.Record) ?? container.Record;
         ContextMenuWindow.ContextMenu? ContainerMenu(Vector2 at) =>
             player.ContextMenuWindow.Menu(name, at, player.ContextMenuWindow.ContainerVerbs(container));
 
@@ -616,7 +621,7 @@ sealed class FurnitureUse(PlayerInterface player)
         _dummyPending = null;
         if (player.SelectedIds().Count == 0) return;
 
-        player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ItemName(pending.Dummy.Record) ?? pending.Dummy.Record, pending.At,
+        player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ShownName(pending.Dummy.Record) ?? pending.Dummy.Record, pending.At,
             [("Training", () => Train(pending.Dummy))]);
     }
 
@@ -663,7 +668,7 @@ sealed class FurnitureUse(PlayerInterface player)
         if (player.SelectedIds().Count == 0 || PickTownTurretAt(p) is not { } turret) return false;
 
         string site = ProductionSystem.TownWorkPrefix + turret.Key;
-        string title = player.Build.Services?.ItemName(turret.Record) ?? turret.Record;
+        string title = player.Build.Services?.ShownName(turret.Record) ?? turret.Record;
         ContextMenuWindow.ContextMenu? TurretMenu(Vector2 at) => player.ContextMenuWindow.Menu(title, at, [("Man Turret", () => ManTurret(site))]);
 
         if (!player.ContextMenuWindow.ContextPressOn(p, TurretMenu, () => ManTurret(site, clicked: true))) ManTurret(site, clicked: true);
@@ -783,7 +788,7 @@ sealed class FurnitureUse(PlayerInterface player)
         if (player.SelectedIds().Count == 0) return;
 
         var seat = pending.Seat;
-        string name = player.Build.Services?.ItemName(seat.Record) ?? seat.Record;
+        string name = player.Build.Services?.ShownName(seat.Record) ?? seat.Record;
         player.ContextMenuWindow.OpenMenu = new(name, pending.At, [("Use", () => SitOn(seat))]);
     }
 
@@ -843,7 +848,7 @@ sealed class FurnitureUse(PlayerInterface player)
     /// A rock as a selected building: its site is the natural site, so the machine window shows its output once it has been mined.
     /// </summary>
     internal BuildingSelection.SelectedBuilding RockBuilding(ResourceNode rock) =>
-        new(player.Build.Services?.ItemName(rock.Record) ?? rock.Record, null, null, null, ProductionSystem.NaturalId(rock.Record, rock.Position),
+        new(player.Build.Services?.ShownName(rock.Record) ?? rock.Record, null, null, null, ProductionSystem.NaturalId(rock.Record, rock.Position),
             ProductionSystem.NaturalId(rock.Record, rock.Position), rock.Position, null, Record: rock.Record);
 
     /// <summary>
@@ -894,7 +899,7 @@ sealed class FurnitureUse(PlayerInterface player)
         _rockPending = null;
         if (player.SelectedIds() is not { Count: > 0 } selection) return;
 
-        string name = player.Build.Services?.ItemName(pending.Rock.Record) ?? pending.Rock.Record;
+        string name = player.Build.Services?.ShownName(pending.Rock.Record) ?? pending.Rock.Record;
         player.ContextMenuWindow.OpenMenu = new(name, pending.At,
         [
             ("Mine", () => MineRock(selection, pending.Rock, false)),

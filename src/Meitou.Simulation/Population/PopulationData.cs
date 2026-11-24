@@ -212,8 +212,8 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
 {
     /// <summary>
     /// The TOWN the town is now, as the original's <c>Town::getGameData</c> (its replacement, else its own record): <see cref="Replacement"/> with
-    /// the placement's id and names (engine choice: the override records' names are editor labels) and, when it names no faction, the faction the
-    /// town had; else <see cref="Record"/>.
+    /// the placement's id and names (engine choice: the override records' names are editor labels; KenshiExtensionPlugin's <c>town name
+    /// override</c> takes the replacement's name) and, when it names no faction, the faction the town had; else <see cref="Record"/>.
     /// </summary>
     public TownData Town { get; private set; } = Record;
 
@@ -228,11 +228,25 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     /// </summary>
     internal void Replace(TownData? replacement)
     {
-        Town = replacement is null
-            ? Record
-            : replacement with { Id = Record.Id, Name = Record.Name, UnexploredName = Record.UnexploredName,
-                Faction = replacement.Faction ?? Town.Faction };
+        Town = replacement is null ? Record : TakenOver(replacement);
         Replacement = replacement;
+    }
+
+    /// <summary>
+    /// <paramref name="replacement"/> as the town: the placement's id and names (the replacement's name when it sets <c>town name override</c>)
+    /// and, when it names no faction, the faction the town had.
+    /// </summary>
+    TownData TakenOver(TownData replacement)
+    {
+        bool renamed = replacement.NameOverride;
+        return replacement with
+        {
+            Id = Record.Id,
+            Name = renamed ? replacement.Name : Record.Name,
+            NameRecord = renamed ? replacement.Id : Record.NameRecord,
+            UnexploredName = Record.UnexploredName,
+            Faction = replacement.Faction ?? Town.Faction,
+        };
     }
 
     /// <summary>
@@ -356,6 +370,13 @@ public sealed class PopulationData
     /// The factions, by faction index.
     /// </summary>
     public required IReadOnlyList<FactionData> Factions { get; init; }
+
+    /// <summary>
+    /// The name of faction <paramref name="faction"/> (<paramref name="name"/> when the player renamed it, else the data's) as the mods' text
+    /// sources show it, asked with the faction's record (<see cref="GameDatabase.ShownName"/>); display only.
+    /// </summary>
+    public string ShownFactionName(int faction, string? name = null) =>
+        Db.ShownName("faction", Factions[faction].Id, name ?? Factions[faction].Name);
 
     /// <summary>
     /// Rolls the characters' looks; null leaves them without (headless tests, markers only).

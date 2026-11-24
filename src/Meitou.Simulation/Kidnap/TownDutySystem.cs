@@ -366,7 +366,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     {
         var town = AiSystem.TownAt(data, world, at);
         if (town.IsNone || cold.Inventory is not { } inv) return null;
-        return StoreFor(world, squad, cold, at, town, [.. Production.ProductionSystem.Ditchable(inv)], register);
+        return StoreFor(world, squad, cold, at, town, [.. Production.ProductionSystem.Ditchable(world, cold, inv)], register);
     }
 
     /// <summary>
@@ -378,7 +378,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var town = AiSystem.TownAt(data, world, at);
         if (town.IsNone || cold.Inventory is not { } inv) return null;
 
-        return StoreFor(world, squad, cold, at, town, [.. Production.ProductionSystem.Ditchable(inv).Where(i => i.Record == record)], register: false);
+        var ditchable = Production.ProductionSystem.Ditchable(world, cold, inv).Where(i => i.Record == record);
+        return StoreFor(world, squad, cold, at, town, [.. ditchable], register: false);
     }
 
     /// <summary>
@@ -1550,7 +1551,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// </summary>
     void StashHere(World world, bool ditch, CharacterCold gc, Inventory inv, Production.Machine? machine, Fixture? box, Inventory store, Vector3 at)
     {
-        var carried = ditch ? Production.ProductionSystem.Ditchable(inv) : LootOf(world, gc);
+        var carried = ditch ? Production.ProductionSystem.Ditchable(world, gc, inv) : LootOf(world, gc);
         foreach (var item in carried.Where(i => machine is not null ? Production.ProductionSystem.Stores(machine, i) : Takes(box!, i)).ToList())
         {
             inv.Remove(item);
@@ -1594,7 +1595,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
         Deeds?.Caged(world, g, b);
         Arrests?.Claim(world, g, d.Body, cage);
-        if (table.Cold(b) is { IsPlayer: true } body) world.Post($"{body.Name} has been locked in a cage by {data.Factions[d.Faction].Name}");
+        if (table.Cold(b) is { IsPlayer: true } body)
+            world.Post($"{world.ShownName(body)} has been locked in a cage by {World.ShownName(data.Factions[d.Faction])}");
         return End(world, d);
     }
 
@@ -1735,7 +1737,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (AtDisposal(world, gn, machine))
         {
             TaskStart.Stand(table, g);
-            string label = world.SystemOf<Production.ProductionSystem>()?.Data(machine.RecordId)?.Label ?? "";
+            string label = world.SystemOf<Production.ProductionSystem>()?.Data(machine.RecordId)?.ShownLabel() ?? "";
             CorpseDisposal.Feed(world, carry, g, machine.Position, label);
             return End(world, d);
         }

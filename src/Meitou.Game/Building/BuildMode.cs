@@ -1158,11 +1158,11 @@ sealed class BuildMode(PlayerInterface player)
         var groups = BuildGroups();
         var group = CurrentGroup();
         var building = CurrentBuilding();
-        b.Lists["CategoriesList"] = [.. categories.Select(c => new UiListItem(c, c))];
+        b.Lists["CategoriesList"] = [.. categories.Select(c => new UiListItem(c, ShownCategory(c)))];
         b.SelectedItems["CategoriesList"] = category is null ? -1 : categories.ToList().IndexOf(category);
-        b.Lists["BuildingsList"] = [.. groups.Select(g => new UiListItem(g.Name, g.Name))];
+        b.Lists["BuildingsList"] = [.. groups.Select(g => new UiListItem(g.Name, ShownGroup(g)))];
         b.SelectedItems["BuildingsList"] = group is null ? -1 : Math.Clamp(_buildGroup, 0, groups.Count - 1);
-        b.Text["BuildingName"] = building?.Name ?? "";
+        b.Text["BuildingName"] = building is null ? "" : ShownText.Record(building.Id, building.Name);
         b.Text["DescriptionText"] = building is null || Services is null ? "" : Services.Description(building.Id);
         b.Properties["DescriptionText"] = new Dictionary<string, string>
         {
@@ -1248,7 +1248,7 @@ sealed class BuildMode(PlayerInterface player)
         if (Services is not { } host) return;
         if (CurrentBuilding() is { } building)
         {
-            var lines = BuildMenu.Stats(building, host.ItemName).Select(l => new PlayerInterface.HudLine(l.Label, l.Value)).ToList();
+            var lines = BuildMenu.Stats(building, host.ShownName).Select(l => new PlayerInterface.HudLine(l.Label, l.Value)).ToList();
             if (controls.FirstOrDefault(c => c.Name == "StatsPanel") is { } panel)
                 player.AddLines(controls, "StatsPanel", lines, MathF.Max(14, panel.Bounds.Height / 11));
         }
@@ -1533,10 +1533,35 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The name of a site's building, for the menu's title.
+    /// The name of a site's building, the game's text (the code mods' menu target and the test channel get it).
     /// </summary>
     internal string SiteName(BuildingSnapshot site) =>
         site.LevelPlacement is not null ? site.Name : Services?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
+
+    /// <summary>
+    /// <see cref="SiteName"/> as shown, for the menu's title and the panels: a building's record name as the mods' text sources show it; a town
+    /// building's name as its record's when it is that, else as a name of its own (a place).
+    /// </summary>
+    internal string ShownSiteName(BuildingSnapshot site) =>
+        site.LevelPlacement is not null ? player.ShownName("place", site.Record, site.Name) : ShownText.Record(site.Record, SiteName(site));
+
+    /// <summary>
+    /// Build category <paramref name="category"/> as the list shows it: the <c>building category</c> text of the first building of the catalog
+    /// that has it, as the mods' text sources show it.
+    /// </summary>
+    string ShownCategory(string category) =>
+        ShownText.Any && Services?.Menu.FirstOfCategory(category) is { } first
+            ? ShownText.Record(first, category, BuildingBuildData.CategoryField)
+            : category;
+
+    /// <summary>
+    /// Build group <paramref name="group"/>'s name as the list shows it: its default member's name, or that member's <c>building group</c> text,
+    /// as the mods' text sources show it.
+    /// </summary>
+    static string ShownGroup(BuildGroup group) =>
+        !ShownText.Any ? group.Name
+            : group.Name == group.Default.Name ? ShownText.Record(group.Default.Id, group.Name)
+            : ShownText.Record(group.Default.Id, group.Name, BuildingBuildData.GroupField);
 
     /// <summary>
     /// The verbs the selection has for a site (the original's building branch, docs/game/ui-input.md "Context menu verbs"): Build (2) for an
@@ -1569,8 +1594,8 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// A finished machine's verbs: a storage's Auto-Haul and Inventory, a furnace's Inventory, a corpse machine's Corpse Disposal, a turret's Man
-    /// Turret.
+    /// A finished machine's verbs: a storage's Auto-Haul and Inventory, a furnace's and a research bench's Inventory, a corpse machine's Corpse
+    /// Disposal, a turret's Man Turret.
     /// </summary>
     void AddMachineVerbs(List<(string, Action)> verbs, BuildingSnapshot site, IReadOnlyList<CharacterId> selection,
         Simulation.Production.MachineSnapshot machine, bool own)
@@ -1596,6 +1621,9 @@ sealed class BuildMode(PlayerInterface player)
             }));
         }
         else if (machine.Function == MachineData.ItemFurnaceFunction) verbs.Add(("Inventory", () => OpenStorage(site)));
+        // A research bench's Use (87) is followed by Inventory (26), as for every building with an inventory (FUN_1407a6bc0, Verified): the
+        // research cost is paid from the benches' inventories only (#1342).
+        else if (ProductionWindows.MachineScreen(machine) == "bench") verbs.Add(("Inventory", () => OpenStorage(site)));
 
         // A corpse machine (function 11) offers Corpse Disposal (136): with Shift the Corpse disposal job (137 and its finder 138), else order 136
         // for every selected character, its queue cleared (FUN_1407fa650 → FUN_1407f9e20).
@@ -1841,7 +1869,7 @@ sealed class BuildMode(PlayerInterface player)
 
         _sitePending = null;
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == pending.Site.Id) is not { } site) return;
-        player.ContextMenuWindow.OpenMenu = player.ContextMenuWindow.Menu(SiteName(site), pending.At, SiteVerbs(site), OfferedJobs(site));
+        player.ContextMenuWindow.OpenMenu = player.ContextMenuWindow.Menu(ShownSiteName(site), pending.At, SiteVerbs(site), OfferedJobs(site));
     }
 
     /// <summary>

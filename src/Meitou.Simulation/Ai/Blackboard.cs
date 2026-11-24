@@ -1074,6 +1074,13 @@ public sealed class AiMind
     public AiGoal? Goal { get; set; }
 
     /// <summary>
+    /// The current goal's held score: the type it was scored for and the score its last think gave it after the desire filters' held-score asks
+    /// (<see cref="GoalDesireKind.HeldScore"/>); kept only while a desire filter is registered, NaN before. Derived from the think, not saved or
+    /// hashed (it follows the hashed goal and the filters' answers).
+    /// </summary>
+    internal (TaskType Type, float Score) HeldScore { get; set; } = (TaskType.None, float.NaN);
+
+    /// <summary>
     /// The goal's plan (<see cref="TaskPlanner"/>), leaf first: the step carried out is the first. A planned goal keeps it while it stays the current
     /// goal, its running step ending by its own tests (<see cref="PlanSteps"/>); a goal that is its own plan is planned again at every think.
     /// </summary>

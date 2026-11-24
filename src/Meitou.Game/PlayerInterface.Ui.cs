@@ -161,6 +161,7 @@ sealed partial class PlayerInterface
     /// </summary>
     public void LoadUi(UiMode mode, Func<string, string?> resolve)
     {
+        resolve = ModLayouts.Over(resolve);
         UiMode = mode;
         UiResolve = resolve;
         var template = PotTemplate.Read(resolve("locale/en_GB/LC_MESSAGES/main.pot")
@@ -216,9 +217,19 @@ sealed partial class PlayerInterface
         FaithfulScreens.Follow("loot-bag", "loot");
         FaithfulScreens.Activated += ScreenRouter.FaithfulAction;
         _uiHost.Diagnostic += d => Console.Error.WriteLine($"ui        {d.Extension} {d.Operation}: {d.Error.Message}");
+        _uiHost.Measurer = MeasureCaption;
         _uiRegistration = _uiHost.Register(new PlayerUiExtension(ExecuteUiAction));
         _xpLabelRegistration = _uiHost.Register(new SquadXpLabel(() => XpLabel));
     }
+
+    /// <summary>
+    /// <paramref name="text"/>'s size as an overlay node's caption in <paramref name="font"/> at text scale <paramref name="scale"/>; zero before the
+    /// painter is made.
+    /// </summary>
+    Vector2 MeasureCaption(string font, string text, float scale) =>
+        UiPainter?.MeasureText(font, text, Height, 0, TitleOpen ? 0 : StandardPixels, scale) is { } size
+            ? new(size.Width, size.Height)
+            : Vector2.Zero;
 
     /// <summary>
     /// The layout <paramref name="file"/> with its templates expanded; null when the install has no such file.
@@ -246,7 +257,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// Frees the painter and removes the interface's UI extension.
+    /// Frees the painter and removes the interface's UI extension and the extensions' text sources.
     /// </summary>
     public void DisposeUi()
     {
@@ -256,6 +267,7 @@ sealed partial class PlayerInterface
         _uiRegistration = null;
         _xpLabelRegistration?.Dispose();
         _xpLabelRegistration = null;
+        ShownText.Remove(_uiHost);
     }
 
     /// <summary>
@@ -280,6 +292,72 @@ sealed partial class PlayerInterface
     /// </summary>
     internal IReadOnlyList<UiBuildingAction> ModBuildingActions(UiSelectedBuilding building, WorldSnapshot snapshot) =>
         _uiHost.BuildingActions(new UiBuildingContext(building, snapshot, () => Session.World.Tick, Say));
+
+    /// <summary>
+    /// The name shown for an item of <paramref name="record"/> named <paramref name="name"/> (<see cref="UiHost.ItemName"/>): the extensions'
+    /// item names, else <paramref name="name"/>.
+    /// </summary>
+    internal string ShownItemName(string record, string name, string modTag) => _uiHost.ItemName(record, name, modTag);
+
+    /// <summary>
+    /// The name of a <paramref name="what"/> (<c>character</c>, <c>squad</c>, <c>outpost</c>, <c>faction</c>, <c>place</c>) made from
+    /// <paramref name="record"/> ("" unknown) as the mods' text sources show it (<see cref="Data.GameDatabase.ShownName"/>); display only.
+    /// <paramref name="name"/> itself when no mod adds a source or no world is loaded.
+    /// </summary>
+    internal string ShownName(string what, string record, string name) =>
+        ShownText.Any && PopulationOf?.Invoke() is { } d ? d.Db.ShownName(what, record, name) : name;
+
+    /// <summary>
+    /// Character <paramref name="c"/>'s name as shown (<see cref="ShownName(string, string, string)"/>, with the record it was made from).
+    /// </summary>
+    internal string ShownName(CharacterSnapshot c) => ShownName("character", c.RecordId, c.Name);
+
+    /// <summary>
+    /// <paramref name="lead"/>'s name as shown (<see cref="ShownName(CharacterSnapshot)"/>); null when there is no character.
+    /// </summary>
+    internal string? ShownLeadName(CharacterSnapshot? lead) => lead is null ? null : ShownName(lead);
+
+    /// <summary>
+    /// The name of the backpack <paramref name="lead"/> wears (the item in its <c>backpack_attach</c> section) as shown
+    /// (<see cref="ShownItemName"/>); null when there is none.
+    /// </summary>
+    internal string? ShownBackpackName(CharacterSnapshot? lead) =>
+        lead?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach") is { } bag ? ShownItemName(bag.Record, bag.Name, bag.ModTag) : null;
+
+    /// <summary>
+    /// Faction <paramref name="faction"/>'s name (<see cref="FactionName"/>: the player's as renamed, else the data's) as shown, with its record;
+    /// null as <see cref="FactionName"/>.
+    /// </summary>
+    internal string? ShownFactionName(int faction)
+    {
+        var name = FactionName?.Invoke(faction);
+        if (name is null || !ShownText.Any) return name;
+
+        return PopulationOf?.Invoke() is { } d && faction >= 0 && faction < d.Factions.Count
+            ? d.ShownFactionName(faction, name)
+            : ShownName("faction", "", name);
+    }
+
+    /// <summary>
+    /// A faction name kept as text (a bounty's, frozen when it was raised) as shown: asked with the record of the data's faction of that name, if
+    /// any.
+    /// </summary>
+    internal string ShownFactionName(string name)
+    {
+        if (!ShownText.Any || PopulationOf?.Invoke() is not { } d) return name;
+
+        string record = "";
+        foreach (var f in d.Factions)
+        {
+            if (f.Name == name)
+            {
+                record = f.Id;
+                break;
+            }
+        }
+
+        return d.Db.ShownName("faction", record, name);
+    }
 
     /// <summary>
     /// The lines the interface extensions add to an item's tooltip (<see cref="UiHost.ItemTooltipLines"/>); none without an extension that adds any.
@@ -373,6 +451,7 @@ sealed partial class PlayerInterface
             PortraitOf = kind == UiScreens.Hud ? PortraitBar.MemberOfCell : null,
             Map = kind == "overview" ? WorldMap.ModView : null,
             State = kind == "stats" ? StatsWindow.ScreenState() : UiScreenContext.NoState,
+            SquadOf = kind == "overview" ? SquadPanel.SquadOfCell : null,
         };
     }
 
@@ -430,6 +509,12 @@ sealed partial class PlayerInterface
     public IDisposable RegisterUiExtension(IUiExtension extension, string? folder) => _uiHost.Register(extension, folder);
 
     /// <summary>
+    /// Registers a code mod's extension with its mod's folder and translations (docs/modding.md "Translations").
+    /// </summary>
+    public IDisposable RegisterUiExtension(IUiExtension extension, string? folder, Localisation.ModTranslations? texts) =>
+        _uiHost.Register(extension, folder, texts);
+
+    /// <summary>
     /// Whether any UI extension adds markers to the world map.
     /// </summary>
     internal bool HasModMapMarkers => _uiHost.HasMapMarkers;
@@ -453,7 +538,7 @@ sealed partial class PlayerInterface
 
         var context = new UiMenuContext(target, SelectedIds(), Mouse, () => SlowModifier, () => Session.World.Tick, Say);
         return _uiHost.CharacterMenuVerbs(context)
-            .Select(v => ContextMenuWindow.Available(v.Caption, v.Choose, !v.Unavailable))
+            .Select(v => ContextMenuWindow.Inked(ContextMenuWindow.Available(v.Caption, v.Choose, !v.Unavailable), v.Colour))
             .Concat(targetRows);
     }
 
@@ -463,11 +548,23 @@ sealed partial class PlayerInterface
     /// </summary>
     internal IReadOnlyList<(string Caption, Action Give)> ModTargetVerbs(UiMenuTarget target)
     {
+        ContextMenuWindow.RowsTarget = target;
         if (!_uiHost.HasTargetMenuVerbs || SelectedIds() is not { Count: > 0 } selected) return [];
 
         var context = new UiMenuTargetContext(target, selected, Mouse, () => SlowModifier, () => Session.World.Tick, Say);
-        return [.. _uiHost.MenuVerbs(context).Select(v => (v.Caption, v.Choose))];
+        return [.. _uiHost.MenuVerbs(context).Select(v => ContextMenuWindow.Inked((v.Caption, v.Choose), v.Colour))];
     }
+
+    /// <summary>
+    /// The interface extensions' changes to one row of a right-click menu as it is built (<see cref="UiHost.MenuRowOverride"/>); null without
+    /// such an extension or a change.
+    /// </summary>
+    internal UiMenuRowOverride? ModMenuRow(UiMenuRowContext row) => _uiHost.HasMenuRowOverrides ? _uiHost.MenuRowOverride(row) : null;
+
+    /// <summary>
+    /// Whether any interface extension changes right-click menu rows.
+    /// </summary>
+    internal bool HasModMenuRows => _uiHost.HasMenuRowOverrides;
 
     /// <summary>
     /// Hands a world map input to the interface extensions (<see cref="UiHost.MapInput"/>); false without such an extension.
@@ -478,6 +575,24 @@ sealed partial class PlayerInterface
     /// Whether any interface extension handles world map input.
     /// </summary>
     internal bool HasModMapInput => _uiHost.HasMapInput;
+
+    /// <summary>
+    /// A key going down to the interface, first to the extensions' key handlers (<see cref="UiHost.KeyInputTaken"/>, docs/modding.md "Interface
+    /// keys"); true when one took it. Not while a text box has the keys or over the title.
+    /// </summary>
+    bool ModKeyInput(Key key, bool ctrl, bool shift)
+    {
+        if (!_uiHost.HasKeyInput || FaithfulScreens.HasKeyboardFocus || TitleOpen) return false;
+
+        bool alt = Session.Input.IsHeld(Key.LeftAlt) || Session.Input.IsHeld(Key.RightAlt);
+        var input = new UiKeyInput(UiKeyInputKind.Down, key, [.. FaithfulScreens.OpenIds], Session.CurrentSnapshot, () => Session.World.Tick, Say)
+        {
+            Ctrl = ctrl,
+            Shift = shift,
+            Alt = alt,
+        };
+        return _uiHost.KeyInputTaken(input);
+    }
 
     /// <summary>
     /// Switches the interface style; a drag or a held order under way ends.
@@ -536,7 +651,7 @@ sealed partial class PlayerInterface
         b.Text["MoneyAmountText"] = "c." + Session.World.Player.Money.ToString("N0", CultureInfo.InvariantCulture);
 
         // The name bar draws its own lines over the widget (HudPanels).
-        b.Text["NameText"] = lead?.Name ?? "No character selected";
+        b.Text["NameText"] = lead is null ? "No character selected" : ShownName(lead);
         b.Properties["NameText"] = new Dictionary<string, string> { ["SkipCaption"] = "true" };
         b.Text["hunger"] = lead?.Body is { } hungry ? $"Hunger {hungry.Hunger:0.00} / 3" : "";
         b.Text["condition"] = lead?.Body is { } status
@@ -578,7 +693,7 @@ sealed partial class PlayerInterface
         {
             if (!c.IsPlayer) continue;
 
-            if (count < 8) b.Text[RosterNameKeys[count]] = c.Name;
+            if (count < 8) b.Text[RosterNameKeys[count]] = ShownName(c);
             count++;
         }
 
@@ -834,7 +949,9 @@ sealed partial class PlayerInterface
             [UiSlots.Squad] = FaithfulSlot("SquadPanel"),
         };
         var overlay = hud ? _uiHost.Arrange(UiMode, Width, Height, b, slots).ToList() : [];
-        controls.AddRange(RecordPortraits.Resolve(overlay));
+        var layers = RecordPortraits.Resolve(overlay).ToLookup(UiHost.LayerOf);
+        controls.InsertRange(0, layers[UiOverlayLayer.Back]);
+        controls.AddRange(layers[UiOverlayLayer.Hud]);
         PortraitBar.SquadBarRow = 0;
         if (FindControl(controls, "SquadPanel") is { } squadPanel)
             PortraitBar.AddSquadPortraits(controls, squadPanel.Bounds);
@@ -845,6 +962,7 @@ sealed partial class PlayerInterface
         if (hud) AddModScreenControls(UiScreens.Hud, controls);
         if (hud) TutorialWindow.AddTutorialPanel(controls);
         AddScreens(controls);
+        controls.AddRange(layers[UiOverlayLayer.Popup]);
 
         // After the screens: a mod's text box may lie in one (screen controls) as well as on the overlay.
         FaithfulScreens.ArrangeOverlayEdits(controls);
@@ -1391,6 +1509,7 @@ sealed partial class PlayerInterface
     {
         UiInput++;
         if (!UiVisible) return false;
+        if (ModKeyInput(key, ctrl, shift)) return true;
         if (key == Key.Escape && (InventoryWindows.CancelInventoryDrag() || ItemsWindow.CancelDrag())) return true;
 
         // toggle_camera_grid (Shift+; fixed: a binding carries no modifier, and ; alone is the free camera's).

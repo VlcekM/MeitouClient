@@ -802,7 +802,7 @@ sealed class GameLoop(GameHost host)
         // Panning (or leaving for the free camera) lets go of the character the camera follows; turning and zooming keep it.
         if (actions.Held(InputAction.MoveForward) || actions.Held(InputAction.MoveBack) || actions.Held(InputAction.MoveLeft)
             || actions.Held(InputAction.MoveRight) || actions.Pressed(InputAction.ToggleFreeCamera)) host.Player.Follow = null;
-        if (actions.Pressed(InputAction.ToggleSettings) && _panel is not null) _panel.Visible = !_panel.Visible;
+        if (actions.Pressed(InputAction.ToggleSettings) && _panel is not null) _panel.Toggle();
         if (actions.Pressed(InputAction.Screenshot)) host.ScreenshotRequested = true;
         // the foliage triangles are read from its GPU cull while shown
         if (actions.Pressed(InputAction.ToggleStats))
@@ -889,7 +889,7 @@ sealed class GameLoop(GameHost host)
     /// <summary>
     /// Whether a text field takes the keys (the settings panel, the debug menu's field, the dev console, an edited UI field).
     /// </summary>
-    bool TextFieldFocused() => _panel?.Visible == true || host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText
+    bool TextFieldFocused() => _panel?.Modal == true || host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText
         || host.DevConsoleHost.ConsoleOpen || host.Player.UiEditing;
 
     /// <summary>
@@ -949,7 +949,7 @@ sealed class GameLoop(GameHost host)
     {
         if (host.Covered) return;
         if (host.DevConsoleHost.ConsoleOpen) host.DevConsoleHost.DevConsole.Type(value);
-        else if (_panel?.Visible == true) _panel.TextInput(value);
+        else if (_panel?.Modal == true) _panel.TextInput(value);
         else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
         else if (host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText) host.DebugMenu.DebugMenuText(value);
         else if (_photo.TextInput(value)) { }   // a preset's name being typed
@@ -1001,7 +1001,7 @@ sealed class GameLoop(GameHost host)
             return true;
         }
         host.Player.UiVisible = PanelLive() && !host.GameOptions.NoPopulation;
-        if (_panel?.Visible == true)
+        if (_panel?.Modal == true)
         {
             if (ModalKeyOf(k) is { } settingsKey)
             {
@@ -1357,7 +1357,7 @@ sealed class GameLoop(GameHost host)
         }
 
         bool cinemaDrag = _cinema.MouseUp();
-        if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && !_debugMenuClick && _panel?.Visible != true && physical is { } released)
+        if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && !_debugMenuClick && _panel?.Modal != true && physical is { } released)
             host.Player.MouseUp(host.PlayerButton(released), at, _shiftDown);
         _profilerClick = false;
         _debugMenuClick = false;
@@ -1534,7 +1534,7 @@ sealed class GameLoop(GameHost host)
     void AdvanceWorld(double frameDt)
     {
         long a0 = Stopwatch.GetTimestamp();
-        if (_panel?.Visible == true)
+        if (_panel?.Modal == true)
         {
             foreach (var key in Enum.GetValues<EngineKey>()) host.Session.Input.SetKey(key, false);
             foreach (var button in Enum.GetValues<EngineButton>()) host.Session.Input.SetMouseButton(button, false);
@@ -1542,7 +1542,7 @@ sealed class GameLoop(GameHost host)
         }
         // Edge scrolling (the game's default): the pointer at the edge of the window pans the camera, unless something else has the pointer.
         host.Session.Camera.Settings.EdgeScroll = host.Config.EdgeScroll != false;
-        bool edgeOff = host.Covered || host.TitleScreen.TitleVisible || _panel?.Visible == true || host.AgentChannel.InterfaceHidden
+        bool edgeOff = host.Covered || host.TitleScreen.TitleVisible || _panel?.Modal == true || host.AgentChannel.InterfaceHidden
             || _cinemaHolds || _cinema.EditorVisible;
         host.Session.Camera.Strategy.EdgePointer = edgeOff ? null : _window is null ? null : WindowPointer.InWindow(_window);
         host.UpdateCameraLeash(_cinemaHolds || _tour.Active);
@@ -1690,7 +1690,7 @@ sealed class GameLoop(GameHost host)
         bool highlighting = Highlight(takeFile);
         bool pointerWorld = (pointerMouse is not null || _headless && host.DevConsoleHost.HeadlessMouse is not null) && !host.Covered
             && !host.GameOptions.NoPopulation
-            && !(PanelLive() && _panel?.Visible == true) && !_cinema.Contains(pointerAt);
+            && !(PanelLive() && _panel?.Contains(pointerAt) == true) && !_cinema.Contains(pointerAt);
         // Photo mode flies the free camera too, but its panel is worked with the pointer: hidden only while the view is turned or the panel is.
         bool freeLook = pointerWorld && host.Session.Camera.IsFree && !host.Player.ModalOpen
             && (!_photo.Active || !_photo.PanelShown || host.OrbitHeld());
@@ -1739,7 +1739,7 @@ sealed class GameLoop(GameHost host)
     bool Highlight(string? takeFile)
     {
         bool highlighting = _highlightHeld && _windowFocused && !host.Covered && !host.Session.Camera.IsFree &&
-            _panel?.Visible != true && !host.AgentChannel.InterfaceHidden && !_cinema.Clean && !_cinemaHolds && !_cinema.EditorVisible;
+            _panel?.Modal != true && !host.AgentChannel.InterfaceHidden && !_cinema.Clean && !_cinemaHolds && !_cinema.EditorVisible;
         if (host.Gpu.Objects is { } signObjects) signObjects.HighlightSigns = highlighting;
         host.Player.GroundItemPicks.HighlightFocus = highlighting && !host.ScreenshotRequested && takeFile is null ? host.Camera.Target : null;
         return highlighting;
@@ -1963,7 +1963,7 @@ sealed class GameLoop(GameHost host)
     {
         if (ui && _overlay is not null && !host.GameOptions.NoPopulation) host.DrawMarkers(_overlay, size.X, size.Y);
         StageClock.UiPart(StageClock.UiMarkers);
-        if (!host.GameOptions.NoPopulation && !covered && _panel?.Visible != true) host.Player.Steer();
+        if (!host.GameOptions.NoPopulation && !covered && _panel?.Modal != true) host.Player.Steer();
         StageClock.UiPart(StageClock.UiSteer);
 
         // The world draws the marker, so it fades with the interface hidden (F7) too.

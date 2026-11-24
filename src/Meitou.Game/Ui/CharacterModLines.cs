@@ -60,13 +60,19 @@ sealed class CharacterModLines(PlayerInterface player)
     }
 
     /// <summary>
-    /// Line <paramref name="k"/>'s controls in <paramref name="row"/>: its icon, then one button across it, or its label and then its value as a
-    /// button, over a bar or as text in the value column; the line style's colours over the panel's.
+    /// Line <paramref name="k"/>'s controls in <paramref name="row"/>: a divider's rule, or its icon, then one button across it, or its label and
+    /// then its value as a button, over a bar or as text in the value column; the line style's colours over the panel's.
     /// </summary>
     void AddLine(List<UiControl> controls, int k, UiRect row, float valuePixels, UiRect? clip)
     {
         var line = _shown[k];
         string name = "StatsText-mod-" + k.ToString(CultureInfo.InvariantCulture);
+        if (line.Divider)
+        {
+            controls.Add(Rule(name + "-divider", row, UiLineStyle.Ink(line.Style?.Label) ?? player.StatLabelColour, clip));
+            return;
+        }
+
         var column = row with { X = row.X + row.Width * 0.35f, Width = row.Width * 0.65f };
         var valueFace = Face("Kenshi_StandardFont_Medium", valuePixels);
         var label = UiLineStyle.PlaceIcon(controls, name, line.Style, row, clip);
@@ -99,6 +105,17 @@ sealed class CharacterModLines(PlayerInterface player)
         if (line.Bar is { } fill) ProgressLine.Add(controls, player.UiResources, player.Width, player.Height, column, fill, name + "-bar-", clip);
         string align = line.Bar is null ? "Right Top" : "HCenter Top";
         controls.Add(Text(name + "-value", value, line.Tooltip, column, valueFace, align, valueInk ?? Ink(), clip));
+    }
+
+    /// <summary>
+    /// A divider's rule: a line across the middle of <paramref name="row"/>, one UI pixel thick, in <paramref name="colour"/> at half opacity.
+    /// </summary>
+    UiControl Rule(string name, UiRect row, string colour, UiRect? clip)
+    {
+        float thick = MathF.Max(1, MathF.Round(player.UiScale));
+        var ink = MyGuiColours.Parse(colour, new Vector4(0.8f, 0.75f, 0.6f, 1)) with { W = 0.5f };
+        var bounds = new UiRect(row.X, row.Y + MathF.Floor((row.Height - thick) / 2), row.Width, thick);
+        return new(name, "Widget", bounds, "", "", "", true, new Dictionary<string, string>(), ink, Pickable: false, Clip: clip);
     }
 
     /// <summary>

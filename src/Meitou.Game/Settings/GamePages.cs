@@ -460,6 +460,8 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Interface scale", "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it).",
             Slider: new("Interface scale", UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale, () => menu.Config.InterfaceScale,
                 SetInterfaceScale, "0.00", Text: v => $"{v * 100:0}%", Faithful: 1, Scale: 100, Step: 0.05f)));
+        result.Add(new("Settings window opacity", "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings).",
+            Slider: menu.Window.OpacitySlider));
         result.Add(new("Show names",
             "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
             Toggle: new("Show names", () => menu.Config.ShowNames, v => menu.Player.ShowNames = menu.Config.ShowNames = v, OnOff: true)));
@@ -544,13 +546,26 @@ sealed class GamePages(SettingsMenu menu)
             "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag "
             + "window is open).",
             Toggle: new("Loot into backpack", () => menu.Config.TakeIntoBackpack, SetTakeIntoBackpack, OnOff: true)));
-        foreach (var action in Enum.GetValues<InputAction>().Where(a => a != InputAction.Quit && a != InputAction.ToggleFps))
+        var shown = Enum.GetValues<InputAction>().Where(a => a != InputAction.Quit && a != InputAction.ToggleFps).ToArray();
+        var mods = menu.Bindings.ModActions;
+        foreach (var action in shown)
+        {
             result.Add(new(SettingsMenu.ActionLabel(action), SettingHints.BindingHint(action), Binding: action));
 
-        // The code mods' key actions follow the game's, in load order (docs/modding.md "Key actions").
-        foreach (var mod in menu.Bindings.ModActions)
-            result.Add(new(mod.Caption, Loc.Tr("A key of the mod {1}: {2}.", mod.OwnerName, mod.Label), Binding: mod.Action));
+            // A code mod's key action that names this row follows it, in load order (docs/modding.md "Key actions").
+            foreach (var mod in mods.Where(m => m.After == action)) result.Add(ModKeyRow(mod));
+        }
+
+        // The other code mods' key actions follow the game's, in load order.
+        foreach (var mod in mods.Where(m => m.After is not { } after || !shown.Contains(after)))
+            result.Add(ModKeyRow(mod));
     }
+
+    /// <summary>
+    /// A code mod's key action's row: its label (in the mod's translation) and the mod's name.
+    /// </summary>
+    static SettingsMenu.Entry ModKeyRow(ModKeyAction mod) =>
+        new(mod.Caption, Loc.Tr("A key of the mod {1}: {2}.", mod.OwnerName, mod.ShownLabel), Binding: mod.Action);
 
     /// <summary>
     /// The Shift pan boost switch, into the config and the camera.

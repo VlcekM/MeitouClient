@@ -206,6 +206,17 @@ public sealed class Squad
     /// </summary>
     public string? AssignedHome { get; set; }
     /// <summary>
+    /// The work building an autonomous squad was given (<see cref="Ai.SetSquadWork"/>): a workplace's
+    /// <see cref="Meitou.Data.World.TownBuilding.Key"/> (a town building's or an outpost machine's site id); its workers (189 / 190) work there,
+    /// wherever its home is. Null: none. Saved, hashed while set.
+    /// </summary>
+    public string? AssignedWork { get; set; }
+    /// <summary>
+    /// How a player's squad goes about the AI's work (<see cref="Ai.SetSquadConduct"/>): its gate guard's side, closing doors behind it. Saved,
+    /// hashed while set.
+    /// </summary>
+    public Ai.SquadConduct Conduct { get; set; }
+    /// <summary>
     /// An autonomous squad the player does not lead (<see cref="Ai.SetSquadAutonomy"/>): its members stay the player's faction but cannot be
     /// selected, so take no orders, a click on one inspects it, and it has no squad tab, takes no squad commands and does not count against
     /// <c>max squads</c> (<see cref="SquadManagement.LedSquads"/>). Only while <see cref="Autonomous"/>, never the last led squad. Meitou only;
@@ -492,6 +503,8 @@ public sealed class SquadRegistry
             if (s.Independent) hasher.Add(0x496E6470);
             if (s.HomeInteriorShown) hasher.Add(0x496E7472);
             if (s.AssignedHome is { } assigned) hasher.Add(Rng.StableHash(assigned));
+            if (s.AssignedWork is { } work) hasher.Add(0x576F726B ^ Rng.StableHash(work));
+            if (s.Conduct != Ai.SquadConduct.None) hasher.Add(0x436E6475 + (int)s.Conduct);
             if (s.AutonomyOwner is { } owner)
             {
                 hasher.Add(0x4F776E72);

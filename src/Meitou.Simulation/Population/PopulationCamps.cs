@@ -25,7 +25,8 @@ public sealed partial class PopulationSystem
         FoldCamp(world, camp);
         world.NestBuildings.Set(camp, layout, owner, centre, record, furniture);
         foreach (var piece in layout.Pieces) world.Fixtures.RegisterNestBuilding(world, _data, piece, owner, site, camp >= 0 ? camp : -1);
-        if (layout.Drops.Count > 0 && fresh && world.NestBuildings.Stock(camp)) LayItems(world, camp, layout.Drops, owner, centre);
+        if (layout.Drops.Count > 0 && fresh && world.NestBuildings.Stock(camp))
+            LayItems(world, camp, layout.Drops, owner, centre, site);
     }
 
     /// <summary>
@@ -288,9 +289,9 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The camp's items on the ground: a <c>debris</c> item as it is, a <c>loot spawn</c> entry rolled from its VENDOR_LIST as an item slot's is
     /// (<see cref="Items.ItemSlots.Roll"/>, with the camp's faction for the grade). Loose, owned by nobody, tagged as the camp's (kept past the
-    /// dropped-item limit, saved with its <c>persist</c> handle).
+    /// dropped-item limit, saved with its <c>persist</c> handle), told to the item-created observers with the camp's town <paramref name="site"/>.
     /// </summary>
-    void LayItems(World world, int camp, List<NestDrop> drops, int owner, Vector2 centre)
+    void LayItems(World world, int camp, List<NestDrop> drops, int owner, Vector2 centre, int site)
     {
         ulong key = Rng.Mix(SeedSalts.NestFurniture ^ (ulong)(uint)(int)centre.X ^ (ulong)(uint)(int)centre.Y << 32 ^ 0x1007UL);
         var rng = new RandomStream(world.Seed, key, RngPurpose.Loot);
@@ -300,7 +301,7 @@ public sealed partial class PopulationSystem
             var item = drop.List ? Loot(world, drop, owner, ref rng) : _data.Items.Create(drop.Record, 1, 0);
             if (item is null) continue;
 
-            Items.ItemCreatedObservers.Report(world, Items.ItemCreatedKind.Loot, item, CharacterId.None);
+            Items.ItemCreatedObservers.ReportLoot(world, item, Items.ItemCreatedPlace.Ground, "", site);
             world.GroundItems.Place(item, drop.Position, drop.Yaw, null, -1, camp);
         }
     }

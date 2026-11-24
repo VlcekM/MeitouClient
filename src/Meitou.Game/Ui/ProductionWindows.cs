@@ -425,7 +425,7 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     string MachineCaption(string id, MachineSnapshot? m)
     {
-        if (m is { IsContainer: true }) return player.Build.Services?.ItemName(m.Record) ?? "CONTAINER";
+        if (m is { IsContainer: true }) return player.Build.Services?.ShownName(m.Record) ?? "CONTAINER";
 
         string? name = id.EndsWith(OwnSuffix, StringComparison.Ordinal) ? player.BuildingSelection.Selected?.Name : _shownName;
         return name ?? player.BuildingSelection.Selected?.Name ?? "BUILDING";
@@ -1740,7 +1740,7 @@ sealed class ProductionWindows(PlayerInterface player)
     /// A station's name: its site's, else its record.
     /// </summary>
     string StationName(MachineSnapshot m) =>
-        player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == m.Site) is { } site ? player.Build.SiteName(site) : m.Record;
+        player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == m.Site) is { } site ? player.Build.ShownSiteName(site) : m.Record;
 
     /// <summary>
     /// Opens the Craft tab on a bench (the building window's QUEUE... button).

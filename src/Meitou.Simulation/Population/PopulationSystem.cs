@@ -339,10 +339,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
         var ahead = new Vector3(MathF.Sin(hot.Yaw), 0, MathF.Cos(hot.Yaw));
         float yaw = Rng.Float(Rng.Hash(world.Seed, (ulong)slot, RngPurpose.Loot, (ulong)world.Tick)) * MathF.Tau;
 
-        // On the ground under that spot (a drop beside a character on a slope or a step would otherwise hang at its feet's height), as an item
-        // dropped from the inventory.
-        var at = hot.Position + right * (5 * side) + ahead * forward;
-        at.Y = world.Walkability.GroundHeight(at.X, at.Z, hot.Position.Y);
+        var at = LimbSpot(world, hot.Position, right * (5 * side) + ahead * forward);
 
         // The stump: the part of the limb's slot and its bone name 2 (BodyPartTemplate.BoneName2; FUN_14064edc0 reads it for the item's pose).
         string? stump = cold.Medical?.Parts.FirstOrDefault(p => p.Template.LimbSlot == limb)?.Template.BoneName2;
@@ -350,6 +347,21 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
             stump is { Length: > 0 } bone
                 ? new FallSource(world.Characters.IdOf(slot), bone, world.Tick, cold.Appearance?.SkinToneParameter ?? default)
                 : null);
+    }
+
+    /// <summary>
+    /// Where a severed limb lies: on the floor at or next to <paramref name="from"/> + <paramref name="offset"/> within
+    /// <see cref="MovementSystem.FloorSlack"/> of the character's height (a drop beside a character on a slope or a step would otherwise hang at its
+    /// feet's height), else next to the character, else at its own place. The ground under the spot alone was the storey below wherever the spot was
+    /// off the character's floor: past a storey's edge, or in the hole a rack or bed cuts in the floor's navmesh.
+    /// </summary>
+    static Vector3 LimbSpot(World world, Vector3 from, Vector3 offset)
+    {
+        var walk = world.Walkability;
+        var at = from + offset;
+        return walk.FloorNear(at.X, at.Z, from.Y, MovementSystem.FloorSlack)
+            ?? walk.FloorNear(from.X, from.Z, from.Y, MovementSystem.FloorSlack)
+            ?? from;
     }
 
     /// <summary>
@@ -456,7 +468,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
                     player.Meet(_data.SiteFactions[site.Index]);
             }
             else if (d2 < far * far && player.Know(site.Index, TownKnowledge.Discovered) && site.Town.Type != TownType.Nest)
-                world.Post(Loc.Tr("Discovered {1}", site.Town.UnexploredName is { Length: > 0 } unexplored ? unexplored : site.Town.Name));
+                world.Post(Loc.Tr("Discovered {1}", site.Town.ShownName(unexplored: site.Town.UnexploredName.Length > 0)));
         }
 
         var wild = WildSites;

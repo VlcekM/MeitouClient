@@ -402,37 +402,51 @@ public static class CharacterGenerator
     }
 
     /// <summary>
-    /// Clothing, one item per slot in the game's order; race flags drop hats, shirts and shoes. The armour's grade may go up by a chance roll.
+    /// Clothing, one item per slot in the game's order; race flags drop hats, shirts and shoes. The armour's grade may go up by a chance roll. Then
+    /// one item for each code mod slot that asks (<see cref="ClothingRolls"/>), in registration order, worn in its section.
     /// </summary>
     static void RollClothing(GameDatabase db, GameRecord character, GameRecord race, MsvcRandom rng, Loadout loadout)
     {
-        int grade = character.GetInt("armour grade", 1), upgrade = character.GetInt("armour upgrade chance", 5);
         var slots = new List<AttachSlot>();
         if (!race.GetBool("no shirts")) slots.Add(AttachSlot.Shirt);
         if (!race.GetBool("no hats")) slots.Add(AttachSlot.Hat);
         if (!race.GetBool("no shoes")) slots.Add(AttachSlot.Boots);
         slots.AddRange([AttachSlot.Body, AttachSlot.Legs, AttachSlot.Belt]);
-        var clothing = character.GetReferences("clothing");
+
         foreach (var slot in slots)
+            RollClothingSlot(db, character, race, rng, loadout, (int)slot, null);
+
+        foreach (var (slot, section) in ClothingRolls.All)
+            RollClothingSlot(db, character, race, rng, loadout, slot, section);
+    }
+
+    /// <summary>
+    /// One clothing slot's roll (<see cref="RollClothing"/>): an ARMOUR of FCS <c>slot</c> <paramref name="slot"/> from the <c>clothing</c> list,
+    /// worn in <paramref name="section"/> (null: the slot's own).
+    /// </summary>
+    static void RollClothingSlot(GameDatabase db, GameRecord character, GameRecord race, MsvcRandom rng, Loadout loadout, int slot,
+        string? section)
+    {
+        int grade = character.GetInt("armour grade", 1), upgrade = character.GetInt("armour upgrade chance", 5);
+
+        // Eligible: quantity ≠ 0, chance > 0, ARMOUR of this slot the race may wear. Chances are relative; a negative
+        // quantity is a "no item" option.
+        var options = character.GetReferences("clothing").Where(r => r.Values.Value0 != 0 && r.Values.Value1 > 0)
+            .Select(r => (Ref: r, Item: db.Find(r.TargetStringId)))
+            .Where(o => o.Item is { Type: FcsRecordType.Armour } && o.Item.GetInt("slot", (int)AttachSlot.Body) == slot
+                    && RaceLimiter.Allows(o.Item, race))
+            .ToList();
+        var chosen = PickRelative(rng, options.Select(o => ((GameReference?)o.Ref, (float)o.Ref.Values.Value1)));
+        if (chosen is not { } c || c.Values.Value0 < 1) return;
+
+        var item = db.Find(c.TargetStringId)!;
+        int up = grade < 5 && rng.Int(0, 100) < upgrade ? 1 : 0;
+        var material = PickRelative(rng, item.GetReferences("material")
+            .Select(r => (db.Find(r.TargetStringId), r.Values.Value1 == 0 ? 100f : r.Values.Value1)));
+        loadout.Clothing.Add(new LoadoutItem(item)
         {
-            // Eligible: quantity ≠ 0, chance > 0, ARMOUR of this slot the race may wear. Chances are relative; a negative
-            // quantity is a "no item" option.
-            var options = clothing.Where(r => r.Values.Value0 != 0 && r.Values.Value1 > 0)
-                .Select(r => (Ref: r, Item: db.Find(r.TargetStringId)))
-                .Where(o => o.Item is { Type: FcsRecordType.Armour } && o.Item.GetInt("slot", (int)AttachSlot.Body) == (int)slot
-                        && RaceLimiter.Allows(o.Item, race))
-                .ToList();
-            var chosen = PickRelative(rng, options.Select(o => ((GameReference?)o.Ref, (float)o.Ref.Values.Value1)));
-            if (chosen is not { } c || c.Values.Value0 < 1) continue;
-            var item = db.Find(c.TargetStringId)!;
-            int up = grade < 5 && rng.Int(0, 100) < upgrade ? 1 : 0;
-            var material = PickRelative(rng, item.GetReferences("material")
-                .Select(r => (db.Find(r.TargetStringId), r.Values.Value1 == 0 ? 100f : r.Values.Value1)));
-            loadout.Clothing.Add(new LoadoutItem(item)
-            {
-                Quality = QualityOfGrade(grade + up), Material = material, Colour = ColourOf(db, character, loadout, item),
-            });
-        }
+            Quality = QualityOfGrade(grade + up), Material = material, Colour = ColourOf(db, character, loadout, item), Section = section,
+        });
     }
 
     /// <summary>

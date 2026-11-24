@@ -509,15 +509,17 @@ public sealed partial class DialogueSystem
     {
         var (c, line, _, speaker, chained) = b;
         MarkUsed(world, c, line);
-        string text =
-            Said(Expand(world, c, line, PickText(world, speaker, line), speaker, speaker == c.Player ? c.Npc : c.Player)) + MoneySuffix(line);
-        float seconds = 2 + 0.12f * text.Length;
+        var (said, shown) = Line(world, c, line, speaker, speaker, speaker == c.Player ? c.Npc : c.Player);
+        string cost = MoneySuffix(line);
+        string text = said + cost;
+        float seconds = 2 + 0.12f * text.Length;   // the game's text: the mods' text never changes how long a bubble stays
         if (text.Length > 0)
         {
             long until = world.Tick + (long)MathF.Ceiling(seconds / world.TickSeconds);
-            _shown[speaker] = (text, until, IsLarge(c.Event), IsInterrupting(c.Event), c.Event);
+            string bubble = shown + cost;
+            _shown[speaker] = (bubble, until, IsLarge(c.Event), IsInterrupting(c.Event), c.Event);
             _speechChanged = true;
-            world.Said(NameOf(world, speaker), text, world.Characters.Cold(n) is { IsPlayer: true });
+            world.Said(world.ShownName(speaker), bubble, world.Characters.Cold(n) is { IsPlayer: true });
         }
         LogBubble(world, c, line, speaker, text);
 

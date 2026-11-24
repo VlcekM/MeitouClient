@@ -1,4 +1,5 @@
 using Meitou.Data.Fcs;
+using Meitou.Localisation;
 
 namespace Meitou.Data.Gameplay;
 
@@ -61,6 +62,13 @@ public enum TownType
 public sealed record TownData
 {
     /// <summary>
+    /// The town's name as the mods' text sources show it (<see cref="ShownText.Record"/>), or with
+    /// <paramref name="unexplored"/> its <c>unexplored name</c>. Display only.
+    /// </summary>
+    public string ShownName(bool unexplored = false) =>
+        unexplored ? ShownText.Record(Id, UnexploredName, "unexplored name") : ShownText.Record(NameRecord ?? Id, Name);
+
+    /// <summary>
     /// The TOWN's string id.
     /// </summary>
     public required string Id { get; init; }
@@ -69,6 +77,17 @@ public sealed record TownData
     /// The TOWN's name in the active language.
     /// </summary>
     public required string Name { get; init; }
+
+    /// <summary>
+    /// The TOWN whose name <see cref="Name"/> is, which its shown text is asked under; null: <see cref="Id"/>.
+    /// </summary>
+    public string? NameRecord { get; init; }
+
+    /// <summary>
+    /// <c>town name override</c>, a KenshiExtensionPlugin field (docs/game/factions-squads-towns.md "Town overrides"): an override town with it
+    /// set gives the town it replaces its name.
+    /// </summary>
+    public bool NameOverride { get; init; }
 
     /// <summary>
     /// <c>type</c>.
@@ -243,6 +262,7 @@ public sealed record TownData
             Faction = faction.Count > 0 ? faction[0].TargetStringId : null,
             IsPublic = r.GetBool("is public"),
             IsSecret = r.GetBool("is secret"),
+            NameOverride = r.GetBool("town name override"),
             SizeRadius = r.GetFloat("size radius"),
             TownRadiusMult = mult,
             NoFoliageRange = type == TownType.NestMarker ? 0 : r.GetFloat("no-foliage range"),

@@ -445,7 +445,7 @@ msgstr ""
 msgid "Air scattering density; zero removes air scattering."
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs src/Meitou.Game/Settings/GamePages.cs
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs src/Meitou.Game/Settings/GamePages.cs src/Meitou.Game/Settings/ModsPage.cs
 msgid "All"
 msgstr ""
 
@@ -641,7 +641,7 @@ msgstr ""
 msgid "Attackers per target"
 msgstr ""
 
-#: src/Meitou.Game/Settings/ModsPage.cs
+#: src/Meitou.Game/Settings/ModsPage.cs src/Meitou.Game/Settings/SettingsSearch.cs
 msgid "Author"
 msgstr ""
 
@@ -1153,7 +1153,7 @@ msgstr ""
 msgid "Click to view groups for {1}"
 msgstr ""
 
-#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/SettingsMenu.cs src/Meitou.Game/Ui/ContextMenuWindow.cs src/Meitou.Game/Ui/FeedbackPanel.cs
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Settings/SettingsWindow.cs src/Meitou.Game/SettingsMenu.cs src/Meitou.Game/Ui/ContextMenuWindow.cs src/Meitou.Game/Ui/FeedbackPanel.cs
 msgid "Close"
 msgstr ""
 
@@ -1821,6 +1821,10 @@ msgstr ""
 msgid "Filter"
 msgstr ""
 
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "Filter mods"
+msgstr ""
+
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Filter strength"
 msgstr ""
@@ -2469,6 +2473,10 @@ msgstr ""
 msgid "How often factions start raids on your towns (the game: 1)."
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings)."
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "How to get Kenshi on macOS"
 msgstr ""
@@ -2643,6 +2651,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Internal rendering resolution relative to the window."
+msgstr ""
+
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "Issues"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
@@ -2933,7 +2945,7 @@ msgstr ""
 msgid "Load button"
 msgstr ""
 
-#: launcher/Meitou.Launcher/MainWindow.axaml
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Settings/ModsPage.cs
 msgid "Load order"
 msgstr ""
 
@@ -3342,7 +3354,7 @@ msgstr ""
 msgid "Mine · Meitou {1}"
 msgstr ""
 
-#: launcher/Meitou.Launcher/MainWindow.axaml
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Settings/SettingsWindow.cs
 msgid "Minimise"
 msgstr ""
 
@@ -3362,7 +3374,7 @@ msgstr ""
 msgid "Modifications to the GLOBAL_CONSTANTS will be lost, you'll have to set them again, sorry!"
 msgstr ""
 
-#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/SettingsMenu.cs
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Settings/SettingsSearch.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Mods"
 msgstr ""
 
@@ -3464,6 +3476,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Host/Photo/PhotoPanel.cs src/Meitou.Game/Settings/PresetNamingDialog.cs src/Meitou.Game/Title/FrontendScreens.cs
 msgid "Name"
+msgstr ""
+
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "Name A-Z"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPlatform.cs
@@ -3583,6 +3599,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/LookPresets.cs
 msgid "No impact"
+msgstr ""
+
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "No mod matches the filter."
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -3743,6 +3763,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Only nightly builds so far: tick Nightly builds beside Play to list them."
+msgstr ""
+
+#: src/Meitou.Game/Settings/SettingsWindow.cs
+msgid "Opacity"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Ui/ContextMenuWindow.cs
@@ -4357,6 +4381,10 @@ msgstr ""
 msgid "Resting"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SettingsWindow.cs
+msgid "Restore"
+msgstr ""
+
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "Restore all preferences, controls and the look to their defaults?"
 msgstr ""
@@ -4701,12 +4729,16 @@ msgstr ""
 msgid "Sets the upscaler and the render scale. MetalFX temporal by default; spatial is an alternative."
 msgstr ""
 
-#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Settings/ModSettingsRows.cs src/Meitou.Game/SettingsMenu.cs
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Settings/ModSettingsRows.cs src/Meitou.Game/Settings/ModsPage.cs src/Meitou.Game/Settings/SettingsWindow.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Settings"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
 msgid "Settings   (Tab hides this)"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs src/Meitou.Game/Settings/SettingsWindow.cs
+msgid "Settings window opacity"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
@@ -4795,6 +4827,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/LauncherSchema.cs
 msgid "Shoulder"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SettingsSearch.cs
+msgid "Show"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -5997,7 +6033,7 @@ msgstr ""
 msgid "Vegetation"
 msgstr ""
 
-#: src/Meitou.Game/Settings/ModsPage.cs
+#: src/Meitou.Game/Settings/ModsPage.cs src/Meitou.Game/Settings/SettingsSearch.cs
 msgid "Version"
 msgstr ""
 
@@ -7011,7 +7047,7 @@ msgstr ""
 msgid "{1} is wanted by {2} for {3}: bounty c.{4}"
 msgstr ""
 
-#: src/Meitou.Game/Settings/ModsPage.cs
+#: src/Meitou.Game/Settings/ModsPage.cs src/Meitou.Game/Settings/SettingsSearch.cs
 msgid "{1} issue"
 msgid_plural "{1} issues"
 msgstr[0] ""
@@ -7021,8 +7057,18 @@ msgstr[1] ""
 msgid "{1} item stack(s) of a closed shop were left on the ground."
 msgstr ""
 
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "{1} mod"
+msgid_plural "{1} mods"
+msgstr[0] ""
+msgstr[1] ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "{1} mods, {2} enabled"
+msgstr ""
+
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "{1} of {2}"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs

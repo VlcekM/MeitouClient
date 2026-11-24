@@ -74,6 +74,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModSlot> Slots { get; } = [];
     /// <summary>
+    /// The layout replacements: the layout file name and the full path of the mod's file, in registration order.
+    /// </summary>
+    public List<(string Layout, string Path)> Layouts { get; } = [];
+    /// <summary>
     /// The wear rules, in registration order.
     /// </summary>
     public List<Data.Gameplay.WearRule> WearRules { get; } = [];
@@ -109,6 +113,10 @@ sealed class ModRegistrations
     /// The folder of the mod each interface extension belongs to (its map marker images are files under it).
     /// </summary>
     public Dictionary<IUiExtension, string> UiFolders { get; } = new(ReferenceEqualityComparer.Instance);
+    /// <summary>
+    /// The translations of the mod each interface extension belongs to (its texts are shown through them).
+    /// </summary>
+    public Dictionary<IUiExtension, Localisation.ModTranslations> UiTexts { get; } = new(ReferenceEqualityComparer.Instance);
     /// <summary>
     /// The debug menu's commands.
     /// </summary>
@@ -278,6 +286,10 @@ sealed class ModRegistry
     /// </summary>
     public Dictionary<IUiExtension, string> UiOwners { get; } = new(ReferenceEqualityComparer.Instance);
     /// <summary>
+    /// The translations of the mod each interface extension belongs to.
+    /// </summary>
+    public Dictionary<IUiExtension, Localisation.ModTranslations> UiTexts { get; } = new(ReferenceEqualityComparer.Instance);
+    /// <summary>
     /// Every mod's debug menu commands, in load order.
     /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
@@ -389,6 +401,11 @@ sealed class ModRegistry
             Simulation.TaskOwners[type] = mod;
         }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
+        foreach (var (layout, path) in r.Layouts)
+        {
+            if (!Game.Ui.ModLayouts.Add(mod, layout, path))
+                Console.Error.WriteLine($"mod       {mod}: layout {layout} is replaced by another mod already; its replacement is left out");
+        }
         foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);
         foreach (var source in r.LookRows) Data.Characters.ModLooks.AddRows(mod, source);
         foreach (var roll in r.LookRolls) Data.Characters.ModLooks.AddRoll(mod, roll);
@@ -399,6 +416,7 @@ sealed class ModRegistry
         Ui.AddRange(r.Ui);
         foreach (var (extension, folder) in r.UiFolders) UiFolders[extension] = folder;
         foreach (var extension in r.Ui) UiOwners[extension] = mod;
+        foreach (var (extension, texts) in r.UiTexts) UiTexts[extension] = texts;
         DebugCommands.AddRange(r.DebugCommands);
         foreach (var state in r.WorldStates)
         {

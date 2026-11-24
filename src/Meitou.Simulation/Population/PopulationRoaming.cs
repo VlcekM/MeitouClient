@@ -1224,7 +1224,7 @@ public sealed partial class PopulationSystem
                 continue;
 
             table.Next[slot].Position = place;
-            world.Post(Loc.Tr("Character {1} of {2} tried to spawn inside walls!", c.Name, squad.Name));
+            world.Post(Loc.Tr("Character {1} of {2} tried to spawn inside walls!", world.ShownName(c), world.ShownName(squad)));
         }
     }
 
@@ -1462,14 +1462,24 @@ public sealed partial class PopulationSystem
     /// that call makes, above 1.1 an elder, which grows no more). A CHARACTER ignores the age. None, adding nothing, also for an age that is not
     /// finite or below 0 (as <see cref="Bodies.BodySystem.SetAnimalAge"/> refuses one). Serial phases only.
     /// </summary>
-    public CharacterId SpawnIntoPlayerSquad(World world, int squadId, string recordId, Vector2 at, float age)
+    public CharacterId SpawnIntoPlayerSquad(World world, int squadId, string recordId, Vector2 at, float age) =>
+        SpawnIntoPlayerSquad(world, squadId, recordId, at, new SpawnOptions(age));
+
+    /// <summary>
+    /// <see cref="SpawnIntoPlayerSquad(World, int, string, Vector2, float)"/> with <see cref="SpawnOptions"/> (engine API): its age, and with
+    /// <see cref="SpawnOptions.IgnoreCaps"/> no <c>max squad size</c> or <c>max faction size</c> test, as the original's birth through
+    /// <c>createRandomCharacter</c> checks no cap (a birth, a summon, a clone). Serial phases only.
+    /// </summary>
+    public CharacterId SpawnIntoPlayerSquad(World world, int squadId, string recordId, Vector2 at, SpawnOptions options)
     {
         if (world.Characters.Phase == TablePhase.Parallel) return CharacterId.None;
         if (world.Squads.Find(squadId) is not { } squad || !SquadManagement.PlayerSquads(world).Contains(squad)) return CharacterId.None;
         if (!float.IsFinite(at.X) || !float.IsFinite(at.Y) || !world.Walkability.IsWalkable(at.X, at.Y)) return CharacterId.None;
+
+        float age = options.Age;
         if (!float.IsFinite(age) || age < 0) return CharacterId.None;
         if (_data.Db.Find(recordId) is not { Type: FcsRecordType.Character or FcsRecordType.AnimalCharacter } record) return CharacterId.None;
-        if (PlayerSquadFull(world, squad)) return CharacterId.None;
+        if (!options.IgnoreCaps && PlayerSquadFull(world, squad)) return CharacterId.None;
         if (UniqueCharacters.IsUnique(record) && !world.Uniques.TryClaim(recordId)) return CharacterId.None;
 
         var built = ModMember(world, squad, record, at, age);

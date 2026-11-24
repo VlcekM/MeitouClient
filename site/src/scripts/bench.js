@@ -56,7 +56,7 @@
 
   /** Everything drawn comes from these: the loaded data and the current selection. */
   let D = null;
-  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "all", metric: "avgFps", hidden: {}, search: "", sort: { col: null, dir: 1 } };
+  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "all", metric: "avgFps", hidden: {}, search: "", offTarget: false, sort: { col: null, dir: 1 } };
 
   // #endregion
 
@@ -178,7 +178,7 @@
         console.warn("Benchmark session " + s.id + " skipped:", e);
       }
     });
-    return { entries: entries, targets: orderTargets(entries, targets), lines: lineList(entries) };
+    return { entries: entries, targets: orderTargets(entries, targets), lines: lineList(entries), haveTargets: targets.length > 0 };
   }
 
   function entry(s, scenario, group, scen) {
@@ -296,12 +296,26 @@
     const seen = dict();
     return inScenarioOf(scenario, fp).filter((e) => {
       if (e.tier !== tier || e.group !== group) return false;
+      if (!state.offTarget && !onTarget(e)) return false;
       const k = e.line + "|" + e.target;
       if (seen[k]) return false;
       seen[k] = 1;
       return true;
     });
   }
+
+  /**
+   * Whether the session's build is a benchmark target (/bench/targets: full releases and the nightlies whose notes say "Daily build"). Legacy kit
+   * commits are never targets there, and without the target list nothing can be told apart, so both count as on target.
+   */
+  function onTarget(e) {
+    if (e.version === 0 || !D.haveTargets) return true;
+    const t = targetOf(e.target);
+    return !!(t && t.kind);
+  }
+
+  /** Whether the selected version, scenario and fingerprint have a session on a build that is not a target. */
+  function hasOffTarget() { return inScenario().some((e) => !onTarget(e)); }
 
   /** The newest session per (machine, platform, target) of the selected version, scenario, fingerprint, tier and group. */
   function selected() { return selectedFor(state.scenario, state.fingerprint, state.tier, state.group); }
@@ -459,6 +473,7 @@
     row1.appendChild(control("Tier", segmented(tiersOf(), state.tier, tierName, pickTier, null,
       (t) => countFor(state.scenario, state.fingerprint, t, state.group))));
     row1.appendChild(control("Benchmark", versionSelect()));
+    if (hasOffTarget()) row1.appendChild(control("Builds", buildsToggle()));
     if (fingerprints().length > 1) row1.appendChild(control("Fingerprint", fingerprintSelect()));
     const metric = control("Metric", metricSelect());
     metric.classList.add("tb-metric");
@@ -504,6 +519,15 @@
   function versionSelect() {
     const opts = versions().map((v) => [String(v), v === 0 ? "Legacy kit" : "Version " + v]);
     return select(opts, String(state.version), (v) => selectVersion(Number(v)));
+  }
+
+  /** Off-target builds (neither a full release nor a daily nightly) are hidden until "All builds" is picked. */
+  function buildsToggle() {
+    const names = { targets: "Targets only", all: "All builds" };
+    return segmented(["targets", "all"], state.offTarget ? "all" : "targets", (k) => names[k], (k) => {
+      state.offTarget = k === "all";
+      render();
+    }, (k) => (k === "targets" ? "Full releases and daily nightlies only" : "Also the other nightlies"));
   }
 
   function fingerprintSelect() {

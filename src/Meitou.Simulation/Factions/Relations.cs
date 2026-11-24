@@ -64,7 +64,8 @@ public static class PlayerRelations
     public static void DeclareWar(World world, FactionRelations relations, int a, int b, CharacterId speaker)
     {
         var (before, after, started) = relations.DeclareWar(a, b);
-        if (started) world.Post(Loc.Tr("War breaks out between {1} and {2}", relations.Factions[a].Name, relations.Factions[b].Name));
+        if (started)
+            world.Post(Loc.Tr("War breaks out between {1} and {2}", World.ShownName(relations.Factions[a]), World.ShownName(relations.Factions[b])));
         if (before != after) Posted(world, relations, a, b, before, after);
         if (started || before != after) Observed(world, relations, a, b, before, after, new(RelationCauseType.WarDeclared, speaker));
         if (before != after) Logged(world, relations, a, b, before, after, "war declared (dialogue)");
@@ -131,7 +132,8 @@ public static class PlayerRelations
     {
         // The player's row is kept in the other faction's table: either way round the other faction names the message.
         int other = a == relations.PlayerFaction ? b : b == relations.PlayerFaction ? a : -1;
-        if (other >= 0 && Notice(relations.Factions[other].Name, before, after) is { } text) world.Post(text);
+        if (other >= 0 && Notice(World.ShownName(relations.Factions[other]), before, after) is { } text)
+            world.Post(text);
     }
 
     /// <summary>

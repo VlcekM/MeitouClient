@@ -192,6 +192,17 @@ keys afresh at each save (a record copied from the loaded save loses those of ef
 is on. Every such key is read back and saved again, so a save keeps the effects of mods not loaded now. **Observed** (2026-11-18, a scratch
 `WriteSave` / `ReadSave` round trip: ticks, stacks and -1 kept; an effect that ended after the read left no key in the same record).
 
+**STATS record keys** (the character's STATS record, `CharacterSaveRecord.Stats`): every STATS record of 27 vanilla saves (15,470
+records, `%LOCALAPPDATA%\kenshi\save`, none with a `meitou` key) holds the same 44 floats, the game's own keys: `armour smith`, `arrow defence`,
+`assassin`, `athletics`, `attack`, `bluff`, `blunt`, `bow`, `bow smith`, `climbing`, `cooking`, `defence`, `dexterity`, `doctor`, `dodge`,
+`endurance`, `engineer`, `farming`, `ff`, `free attribute points`, `hackers`, `heavy weapons`, `katana`, `labouring`, `lockpicking`, `mass combat`,
+`medic`, `perception`, `poles`, `robotics`, `sabres`, `science`, `stealth`, `strength`, `survival`, `swimming`, `thievery`, `toughness2`,
+`tracking`, `turrets`, `unarmed`, `warrior spirit`, `weapon smith`, `xp`; no int, bool, string or other key. **Verified** (2026-11-24, a scratch
+survey reading each save's `platoon/*.platoon`). Other floats come from plugins: `kills`, `kos`, `limbs` (KillCounter, in 10,054 records) and
+`NIT_ambidexterity` (175). Meitou's writer covers the stat fields and [legacy keys](../game/character-stats.md#the-stat-list) and keeps the others of
+a loaded record; `bluff`, `climbing`, `doctor` and `tracking` are not written for a new character (**Observed**, `CharacterStats.WriteSave`,
+`LegacyStats.Keys`).
+
 ### Where saves live
 
 | Setting / path | Meaning |
@@ -468,7 +479,8 @@ A squad's member order is its platoon file's INSTANCE_COLLECTION order: Meitou r
 rewrites the collection in the squad's current order, slots and handles unchanged, so a reorder on the squads screen survives a reload.
 Meitou-only, for an [autonomous squad](../simulation.md#autonomous-player-squads) (`Saving/AutonomySave`): `meitou autonomous` (bool), its packages in the
 NPC platoons' `replacementAI` / `contractjob` / `jobhr`; `meitou independent` (bool) for one the player does not lead; `meitou home` (string: a town building key or a player building id) while a home is
-assigned; `meitou autonomy owner` (string: the manifest id of the code mod that switched it on) while it names one. Other player platoons' AI keys stay as read.
+assigned; `meitou work` (string: a workplace key) while a work building is assigned and `meitou conduct` (int: `SquadConduct` bits) while
+set, on any player platoon; `meitou autonomy owner` (string: the manifest id of the code mod that switched it on) while it names one. Other player platoons' AI keys stay as read.
 A squad a code mod keeps out of the faction size count (`Saving/ModSquadSave`, [modding](../modding.md#registration-surface)): `meitou uncounted` (bool) and
 `meitou uncounted owner` (string: the mod's manifest id), each only while set; a squad a mod gave its own purse: `meitou purse` (string: its money
 in cats) and `meitou purse owner` (string: the mod's manifest id), each only while set; a squad a mod put to sleep: `meitou dormant` (bool) and `meitou dormant owner`
@@ -817,7 +829,10 @@ Job lists (`Saving/PermaJobSave`): the original's GAMESTATE_AI (`ai`) keys `jobs
 A mod's own job type ([mod jobs](../modding.md#registration-surface)) is not in that list: int `meitou mjob<k>` (task type), int `meitou mjobAt<k>`
 (its place: how many game jobs come before it) and string `meitou mjob<k>` (its building id) keep it, and the `pjob` numbers skip it. A job on a
 character writes that character's handle once every character has one, as `pjobT<i>`, so one new to the save is named too. Every character's list
-is read, an NPC's too (the original's records hold NPCs' 57 and 187); an NPC's is written while it has one. The squad AI
+is read, an NPC's too (the original's records hold NPCs' 57 and 187); an NPC's is written while it has one. A rewrite clears only the list's
+numbered keys (`pjob<i>`, the `pjobT<i>` handle parts), so other `ai` keys, an original plugin's among them (JobTabs' `jt_active` and
+per-tab job keys, layout **Unknown**), stay as read; code mods' [character save fields](../modding.md#registration-surface) are written over them
+last. The squad AI
 options are CAMERA bools (**Verified**, writer `FUN_1403eb710`; the key of each option and new-game values in
 [squad AI options](../game/ai-tasks.md#squad-ai-options)); Meitou reads and writes nine (not `stay`, `eject`), an absent one keeps its default.
 
@@ -847,7 +862,8 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
   character or site is neither in the world nor still to come, or its handle names nothing the save holds; an entry of a finder row
   (125, 16, 58, 57, 250, 238) is kept whatever its hand names, as its finder picks the target. A building handle is the building's instance (a build site, or a fixture whose id is the building's own, a bed too); a CHARACTER handle finds the character by its saved handle.
 - **Meitou keys**: string `meitou tjob<i>` (the order's site id: a build site, fixture or rock, which wins on load over a building handle, as `meitou pjob<i>`), int `meitou tjobK<i>` (the owner's
-  detail code, `IOrderOwner.SaveKind`: a loot that opens the window, a bed named by a put-in order, a lock order done in place), each written only when set. Ground-item
+  detail code, `IOrderOwner.SaveKind`: a loot that opens the window, a bed named by a put-in order, a lock order done in place), float `meitou tjobR<i>` (the order's own
+  reach, `OrderEntry.Reach`; a value not finite or below 0 reads as none), each written only when set. Ground-item
   pick-ups (a runtime item id) and the Medic / Rescue buttons' looks are not saved. A container order is 26 on its site and a walk only to it a 29; a row 3 on a
   site, as an older Meitou wrote them, loads as 26 (kind 0) or is dropped (a walk only).
 

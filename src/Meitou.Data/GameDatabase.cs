@@ -1,5 +1,6 @@
 using Meitou.Content;
 using Meitou.Data.Fcs;
+using Meitou.Localisation;
 
 namespace Meitou.Data;
 
@@ -56,6 +57,15 @@ public sealed class GameDatabase
     /// The record of <paramref name="stringId"/>, or null when none is loaded.
     /// </summary>
     public GameRecord? Find(string stringId) => _records.GetValueOrDefault(stringId);
+
+    /// <summary>
+    /// The name of a <paramref name="what"/> (<c>character</c>, <c>squad</c>, <c>outpost</c>, <c>faction</c>, <c>place</c>) made from record
+    /// <paramref name="record"/> ("" none) and called <paramref name="name"/>, as the mods' text sources show it
+    /// (<see cref="ShownText.Name"/>: still its record's name, asked as the record's; else as a name of its own). Display only.
+    /// </summary>
+    public string ShownName(string what, string record, string name) =>
+        !ShownText.Any ? name
+            : ShownText.Name(what, record ?? "", record is { Length: > 0 } && Find(record) is { } r ? r.Name : "", name);
 
     /// <summary>
     /// Every record of <paramref name="type"/>, in no defined order (a scan of all records each call).

@@ -348,6 +348,7 @@ public sealed partial class World
             MachinesVersion = Machines.Version,
             Research = _production?.ResearchView(this) ?? Production.ResearchSnapshot.Empty,
             Outposts = _production?.OutpostView(this) ?? [],
+            WorkSites = _production?.WorkSitesView(this) ?? [],
             MapSquads = _mapSquads.Published(this),
             Crafts = _production?.CraftsView(this) ?? Snapshot.Crafts,
             Smiths = _production?.SmithsView(this) ?? Snapshot.Smiths
@@ -396,13 +397,15 @@ public sealed partial class World
     /// <summary>
     /// The sneaker's watchers of the last <see cref="AggroSystem.WatcherSeconds"/> that are still about, where they stand now.
     /// </summary>
-    SquadView[] PublishSquads() => [.. SquadManagement.LedSquads(this).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]))];
+    SquadView[] PublishSquads() =>
+        [.. SquadManagement.LedSquads(this).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]) { TemplateId = s.TemplateId })];
 
     /// <summary>
     /// The player's squads the player does not lead, for <see cref="WorldSnapshot.IndependentSquads"/>.
     /// </summary>
     SquadView[] PublishIndependentSquads() =>
-        [.. SquadManagement.PlayerSquads(this).Where(s => s.Independent).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]))];
+        [.. SquadManagement.PlayerSquads(this).Where(s => s.Independent)
+            .Select(s => new SquadView(s.Id, s.Name, [.. s.Members]) { TemplateId = s.TemplateId })];
 
     #endregion
 
@@ -550,7 +553,7 @@ public sealed partial class World
             : [];
         s.Slave = cold is { SlaveState: >= 1 and <= 3 }
             ? new SlaveView(cold.SlaveState,
-                population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? factions[cold.SlaveOwner].Name : "",
+                population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? ShownName(factions[cold.SlaveOwner]) : "",
                 SystemOf<Kidnap.CaptiveSystem>()?.LooksLikeSlaveLevel(cold) ?? 0)
             : null;
         s.Disguise = detailed && cold!.Faction == Player.Faction && (cold.DisguiseLevel > 0 || cold.RecentlyWanted > 0)
@@ -633,6 +636,7 @@ public sealed partial class World
         var population = f.Population;
 
         s.InCombat = cold?.InCombat ?? false;
+        s.Attacking = combat?.Playing(id, Tick) is { IsAttack: true };
         s.CombatMode = cold is not null && combat is not null && CharacterFacts.InCombatMode(combat, table, id, cold, true, true);
         s.FightsPlayer = fightsPlayer;
         s.HostileToPlayer = cold is not null && CharacterFacts.HostileToPlayer(population?.Relations, Player.Faction, cold.Faction, fightsPlayer);
@@ -794,7 +798,9 @@ public sealed partial class World
 
         bool Marked(int k) => marks is not null && marks[k] > 0;
 
-        string name = data is { Factions: { } factions } && (uint)c.DisguiseFaction < (uint)factions.Count ? factions[c.DisguiseFaction].Name : "";
+        string name = data is { Factions: { } factions } && (uint)c.DisguiseFaction < (uint)factions.Count
+            ? ShownName(factions[c.DisguiseFaction])
+            : "";
         bool secure = SystemOf<Crime.ArrestSystem>()?.SecureLocation(this, at) ?? false;
         return new DisguiseView(c.DisguiseLevel, name, c.RecentlyWanted, Crime.ArrestSystem.SeenFaction(c) != c.Faction, secure,
             Marked(Crime.ArrestSystem.SameFactionMark), Marked(Crime.ArrestSystem.SlaveOwnerMark), Marked(Crime.ArrestSystem.KnowsMeMark));
@@ -869,12 +875,12 @@ public sealed partial class World
             .. Items.InventoryCommands.MainClosed(cold) ? MainGrid : []];
 
     /// <summary>
-    /// The health panel's rows: each body part's flesh, stun, bandage and rig.
+    /// The health panel's rows: each body part's name as the mods' text sources show it, flesh, stun, bandage and rig.
     /// </summary>
     static IReadOnlyList<HealthPartView> HealthPartsOf(MedicalState health, RaceData anatomy) =>
         Array.AsReadOnly(health.Parts
-            .Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp,
-                p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb, Wear = p.Wear })
+            .Select(p => new HealthPartView(p.Template.StringId, ShownText.Record(p.Template.StringId, p.Template.Name), p.Flesh, p.Stun, p.Bandage,
+                p.Rig, p.MaxHp, p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb, Wear = p.Wear })
             .ToArray());
 
     /// <summary>
@@ -931,7 +937,7 @@ public sealed partial class World
         return InventoryItemView.Of(index, item) with
         {
             StolenFrom = stolen ? item.StolenFrom : -1,
-            StolenOwner = stolen ? Characters.OwnerNameOf(item.Owner) : null,
+            StolenOwner = stolen ? ShownOwnerNameOf(item.Owner) : null,
             StealChance = steal?.Invoke(item)
         };
     }

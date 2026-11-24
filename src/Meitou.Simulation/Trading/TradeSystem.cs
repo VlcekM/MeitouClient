@@ -99,6 +99,11 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     float Quality, long Price, long UnitPrice, bool Stolen)
 {
     /// <summary>
+    /// The item's code-mod tag ("" none; the mods' shown text, docs/modding.md "Shown text").
+    /// </summary>
+    public string ModTag { get; init; } = "";
+
+    /// <summary>
     /// The current transfer reverses a purchase or sale from this trade window at its original price.
     /// </summary>
     public bool Buyback { get; init; }
@@ -1504,7 +1509,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             squad.Money += price;
         }
 
-        world.Post(Loc.Tr(sell ? "{1} sold {2} for c.{3}" : "{1} bought {2} for c.{3}", cold.Name, Units(units, item.Name), price));
+        string what = Units(units, item.ShownName());
+        world.Post(Loc.Tr(sell ? "{1} sold {2} for c.{3}" : "{1} bought {2} for c.{3}", world.ShownName(cold), what, price));
         _heldDeal = world.TradeObservers.Active ? new HeldDeal(c, t, sell, item.Record, units, price, buyback) : null;
         return receipt;
     }
@@ -1579,7 +1585,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         world.Player.Money -= price;
         squad.Money += price;
-        world.Post(Loc.Tr("{1} bought {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
+        world.Post(Loc.Tr("{1} bought {2} for c.{3}", world.ShownName(cold), Units(placed, item.ShownName()), price));
         ReportDeal(world, c, t, false, item.Record, placed, price, buyback);
     }
 
@@ -1715,7 +1721,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         squad.Money -= price;
         world.Player.Money += price;
-        world.Post(Loc.Tr("{1} sold {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
+        world.Post(Loc.Tr("{1} sold {2} for c.{3}", world.ShownName(cold), Units(placed, item.ShownName()), price));
         ReportDeal(world, c, t, true, item.Record, placed, price, buyback);
     }
 
@@ -1993,6 +1999,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return new(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity, item.Quality, stackPrice,
                 unitPrice, stolen)
             {
+                ModTag = item.ModTag,
                 Buyback = buyback,
                 Container = item.Contents is not null,
                 BagItems = item.Contents?.Items.Count ?? -1,
@@ -2010,7 +2017,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                 Charges = item.Charges,
                 MaxCharges = item.MaxCharges,
                 StolenFrom = stolen ? item.StolenFrom : -1,
-                StolenOwner = stolen ? world.Characters.OwnerNameOf(item.Owner) : null,
+                StolenOwner = stolen ? world.ShownOwnerNameOf(item.Owner) : null,
                 Unique = item.Unique,
                 FenceChance = odds is { } shown ? Math.Clamp(shown, 0, 1) : null,
                 FenceOdds = odds is < 1 ? Math.Max(odds.Value, 0) : null,
@@ -2024,7 +2031,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             goodsOf[world.Characters.IdOf(seller)] = Goods(world.Characters.Cold(seller)!, item => View(item.Item, item.Index, true, seller));
 
         var held = HeldView(world, goodsOf, (item, sell, seller) => View(item, -1, sell, seller), c);
-        string name = world.Characters.Cold(t)!.Name;
+        string name = world.ShownName(world.Characters.Cold(t)!);
         return new TradeView(_customer, _trader, name, squad.Money, world.Player.Money, shop.Window.Width, shop.Window.Height, stock,
             goodsOf[_customer], shop.Terms.BuysStolen, shop.Terms.BuysIllegal)
         {

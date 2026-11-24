@@ -50,7 +50,7 @@ public readonly record struct EffectAnchor
     public EffectAnchorKind Kind { get; init; }
 
     /// <summary>
-    /// A point anchor's world point; a bone's or building's offset in its frame.
+    /// A point anchor's world point; a bone's, weapon's, building's or bolt's offset in its frame.
     /// </summary>
     public Vector3 Offset { get; init; }
 
@@ -111,6 +111,13 @@ public readonly record struct EffectAnchor
     /// The melee weapon the character holds drawn: the origin at the weapon's hilt end, +Y along the blade, scaled so 8.5 units span the weapon.
     /// </summary>
     public static EffectAnchor Weapon(CharacterId on) => new() { Kind = EffectAnchorKind.Weapon, Character = on };
+
+    /// <summary>
+    /// A point on the melee weapon the character holds drawn: <see cref="Weapon(CharacterId)"/> moved by <paramref name="offset"/> and turned by
+    /// <paramref name="turn"/> in the weapon's frame, the offset in its units (8.5 along +Y is the tip, whatever the weapon's length).
+    /// </summary>
+    public static EffectAnchor Weapon(CharacterId on, Vector3 offset, Quaternion? turn = null) =>
+        new() { Kind = EffectAnchorKind.Weapon, Character = on, Offset = offset, Turn = turn };
 
     /// <summary>
     /// A player-built or nest building by its instance id (<c>BuildingSnapshot.Id</c>), its origin and turn, moved by <paramref name="offset"/>

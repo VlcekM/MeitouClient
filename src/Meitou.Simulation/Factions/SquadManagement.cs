@@ -460,7 +460,7 @@ public static class SquadManagement
                 dead.Members.Add(id);
                 cold.SquadId = dead.Id;
                 moved = true;
-                world.Post(DeathMessage(cold));
+                world.Post(DeathMessage(cold, world.ShownName(cold)));
             }
             if (moved) Relead(table, squad);
         }
@@ -468,17 +468,17 @@ public static class SquadManagement
 
     /// <summary>
     /// The death handler's message for a character of the player's faction (<c>FUN_1407a6200</c>, docs/game/factions-squads-towns.md "The
-    /// player's dead"), chosen by the body as it died: blood loss, else starvation, else plain death.
+    /// player's dead"), chosen by the body as it died: blood loss, else starvation, else plain death; <paramref name="name"/> is its name as shown.
     /// </summary>
-    static string DeathMessage(CharacterCold cold)
+    static string DeathMessage(CharacterCold cold, string name)
     {
         if (cold is { Medical: { } medical, Race: { } race })
         {
             float capacity = MedicalState.BloodCapacity(race, cold.Stats?.Strength ?? 50, medical.HasStatsObject, medical.ScaleK, medical.ScaleZ);
-            if (medical.Blood <= -capacity) return Loc.Tr("{1} has died from blood loss.", cold.Name);
-            if (medical.Hunger <= 0) return Loc.Tr("{1} has died from starvation.", cold.Name);
+            if (medical.Blood <= -capacity) return Loc.Tr("{1} has died from blood loss.", name);
+            if (medical.Hunger <= 0) return Loc.Tr("{1} has died from starvation.", name);
         }
-        return Loc.Tr("{1} is dead.", cold.Name);
+        return Loc.Tr("{1} is dead.", name);
     }
 
     /// <summary>

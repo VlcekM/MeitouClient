@@ -1052,14 +1052,22 @@ public sealed class ModHost
     /// Registers the mods' interface extensions with a new interface, each with its mod's folder (null when unknown); one that throws is logged and
     /// skipped.
     /// </summary>
-    public List<IDisposable> RegisterUi(Func<IUiExtension, string?, IDisposable> register)
+    public List<IDisposable> RegisterUi(Func<IUiExtension, string?, IDisposable> register) =>
+        RegisterUi((extension, folder, _) => register(extension, folder));
+
+    /// <summary>
+    /// Registers the mods' interface extensions with a new interface, each with its mod's folder and translations (null when unknown); one that
+    /// throws is logged and skipped.
+    /// </summary>
+    public List<IDisposable> RegisterUi(Func<IUiExtension, string?, Localisation.ModTranslations?, IDisposable> register)
     {
         var registrations = new List<IDisposable>();
         foreach (var extension in _registry.Ui)
         {
             try
             {
-                registrations.Add(register(extension, _registry.UiFolders.GetValueOrDefault(extension)));
+                var texts = _registry.UiTexts.GetValueOrDefault(extension);
+                registrations.Add(register(extension, _registry.UiFolders.GetValueOrDefault(extension), texts));
             }
             catch (Exception e)
             {

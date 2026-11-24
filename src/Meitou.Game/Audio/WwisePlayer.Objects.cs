@@ -31,6 +31,16 @@ public sealed partial class WwisePlayer
     ulong _postingObject;
 
     /// <summary>
+    /// The playback an action's sounds belong to while <see cref="Run"/> plays it (<see cref="NewPlaying"/>; 0 none).
+    /// </summary>
+    uint _postingPlay;
+
+    /// <summary>
+    /// The last playback id handed out (<see cref="NewPlaying"/>).
+    /// </summary>
+    int _lastPlaying;
+
+    /// <summary>
     /// One game object: its place (behind a lock, written from the host's threads) and its own game parameters and switches (the audio thread's).
     /// </summary>
     sealed class GameObjectState
@@ -148,6 +158,43 @@ public sealed partial class WwisePlayer
     {
         ObjectState(gameObject);
         _commands.Enqueue(() => PostNow(eventId, gameObject, expires: _time + 10));
+    }
+
+    /// <summary>
+    /// Posts an event as <see cref="Post(uint, ulong)"/>, its sounds tagged with <paramref name="playing"/> (<see cref="NewPlaying"/>) so that
+    /// <see cref="StopPlaying"/> ends them alone.
+    /// </summary>
+    public void Post(string eventName, ulong gameObject, uint playing)
+    {
+        uint eventId = WwiseHash.Id(eventName);
+        ObjectState(gameObject);
+        _commands.Enqueue(() => PostNow(eventId, gameObject, expires: _time + 10, playing));
+    }
+
+    /// <summary>
+    /// A new playback id (never 0), as Wwise's playing ids: tags one post's sounds for <see cref="StopPlaying"/>. Any thread.
+    /// </summary>
+    public uint NewPlaying()
+    {
+        uint id = (uint)Interlocked.Increment(ref _lastPlaying);
+        return id == 0 ? (uint)Interlocked.Increment(ref _lastPlaying) : id;
+    }
+
+    /// <summary>
+    /// Stops the sounds of the playback <paramref name="playing"/>, fading out over <paramref name="seconds"/> (at once at 0), and drops its
+    /// actions still waiting for a delay or a bank. Any thread; run at the next block.
+    /// </summary>
+    public void StopPlaying(uint playing, float seconds)
+    {
+        if (playing == 0) return;
+
+        _commands.Enqueue(() =>
+        {
+            foreach (var r in _roots)
+                if (r.Playing == playing) r.Stop(seconds);
+            _pending.RemoveAll(p => p.Playing == playing);
+            _delayed.RemoveAll(d => d.Playing == playing);
+        });
     }
 
     /// <summary>

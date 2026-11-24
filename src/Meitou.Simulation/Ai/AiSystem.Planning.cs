@@ -671,7 +671,7 @@ public sealed partial class AiSystem
                 // collection lists. For a machine target (row 93 at a town machine) it carries an item an input takes (FUN_1405a45f0); 66
                 // (FUN_140597530): it carries the machine's output item.
                 StateType.HaveSomeResourcesFor =>
-                    target.Kind == Targets.Store && cold.Inventory is { } carried ? Production.ProductionSystem.Ditchable(carried).Any()
+                    target.Kind == Targets.Store && cold.Inventory is { } carried ? Production.ProductionSystem.Ditchable(_world, cold, carried).Any()
                     : MachineAt(target) is { } fillable && Production.ProductionSystem.CarriesInputOf(cold, fillable),
                 StateType.HaveSomeResourcesFrom => ResourcesFrom(target, cold),
                 // 89 (FUN_1405a2c90): it carries the machine's output and a storage takes it (FUN_14059acd0), so row 87's !89 plans 113, then 93 into

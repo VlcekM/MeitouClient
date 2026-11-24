@@ -1,4 +1,5 @@
 using Meitou.Data.Fcs;
+using Meitou.Localisation;
 
 namespace Meitou.Data.Gameplay.Construction;
 
@@ -116,6 +117,12 @@ public sealed record MachineData
     /// ("Incinerating"; docs/game/buildings-production.md).
     /// </summary>
     public string Label { get; init; } = "";
+
+    /// <summary>
+    /// <see cref="Label"/> as the mods' text sources show it (<see cref="ShownText.Record"/>, the functionality record's
+    /// <c>string</c> field). Display only.
+    /// </summary>
+    public string ShownLabel() => Functionality is { } f ? ShownText.Record(f, Label, "string") : Label;
 
     /// <summary>
     /// The recipe's input sections (<c>consumes</c>, plus a bench's added sections), in order.
@@ -813,9 +820,10 @@ public sealed class ResourceField
     }
 
     /// <summary>
-    /// The name of the BIOME_GROUP at a position (null without an areas map): what the prospecting window shows as the zone.
+    /// The name of the BIOME_GROUP at a position (null without an areas map) as the mods' text sources show it: what the prospecting window shows
+    /// as the zone. Display only.
     /// </summary>
-    public string? ZoneName(float x, float z) => Group(x, z)?.Name;
+    public string? ZoneName(float x, float z) => Group(x, z)?.ShownName();
 
     /// <summary>
     /// The crop coverages (<c>green</c>, <c>arid</c>, <c>swamp</c>) of the ground at a position (<b>Observed</b>, the prospecting window's

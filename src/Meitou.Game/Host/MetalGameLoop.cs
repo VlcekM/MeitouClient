@@ -1864,7 +1864,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             if (host.Covered) return;
             if (host.DevConsoleHost.ConsoleOpen) host.DevConsoleHost.DevConsole.Type(value);
-            else if (_settings?.Visible == true) _settings.TextInput(value);
+            else if (_settings?.Modal == true) _settings.TextInput(value);
             else if (host.Sandbox.SandboxPicker is { Open: true }) host.Sandbox.SandboxPicker.TextInput(value);
             else if (host.DebugMenu.DebugMenuOpen && host.DebugMenu.DebugMenuTakesText) host.DebugMenu.DebugMenuText(value);
             else if (_photo?.TextInput(value) == true) { }   // a preset's name being typed
@@ -1976,7 +1976,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool MenuKey(SilkKey key, bool ctrl)
     {
         // The full settings dialog (Metal's F10 used to be a preset overlay; the preset now lives in Display).
-        if (_settings?.Visible == true)
+        if (_settings?.Modal == true)
         {
             if (ModalKeyOf(key) is { } settingsKey)
             {
@@ -2010,13 +2010,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_photo is { Active: true }) return false;
         if (key == SilkKey.F10 && _settings is not null)
         {
-            _settings.Visible = !_settings.Visible;
+            _settings.Toggle();
             return true;
         }
         if (_settings is not null && KeyMap.Map(key) is { } settingsToggle &&
             host.Session.Bindings.Get(InputAction.ToggleSettings).Contains(Binding.Of(settingsToggle)))
         {
-            _settings.Visible = !_settings.Visible;
+            _settings.Toggle();
             return true;
         }
         return false;
@@ -2131,11 +2131,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             if (host.Covered) return;
             if (KeyMap.Map(button) is not { } mapped) return;
             var at = Pixels(mouse.Position);
-            if (_settings?.Visible == true)
-            {
-                _settings.MouseDown(at, mapped);
-                return;
-            }
+            if (_settings?.MouseDown(at, mapped) == true) return;
+            if (_settings?.Contains(at) == true) return;
             if (_photo is { Active: true } photo)
             {
                 PhotoPointerDown(photo, mapped, at);
@@ -2162,11 +2159,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             if (host.Covered) return;
             bool menuClick = _debugMenuClick;
             _debugMenuClick = false;
-            if (_settings?.Visible == true)
-            {
-                _settings.MouseUp();
-                return;
-            }
+            bool settingsDrag = _settings?.MouseUp() == true;
+            if (_settings?.Modal == true || settingsDrag) return;
             if (KeyMap.Map(button) is not { } mapped) return;
             if (_photo is { Active: true } photo)
             {
@@ -2180,11 +2174,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         mouse.Scroll += (_, wheel) =>
         {
             if (host.Covered) return;
-            if (_settings?.Visible == true)
-            {
-                _settings.Scroll(wheel.Y);
-                return;
-            }
+            if (_settings?.Scroll(wheel.Y) == true) return;
             if (_photo is { Active: true } photo)
             {
                 // Over the panel the wheel steps the setting under it; over the picture it zooms, or sets the fly speed with Ctrl.
@@ -2215,9 +2205,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _lastMouse = p;
             return;
         }
-        if (_settings?.Visible == true)
+        if (_settings?.MouseMove(Pixels(p)) == true)
         {
-            _settings.MouseMove(Pixels(p));
             _lastMouse = p;
             return;
         }
@@ -2824,7 +2813,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         bool ctrlHeld = Ctrl();
         bool altHeld = host.HighlightHeld();
         bool highlighting = altHeld && !host.Covered && !host.TitleScreen.TitleVisible && _hud is { UiVisible: true } &&
-            _settings?.Visible != true && !host.Session.Camera.IsFree;
+            _settings?.Modal != true && !host.Session.Camera.IsFree;
         if (_hud is not null)
         {
             _hud.CtrlHeld = ctrlHeld;
@@ -2843,7 +2832,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         // Edge scrolling only while the world owns the pointer (the interface is visible and not dragging a panel).
         host.Session.Camera.Settings.EdgeScroll = host.Config.EdgeScroll != false;
-        host.Session.Camera.Strategy.EdgePointer = host.Covered || _hud is not null && host.TitleScreen.TitleVisible || _settings?.Visible == true ||
+        host.Session.Camera.Strategy.EdgePointer = host.Covered || _hud is not null && host.TitleScreen.TitleVisible || _settings?.Modal == true ||
             _hud is { UiVisible: false } or { UiCapturesPointer: true } ? null : WindowPointer.InWindow(_window);
         host.UpdateCameraLeash(_tourHolds || _tour.Active);
 
@@ -3037,12 +3026,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 {
                     _characters.PortraitRequests.Add(new PortraitRequest(host.PortraitKey(member.Id), cell, member.PortraitSerial));
                 }
+
+                foreach (var (id, cell) in _hud.RecordPortraits.Live)
+                    _characters.PortraitRequests.Add(new PortraitRequest(host.PortraitKey(id), cell, _hud.PortraitBar.PortraitSerial(id)));
             }
         }
         // Saved pictures have neither the ground items' labels nor the hover and building outlines.
         if (_shotFrame && _hud is not null) _hud.GroundItemPicks.HighlightFocus = null;
         var hoverKeys = new List<(long Key, Vector4 Colour)>();
-        bool outlines = !host.Session.Camera.IsFree && _hud is { UiVisible: true } && !host.Covered && _settings?.Visible != true
+        bool outlines = !host.Session.Camera.IsFree && _hud is { UiVisible: true } && !host.Covered && _settings?.Modal != true
             && !_shotFrame;
         bool outlining = host.Config.HoverOutline && outlines;
         if (outlining)
@@ -3345,7 +3337,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         bool wrote = false;
         if (!_still && !_shotFrame && !feedbackShot && pointerMouse is not null && _hud is not null)
         {
-            bool pointerWorld = !host.Covered && !host.GameOptions.NoPopulation && _settings?.Visible != true && !host.TitleScreen.TitleVisible;
+            bool pointerWorld = !host.Covered && !host.GameOptions.NoPopulation && _settings?.Modal != true && !host.TitleScreen.TitleVisible;
             // Photo mode flies the free camera too, but its panel is worked with the pointer: hidden only while the view is turned or the panel is.
             bool freeLook = pointerWorld && host.Session.Camera.IsFree
                 && (_photo is not { Active: true } || !_photo.PanelShown || host.OrbitHeld());
@@ -3409,7 +3401,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             // Compacting the LOH is a stop-the-world move of every large object: on a 4+ GB heap it stalled
             // this loop for 1.6 s. Do it where a loading screen or a menu covers the pause, or when the heap
             // has grown past 4 GB; otherwise a background collection is enough and does not move live arrays.
-            bool safePoint = host.TitleScreen.TitleVisible || _settings?.Visible == true || host.ActiveSceneLoad is not null
+            bool safePoint = host.TitleScreen.TitleVisible || _settings?.Modal == true || host.ActiveSceneLoad is not null
                 || host.Loading?.Exiting == true;
             bool compact = safePoint || managedHighWater;
             if (compact)

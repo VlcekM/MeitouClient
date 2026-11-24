@@ -5723,3 +5723,37 @@ msgstr "• レイトレーシングはウルトラとエクストリームの�
 #. machine-translated
 msgid "• Your saved graphics settings and mods are ignored and never modified"
 msgstr "• 保存済みのグラフィック設定と Mod は使用されず、変更もされません"
+
+msgid "Settings window opacity"
+msgstr "設定ウィンドウの不透明度"
+
+msgid "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings)."
+msgstr "ゲーム内設定ウィンドウの不透明度です（下げると設定を調整しながら背後の世界を確認できます）。"
+
+msgid "No mod matches the filter."
+msgstr "フィルターに一致するMODはありません。"
+
+msgid "Issues"
+msgstr "問題"
+
+msgid "Name A-Z"
+msgstr "名前順 A-Z"
+
+msgid "Filter mods"
+msgstr "MODを絞り込む"
+
+msgid "Show"
+msgstr "表示"
+
+msgid "Opacity"
+msgstr "不透明度"
+
+msgid "Restore"
+msgstr "元に戻す"
+
+msgid "{1} of {2}"
+msgstr "{1} / {2}"
+
+msgid "{1} mod"
+msgid_plural "{1} mods"
+msgstr[0] "{1} 個のMOD"
