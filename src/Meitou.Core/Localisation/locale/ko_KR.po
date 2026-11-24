@@ -5699,3 +5699,37 @@ msgstr "하드웨어가 감지될 때 생성됩니다."
 #. machine-translated
 msgid "Generated for this computer so the site keeps your results together."
 msgstr "사이트에서 결과를 함께 묶어 두도록 이 컴퓨터용으로 생성됩니다."
+
+msgid "Settings window opacity"
+msgstr "설정 창 불투명도"
+
+msgid "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings)."
+msgstr "게임 내 설정 창의 불투명도입니다(낮추면 설정을 조정하면서 뒤쪽 월드를 볼 수 있습니다)."
+
+msgid "No mod matches the filter."
+msgstr "필터와 일치하는 모드가 없습니다."
+
+msgid "Issues"
+msgstr "문제"
+
+msgid "Name A-Z"
+msgstr "이름순 A-Z"
+
+msgid "Filter mods"
+msgstr "모드 필터"
+
+msgid "Show"
+msgstr "표시"
+
+msgid "Opacity"
+msgstr "불투명도"
+
+msgid "Restore"
+msgstr "복원"
+
+msgid "{1} of {2}"
+msgstr "{1} / {2}"
+
+msgid "{1} mod"
+msgid_plural "{1} mods"
+msgstr[0] "모드 {1}개"

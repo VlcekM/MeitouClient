@@ -460,6 +460,8 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Interface scale", "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it).",
             Slider: new("Interface scale", UserConfig.MinInterfaceScale, UserConfig.MaxInterfaceScale, () => menu.Config.InterfaceScale,
                 SetInterfaceScale, "0.00", Text: v => $"{v * 100:0}%", Faithful: 1, Scale: 100, Step: 0.05f)));
+        result.Add(new("Settings window opacity", "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings).",
+            Slider: menu.Window.OpacitySlider));
         result.Add(new("Show names",
             "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
             Toggle: new("Show names", () => menu.Config.ShowNames, v => menu.Player.ShowNames = menu.Config.ShowNames = v, OnOff: true)));

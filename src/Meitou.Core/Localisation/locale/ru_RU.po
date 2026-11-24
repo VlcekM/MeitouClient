@@ -5703,3 +5703,39 @@ msgstr "Создаётся при определении оборудовани�
 #. machine-translated
 msgid "Generated for this computer so the site keeps your results together."
 msgstr "Создаётся для этого компьютера, чтобы сайт объединял ваши результаты."
+
+msgid "Settings window opacity"
+msgstr "Непрозрачность окна настроек"
+
+msgid "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings)."
+msgstr "Непрозрачность игрового окна настроек (уменьшите, чтобы видеть мир позади во время настройки)."
+
+msgid "No mod matches the filter."
+msgstr "Нет модов, соответствующих фильтру."
+
+msgid "Issues"
+msgstr "Проблемы"
+
+msgid "Name A-Z"
+msgstr "Имя A–Z"
+
+msgid "Filter mods"
+msgstr "Фильтр модов"
+
+msgid "Show"
+msgstr "Показать"
+
+msgid "Opacity"
+msgstr "Непрозрачность"
+
+msgid "Restore"
+msgstr "Восстановить"
+
+msgid "{1} of {2}"
+msgstr "{1} из {2}"
+
+msgid "{1} mod"
+msgid_plural "{1} mods"
+msgstr[0] "{1} мод"
+msgstr[1] "{1} мода"
+msgstr[2] "{1} модов"

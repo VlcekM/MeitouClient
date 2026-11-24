@@ -5701,3 +5701,38 @@ msgstr "Se genera al detectar el hardware."
 #. machine-translated
 msgid "Generated for this computer so the site keeps your results together."
 msgstr "Generado para este equipo para que el sitio agrupe tus resultados."
+
+msgid "Settings window opacity"
+msgstr "Opacidad de la ventana de ajustes"
+
+msgid "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings)."
+msgstr "Opacidad de la ventana de ajustes en el juego (bájala para ver el mundo detrás mientras ajustas opciones)."
+
+msgid "No mod matches the filter."
+msgstr "Ningún mod coincide con el filtro."
+
+msgid "Issues"
+msgstr "Problemas"
+
+msgid "Name A-Z"
+msgstr "Nombre A-Z"
+
+msgid "Filter mods"
+msgstr "Filtrar mods"
+
+msgid "Show"
+msgstr "Mostrar"
+
+msgid "Opacity"
+msgstr "Opacidad"
+
+msgid "Restore"
+msgstr "Restaurar"
+
+msgid "{1} of {2}"
+msgstr "{1} de {2}"
+
+msgid "{1} mod"
+msgid_plural "{1} mods"
+msgstr[0] "{1} mod"
+msgstr[1] "{1} mods"

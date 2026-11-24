@@ -125,6 +125,10 @@ sealed class UserConfig
     /// </summary>
     public const float MinInterfaceScale = 0.5f, MaxInterfaceScale = 2;
     /// <summary>
+    /// The lowest <see cref="SettingsOpacity"/> (25%).
+    /// </summary>
+    public const float MinSettingsOpacity = 0.25f;
+    /// <summary>
     /// The ranges of <see cref="CameraMoveSpeed"/> (150 … 1000) and <see cref="CameraZoomSpeed"/> (10 … 200), the original's.
     /// </summary>
     public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
@@ -264,6 +268,10 @@ sealed class UserConfig
     /// larger than the window height alone makes it.
     /// </summary>
     public float InterfaceScale { get; set; } = 1;
+    /// <summary>
+    /// The opacity of the in-game settings window (25% … 100%, default 100%; header bar and Interface settings).
+    /// </summary>
+    public float SettingsOpacity { get; set; } = 1;
     /// <summary>
     /// The damage floaters (Interface settings): the original's <c>floaters</c> option, Simple by default; Meitou also floats a green "+N" over a
     /// player character that heals.
