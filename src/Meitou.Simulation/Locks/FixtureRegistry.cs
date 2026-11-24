@@ -1197,7 +1197,7 @@ public sealed partial class FixtureRegistry
             if (!next[s].Alive || table.Cold(s) is not { InSomething: not HeldState.None, InWhat: { } what } c)
                 continue;
 
-            if (HeldFixture(c, what) is not { } f || !IsFree(table, f)) continue;
+            if (HeldFixture(c, what) is not { } f || !Claims(world, f, new CharacterId(s, next[s].Generation), c)) continue;
             f.Occupant = new CharacterId(s, next[s].Generation);
             c.InWhat = f.Id;
 
@@ -1220,6 +1220,34 @@ public sealed partial class FixtureRegistry
             }
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="held"/> takes the fixture its save names: a free one, or one a prisoner holds by the original's keys alone while
+    /// <paramref name="held"/>'s are Meitou's. Two prisoners claim one cage only in a Meitou save whose load left the original's prisoner out (#1271),
+    /// whose record kept the original's keys as read; the cage was empty in that game and Meitou caged the other there since, so the newer claim
+    /// wins and the stale one, in the cage or still to come, is let go where it stands (engine choice: the original never saves such a pair).
+    /// </summary>
+    bool Claims(World world, Fixture f, CharacterId held, CharacterCold c)
+    {
+        var table = world.Characters;
+        if (IsFree(table, f)) return true;
+
+        var occupant = f.Occupant;
+        bool newer = HeldByMeitou(c);
+        bool occupantNewer = table.TryResolveNext(occupant, out int o) && table.Cold(o) is { } other && HeldByMeitou(other);
+        if (newer == occupantNewer) return false;
+
+        if (newer) ReleaseHeld(world, occupant);
+        else ReleaseHeld(world, held);
+
+        return newer;
+    }
+
+    /// <summary>
+    /// Whether a loaded character's held state was read from Meitou's keys (<see cref="Saving.HeldSave.MeitouWhat"/>), which Meitou writes when it
+    /// holds or frees a character after the load; the original's keys alone are a hold left as read.
+    /// </summary>
+    static bool HeldByMeitou(CharacterCold c) => c.Save?.Source.GameState?.Strings.ContainsKey(Saving.HeldSave.MeitouWhat) == true;
 
     /// <summary>
     /// The fixture a held character's <see cref="CharacterCold.InWhat"/> names: a fixture id, a standalone bed, a building of the player's the

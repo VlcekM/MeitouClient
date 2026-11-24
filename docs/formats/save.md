@@ -795,7 +795,9 @@ Shop prisoner's cage (`1783-gamedata.base`, an `<n>-zoneX.Y-INGAME` entry of the
 the shop's `interior layout name`, the next cage 27.8 away. A sleeper's generated interior bed is matched the same way
 (**Observed**: the 24 saved sleepers of the Rebirth garrison, record `3460-otto.mod`, at distance 0 from Meitou's beds, the next bed
 of the record 33 away). A building of the player's is known by its zone and instance in the zones' states but by its instance alone in Meitou, so an
-`in what` naming one resolves to the cage or bed of that instance (`FixtureRegistry.PlayerBuildingFixture`, #1271). Meitou-only keys `meitou in something` (int) /
+`in what` naming one resolves to the cage or bed of that instance (`FixtureRegistry.PlayerBuildingFixture`, #1271). Two prisoners naming one cage
+(only a Meitou save whose load left the original's prisoner out, its keys kept as read, while Meitou caged another there): the one held by Meitou's keys
+takes it and the other is let go where it stands (**engine choice**, `FixtureRegistry.Claims`). Meitou-only keys `meitou in something` (int) /
 `meitou in what` (fixture id) carry the rest and win on load. A prisoner in a layout cage is written with `in what` naming the cage's
 entry when the save holds it (the house's saved interior, else the one `InteriorSave` writes, [Zone files](#zone-files)), the entry's
 `locked` and `lock lvl` as the cage's lock is now; a prisoner of a platoon the save leaves as read gets it too. The held characters are bound (`FixtureRegistry.Bind`) when a town registers
