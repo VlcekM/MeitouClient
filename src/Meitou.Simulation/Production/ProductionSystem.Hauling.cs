@@ -353,17 +353,19 @@ public sealed partial class ProductionSystem
     /// the machine (ties: the lower site id); no building of the machine's own record (vfunc <c>0x18</c>, the record, against the excluded target's).
     /// The finder measures from the character, who stands at the machine when it fetches (#963: a well 3000 or more away was missed). A producer
     /// <paramref name="operating"/> operates counts once its output is full, so it fills the well before it leaves with the water. A storage is
-    /// taken only when the storage filters let <paramref name="fetcher"/> take the item from it (<see cref="IStorageFilter"/>).
+    /// taken only when the storage filters let <paramref name="fetcher"/> take the item from it (<see cref="IStorageFilter"/>); of those, the one
+    /// of the highest take priority (<see cref="IStoragePriority"/>, engine API), the nearest among equals.
     /// </summary>
     string? NearestSource(World world, BuildSite from, string record, CharacterCold fetcher, CharacterCold? operating = null)
     {
         string? own = world.Machines.Find(from.Id)?.Data.Id;
         bool Fetchable(BuildSite s, Machine m) => s.Id != from.Id && m.Data.Id != own && InSourceRange(s.Position, from.Position);
-        bool Stored(BuildSite s, Machine m) => m.Data.IsStorage && Fetchable(s, m) && m.Storage is { } st && StorageHolds(st, record)
-            && world.StorageAllows(fetcher, s.Id, StorageUse.Take, record);
+        StoragePriority Stored(BuildSite s, Machine m) => m.Data.IsStorage && Fetchable(s, m) && m.Storage is { } st && StorageHolds(st, record)
+            ? world.StorageRank(fetcher, s.Id, StorageUse.Take, record)
+            : StoragePriority.Forbidden;
         bool Made(BuildSite s, Machine m) => !m.Data.IsStorage && Fetchable(s, m) && OutputHolds(m, s, record, operating);
 
-        return NearestSite(world, from.Position, float.MaxValue, IsStore, Stored) ?? NearestSite(world, from.Position, float.MaxValue, IsMaker, Made);
+        return BestStore(world, from.Position, IsStore, Stored) ?? NearestSite(world, from.Position, float.MaxValue, IsMaker, Made);
     }
 
     /// <summary>
@@ -381,13 +383,14 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The nearest complete storage <paramref name="by"/> uses (<see cref="StoresFor"/>) within <see cref="InFinderRange"/> of a machine that passes
     /// <paramref name="ok"/> and the storage filters for putting <paramref name="record"/> in (<see cref="IStorageFilter"/>; ties: the lower
-    /// site id). The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the character, who stands at the machine (#965: a
+    /// site id); of those, the one of the highest put priority (<see cref="IStoragePriority"/>, engine API), the nearest among equals. The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the character, who stands at the machine (#965: a
     /// storage 3000 or more away was missed).
     /// </summary>
     string? NearestStorage(World world, BuildSite from, CharacterCold by, string record, Func<Machine, bool> ok)
     {
         string? best = null;
         float bestGap = float.MaxValue;
+        var bestRank = StoragePriority.Forbidden;
         foreach (var s in world.Machines.All)
         {
             if (!s.Data.IsStorage || s.Storage is null || s.Site == from.Id || Site(world, s.Site) is not { Complete: true } site
@@ -395,12 +398,14 @@ public sealed partial class ProductionSystem
                 continue;
 
             float gap = Gap(site.Position, from.Position);
-            if (gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0)) continue;
+            bool nearer = gap < bestGap || gap == bestGap && string.CompareOrdinal(s.Site, best) < 0;
+            if (!nearer && !world.StorageMayOutrank(bestRank)) continue;
             if (!InFinderRange(site.Position, from.Position) || !ok(s)) continue;
-            if (!world.StorageAllows(by, s.Site, StorageUse.Put, record)) continue;
 
-            best = s.Site;
-            bestGap = gap;
+            var rank = world.StorageRank(by, s.Site, StorageUse.Put, record);
+            if (rank == StoragePriority.Forbidden || rank < bestRank || rank == bestRank && !nearer) continue;
+
+            (best, bestGap, bestRank) = (s.Site, gap, rank);
         }
 
         return best;

@@ -10,7 +10,7 @@ sealed class StorageFilters
     /// <summary>
     /// The filters in system order, each with its system index.
     /// </summary>
-    List<Entry>? _filters;
+    List<StorageHook<IStorageFilter>>? _filters;
 
     /// <summary>
     /// Whether any filter is registered; a search asks nothing without one.
@@ -22,7 +22,7 @@ sealed class StorageFilters
     /// </summary>
     internal void Register(ITickSystem system, int systemIndex)
     {
-        if (system is IStorageFilter filter) (_filters ??= []).Add(new Entry(filter, systemIndex));
+        if (system is IStorageFilter filter) (_filters ??= []).Add(new StorageHook<IStorageFilter>(filter, systemIndex, "storage filter"));
     }
 
     /// <summary>
@@ -38,7 +38,7 @@ sealed class StorageFilters
 
             try
             {
-                if (!entry.Filter.Allows(world, who, storage, use, record)) return false;
+                if (!entry.Hook.Allows(world, who, storage, use, record)) return false;
             }
             catch (Exception e)
             {
@@ -79,61 +79,5 @@ sealed class StorageFilters
         }
 
         return record;
-    }
-
-    /// <summary>
-    /// One filter and the tick it first threw in (-1 none).
-    /// </summary>
-    sealed class Entry(IStorageFilter filter, int systemIndex)
-    {
-        /// <summary>
-        /// The tick the filter first threw in; -1 while it never has.
-        /// </summary>
-        long _faultTick = -1;
-
-        /// <summary>
-        /// The filter.
-        /// </summary>
-        public IStorageFilter Filter { get; } = filter;
-
-        /// <summary>
-        /// The filter's system index (what the hash records).
-        /// </summary>
-        public int SystemIndex { get; } = systemIndex;
-
-        /// <summary>
-        /// Whether the filter has thrown.
-        /// </summary>
-        public bool Faulted => FaultTick >= 0;
-
-        /// <summary>
-        /// The tick the filter first threw in; -1 while it never has.
-        /// </summary>
-        public long FaultTick => Interlocked.Read(ref _faultTick);
-
-        /// <summary>
-        /// Whether the filter is asked at <paramref name="tick"/>: never threw, or threw in this tick (it goes on being asked there, so the tick's
-        /// answers do not depend on which worker threw first).
-        /// </summary>
-        public bool AskedAt(long tick)
-        {
-            long fault = Interlocked.Read(ref _faultTick);
-            return fault < 0 || fault == tick;
-        }
-
-        /// <summary>
-        /// Records the first throw at <paramref name="tick"/> with its log line; later throws in the same tick are not logged again.
-        /// </summary>
-        public void Fault(long tick, Exception e)
-        {
-            if (Interlocked.CompareExchange(ref _faultTick, tick, -1) != -1) return;
-
-            string fault = $"{e.GetType().Name}: {e.Message}";
-            SimulationExtensions.TellOutdated(Filter, e);
-            if (SimulationExtensions.FactoryOf(Filter) is { } factory)
-                Console.Error.WriteLine($"mod       {factory.Owner}: storage filter '{factory.Name}' disabled for this world: {fault}");
-            else
-                Console.Error.WriteLine($"storage filter '{Filter.GetType().FullName}' disabled for this world: {fault}");
-        }
     }
 }

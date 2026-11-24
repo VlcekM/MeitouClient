@@ -294,15 +294,16 @@ public class ProductionTests
         /// Creates machines on town 1 so power fixtures use a shared grid; town 0 models furniture without a player outpost.
         /// </summary>
         public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false, int town = 1,
-            PopulationData? population = null, float spacing = 30)
+            PopulationData? population = null, float spacing = 30, ITickSystem[]? extra = null)
         {
             Items = new ItemFactory(db, constants);
             var walk = new OpenGroundWalkability(SyntheticTown.Ground);
             Production = new ProductionSystem(db, constants, BodyOptions.Default, Items, null);
+            List<ITickSystem> systems = [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production];
+            if (population is not null) systems.Add(new PopulationSystem(population));
+            systems.AddRange(extra ?? []);
             World = new SimWorld(new WorldSettings { Seed = 5, Threads = threads, PublishSnapshots = snapshots, MinPartitionSize = 1 }, walk,
-                population is null
-                    ? [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production]
-                    : [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), Production, new PopulationSystem(population)]);
+                systems);
             World.Player.Faction = PlayerFaction;
             World.Research.Set(db, [Tinkering]);
             for (int i = 0; i < records.Length; i++)
@@ -1203,6 +1204,113 @@ public class ProductionTests
 
         Assert.True(stored && farm.Inputs[0].Count > 0, $"tank {tank.Items.Count}, farm {farm.Inputs[0].Count}");
         Assert.Equal((1, 0), (rig.Count(farmer, Crop), tank.Items.Count(i => i.Record == Crop)));
+    }
+
+    // ------------------------------------------------------------------ storage priorities
+
+    /// <summary>
+    /// A storage priority system answering from a function of the storage and the use.
+    /// </summary>
+    sealed class Ranks(Func<string, StorageUse, StoragePriority> rank) : IStoragePriority
+    {
+        public StoragePriority Priority(SimWorld world, CharacterId who, string storage, StorageUse use, string? record) => rank(storage, use);
+    }
+
+    /// <summary>
+    /// A storage filter refusing one storage.
+    /// </summary>
+    sealed class Refuses(string storage) : IStorageFilter
+    {
+        public bool Allows(SimWorld world, CharacterId who, string storage1, StorageUse use, string? record) => storage1 != storage;
+    }
+
+    /// <summary>
+    /// <see cref="SimWorld.StorageRank(CharacterId, string, StorageUse, string?)"/> (docs/modding.md "Storage priority"): a filter's refusal is
+    /// Forbidden, any system's Forbidden wins, else the first answer other than Normal in system order, so take and put rank apart (an overstock
+    /// store: put low, take critical); a system that throws answers Normal. Catches a priority that ignored the filters, let a later system's
+    /// Forbidden be overruled or let a throwing system break the search.
+    /// </summary>
+    [Fact]
+    public void A_storage_rank_combines_filters_and_priority_systems()
+    {
+        StoragePriority First(string s, StorageUse use) => s switch
+        {
+            "over" => use == StorageUse.Put ? StoragePriority.Low : StoragePriority.Critical,
+            "boom" => throw new InvalidOperationException("test"),
+            _ => StoragePriority.Normal,
+        };
+        StoragePriority Second(string s, StorageUse use) => s is "over" or "pref" ? StoragePriority.Preferred
+            : s == "shut" ? StoragePriority.Forbidden
+            : StoragePriority.Normal;
+        using var rig = new Rig(Database(), Constants, [Tank], extra: [new Refuses("refused"), new Ranks(First), new Ranks(Second)]);
+        var who = rig.Add(0, StatsEnumerated.Labouring, Unit);
+        rig.World.RunTick();
+        StoragePriority Rank(string s, StorageUse use) => rig.World.StorageRank(who, s, use, Water);
+
+        Assert.Equal(StoragePriority.Forbidden, Rank("refused", StorageUse.Take));
+        Assert.Equal((StoragePriority.Low, StoragePriority.Critical), (Rank("over", StorageUse.Put), Rank("over", StorageUse.Take)));
+        Assert.Equal(StoragePriority.Preferred, Rank("pref", StorageUse.Put));
+        Assert.Equal(StoragePriority.Forbidden, Rank("shut", StorageUse.Put));
+        Assert.Equal(StoragePriority.Normal, Rank("boom", StorageUse.Take));
+        Assert.Equal(StoragePriority.Normal, Rank("plain", StorageUse.Take));
+    }
+
+    /// <summary>
+    /// The town fill fetch (<see cref="FillSources"/>) takes from the storage of the highest take priority, the nearest among equals: without a
+    /// priority system the nearer bin, with the farther bin ranked Critical for taking (the nearer Low) the farther one, and with the nearer one
+    /// Forbidden the farther one. Catches a finder that kept nearest-first or asked the priority only for nearer storages.
+    /// </summary>
+    [Theory]
+    [InlineData(StoragePriority.Normal, StoragePriority.Normal, 1)]
+    [InlineData(StoragePriority.Low, StoragePriority.Critical, 2)]
+    [InlineData(StoragePriority.Forbidden, StoragePriority.Normal, 2)]
+    [InlineData(StoragePriority.Preferred, StoragePriority.Preferred, 1)]
+    public void A_fill_fetch_takes_from_the_storage_of_the_highest_take_priority(StoragePriority near, StoragePriority far, int expected)
+    {
+        Rig? built = null;
+        StoragePriority Rank(string s, StorageUse use) => use != StorageUse.Take ? StoragePriority.Normal
+            : s == built!.Sites[1] ? near
+            : s == built.Sites[2] ? far
+            : StoragePriority.Normal;
+        using var rig = built = new Rig(MillDatabase(), Constants, [Mill, Bin, Bin], extra: [new Ranks(Rank)]);
+        var worker = rig.Add(0, StatsEnumerated.Labouring, Unit);
+        rig.World.RunTick();
+        rig.Machine(0).Inputs[0].Count = 3;
+        foreach (int bin in new[] { 1, 2 }) Assert.True(rig.Machine(bin).Storage!.Add(rig.Items.Create(Water, 20)!));
+        var cold = rig.World.Characters.Cold(worker.Slot)!;
+        var at = rig.World.Characters.Next[worker.Slot].Position;
+
+        var source = FillSources.Find(rig.World, null, rig.Machine(0), cold, at, []);
+
+        Assert.Equal(rig.Sites[expected], source?.Store);
+    }
+
+    /// <summary>
+    /// An operator hauls a full well's water to the storage of the highest put priority, the nearest among equals: without a priority system the
+    /// nearer tank, with the farther tank Preferred for putting (the nearer an overstock store: put Low, take Critical) the farther one. Catches
+    /// the operator's output finder (<c>NearestStorage</c>) keeping nearest-first or reading the take priority.
+    /// </summary>
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 2)]
+    public void An_operator_hauls_output_to_the_storage_of_the_highest_put_priority(bool ranked, int expected)
+    {
+        Rig? built = null;
+        StoragePriority Rank(string s, StorageUse use) => !ranked ? StoragePriority.Normal
+            : s == built!.Sites[1] ? (use == StorageUse.Put ? StoragePriority.Low : StoragePriority.Critical)
+            : s == built.Sites[2] && use == StorageUse.Put ? StoragePriority.Preferred
+            : StoragePriority.Normal;
+        using var rig = built = new Rig(Database(), Constants, [Well, Tank, Tank], extra: [new Ranks(Rank)]);
+        var labourer = rig.Add(0, StatsEnumerated.Labouring, Unit);
+        rig.World.RunTick();
+        var well = rig.Machine(0);
+        well.Output!.Count = 10;
+        well.Yield = 0;
+        rig.World.Commands.Enqueue(new OperateOrder([labourer], rig.Sites[0]) { Tick = rig.World.Tick });
+        int Stored(int site) => rig.Machine(site).Storage!.Items.Where(i => i.Record == Water).Sum(i => i.Quantity);
+        for (int t = 0; t < 30000 && Stored(1) + Stored(2) == 0; t++) rig.World.RunTick();
+
+        Assert.True(Stored(expected) > 0 && Stored(3 - expected) == 0, $"near {Stored(1)}, far {Stored(2)}");
     }
 
     // ------------------------------------------------------------------ job lists

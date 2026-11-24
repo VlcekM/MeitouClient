@@ -1892,8 +1892,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The material finder (<b>Verified</b>, the 115 "Finding building mats" target finder <c>FUN_1405a2a60</c> -> <c>FUN_14059d000</c>;
     /// docs/game/buildings-production.md "Material delivery"): for each material still owed, in the site's order, the first that has a source wins: a
-    /// loose item of it (<see cref="LooseSource.Nearest"/>), else the nearest player storage holding it within <see cref="SourceRangeSquared"/> that
-    /// the storage filters let the builder take it from (<see cref="Items.IStorageFilter"/>), else the nearest player machine whose output holds it.
+    /// loose item of it (<see cref="LooseSource.Nearest"/>), else the player storage holding it within <see cref="SourceRangeSquared"/> that
+    /// the storage filters let the builder take it from (<see cref="Items.IStorageFilter"/>; the highest take priority, then the nearest:
+    /// <see cref="MaterialStore"/>), else the nearest player machine whose output holds it.
     /// The buildings are those of the builder's town (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: no per-material memory of the
     /// last source (the original's is a cache emptied at each AI update, so it changes no answer), the exact record (the original also lets any
     /// record of the same type stand in for a non-ITEM material).
@@ -1911,25 +1912,68 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             string want = material.Item;
             if (LooseSource.Nearest(world, data, cold, at, want) is { } loose) return new MaterialSource(null, loose.Id, want);
 
-            string? store = null, machine = null;
-            float storeGap = float.MaxValue, machineGap = float.MaxValue;
-            foreach (var m in world.Machines.All)
-            {
-                if (world.Buildings.Find(m.Site) is not { Complete: true } building || building.Owner != cold.Faction) continue;
-                float d = Vector3.DistanceSquared(building.Position, at);
-                if (d > SourceRangeSquared || inTown is not null && !inTown(building.Position)) continue;
-                if (m.Data.IsStorage)
-                {
-                    bool holds = d < storeGap && m.Storage is { } inv && Stack(inv, want) is not null;
-                    if (holds && world.StorageAllows(cold, m.Site, Items.StorageUse.Take, want)) (store, storeGap) = (m.Site, d);
-                }
-                else if (d < machineGap && m.Output is { Count: > 0 } output && output.Recipe.Item == want) (machine, machineGap) = (m.Site, d);
-            }
-
-            if ((store ?? machine) is { } from) return new MaterialSource(from, null, want);
+            if ((MaterialStore(world, cold, at, want, inTown) ?? MaterialMachine(world, cold, at, want, inTown)) is { } from)
+                return new MaterialSource(from, null, want);
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The builder's faction's complete storage within <see cref="SourceRangeSquared"/> of <paramref name="at"/> (and in its town) holding a loose
+    /// stack of <paramref name="want"/> that the storage filters let it take from (<see cref="Items.IStorageFilter"/>): the one of the highest take
+    /// priority (<see cref="Items.IStoragePriority"/>, engine API), the nearest among equals (a tie keeps the first); null with none.
+    /// </summary>
+    static string? MaterialStore(World world, CharacterCold cold, Vector3 at, string want, Func<Vector3, bool>? inTown)
+    {
+        string? store = null;
+        float storeGap = float.MaxValue;
+        var storeRank = Items.StoragePriority.Forbidden;
+        foreach (var m in world.Machines.All)
+        {
+            if (!m.Data.IsStorage || m.Storage is not { } inv || OwnSource(world, cold, m, at, inTown) is not { } d) continue;
+
+            bool nearer = d < storeGap;
+            if (!nearer && !world.StorageMayOutrank(storeRank) || Stack(inv, want) is null) continue;
+
+            var rank = world.StorageRank(cold, m.Site, Items.StorageUse.Take, want);
+            if (rank == Items.StoragePriority.Forbidden || rank < storeRank || rank == storeRank && !nearer) continue;
+
+            (store, storeGap, storeRank) = (m.Site, d, rank);
+        }
+
+        return store;
+    }
+
+    /// <summary>
+    /// The builder's faction's nearest complete machine within <see cref="SourceRangeSquared"/> of <paramref name="at"/> (and in its town) whose
+    /// output holds <paramref name="want"/> (a tie keeps the first); null with none.
+    /// </summary>
+    static string? MaterialMachine(World world, CharacterCold cold, Vector3 at, string want, Func<Vector3, bool>? inTown)
+    {
+        string? machine = null;
+        float machineGap = float.MaxValue;
+        foreach (var m in world.Machines.All)
+        {
+            if (m.Data.IsStorage || OwnSource(world, cold, m, at, inTown) is not { } d) continue;
+            if (d < machineGap && m.Output is { Count: > 0 } output && output.Recipe.Item == want) (machine, machineGap) = (m.Site, d);
+        }
+
+        return machine;
+    }
+
+    /// <summary>
+    /// The squared distance from <paramref name="at"/> to a complete building of the builder's faction within <see cref="SourceRangeSquared"/>
+    /// and in its town (<paramref name="inTown"/>, null: no limit); null for any other.
+    /// </summary>
+    static float? OwnSource(World world, CharacterCold cold, Production.Machine m, Vector3 at, Func<Vector3, bool>? inTown)
+    {
+        if (world.Buildings.Find(m.Site) is not { Complete: true } building || building.Owner != cold.Faction) return null;
+
+        float d = Vector3.DistanceSquared(building.Position, at);
+        if (d > SourceRangeSquared || inTown is not null && !inTown(building.Position)) return null;
+
+        return d;
     }
 
     /// <summary>
