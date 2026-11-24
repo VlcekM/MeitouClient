@@ -1881,7 +1881,8 @@ optional), `EdgeGap` (site, point -> gap to its footprint hull; the host's).
   item whole (the rest stays); with something taken it walks back as *Build*, else the work ends. *Dismantle*: a complete site first
   becomes incomplete with progress at most target - 1; then progress -= dt x `lerp(0.05, 4, e/100)` x 4 x rate (no option
   or constant), XP as building; at 0 the delivered materials come back and the site is removed. The `medic` clip plays
-  for building and delivering, `stonemine` for dismantling (`AnimationSystem.HeldClip`).
+  for building and delivering, `stonemine` for dismantling and for a door or wall basher in reach (an animal: its bash technique's clip,
+  `CharacterCold.BashSwing`) (`AnimationSystem.HeldClip`).
 - Refund: entry i with something delivered gives `max(1, trunc(U x delivered))` units, U = m + (1 - m) x
   `Rng.Float(Rng.Hash(seed, StableHash(id), RngPurpose.Build, i))`, m = CONSTANTS `min dismantle materials percentage` /
   100; each unit is its own ground item (`GroundItems.Drop`, yaw 0) at x, z = position + (2u - 1) r, u from streams

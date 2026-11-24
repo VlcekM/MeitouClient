@@ -1315,6 +1315,19 @@ public sealed class CharacterCold
     public float BashTime { get; set; }
 
     /// <summary>
+    /// The tick of the basher's last update swinging at <see cref="Bashing"/> (Task_BashDoor <c>FUN_140348c10</c> plays its clip every update in
+    /// reach): the animation plays the swing while it is current. Not hashed: it follows from <see cref="Bashing"/>.
+    /// </summary>
+    public long BashSwing { get; set; } = -1;
+
+    /// <summary>
+    /// The tick of this character's last update working a door's lock (Task_LockDoor / Task_UnlockDoor, docs/game/locks.md "Lock and unlock"), the
+    /// bar's fill and whether it locks: the bar the original's <c>ProgressBarTask</c> draws over a player's character. Not hashed: it follows from
+    /// the work.
+    /// </summary>
+    public (long Tick, float Fill, bool Locking) LockWork { get; set; } = (-1, 0, false);
+
+    /// <summary>
     /// The shackles this character is working on (<see cref="Locks.LockSystem"/>: picking, cutting; null: none). Hashed only while set.
     /// </summary>
     public Locks.ShackleJob? Shackles { get; set; }

@@ -700,7 +700,8 @@ public sealed partial class World
         s.Stealth = sneaking ? watchers.Length == 0 ? StealthExposure.Unobserved : watchers.Max(w => w.Level) : null;
         s.Light = sneaking ? Sight.PeekLight(i) : 1;
         s.Watchers = watchers;
-        var gameBar = cold is { IsPlayer: true } ? PickBar(cold, state[i].Task) ?? CutBar(cold, state[i].Task) ?? TrainBar(cold) : null;
+        var gameBar = cold is { IsPlayer: true } ? PickBar(cold, state[i].Task) ?? CutBar(cold, state[i].Task) ?? LockBar(cold) ?? TrainBar(cold)
+            : null;
         s.Bar = ModBar(cold) ?? gameBar;
         s.Prison = cold is { IsImprisoned: true }
             ? new PrisonView(!(cold.InWhat is { } cageId && Fixtures.Find(cageId) is { } cage && cage.Lock is not { EffectivelyLocked: true }),
@@ -979,6 +980,14 @@ public sealed partial class World
 
         return new TaskBar(Loc.Tr("Cutting: {1,num}", (int)(l.Hardness * 10)), 0);
     }
+
+    /// <summary>
+    /// The bar of Task_LockDoor and Task_UnlockDoor (<c>ProgressBarTask</c>, captions "Locking" and "Unlocking", <b>Verified</b>
+    /// <c>FUN_140351fd0</c>, <c>FUN_140352140</c>), while the character works the lock (<see cref="CharacterCold.LockWork"/>).
+    /// </summary>
+    TaskBar? LockBar(CharacterCold c) => c.LockWork.Tick >= Tick - 1
+        ? new TaskBar(c.LockWork.Locking ? Loc.Tr("Locking") : Loc.Tr("Unlocking"), c.LockWork.Fill)
+        : null;
 
     /// <summary>
     /// The bar of Task_UseTrainingDummy (docs/game/ai-tasks.md "Finders of the jobs"): "Training", filled with the trained stat's fraction, while the

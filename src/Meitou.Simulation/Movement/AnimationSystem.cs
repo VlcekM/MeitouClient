@@ -140,6 +140,11 @@ public sealed class CharacterAnimation
     /// <see cref="HeldRate"/> is the held clip's rate itself, whatever its record's play speed (a bed's clip). Derived, not hashed.
     /// </summary>
     public bool HeldFlat;
+    /// <summary>
+    /// The held clip's time, set from the simulation (a basher's swing, so the blow lands at its frame); -1: the clip runs on its own. Derived,
+    /// not hashed.
+    /// </summary>
+    public float HeldTime = -1;
 
     #endregion
 
@@ -369,6 +374,28 @@ public sealed class AnimationSystem(
     int DismantlingClip { get; } = library.IndexOf("stonemine");
 
     /// <summary>
+    /// Whether the character swings at a door or wall this tick (<see cref="CharacterCold.BashSwing"/>, stamped by the lock system each update in
+    /// reach).
+    /// </summary>
+    static bool Swinging(CharacterCold cold, long tick) => cold.BashSwing >= tick - 1;
+
+    /// <summary>
+    /// The swing clip's time from the basher's phase (<see cref="CharacterCold.BashTime"/>, seconds into the cycle): the clip runs at its play
+    /// speed, a human's <c>stonemine</c> at its record's and an animal's technique at its <c>anim speed mult</c>, so the blow lands at 0.6 of it
+    /// (<c>FUN_140348c10</c>).
+    /// </summary>
+    static float SwingTime(CharacterCold cold, float rate) => MathF.Max(cold.BashTime, 0) * rate;
+
+    /// <summary>
+    /// An animal's swing this tick: its door-bash attack technique's clip (<see cref="CombatSystem.AnimalBashTechnique"/>) and its play rate; -1
+    /// when it does not swing or has none.
+    /// </summary>
+    (int Clip, float Rate) AnimalSwing(CharacterCold cold, long tick) =>
+        Swinging(cold, tick) && combat?.AnimalBashTechnique(cold) is { } own && Library.IndexOfTechnique(own.StringId) is >= 0 and var clip
+            ? (clip, MathF.Max(own.AnimSpeedMult, 0.1f))
+            : (-1, 0);
+
+    /// <summary>
     /// The crouch clip Task_Crouch plays forwards and Task_UnCrouch backwards (<c>squat T</c>, FUN_140346360 / FUN_140345fb0).
     /// </summary>
     int SquatClip { get; } = library.IndexOf("squat T");
@@ -441,6 +468,8 @@ public sealed class AnimationSystem(
         _ when cold.StandingUp && SquatClip >= 0 => SquatClip,
         // A crouch goal (Task_Crouch 27 plays it forwards, Task_UnCrouch 28 backwards); the stance byte follows (FinishCrouch).
         _ when CrouchGoal(cold) != 0 && SquatClip >= 0 => SquatClip,
+        // A basher plays stonemine at speed 1 every update it is in reach of its door or wall (Task_BashDoor, FUN_140348c10, Verified; #1336).
+        _ when Swinging(cold, tick) && DismantlingClip >= 0 => DismantlingClip,
         // The lock picker plays the cage's `animation lockpick`, else the medic clip every update it picks
         // (Task_PickLock, FUN_140359160; the crawler's kneeling clip is chosen in Crawl).
         _ when (cold.PickingLock is not null || cold.DoorWay is not null) && cold.PickWork.Tick >= tick - 1
@@ -1038,6 +1067,7 @@ public sealed class AnimationSystem(
         var upper = upperScratch ?? [];
         a.HeldIndex = -1;
         a.HeldFlat = false;
+        a.HeldTime = -1;
         lower.Clear();
         upper.Clear();
         if (Library.Animal(cold.RecordId) is { } animal)
@@ -1247,6 +1277,7 @@ public sealed class AnimationSystem(
         {
             a.HeldIndex = held;
             a.HeldRate = HeldRateOf(task, cold, held, tick);
+            if (held == DismantlingClip && Swinging(cold, tick)) a.HeldTime = SwingTime(cold, Library.Definitions[held].PlaySpeed);
 
             // In a bed (the only place the sleep task holds a clip): the bed's flat rate.
             if (task == CharacterTask.Sleep && !cold.LeavingBed) (a.HeldRate, a.HeldFlat) = (BedRate, true);
@@ -1688,6 +1719,7 @@ public sealed class AnimationSystem(
             else if (layer.Definition == technique) layer.Time = fight.Progress * length;   // the combat system's timing: the blow lands at its frame
             // held at the start while getting up blends out of a ragdoll
             else if (layer.Definition == a.Action) layer.Time = MathF.Max(a.ActionTime, 0);
+            else if (layer.Definition == a.HeldIndex && a.HeldTime >= 0) layer.Time = a.HeldTime;
             else if (layer.Target <= 0 && !RunsFading(d, synched)) layer.Time = FadingTime(d, layer, dt);
             else if (IsStrafe(d))
             {
@@ -1808,6 +1840,13 @@ public sealed class AnimationSystem(
             a.Idle = -1;
         }
         else if (technique >= 0) wanted.Add((technique, 1));
+        else if (!down && AnimalSwing(cold, tick) is { Clip: >= 0 } swing)
+        {
+            // Bashing a door: its attack technique's clip, timed by the swing (Task_BashDoor, FUN_140348c10, Verified).
+            wanted.Add((swing.Clip, 1));
+            (a.HeldIndex, a.HeldTime) = (swing.Clip, SwingTime(cold, swing.Rate));
+            a.Idle = -1;
+        }
         else if (!down && JobClip(cold, plan, task) is >= 0 and var job)
         {
             wanted.Add((job, 1));

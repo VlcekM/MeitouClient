@@ -101,7 +101,7 @@ public sealed partial class LockSystem
         var face = new Vector2(wall.Position.X, wall.Position.Z) - Flat(n.Position);
         if (face.LengthSquared() > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Y);
         if (c.BashTime < 0) c.BashTime = 0;
-        if (!BashBlowLands(c, world.TickSeconds)) return;
+        if (!BashBlowLands(c, world.Tick, world.TickSeconds)) return;
         float force = Packet(c) is var (cut, blunt, animal) ? (2 * blunt + 0.5f * cut) * (animal ? 0.25f : 1) : 0;
         if (CombatSystem.StrikeWall(world, wall, force, s)) StopBashing(table, s, c);
     }
