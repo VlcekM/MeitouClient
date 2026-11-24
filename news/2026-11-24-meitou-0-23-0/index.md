@@ -32,12 +32,13 @@ walls, auto-hauling, and base management in general.
 # Bugfixing & bugfixing & bugfixing
 We have fixed over 160 bugs since 0.22.1 and the last couple of days, a large amount of issue reports we receive are vanilla behavior.
 I believe that this is a huge indicator that we are going the right way. We have also added many optional fixes for vanilla bugs in Meitou.
+Huge thanks to @Jame for the incredible bug triage and fixing work.
 
 # Performance improvements 
 
 I took a peek at some stuff we were doing inefficiently, and I managed to remove a very large amount of the stutters while travelling and when playing, including around halving the CPU frame time.
 I also added a few small options that should reduce the render quality just a bit, but improve performance by a lot on integrated graphics and laptops. My office laptop now reaches almost 60FPS in the hub.
-Also decreased ram usage by about
+Also decreased ram usage by about 25%
 
 # Quality of life, modding and RE_Kenshi
 We have integrated some quality of life mods (such as squad size, XP modifier, hiding hats) directly into Meitou,
