@@ -13,9 +13,20 @@
   const SCENARIOS = { bases: "Bases", "shark-flyby": "Shark flyby" };
   const LEGACY_SCENARIOS = { play: "Play benchmark", bases: "Base switch" };
 
-  /** Groups of a scenario's segments as result.json names them (they differ per scenario); others sort before "all", by id. */
+  /** Groups of a scenario's segments as result.json names them (they differ per scenario); "all" sorts first, others by id. */
   const GROUPS = {
-    camera: "Camera", streaming: "Streaming", simulation: "Simulation", ui: "UI", views: "Views", flight: "Flight", all: "All segments"
+    all: "All segments", camera: "Camera", streaming: "Streaming", simulation: "Simulation", ui: "UI", views: "Views", flight: "Flight"
+  };
+
+  /** Human-readable descriptions for each segment group, shown under the controls and as button tooltips. */
+  const GROUP_DESC = {
+    camera: "Basic camera movement around the starting base: stationary idle, 360\u00B0 orbit, zooming out and in, and steady panning.",
+    streaming: "Fast camera travel across the map and snapping back, stressing terrain, foliage, and zone streaming.",
+    simulation: "World simulation and gameplay under load: 2x/5x speed, dialogue, trading, containers, doors, picking up items, pathfinding bursts, walking, combat, and looting.",
+    ui: "Opening and switching between in-game interface panels (inventory, stats, overview, limbs, and build menu), cold and warm.",
+    views: "Heavy draw-distance angles (low grazing horizon sweep and high top-down overview) plus camera flights hopping between squad members.",
+    flight: "Fixed camera flyby around the busy swamp town of Shark: a high 360\u00B0 orbit, a closer low orbit, and a low pass through the centre.",
+    all: "Combined results across every measured segment in the scenario (excluding the initial uncounted settle)."
   };
 
   /** What the legacy view shows, under the controls. */
@@ -45,7 +56,7 @@
 
   /** Everything drawn comes from these: the loaded data and the current selection. */
   let D = null;
-  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "", metric: "avgFps", hidden: {}, search: "" };
+  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "all", metric: "avgFps", hidden: {}, search: "" };
 
   // #endregion
 
@@ -393,13 +404,16 @@
     inScenario().forEach((e) => { have[e.group] = 1; });
     const known = Object.keys(GROUPS).filter((g) => have[g] && g !== "all");
     const other = Object.keys(have).filter((g) => !own(GROUPS, g)).sort();
-    return known.concat(other, have.all ? ["all"] : []);
+    return (have.all ? ["all"] : []).concat(known, other);
   }
 
   function groupName(g) { return own(GROUPS, g) ? GROUPS[g] : g; }
 
+  function groupDesc(g) { return own(GROUP_DESC, g) ? GROUP_DESC[g] : ""; }
+
   function render() {
     renderControls();
+    renderGroupDesc();
     renderCaveat();
     renderChart();
     renderMachines();
@@ -413,8 +427,18 @@
     host.appendChild(control("Scenario", segmented(scenariosOf(), state.scenario, scenarioName, selectScenario)));
     if (fingerprints().length > 1) host.appendChild(control("Fingerprint", fingerprintSelect()));
     host.appendChild(control("Tier", segmented(tiersOf(), state.tier, tierName, pickTier)));
-    if (groups.length > 1) host.appendChild(control("Segments", segmented(groups, state.group, groupName, pickGroup)));
+    if (groups.length > 1) host.appendChild(control("Segments", segmented(groups, state.group, groupName, pickGroup, groupDesc)));
     host.appendChild(control("Metric", metricSelect()));
+  }
+
+  function renderGroupDesc() {
+    const host = document.getElementById("group-desc");
+    const desc = groupsOf().length > 1 ? groupDesc(state.group) : "";
+    host.hidden = !desc;
+    host.innerHTML = "";
+    if (!desc) return;
+    host.appendChild(el("strong", {}, groupName(state.group) + ": "));
+    host.appendChild(document.createTextNode(desc));
   }
 
   function tierName(t) { return t ? t[0].toUpperCase() + t.slice(1) : t; }
@@ -465,10 +489,13 @@
     return s;
   }
 
-  function segmented(items, current, label, onPick) {
+  function segmented(items, current, label, onPick, titleOf) {
     const seg = el("div", { class: "seg", role: "group" });
     items.forEach((it) => {
-      const b = el("button", { type: "button", "aria-pressed": it === current ? "true" : "false" }, label(it));
+      const attrs = { type: "button", "aria-pressed": it === current ? "true" : "false" };
+      const title = titleOf ? titleOf(it) : "";
+      if (title) attrs.title = title;
+      const b = el("button", attrs, label(it));
       b.addEventListener("click", () => onPick(it));
       seg.appendChild(b);
     });

@@ -7,13 +7,90 @@ import Base from '../layouts/Base.astro';
 
 const backgrounds = [1, 2, 3, 4].map((i) => `/roadmap-bg/bg-${i}.jpg`);
 const service = 'https://gear-pastry-chorus.cloudovna.app';
-const groups = [
-  ['camera', 'idle, orbit, zoom, pan'],
-  ['streaming', 'travel, return'],
-  ['simulation', 'speed-x2, speed-x5, talk, trade, container, doors, pick-up, paths, walk, fight, fight-on, loot'],
-  ['ui', 'panels, panels-warm'],
-  ['views', 'horizon, overview, flights'],
-  ['all', 'every segment except settle'],
+const basesGroups: [string, string, string, [string, string][]][] = [
+  [
+    'Camera',
+    'camera',
+    'Basic camera movement around the starting base.',
+    [
+      ['idle', 'Stationary camera looking at the starting base.'],
+      ['orbit', 'Full 360° camera rotation around the base.'],
+      ['zoom', 'Zooms out to maximum camera distance and back in.'],
+      ['pan', 'Smoothly pans the camera across the terrain at normal speed.'],
+    ],
+  ],
+  [
+    'Streaming',
+    'streaming',
+    'Fast camera movement across the map to stress world and terrain streaming.',
+    [
+      ['travel', 'High-speed camera travel across the map (3,000 units/s), forcing new terrain, foliage, and zones to stream in.'],
+      ['return', 'Snaps the camera back to the starting base.'],
+    ],
+  ],
+  [
+    'Simulation',
+    'simulation',
+    'Higher game speeds, NPC and world interactions, pathfinding bursts, and combat.',
+    [
+      ['speed-x2', 'Follows the squad leader at 2x game speed.'],
+      ['speed-x5', 'Follows the squad leader at 5x game speed.'],
+      ['talk', 'Returns to 1x speed and initiates dialogue with the nearest NPC.'],
+      ['trade', 'Opens the trade screen with the nearest trader.'],
+      ['container', 'Opens the nearest unlocked container.'],
+      ['doors', 'Toggles the three nearest doors.'],
+      ['pick-up', 'Orders the leader to pick up the nearest ground item.'],
+      ['paths', 'Sends the squad or individual members to random destinations 20–200 m away every 0.5 s to stress pathfinding.'],
+      ['walk', 'Moves the squad 600 units across the terrain at normal speed.'],
+      ['fight', 'Spawns six hostile NPCs beside the squad.'],
+      ['fight-on', 'Orders the squad to attack the nearest enemy.'],
+      ['loot', 'Orders the leader to loot the nearest downed body.'],
+    ],
+  ],
+  [
+    'UI',
+    'ui',
+    'Opening and switching between in-game interface panels.',
+    [
+      ['panels', 'Opens inventory, stats, and world overview panels for the first time (cold).'],
+      ['panels-warm', 'Re-opens inventory, stats, and overview (warm), plus the limbs and build menus.'],
+    ],
+  ],
+  [
+    'Views',
+    'views',
+    'Heavy draw-distance angles and jumping between squad members.',
+    [
+      ['horizon', 'Low, grazing 360° sweep showing maximum terrain, foliage, and distant objects.'],
+      ['overview', 'Top-down view from the farthest camera distance.'],
+      ['flights', 'Hops the camera between the first six player characters twice (6 s each), as if double-clicking their portraits.'],
+    ],
+  ],
+  [
+    'All segments',
+    'all',
+    'Combined results across every measured segment in the scenario (excluding settle).',
+    [],
+  ],
+];
+
+const sharkGroups: [string, string, string, [string, string][]][] = [
+  [
+    'Flight',
+    'flight',
+    'Fixed camera flyby around the busy swamp town of Shark.',
+    [
+      ['circle-high', 'Full 360° high-altitude orbit around Shark.'],
+      ['circle-low', 'Full 360° closer, lower-angle orbit around the town.'],
+      ['pass', 'Low-altitude fly-through straight across the centre of Shark.'],
+    ],
+  ],
+  [
+    'All segments',
+    'all',
+    'Combined results across the whole flyby (same as flight, excluding settle).',
+    [],
+  ],
 ];
 ---
 <Base title="Benchmarks - Meitou" description="Performance benchmarks of Meitou builds on players' machines, taken with the Meitou launcher." kofiTop>
@@ -28,6 +105,7 @@ const groups = [
     <section id="charts-sec">
       <h2>Over builds</h2>
       <div id="controls" class="controls"></div>
+      <p id="group-desc" class="muted small" hidden></p>
       <div id="caveat"></div>
       <div id="status" class="box" role="status">Loading benchmark results...</div>
       <div id="chart"></div>
@@ -54,10 +132,44 @@ const groups = [
         <div><dt>Runs</dt><dd>Two launches per scenario and tier; run 1 may be cache-cold, so the chart shows run 2 and run 1 dimmed, never an average</dd></div>
       </dl>
       <h3>Segments of the Bases scenario</h3>
-      <p class="muted">The game's play benchmark script, grouped by segment; <code>settle</code> runs first and is never counted in any
-      scenario. Shark flyby has the groups <code>flight</code> and <code>all</code>.</p>
+      <p class="muted">The game's play benchmark script, grouped by what each phase stresses. <code>settle</code> runs first to let the
+      world finish loading and initial streaming, and is never counted in any group.</p>
       <table class="groups">
-        <tbody>{groups.map(([id, segs]) => <tr><td>{id}</td><td>{segs}</td></tr>)}</tbody>
+        <tbody>
+          {basesGroups.map(([name, id, desc, segs]) => (
+            <tr>
+              <td><strong>{name}</strong><br /><code>{id}</code></td>
+              <td>
+                {desc}
+                {segs.length > 0 && (
+                  <ul class="seg-list">
+                    {segs.map(([seg, meaning]) => <li><code>{seg}</code> &mdash; {meaning}</li>)}
+                  </ul>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h3>Segments of the Shark flyby scenario</h3>
+      <p class="muted">A new game teleported to the town Shark. <code>settle</code> waits until at least 50 town residents have spawned
+      and settled before recording begins (never counted).</p>
+      <table class="groups">
+        <tbody>
+          {sharkGroups.map(([name, id, desc, segs]) => (
+            <tr>
+              <td><strong>{name}</strong><br /><code>{id}</code></td>
+              <td>
+                {desc}
+                {segs.length > 0 && (
+                  <ul class="seg-list">
+                    {segs.map(([seg, meaning]) => <li><code>{seg}</code> &mdash; {meaning}</li>)}
+                  </ul>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
       </table>
       <h3>Benchmark versions</h3>
       <p>The benchmark version changes whenever the workload does (tiers, settings, segments, save, metric definitions); numbers of
@@ -158,8 +270,12 @@ const groups = [
   .tablewrap{overflow-x:auto}
   .mtable td:first-child{min-width:12rem}
   .mtable td.l{white-space:normal}
-  .groups td{text-align:left;white-space:normal}
-  .groups td:first-child{width:8rem;color:var(--muted)}
+  .groups td{text-align:left;white-space:normal;vertical-align:top}
+  .groups td:first-child{width:9rem;color:var(--muted)}
+  .groups td:first-child strong{color:var(--text)}
+  .seg-list{margin:.35rem 0 0;padding-left:1.15rem;color:var(--muted);font-size:.88rem}
+  .seg-list li{margin:.15rem 0}
+  .seg-list code{color:var(--text)}
   #tip{position:fixed;z-index:10;pointer-events:none;background:var(--panel)!important;color:var(--text);border:1px solid var(--line);
     border-radius:8px;padding:6px 10px;font-size:.85rem;box-shadow:0 4px 14px rgba(0,0,0,.2);max-width:300px}
   .dot{display:inline-block;width:.7em;height:.7em;border-radius:50%;margin-right:.35em;vertical-align:baseline}
