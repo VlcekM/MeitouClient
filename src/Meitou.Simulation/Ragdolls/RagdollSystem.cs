@@ -134,10 +134,23 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// </summary>
     const int ThreadedBodies = 256;
     /// <summary>
-    /// Freezing (docs/game/ragdolls.md "Sleep and limits"): not before this age, then when this share of the bodies is still; at the latest after
-    /// <see cref="FreezeLatest"/>.
+    /// Freezing (docs/game/ragdolls.md "Sleep and limits", <c>FUN_1407d2440</c>): not before this age, then within <see cref="FreezeWindow"/> when
+    /// this share of the bodies is still; past the window by the ground test (<see cref="Settles"/>).
     /// </summary>
-    public const float FreezeEarliest = 2, FreezeShare = 0.6f, FreezeLatest = 7;
+    public const float FreezeEarliest = 2, FreezeShare = 0.6f;
+    /// <summary>
+    /// The freeze window (seconds, the original's timer <c>+0x20</c> against 5): within it the still share freezes, past it the ground test decides.
+    /// </summary>
+    const float FreezeWindow = 5;
+    /// <summary>
+    /// The ground test's ray: from this far above the root straight down (mask <c>0x7f9e04</c>, the terrain and the buildings), freezing when it
+    /// meets something within <see cref="FreezeGroundReach"/> of its start.
+    /// </summary>
+    const float FreezeRayRise = 20, FreezeGroundReach = 100;
+    /// <summary>
+    /// The window time a ground test still pending sets (<c>0x40933333</c>), so it asks again 0.4 s later.
+    /// </summary>
+    const float FreezePending = 4.6f;
     /// <summary>
     /// Meitou (<b>engine choice</b>): a collapsed limb of a character still up dangles only within this of the camera
     /// (<see cref="World.ViewPosition"/>; about where the human body's first reduced mesh level starts), and one already dangling until 10 % farther;
@@ -335,6 +348,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         /// The seconds since the whole-body ragdoll started (see <see cref="FreezeEarliest"/>).
         /// </summary>
         public float Age;
+        /// <summary>
+        /// The <see cref="Age"/> its freeze window began at: <see cref="FreezeEarliest"/>, later the age of a ground test that found it in the air
+        /// (the window starts again).
+        /// </summary>
+        public float WindowStart = FreezeEarliest;
         /// <summary>
         /// Seconds of the get-up blend left (0: none), and the bones it blends from, in world space.
         /// </summary>
@@ -807,7 +825,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : blow, advanced, world.Seed);
         if (restored)
         {
-            r.Age = restore!.Age;
+            (r.Age, r.WindowStart) = (restore!.Age, FreezeEarliest);
             if (restore.Frozen && restore.Age >= FreezeEarliest) Freeze(r);
             hot.Position = r.Definition.RootAt(r.Pose);   // a frozen one is never read back
         }
@@ -879,7 +897,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                         Freeze(r);
                         r.Unloaded = true;
                     }
-                    else if (r.Age >= FreezeLatest || r.Age >= FreezeEarliest && StillShare(r) >= FreezeShare) Freeze(r);
+                    else if (Settles(r, env, root)) Freeze(r);
                     hot.Position = r.Definition.RootAt(r.Pose);
                     hot.Velocity = Vector3.Zero;
                     if (cold.CarriedBy.IsNone) StandOn(cold, ground);
@@ -1110,8 +1128,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         r.Unloaded = false;
         r.Soft = soft;
         if (mask == RagdollPart.None) return;
-        if ((mask & RagdollPart.Whole) != 0 && !r.InScene) r.Age = 0;
-        if ((mask & RagdollPart.Whole) == 0) r.Age = 0;
+        if ((mask & RagdollPart.Whole) != 0 && !r.InScene) (r.Age, r.WindowStart) = (0, FreezeEarliest);
+        if ((mask & RagdollPart.Whole) == 0) (r.Age, r.WindowStart) = (0, FreezeEarliest);
 
         var dynamic = new bool[bodies.Length];
         for (int b = 0; b < bodies.Length; b++) dynamic[b] = Simulates(r, mask, bodies[b]);
@@ -1587,7 +1605,33 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             body.Awake = true;
         }
 
-        r.Age = 0;
+        (r.Age, r.WindowStart) = (0, FreezeEarliest);
+    }
+
+    /// <summary>
+    /// Whether a whole ragdoll at <paramref name="root"/> freezes this step (<c>FUN_1407d2440</c>, <b>Verified</b> by decompile): not before
+    /// <see cref="FreezeEarliest"/>; within <see cref="FreezeWindow"/> after its window began once <see cref="FreezeShare"/> of its bodies are still;
+    /// past it when the ray from <see cref="FreezeRayRise"/> above the root down meets the terrain or a building within
+    /// <see cref="FreezeGroundReach"/>, else the window starts again (a body falling from a cliff falls on). Buildings on the way still being read
+    /// ask again shortly, as the original's pending ray does.
+    /// </summary>
+    bool Settles(Ragdoll r, IRagdollEnvironment env, Vector3 root)
+    {
+        if (r.Age < FreezeEarliest) return false;
+        if (r.Age - r.WindowStart <= FreezeWindow) return StillShare(r) >= FreezeShare;
+
+        var top = root + new Vector3(0, FreezeRayRise, 0);
+        float building = Combat.SolidHits.BuildingHit(env, top, new Vector3(0, -FreezeGroundReach, 0), out bool ready);
+        if (!ready)
+        {
+            r.WindowStart = r.Age - FreezePending;
+            return false;
+        }
+
+        if (building >= 0 || top.Y - env.GroundHeight(root.X, root.Z, root.Y) <= FreezeGroundReach) return true;
+
+        r.WindowStart = r.Age;
+        return false;
     }
 
     /// <summary>
@@ -1782,6 +1826,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             hasher.Add(r.Frozen);
             if (r.Unloaded) hasher.Add(true);
             hasher.Add(r.Age);
+            if (r.WindowStart != FreezeEarliest) hasher.Add(r.WindowStart);
             hasher.Add(r.BlendLeft);
             foreach (var p in r.Pose)
             {
