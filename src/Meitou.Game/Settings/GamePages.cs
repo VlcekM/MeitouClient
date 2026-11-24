@@ -96,6 +96,11 @@ sealed class GamePages(SettingsMenu menu)
     Slider[]? _skillXpSliders;
 
     /// <summary>
+    /// The player faction size, squad size and squad count limit sliders, made on first use.
+    /// </summary>
+    Slider? _maxFactionSizeSlider, _maxSquadSizeSlider, _maxSquadsSlider;
+
+    /// <summary>
     /// The dropped items kept slider, made on first use.
     /// </summary>
     Slider? _groundItemsSlider;
@@ -359,6 +364,43 @@ sealed class GamePages(SettingsMenu menu)
                 menu.GameplayChanged?.Invoke();
             },
             "0.##", Text: v => $"{v:0.##}x", Faithful: 1, Step: 0.25f);
+
+    /// <summary>
+    /// The max faction size slider (1 to 256), marked at the game's 30.
+    /// </summary>
+    Slider MaxFactionSizeSlider => _maxFactionSizeSlider ??= SquadLimitSlider("Max faction size", UserConfig.DefaultMaxFactionSize,
+        () => menu.Config.MaxFactionSize ?? menu.Player.SquadWindows.SquadLimits?.Invoke()?.Constants.MaxFactionSize
+            ?? UserConfig.DefaultMaxFactionSize,
+        v => menu.Config.MaxFactionSize = v);
+
+    /// <summary>
+    /// The max squad size slider (1 to 256), marked at the game's 20.
+    /// </summary>
+    Slider MaxSquadSizeSlider => _maxSquadSizeSlider ??= SquadLimitSlider("Max squad size", UserConfig.DefaultMaxSquadSize,
+        () => menu.Config.MaxSquadSize ?? menu.Player.SquadWindows.SquadLimits?.Invoke()?.Constants.MaxSquadSize
+            ?? UserConfig.DefaultMaxSquadSize,
+        v => menu.Config.MaxSquadSize = v);
+
+    /// <summary>
+    /// The max squads slider (1 to 256), marked at the game's 10.
+    /// </summary>
+    Slider MaxSquadsSlider => _maxSquadsSlider ??= SquadLimitSlider("Max squads", UserConfig.DefaultMaxSquads,
+        () => menu.Config.MaxSquads ?? menu.Player.SquadWindows.SquadLimits?.Invoke()?.Constants.MaxSquads
+            ?? UserConfig.DefaultMaxSquads,
+        v => menu.Config.MaxSquads = v);
+
+    /// <summary>
+    /// A player squad or faction cap slider (1 to 256, whole counts, marked at the game's <paramref name="faithful"/>), applied to the running
+    /// world at once.
+    /// </summary>
+    Slider SquadLimitSlider(string label, int faithful, Func<int> get, Action<int> set) =>
+        new(label, UserConfig.MinSquadLimit, UserConfig.MaxSquadLimit, () => get(),
+            v =>
+            {
+                set(Math.Clamp((int)MathF.Round(v), UserConfig.MinSquadLimit, UserConfig.MaxSquadLimit));
+                menu.GameplayChanged?.Invoke();
+            },
+            "0", Faithful: faithful, Step: 1);
 
     /// <summary>
     /// The fast speed slider, in half steps, marked at the game's default.
@@ -884,6 +926,16 @@ sealed class GamePages(SettingsMenu menu)
 
         result.Add(new(OthersXpSlider.Label,
             "The same for everyone outside your faction: other factions, enemies and wild animals (the game: 1x).", Slider: OthersXpSlider));
+        result.Add(new(MaxFactionSizeSlider.Label,
+            "The faction's recruitment limit: how many characters and animals your faction may hold (the game: 30). Existing members stay if you lower "
+            + "it. Click the number to type an exact value.",
+            Slider: MaxFactionSizeSlider));
+        result.Add(new(MaxSquadSizeSlider.Label,
+            "How many members one of your squads may hold (the game: 20). Full squads put new recruits into a new squad.",
+            Slider: MaxSquadSizeSlider));
+        result.Add(new(MaxSquadsSlider.Label,
+            "How many squads your faction may create (the game: 10).",
+            Slider: MaxSquadsSlider));
         result.Add(new(FastSpeedSlider.Label, "The game speed of the second speed button (two arrows) and its key (the game: 2x).",
             Slider: FastSpeedSlider));
         result.Add(new(FastestSpeedSlider.Label,

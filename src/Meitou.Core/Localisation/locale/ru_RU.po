@@ -5423,3 +5423,35 @@ msgstr "Стражники отказываются от потерянных п
 #. machine-translated
 msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
 msgstr "Стражник, потерявший из виду персонажа, которого арестовывал, сдаётся и возвращается к своим обязанностям. В игре он снова вступает в бой, где бы ни был персонаж, и может прибежать прямо к тому, кто прячется вне поля зрения."
+
+#. machine-translated
+msgid "Max faction size"
+msgstr "Макс. размер фракции"
+
+#. machine-translated
+msgid "Max squad size"
+msgstr "Макс. размер отряда"
+
+#. machine-translated
+msgid "Max squads"
+msgstr "Макс. число отрядов"
+
+#. machine-translated
+msgid "Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "Макс. размер фракции, Макс. размер отряда и Макс. число отрядов в расширенных настройках"
+
+#. machine-translated
+msgid "its limits are now Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "его лимиты теперь находятся в расширенных настройках: Макс. размер фракции, Макс. размер отряда и Макс. число отрядов"
+
+#. machine-translated
+msgid "The faction's recruitment limit: how many characters and animals your faction may hold (the game: 30). Existing members stay if you lower it. Click the number to type an exact value."
+msgstr "Лимит найма фракции: сколько персонажей и животных может быть в вашей фракции (в игре: 30). Уже нанятые участники останутся, если снизить значение. Щёлкните по числу, чтобы ввести точное значение."
+
+#. machine-translated
+msgid "How many members one of your squads may hold (the game: 20). Full squads put new recruits into a new squad."
+msgstr "Сколько участников может быть в одном отряде (в игре: 20). Если отряд полон, новые рекруты попадают в новый отряд."
+
+#. machine-translated
+msgid "How many squads your faction may create (the game: 10)."
+msgstr "Сколько отрядов может создать ваша фракция (в игре: 10)."

@@ -5419,3 +5419,35 @@ msgstr "경비병이 놓친 용의자를 포기"
 #. machine-translated
 msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
 msgstr "체포하던 캐릭터를 놓친 경비병은 포기하고 원래 임무로 돌아갑니다. 게임에서는 캐릭터가 어디에 있든 다시 싸움을 시작하므로, 보이지 않는 곳에 숨은 사람에게 곧장 달려갈 수 있습니다."
+
+#. machine-translated
+msgid "Max faction size"
+msgstr "최대 세력 인원"
+
+#. machine-translated
+msgid "Max squad size"
+msgstr "최대 분대 인원"
+
+#. machine-translated
+msgid "Max squads"
+msgstr "최대 분대 수"
+
+#. machine-translated
+msgid "Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "고급 설정의 최대 세력 인원, 최대 분대 인원 및 최대 분대 수"
+
+#. machine-translated
+msgid "its limits are now Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "해당 제한은 이제 고급 설정의 최대 세력 인원, 최대 분대 인원 및 최대 분대 수로 옮겨졌습니다"
+
+#. machine-translated
+msgid "The faction's recruitment limit: how many characters and animals your faction may hold (the game: 30). Existing members stay if you lower it. Click the number to type an exact value."
+msgstr "세력의 영입 제한: 세력이 보유할 수 있는 캐릭터와 동물의 최대 수(게임: 30). 값을 낮춰도 기존 구성원은 유지됩니다. 숫자를 클릭해 정확한 값을 입력할 수 있습니다."
+
+#. machine-translated
+msgid "How many members one of your squads may hold (the game: 20). Full squads put new recruits into a new squad."
+msgstr "하나의 분대에 소속될 수 있는 최대 인원수(게임: 20). 분대가 가득 차면 새로 영입한 동료는 새 분대에 배치됩니다."
+
+#. machine-translated
+msgid "How many squads your faction may create (the game: 10)."
+msgstr "세력이 생성할 수 있는 최대 분대 수(게임: 10)."

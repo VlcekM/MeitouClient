@@ -734,6 +734,9 @@ sealed partial class GameHost(
                 SquadXp = Config.SquadXp,
                 SquadSkillXp = SkillXp.Rates(Config.SquadSkillXp),
                 OthersXp = Config.OthersXp,
+                MaxFactionSize = Config.MaxFactionSize,
+                MaxSquadSize = Config.MaxSquadSize,
+                MaxSquads = Config.MaxSquads,
             },
             ZoneReady = ready =>
             {
@@ -1084,7 +1087,7 @@ sealed partial class GameHost(
         // The region (BIOME_GROUP) under a point, for the biome banner.
         ui.BiomeBanner.RegionAt = (x, z) => ActiveWeather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
         ui.Build.BuildHost = BuildingSync.MakeBuildServices();
-        ui.SquadWindows.SquadLimits = () => PopData?.Bodies.Constants;
+        ui.SquadWindows.SquadLimits = () => PopData?.Bodies;
         ui.Furniture.Rocks = () => PopData?.ResourceNodes;
 
         ConnectFactions(ui);

@@ -200,14 +200,14 @@ public static class SquadManagement
     internal static void Apply(World world, PopulationData? data, SquadCommand command)
     {
         if (!world.Player.Exists) return;
-        var constants = data?.Bodies.Constants;
+        var bodies = data?.Bodies;
         switch (command)
         {
             case NewSquadCommand create:
                 if (data is null) return;
 
                 // The original counts the squad boxes against `max squads` (FUN_140491b50).
-                if (LedSquads(world).Count >= constants!.MaxSquads)
+                if (LedSquads(world).Count >= bodies!.MaxSquads)
                 {
                     world.Post("Maximum number of squads reached.");
                     return;
@@ -242,7 +242,7 @@ public static class SquadManagement
                 KeepActive(world);
                 break;
             case MoveToSquadCommand move:
-                Move(world, constants?.MaxSquadSize ?? int.MaxValue, move);
+                Move(world, bodies?.MaxSquadSize ?? int.MaxValue, move);
                 break;
             case ReorderSquadCommand reorder:
                 if (Own(world, reorder.Squad) is not { } moved) return;

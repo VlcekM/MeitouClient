@@ -110,6 +110,8 @@ sealed class GameMods(GameHost host)
         _builtInNotices = BuiltInMods.Adopt(host.Config, host.Install);
         (data.BodyOptions.SquadXp, data.BodyOptions.OthersXp) = (host.Config.SquadXp, host.Config.OthersXp);
         data.BodyOptions.SquadSkillXp = Meitou.Game.Settings.SkillXp.Rates(host.Config.SquadSkillXp);
+        (data.BodyOptions.MaxFactionSize, data.BodyOptions.MaxSquadSize, data.BodyOptions.MaxSquads) =
+            (host.Config.MaxFactionSize, host.Config.MaxSquadSize, host.Config.MaxSquads);
 
         if (host.DataPhase?.Mods is { } prepared) StartPrepared(prepared, host.DataPhase.Enabled, db, data);
         else LoadMods(db, data);

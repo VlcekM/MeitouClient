@@ -149,7 +149,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
     internal float? ShownLockChance(Vector3 at, int level, bool building)
     {
         if (LockChance(at, level) is not { } chance) return null;
-        if (building && chance < (player.SquadWindows.SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f)) return 0;
+        if (building && chance < (player.SquadWindows.SquadLimits?.Invoke()?.Constants.MinimumLockpickChance ?? 0.05f)) return 0;
 
         return chance;
     }

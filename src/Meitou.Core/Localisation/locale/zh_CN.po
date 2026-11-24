@@ -6252,3 +6252,35 @@ msgstr "守卫放弃跟丢的嫌疑人"
 #. machine-translated
 msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
 msgstr "跟丢了正在逮捕的角色的守卫会放弃并回到自己的职责。原版游戏会让他无论角色在哪里都重新开始战斗，因此他可能径直跑向躲在视线之外的人。"
+
+#. machine-translated
+msgid "Max faction size"
+msgstr "派系人数上限"
+
+#. machine-translated
+msgid "Max squad size"
+msgstr "小队人数上限"
+
+#. machine-translated
+msgid "Max squads"
+msgstr "小队数量上限"
+
+#. machine-translated
+msgid "Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "高级设置中的派系人数上限、小队人数上限和小队数量上限"
+
+#. machine-translated
+msgid "its limits are now Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "其上限现已移至高级设置中的派系人数上限、小队人数上限和小队数量上限"
+
+#. machine-translated
+msgid "The faction's recruitment limit: how many characters and animals your faction may hold (the game: 30). Existing members stay if you lower it. Click the number to type an exact value."
+msgstr "派系的招募上限：你的派系最多可容纳的角色和动物数量（游戏：30）。调低上限不会移除现有成员。点击数字可输入精确值。"
+
+#. machine-translated
+msgid "How many members one of your squads may hold (the game: 20). Full squads put new recruits into a new squad."
+msgstr "单个小队最多可容纳的成员数量（游戏：20）。小队满员时，新招募的成员会进入一个新小队。"
+
+#. machine-translated
+msgid "How many squads your faction may create (the game: 10)."
+msgstr "你的派系最多可创建的小队数量（游戏：10）。"

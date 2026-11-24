@@ -29,7 +29,7 @@ public sealed partial class DialogueSystem
         {
             return true;
         }
-        if (SquadManagement.CappedHeads(world) >= _data.Bodies.Constants.MaxFactionSize)
+        if (SquadManagement.CappedHeads(world) >= _data.Bodies.MaxFactionSize)
         {
             world.Post("It looks like your squad is a little full.");
             c.Ended = true;
@@ -65,8 +65,9 @@ public sealed partial class DialogueSystem
     /// extra, empty squad of the active squad's template at its position before the recruit is added (the recruit does not join it, so it stays
     /// empty, docs/game/dialogue.md "Recruiting").
     /// </summary>
-    static void ExtraSquadAtTheCap(World world, PopulationData data, Squad active, GameConstants limits)
+    static void ExtraSquadAtTheCap(World world, PopulationData data, Squad active)
     {
+        var limits = data.Bodies;
         if (SquadManagement.CappedHeads(world) >= limits.MaxFactionSize || active.Members.Count + 1 <= limits.MaxSquadSize
             || SquadManagement.LedSquads(world).Count < limits.MaxSquads)
         {
@@ -88,7 +89,7 @@ public sealed partial class DialogueSystem
         if (!table.IsAlive(id)) return $"{cold.Name} is dead";
         if (!Recruitable(world, data, slot)) return $"{cold.Name} has no dialogue that makes them join";
         if (ActiveSquad(world) is not { } squad) return "you have no squad";
-        if (squad.Members.Count >= data.Bodies.Constants.MaxSquadSize) return "your squad is full";
+        if (squad.Members.Count >= data.Bodies.MaxSquadSize) return "your squad is full";
         return null;
     }
 
@@ -118,9 +119,9 @@ public sealed partial class DialogueSystem
     internal static bool JoinPlayer(World world, PopulationData data, int slot)
     {
         var table = world.Characters;
-        var limits = data.Bodies.Constants;
+        var limits = data.Bodies;
         if (ActiveSquad(world) is not { } squad) return false;
-        ExtraSquadAtTheCap(world, data, squad, limits);
+        ExtraSquadAtTheCap(world, data, squad);
         if (squad.Members.Count >= limits.MaxSquadSize)
         {
             squad = SquadManagement.NewSquad(world, data.Db, table.Next[slot].Position,

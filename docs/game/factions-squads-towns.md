@@ -1108,7 +1108,7 @@ every message {1} is the campaign's name and {2} the target town's (the cancel m
 | `Global population multiplier` | 1 | P in 6.2 |
 | `npc range` | settings.cfg value | relevance range, see [game-loop.md](game-loop.md) |
 | `raidFrequencyMult` / `raidSizeMult` (`settings.cfg`; options "Town raid events: frequency" 0.25-3, "size" 0.25-4) | 1 | campaign roll chance; required men = int(`num forces` × size) ([campaigns](#campaigns)) |
-| CONSTANTS `max squads` / `max squad size` / `max faction size` | 10 / 20 / 30 | stored by the constants loader (`FUN_14086b2b0`; the squad screen reads them as `DAT_142133f4c` / `DAT_142133f48`); enforced by the squads screen (ADD SQUAD, portrait drops, [ui-screens.md](ui-screens.md#squads-tab)) and recruiting ([dialogue.md](dialogue.md)) (**Observed**) |
+| CONSTANTS `max squads` / `max squad size` / `max faction size` | 10 / 20 / 30 | stored by the constants loader (`FUN_14086b2b0`; the squad screen reads them as `DAT_142133f4c` / `DAT_142133f48`); enforced by the squads screen (ADD SQUAD, portrait drops, [ui-screens.md](ui-screens.md#squads-tab)) and recruiting ([dialogue.md](dialogue.md)) (**Observed**). Meitou: Advanced settings sliders (`Max squads`, `Max squad size`, `Max faction size`, 1-256, `BodyOptions`) override them live when set |
 | area tick | 2 s scaled | 6.2 |
 | min distance of a homeless spawn from the player | 1382.4 | 6.2 |
 

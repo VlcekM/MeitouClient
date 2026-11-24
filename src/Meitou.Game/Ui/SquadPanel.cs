@@ -67,9 +67,9 @@ sealed class SquadPanel(PlayerInterface player)
     (int Squad, Vector2 From)? _squadBoxDrag;
 
     /// <summary>
-    /// The CONSTANTS limits (max squads, squad size, faction size); null before a world with game data.
+    /// The player squad and faction limits (max squads, squad size, faction size) and game constants; null before a world with game data.
     /// </summary>
-    public Func<Data.Gameplay.GameConstants?>? SquadLimits { get; set; }
+    public Func<Simulation.Bodies.BodyFactory?>? SquadLimits { get; set; }
 
     /// <summary>
     /// The overview is open on its Squads tab.

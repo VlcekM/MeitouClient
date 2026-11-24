@@ -1504,7 +1504,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     bool PlayerSquadFull(World world, Squad squad)
     {
-        var limits = _data.Bodies.Constants;
+        var limits = _data.Bodies;
         if (squad.Members.Count >= limits.MaxSquadSize) return true;
 
         return !squad.Uncounted && SquadManagement.CappedHeads(world) >= limits.MaxFactionSize;

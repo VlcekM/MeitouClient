@@ -5421,3 +5421,35 @@ msgstr "Wachen geben verlorene Verdächtige auf"
 #. machine-translated
 msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
 msgstr "Eine Wache, die den Charakter aus den Augen verliert, den sie verhaften wollte, gibt auf und kehrt zu ihren Aufgaben zurück. Im Spiel nimmt sie den Kampf wieder auf, wo immer der Charakter ist, und kann so geradewegs zu jemandem laufen, der sich außer Sicht versteckt."
+
+#. machine-translated
+msgid "Max faction size"
+msgstr "Maximale Fraktionsgröße"
+
+#. machine-translated
+msgid "Max squad size"
+msgstr "Maximale Truppgröße"
+
+#. machine-translated
+msgid "Max squads"
+msgstr "Maximale Trupps"
+
+#. machine-translated
+msgid "Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "Maximale Fraktionsgröße, Maximale Truppgröße und Maximale Trupps in den erweiterten Einstellungen"
+
+#. machine-translated
+msgid "its limits are now Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "seine Grenzen sind jetzt Maximale Fraktionsgröße, Maximale Truppgröße und Maximale Trupps in den erweiterten Einstellungen"
+
+#. machine-translated
+msgid "The faction's recruitment limit: how many characters and animals your faction may hold (the game: 30). Existing members stay if you lower it. Click the number to type an exact value."
+msgstr "Das Rekrutierungslimit der Fraktion: wie viele Figuren und Tiere deine Fraktion aufnehmen darf (im Spiel: 30). Bestehende Mitglieder bleiben erhalten, wenn du es senkst. Klicke auf die Zahl, um einen genauen Wert einzugeben."
+
+#. machine-translated
+msgid "How many members one of your squads may hold (the game: 20). Full squads put new recruits into a new squad."
+msgstr "Wie viele Mitglieder einer deiner Trupps fassen darf (im Spiel: 20). Volle Trupps setzen neue Rekruten in einen neuen Trupp."
+
+#. machine-translated
+msgid "How many squads your faction may create (the game: 10)."
+msgstr "Wie viele Trupps deine Fraktion erstellen darf (im Spiel: 10)."

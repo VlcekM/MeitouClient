@@ -315,7 +315,7 @@ public sealed partial class DialogueSystem
     /// </summary>
     bool IsRecruitable(World world, CharacterCold s)
     {
-        if (Factions.SquadManagement.CappedHeads(world) >= _data.Bodies.Constants.MaxFactionSize) return false;
+        if (Factions.SquadManagement.CappedHeads(world) >= _data.Bodies.MaxFactionSize) return false;
         if (s.Stats is { } stats && CombatLevel(stats) >= RecruitableLevelLimit) return false;
 
         return s.NpcClass is not (FundamentalType.LawEnforcement or FundamentalType.Military or FundamentalType.Trader or FundamentalType.Diplomat);

@@ -708,6 +708,8 @@ sealed class GameSaves(GameHost host)
                 (gameplay.Dismemberment, host.Config.Decapitation, host.Config.AdvancedRagdolls);
             (data.BodyOptions.SquadXp, data.BodyOptions.OthersXp) = (host.Config.SquadXp, host.Config.OthersXp);
             data.BodyOptions.SquadSkillXp = SkillXp.Rates(host.Config.SquadSkillXp);
+            (data.BodyOptions.MaxFactionSize, data.BodyOptions.MaxSquadSize, data.BodyOptions.MaxSquads) =
+                (host.Config.MaxFactionSize, host.Config.MaxSquadSize, host.Config.MaxSquads);
         }
 
         foreach (var population in host.Session.World.Systems.OfType<PopulationSystem>())

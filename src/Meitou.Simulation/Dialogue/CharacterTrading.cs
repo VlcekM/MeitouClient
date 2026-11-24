@@ -406,7 +406,7 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     void BuyAnimals(World world, CharacterTrade t, int seller, List<(int Slot, CharacterCold Cold, long Price)> chosen, long total)
     {
         var table = world.Characters;
-        int free = data.Bodies.Constants.MaxFactionSize - Factions.SquadManagement.CappedHeads(world);
+        int free = data.Bodies.MaxFactionSize - Factions.SquadManagement.CappedHeads(world);
         if (chosen.Count > free)
         {
             _characterTrade = t;   // the original returns before closing

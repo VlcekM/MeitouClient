@@ -84,6 +84,24 @@ public sealed record BodyOptions
     public float OthersXp { get; set; } = 1;
 
     /// <summary>
+    /// Meitou (Advanced settings "Max faction size"; null: the loaded CONSTANTS <c>max faction size</c>, 30 in the base game): the player
+    /// faction's recruitment cap. Settable, as <see cref="Dismemberment"/>.
+    /// </summary>
+    public int? MaxFactionSize { get; set; }
+
+    /// <summary>
+    /// Meitou (Advanced settings "Max squad size"; null: the loaded CONSTANTS <c>max squad size</c>, 20 in the base game): how many members one
+    /// player squad may hold. Settable, as <see cref="Dismemberment"/>.
+    /// </summary>
+    public int? MaxSquadSize { get; set; }
+
+    /// <summary>
+    /// Meitou (Advanced settings "Max squads"; null: the loaded CONSTANTS <c>max squads</c>, 10 in the base game): how many squads the player may
+    /// create with ADD SQUAD. Settable, as <see cref="Dismemberment"/>.
+    /// </summary>
+    public int? MaxSquads { get; set; }
+
+    /// <summary>
     /// Debug (F10 "Force hits to", <see cref="DebugForceHits"/>): every blow lands on the part of this template string id, else of this name, when
     /// the victim has it and a blow could pick it; else as usual. Null: off. Not saved.
     /// </summary>

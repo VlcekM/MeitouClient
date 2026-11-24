@@ -2354,7 +2354,15 @@ msgid "How many maps the shadows are split over, nearest to farthest: more keeps
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "How many members one of your squads may hold (the game: 20). Full squads put new recruits into a new squad."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "How many squads roam and live in the wild (the game: 1). Affects performance."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "How many squads your faction may create (the game: 10)."
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
@@ -2988,6 +2996,22 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Match the display refresh rate to prevent tearing."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Max faction size"
+msgstr ""
+
+#: src/Meitou.Core/Content/CoveredMods.cs
+msgid "Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Max squad size"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Max squads"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
@@ -5226,6 +5250,10 @@ msgid "The door will lock when it closes."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "The faction's recruitment limit: how many characters and animals your faction may hold (the game: 30). Existing members stay if you lower it. Click the number to type an exact value."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "The flies over corpses are heard only close to them, not from across the base (the game: off)."
 msgstr ""
 
@@ -6233,6 +6261,10 @@ msgstr ""
 
 #: src/Meitou.Game/Mods/ModHost.cs
 msgid "its game data changes failed to apply"
+msgstr ""
+
+#: src/Meitou.Game/Mods/BuiltInMods.cs
+msgid "its limits are now Max faction size, Max squad size and Max squads in the Advanced settings"
 msgstr ""
 
 #: src/Meitou.Game/Mods/BuiltInMods.cs

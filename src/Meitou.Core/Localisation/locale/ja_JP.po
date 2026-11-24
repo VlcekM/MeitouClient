@@ -5419,3 +5419,35 @@ msgstr "見失った容疑者を衛兵があきらめる"
 #. machine-translated
 msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
 msgstr "逮捕しようとしていたキャラクターを見失った衛兵は、あきらめて持ち場に戻ります。ゲームではキャラクターがどこにいても戦いを再開するため、見えない場所に隠れている相手のもとへまっすぐ走っていくことがあります。"
+
+#. machine-translated
+msgid "Max faction size"
+msgstr "最大派閥人数"
+
+#. machine-translated
+msgid "Max squad size"
+msgstr "最大部隊人数"
+
+#. machine-translated
+msgid "Max squads"
+msgstr "最大部隊数"
+
+#. machine-translated
+msgid "Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "詳細設定の最大派閥人数、最大部隊人数、最大部隊数"
+
+#. machine-translated
+msgid "its limits are now Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "その上限は現在、詳細設定の最大派閥人数、最大部隊人数、最大部隊数になっています"
+
+#. machine-translated
+msgid "The faction's recruitment limit: how many characters and animals your faction may hold (the game: 30). Existing members stay if you lower it. Click the number to type an exact value."
+msgstr "派閥の勧誘上限：派閥に所属できるキャラクターと動物の最大数（ゲーム：30）。下げても既存のメンバーは残ります。数字をクリックすると正確な値を入力できます。"
+
+#. machine-translated
+msgid "How many members one of your squads may hold (the game: 20). Full squads put new recruits into a new squad."
+msgstr "1つの部隊に所属できる最大メンバー数（ゲーム：20）。部隊が満員の場合、新しい仲間は新しい部隊に入ります。"
+
+#. machine-translated
+msgid "How many squads your faction may create (the game: 10)."
+msgstr "派閥が作成できる部隊の最大数（ゲーム：10）。"

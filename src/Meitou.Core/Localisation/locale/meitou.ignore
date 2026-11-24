@@ -905,6 +905,7 @@ when finished
 
 # Not shown as Meitou's text: widget, skin and icon names, alignments, formats, fonts, skeleton bone names, record names (translated by .translation files), Workshop mod titles, editor fields.
  d MMM
+256 Squad Limit
 ACES
 Alert
 Ancient
@@ -1069,6 +1070,9 @@ fonts:Kenshi#Exo 2, $Default
 interior layout name
 job panel button 
 job panel buttons
+max faction size
+max squad size
+max squads
 meitou world states
 npc range
 town panel line 

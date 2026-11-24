@@ -136,6 +136,11 @@ sealed class UserConfig
     /// The range and default of <see cref="CorpseFlyRange"/>: 10% to 200% of the game's range; 30% (150 units) is Meitou's choice.
     /// </summary>
     public const float MinCorpseFlyRange = 0.1f, MaxCorpseFlyRange = 2, DefaultCorpseFlyRange = 0.3f;
+    /// <summary>
+    /// The Advanced settings' player squad and faction cap sliders: 1 to 256, with the base game's CONSTANTS values (30, 20, 10) as defaults.
+    /// </summary>
+    public const int MinSquadLimit = 1, MaxSquadLimit = 256,
+        DefaultMaxFactionSize = 30, DefaultMaxSquadSize = 20, DefaultMaxSquads = 10;
 
     /// <summary>
     /// The file's layout: <see cref="CurrentVersion"/>, or the newer one of a later release whose file this is (kept, so that release does not
@@ -455,6 +460,21 @@ sealed class UserConfig
     /// The XP sliders' range (<see cref="SquadXp"/>, <see cref="OthersXp"/>): none to a thousand times the game's, as the XP mods allow.
     /// </summary>
     public const float MinXpRate = 0, MaxXpRate = 1000;
+    /// <summary>
+    /// How many characters and animals the player faction may recruit (Advanced settings "Max faction size", <see cref="MinSquadLimit"/> …
+    /// <see cref="MaxSquadLimit"/>; null: the loaded CONSTANTS <c>max faction size</c>, 30 in the base game).
+    /// </summary>
+    public int? MaxFactionSize { get; set; }
+    /// <summary>
+    /// How many members one of the player's squads may hold (Advanced settings "Max squad size", <see cref="MinSquadLimit"/> …
+    /// <see cref="MaxSquadLimit"/>; null: the loaded CONSTANTS <c>max squad size</c>, 20 in the base game).
+    /// </summary>
+    public int? MaxSquadSize { get; set; }
+    /// <summary>
+    /// How many squads the player faction may create (Advanced settings "Max squads", <see cref="MinSquadLimit"/> … <see cref="MaxSquadLimit"/>;
+    /// null: the loaded CONSTANTS <c>max squads</c>, 10 in the base game).
+    /// </summary>
+    public int? MaxSquads { get; set; }
     /// <summary>
     /// The mods (by <c>mods.cfg</c> name) whose settings Meitou has taken into its own built-in feature, once each (<c>BuiltInMods</c>); a name
     /// followed by " (again)" marks a second takeover, of settings a later Meitou added to the feature.
@@ -1168,6 +1188,9 @@ sealed class UserConfig
         SquadXp = float.IsFinite(SquadXp) ? Math.Clamp(SquadXp, MinXpRate, MaxXpRate) : 1;
         OthersXp = float.IsFinite(OthersXp) ? Math.Clamp(OthersXp, MinXpRate, MaxXpRate) : 1;
         SquadSkillXp = SkillXp.Kept(SquadSkillXp);
+        MaxFactionSize = MaxFactionSize is { } faction ? Math.Clamp(faction, MinSquadLimit, MaxSquadLimit) : null;
+        MaxSquadSize = MaxSquadSize is { } squad ? Math.Clamp(squad, MinSquadLimit, MaxSquadLimit) : null;
+        MaxSquads = MaxSquads is { } squads ? Math.Clamp(squads, MinSquadLimit, MaxSquadLimit) : null;
         foreach (var (mod, saved) in ModSettings.ToList())
             if (saved is null) ModSettings.Remove(mod);
     }

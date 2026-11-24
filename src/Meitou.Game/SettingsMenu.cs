@@ -1652,6 +1652,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.MuteCorpseFlies = false;
         Config.QuietCorpseFlies = false;
         Config.CorpseFlyRange = UserConfig.DefaultCorpseFlyRange;
+        Config.MaxFactionSize = Config.MaxSquadSize = Config.MaxSquads = null;
         GamePages.SetGameplay(new());
         Config.HardwareMouse = false;
         Config.EnhancedHardwareMouse = true;

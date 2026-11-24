@@ -3031,8 +3031,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             _characters.PortraitRequests.Clear();
             if (_hud is not null)
-                foreach (var (member, cell) in _hud.PortraitBar.SquadBarMembers().Select((member, cell) => (member, cell)))
+            {
+                foreach (var (member, cell) in _hud.PortraitBar.SquadBarMembers().Take(PortraitBar.DialogueNpcCell)
+                    .Select((member, cell) => (member, cell)))
+                {
                     _characters.PortraitRequests.Add(new PortraitRequest(host.PortraitKey(member.Id), cell, member.PortraitSerial));
+                }
+            }
         }
         // Saved pictures have neither the ground items' labels nor the hover and building outlines.
         if (_shotFrame && _hud is not null) _hud.GroundItemPicks.HighlightFocus = null;

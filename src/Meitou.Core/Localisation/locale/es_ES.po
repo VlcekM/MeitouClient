@@ -5421,3 +5421,35 @@ msgstr "Los guardias abandonan a los sospechosos perdidos"
 #. machine-translated
 msgid "A guard who loses sight of the character he was arresting gives up and goes back to his duties. The game has him take the fight up again wherever the character is, so he can run straight to someone hiding out of sight."
 msgstr "Un guardia que pierde de vista al personaje que estaba arrestando se rinde y vuelve a sus tareas. El juego le hace retomar la pelea dondequiera que esté el personaje, así que puede correr directo hacia alguien escondido fuera de su vista."
+
+#. machine-translated
+msgid "Max faction size"
+msgstr "Tamaño máximo de facción"
+
+#. machine-translated
+msgid "Max squad size"
+msgstr "Tamaño máximo de escuadrón"
+
+#. machine-translated
+msgid "Max squads"
+msgstr "Máximo de escuadrones"
+
+#. machine-translated
+msgid "Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "Tamaño máximo de facción, Tamaño máximo de escuadrón y Máximo de escuadrones en los ajustes Avanzados"
+
+#. machine-translated
+msgid "its limits are now Max faction size, Max squad size and Max squads in the Advanced settings"
+msgstr "sus límites ahora son Tamaño máximo de facción, Tamaño máximo de escuadrón y Máximo de escuadrones en los ajustes Avanzados"
+
+#. machine-translated
+msgid "The faction's recruitment limit: how many characters and animals your faction may hold (the game: 30). Existing members stay if you lower it. Click the number to type an exact value."
+msgstr "El límite de reclutamiento de la facción: cuántos personajes y animales puede tener tu facción (el juego: 30). Los miembros existentes permanecen si lo bajas. Haz clic en el número para escribir un valor exacto."
+
+#. machine-translated
+msgid "How many members one of your squads may hold (the game: 20). Full squads put new recruits into a new squad."
+msgstr "Cuántos miembros puede tener uno de tus escuadrones (el juego: 20). Los escuadrones llenos colocan a los nuevos reclutas en un escuadrón nuevo."
+
+#. machine-translated
+msgid "How many squads your faction may create (the game: 10)."
+msgstr "Cuántos escuadrones puede crear tu facción (el juego: 10)."

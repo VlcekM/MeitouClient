@@ -32,6 +32,22 @@ public sealed class BodyFactory(GameDatabase db)
     public BodyOptions Options { get; init; } = BodyOptions.Default;
 
     /// <summary>
+    /// The player faction's head cap: <see cref="BodyOptions.MaxFactionSize"/> when set, else CONSTANTS <c>max faction size</c> (30 in the base
+    /// game).
+    /// </summary>
+    public int MaxFactionSize => Options.MaxFactionSize ?? Constants.MaxFactionSize;
+
+    /// <summary>
+    /// The player squad's member cap: <see cref="BodyOptions.MaxSquadSize"/> when set, else CONSTANTS <c>max squad size</c> (20 in the base game).
+    /// </summary>
+    public int MaxSquadSize => Options.MaxSquadSize ?? Constants.MaxSquadSize;
+
+    /// <summary>
+    /// The player's squad count cap: <see cref="BodyOptions.MaxSquads"/> when set, else CONSTANTS <c>max squads</c> (10 in the base game).
+    /// </summary>
+    public int MaxSquads => Options.MaxSquads ?? Constants.MaxSquads;
+
+    /// <summary>
     /// The data of a RACE record (cached).
     /// </summary>
     public RaceData Race(GameRecord race) => _races.GetOrAdd(race.StringId, _ => RaceData.From(race, Db));

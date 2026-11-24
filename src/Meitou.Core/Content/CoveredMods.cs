@@ -65,10 +65,40 @@ public static class CoveredMods
         new(null, null, "Quiet corpse flies in the Audio settings", [new(2385009404, 1612536455)]);
 
     /// <summary>
+    /// The data mods that raise the player faction, squad size and squad count caps, matched by <c>256 Squad Limit</c> or their workshop items:
+    /// "256 Recruitment Limit" (705119823, 2018-04-19), "256 People" (1767015632, 2019-06-11), "Increased Party Size 256" (1701119801, 2019-04-02),
+    /// "64 Faction Size Limit" (1723792132, 2019-04-26), "256 Recruits - V.1.0.68" (3405818838, 2025-01-12), "Wolves Max Squad limits" (1362433476,
+    /// 2018-04-15), "_256 Squad Limit" (1578601833, 2018-11-30), "increased recruitment (60 version)" (773491398, 2019-10-02), "100 Character Limit"
+    /// (1996458247, 2020-02-13), "Max Party Size (256)" (2133492547, 2020-06-17), "Maximized Faction size" (801089396, 2016-11-17), "48 Faction Size
+    /// Limit" (1723790671, 2019-04-26), "256 Squad Limit" (3746322010, 2026-06-17), "100factions 22Squads" (2018675754, 2020-03-12), "Recruitment
+    /// Limit 200" (2994957775, 2023-06-26) and "Increased Faction Limit &amp; Squad Size" (3551190789, 2025-09-20).
+    /// </summary>
+    public static readonly BuiltInMod SquadLimits = new("256 Squad Limit", null,
+        "Max faction size, Max squad size and Max squads in the Advanced settings",
+        [
+            new(705119823, 1524166325),
+            new(1767015632, 1560243898),
+            new(1701119801, 1554176827),
+            new(1723792132, 1556284426),
+            new(3405818838, 1736679135),
+            new(1362433476, 1523819046),
+            new(1578601833, 1543600152),
+            new(773491398, 1570003843),
+            new(1996458247, 1581609184),
+            new(2133492547, 1592424882),
+            new(801089396, 1479354852),
+            new(1723790671, 1556284391),
+            new(3746322010, 1781657015),
+            new(2018675754, 1583974579),
+            new(2994957775, 1687786216),
+            new(3551190789, 1758333424),
+        ]);
+
+    /// <summary>
     /// The mods Meitou has built in.
     /// </summary>
     public static IReadOnlyList<BuiltInMod> BuiltIn { get; } =
-        [RekenshiXp, XpPort, SwampTurtleFix, CharacterHighlight, MuteFlies, ImmersiveFlies];
+        [RekenshiXp, XpPort, SwampTurtleFix, CharacterHighlight, MuteFlies, ImmersiveFlies, SquadLimits];
 
     /// <summary>
     /// Emkej's "Loot-Scoot-Execute" (workshop 3675700748, matched against its 2026-04-26 update, and its "MCM fork" 3813852124, its 2026-11-13
