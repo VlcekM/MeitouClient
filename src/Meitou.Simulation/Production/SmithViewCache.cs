@@ -66,8 +66,13 @@ sealed class SmithViewCache(GameDatabase db)
         if (_published is not null && _version == machines && _shownRevision == ShownText.Revision) return _published;
 
         _version = machines;
-        bool changed = Collect(world) || _shownRevision != ShownText.Revision;
-        _shownRevision = ShownText.Revision;
+        if (_shownRevision != ShownText.Revision)
+        {
+            // Every entry's view holds shown names: make them all again.
+            _entries.Clear();
+            _shownRevision = ShownText.Revision;
+        }
+        bool changed = Collect(world);
         if (_published is not null && !changed) return _published;
         return _published = Published();
     }

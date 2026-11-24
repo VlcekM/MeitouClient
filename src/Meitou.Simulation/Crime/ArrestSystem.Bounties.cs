@@ -288,7 +288,9 @@ public sealed partial class ArrestSystem : IOrderOwner
     {
         if (Carry is null || world.Characters.Cold(slot) is not { Carrying.IsNone: false } c) return OrderCheck.Gone;
         if (c is not { IsImprisoned: false, Medical.Incapacitated: false }) return OrderCheck.Blocked();
-        return CageFor(world, slot, c, order.Site) is null ? OrderCheck.Blocked($"{world.ShownName(c)}: no free cage nearby", posted: true) : OrderCheck.Run;
+        return CageFor(world, slot, c, order.Site) is null
+            ? OrderCheck.Blocked($"{world.ShownName(c)}: no free cage nearby", posted: true)
+            : OrderCheck.Run;
     }
 
     /// <summary>

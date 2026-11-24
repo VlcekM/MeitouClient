@@ -529,8 +529,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (order.Row == TaskType.OperateStorage) return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         if (cold.OperateSite == id) return OrderCheck.Run;
         if (order.Row == TaskType.UseTurret ? !AbleToMan(cold) : !Able(cold)) return OrderCheck.Blocked();
-        if (IsSeat(m) && SeatOccupied(world, site)) return OrderCheck.Blocked($"{world.ShownName("place", site.Record, site.Name)} is already in use.", posted: true);
-        if (OperatorsOf(world, id) >= m.Data.MaxOperators)
+        if ((IsSeat(m) && SeatOccupied(world, site)) || OperatorsOf(world, id) >= m.Data.MaxOperators)
             return OrderCheck.Blocked($"{world.ShownName("place", site.Record, site.Name)} is already in use.", posted: true);
         return Unpowered(world, order, site, m) ? OrderCheck.Blocked(Loc.Tr("It needs electricity.")) : OrderCheck.Run;
     }

@@ -194,8 +194,8 @@ public sealed class GameRecord
     public string ShownName(string tag = "") => Meitou.Localisation.ShownText.Record(StringId, Name, Meitou.Localisation.ShownText.RecordName, tag);
 
     /// <summary>
-    /// String field <paramref name="key"/> (<see cref="GetString"/>) as the mods' text sources show it (<see cref="Meitou.Localisation.ShownText.Record"/>,
-    /// the field named by <paramref name="key"/>). Display only.
+    /// String field <paramref name="key"/> (<see cref="GetString"/>) as the mods' text sources show it
+    /// (<see cref="Meitou.Localisation.ShownText.Record"/>, the field named by <paramref name="key"/>). Display only.
     /// </summary>
     public string GetShownString(string key, string fallback = "") => Meitou.Localisation.ShownText.Record(StringId, GetString(key, fallback), key);
 

@@ -65,6 +65,11 @@ public static class ShownText
     public const int MaxText = 4000;
 
     /// <summary>
+    /// The field of a <see cref="ShownTextKind.Record"/> that is the record's name.
+    /// </summary>
+    public const string RecordName = "name";
+
+    /// <summary>
     /// The most answers kept; past it the cache starts over (tagged items and texts the code builds can make the set open-ended), and only the texts
     /// shown after that are asked again.
     /// </summary>
@@ -173,11 +178,6 @@ public static class ShownText
     }
 
     /// <summary>
-    /// The field of a <see cref="ShownTextKind.Record"/> that is the record's name.
-    /// </summary>
-    public const string RecordName = "name";
-
-    /// <summary>
     /// Record <paramref name="record"/>'s <paramref name="field"/> (<see cref="RecordName"/> for its name), <paramref name="text"/>, as shown, for
     /// one item tagged <paramref name="tag"/> ("" none); see <see cref="ShownTextKind.Record"/>.
     /// </summary>
@@ -200,8 +200,9 @@ public static class ShownText
     /// <summary>
     /// The text shown for <paramref name="text"/> of <paramref name="kind"/> under <paramref name="key"/>, <paramref name="tag"/> and
     /// <paramref name="field"/>: each source in registration order gets the text so far and may replace it (null or blank: keep it); the result is
-    /// cut (a name to <see cref="MaxName"/> characters on one line, anything else to <see cref="MaxText"/>) and kept until <see cref="Refresh"/>. A source that
-    /// throws is dropped and reported through <see cref="Dropped"/>. With no source, or a blank <paramref name="text"/>, the text as it is.
+    /// cut (a name to <see cref="MaxName"/> characters on one line, anything else to <see cref="MaxText"/>) and kept until <see cref="Refresh"/>. A
+    /// source that throws is dropped and reported through <see cref="Dropped"/>. With no source, or a blank <paramref name="text"/>, the text as it
+    /// is.
     /// </summary>
     public static string Of(ShownTextKind kind, string key, string text, string tag = "", string field = "")
     {
@@ -223,7 +224,9 @@ public static class ShownText
                     var context = new ShownTextContext(kind, asked.Item2, shown, asked.Item4, asked.Item5);
                     try
                     {
-                        if (source(context) is { } given && Clean(OneLine(kind, asked.Item5), given) is { Length: > 0 } clean && !string.IsNullOrWhiteSpace(clean)) shown = clean;
+                        string? given = source(context);
+                        if (given is not null && Clean(OneLine(kind, asked.Item5), given) is var clean && !string.IsNullOrWhiteSpace(clean))
+                            shown = clean;
                     }
                     catch (Exception e)
                     {
@@ -238,20 +241,21 @@ public static class ShownText
                 s_inside = false;
             }
 
-            if (s_count >= MaxCached) Forget();
+            if (s_count >= MaxCached) Forget(changed: false);
             if (Answers.TryAdd(asked, shown)) s_count++;
             return shown;
         }
     }
 
     /// <summary>
-    /// Empties the cache (under <see cref="Asking"/>).
+    /// Empties the cache (under <see cref="Asking"/>); with <paramref name="changed"/> (not a cache that only grew too big), moves
+    /// <see cref="Revision"/>.
     /// </summary>
-    static void Forget()
+    static void Forget(bool changed = true)
     {
         Answers.Clear();
         s_count = 0;
-        s_revision++;
+        if (changed) s_revision++;
     }
 
     /// <summary>

@@ -565,7 +565,8 @@ public sealed partial class BuildingRegistry
 
             list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials,
                 s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public, Outside = s.Outside,
-                TownName = s.LevelTown?.Name ?? FindTown(s.Town)?.Name, TownRecord = s.LevelTown?.Id, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
+                TownName = s.LevelTown?.Name ?? FindTown(s.Town)?.Name, TownRecord = s.LevelTown?.Id, LevelPlacement = s.LevelPlacement,
+                Destroyed = s.Destroyed, Name = s.Name });
         }
 
         _publishedVersion = Version;

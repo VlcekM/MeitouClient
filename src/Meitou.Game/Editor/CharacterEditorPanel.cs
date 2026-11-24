@@ -788,7 +788,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
             {
                 var options = draft.Options(c.Kind);
                 b.Text[owner + ".ElementText"] = c.Kind switch { EditorControlKind.Head => "Face", EditorControlKind.Beard => "Beard", _ => "Hair" };
-                b.Text[owner + ".ElementValueText"] = options.ElementAtOrDefault(draft.OptionIndex(c.Kind))?.ShownName() ?? "None";
+                b.Text[owner + ".ElementValueText"] = draft.ShownOptionName(c.Kind);
                 b.Text[owner + ".NumberText"] = $"{draft.OptionIndex(c.Kind) + 1}/{options.Count}";
                 continue;
             }

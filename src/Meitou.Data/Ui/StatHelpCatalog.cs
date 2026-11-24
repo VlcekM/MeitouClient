@@ -25,7 +25,8 @@ public sealed class StatHelpCatalog
     /// <summary>
     /// The text referenced from source line <paramref name="line"/>, the longest English msgid when several share it; "" when none.
     /// </summary>
-    public string TextAt(int line) => _entries.Where(e => e.Lines.Contains(line)).MaxBy(e => e.English.Length) is { } entry ? Loc.Tr(entry.English) : "";
+    public string TextAt(int line) =>
+        _entries.Where(e => e.Lines.Contains(line)).MaxBy(e => e.English.Length) is { } entry ? Loc.Tr(entry.English) : "";
 
     /// <summary>
     /// <see cref="From"/> the gettext template at <paramref name="path"/>.

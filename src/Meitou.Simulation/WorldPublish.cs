@@ -396,13 +396,15 @@ public sealed partial class World
     /// <summary>
     /// The sneaker's watchers of the last <see cref="AggroSystem.WatcherSeconds"/> that are still about, where they stand now.
     /// </summary>
-    SquadView[] PublishSquads() => [.. SquadManagement.LedSquads(this).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]))];
+    SquadView[] PublishSquads() =>
+        [.. SquadManagement.LedSquads(this).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]) { TemplateId = s.TemplateId })];
 
     /// <summary>
     /// The player's squads the player does not lead, for <see cref="WorldSnapshot.IndependentSquads"/>.
     /// </summary>
     SquadView[] PublishIndependentSquads() =>
-        [.. SquadManagement.PlayerSquads(this).Where(s => s.Independent).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]))];
+        [.. SquadManagement.PlayerSquads(this).Where(s => s.Independent)
+            .Select(s => new SquadView(s.Id, s.Name, [.. s.Members]) { TemplateId = s.TemplateId })];
 
     #endregion
 

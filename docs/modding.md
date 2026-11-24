@@ -1128,8 +1128,8 @@ holds refuses the second mod.
   move, at least 20 times a second), so it must be cheap and read only its context; a tick may be in flight, so it must not touch the world.
   It gets `UiBuildingContext`: `Building` (`UiSelectedBuilding`: `Instance`, the key the simulation
   knows it by and `world.Player.InspectedBuilding` holds; `Record`, its record's string id or null; `SiteId`, the player's building id or null;
-  the panel's `Name`; `Owned`, whether the player's faction owns it, as the game's own buttons show), the `Snapshot` on screen, `Tick` read
-  when asked, and `Enqueue`. It returns `UiBuildingAction`s (caption, tooltip or null, press); return none to add nothing for that building.
+  the panel's `Name`, as shown after the mods' text sources (`Record` names the building for certain); `Owned`, whether the player's faction
+  owns it, as the game's own buttons show), the `Snapshot` on screen, `Tick` read when asked, and `Enqueue`. It returns `UiBuildingAction`s (caption, tooltip or null, press); return none to add nothing for that building.
   Captions and tooltips go through the translation catalog, as the game's own (a text the catalog lacks shows as given). A press plays the
   panel's click and runs only while the building it was shown for is still selected and still exists (the game's own buttons' check); it changes
   the world only by queueing commands, which the mod's system applies in its serial `Inputs` step (`Instance` names the building). By then the

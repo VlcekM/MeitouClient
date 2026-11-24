@@ -90,7 +90,7 @@ sealed class SquadPanel(PlayerInterface player)
             return;
         }
 
-        b.TabCaptions["SquadPanel"] = [.. tabs.Select(s => player.ShownName("squad", "", s.Name))];
+        b.TabCaptions["SquadPanel"] = [.. tabs.Select(s => player.ShownName("squad", s.TemplateId, s.Name))];
         b.SelectedTabs["SquadPanel"] = Math.Max(0, tabs.FindIndex(s => s.Id == player.Session.CurrentSnapshot.ActiveSquad));
     }
 

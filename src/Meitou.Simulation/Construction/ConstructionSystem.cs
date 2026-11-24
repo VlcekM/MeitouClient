@@ -1676,7 +1676,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         SyncChildren(world, site);
         SetBroken(world, site, false);
         if (site.Owner == world.Player.Faction)
-            world.Post(Loc.Tr("Building '{1}' construction complete.", ShownText.Record(site.Record, site.Name)));
+            world.Post(Loc.Tr("Building '{1}' construction complete.", world.ShownName("place", site.Record, site.Name)));
     }
 
     /// <summary>

@@ -15,7 +15,8 @@ sealed class CraftOptionsCache(Func<World, Machine, IReadOnlyList<CraftOptionVie
     IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>>? _published;
 
     /// <summary>
-    /// The shown text revision (<see cref="ShownText.Revision"/>) the published view was built at: its names are rebuilt when a mod's text changes.
+    /// The shown text revision (<see cref="ShownText.Revision"/>) the option lists were made at: their names are made again when a mod's text
+    /// changes.
     /// </summary>
     int _shownRevision;
 
@@ -43,9 +44,7 @@ sealed class CraftOptionsCache(Func<World, Machine, IReadOnlyList<CraftOptionVie
     public IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>> Of(World world)
     {
         Sync(world);
-        if (_published is not null && _shownRevision == ShownText.Revision && SameBenches(world)) return _published;
-
-        _shownRevision = ShownText.Revision;
+        if (_published is not null && SameBenches(world)) return _published;
 
         _benches = [.. world.Machines.All.Where(m => m.Craft is not null)];
         var map = new Dictionary<string, IReadOnlyList<CraftOptionView>>(StringComparer.Ordinal);
@@ -63,13 +62,15 @@ sealed class CraftOptionsCache(Func<World, Machine, IReadOnlyList<CraftOptionVie
     }
 
     /// <summary>
-    /// Drops the option lists and the site map when the unlocks are not the ones they were made with.
+    /// Drops the option lists and the site map when the unlocks are not the ones they were made with, or the shown text changed (their names are
+    /// shown text).
     /// </summary>
     void Sync(World world)
     {
-        if (ReferenceEquals(_unlocked, world.Research.UnlockedCrafts)) return;
+        if (ReferenceEquals(_unlocked, world.Research.UnlockedCrafts) && _shownRevision == ShownText.Revision) return;
 
         _unlocked = world.Research.UnlockedCrafts;
+        _shownRevision = ShownText.Revision;
         _lists.Clear();
         _published = null;
     }
