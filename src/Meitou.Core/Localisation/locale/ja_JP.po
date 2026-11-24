@@ -5132,8 +5132,8 @@ msgid "Machine id (letters, digits, dashes)"
 msgstr "マシン ID（英字・数字・ハイフン）"
 
 #. machine-translated
-msgid "Machine name"
-msgstr "マシン名"
+msgid "Machine name (optional)"
+msgstr "マシン名（任意）"
 
 #. machine-translated
 msgid "Notes (cooling, power plan, ...)"
@@ -5216,8 +5216,8 @@ msgid "The runs were made by {1}, not {2}: they cannot be submitted."
 msgstr "実行したのは {2} ではなく {1} です。送信できません。"
 
 #. machine-translated
-msgid "Fill in the machine's id and name to submit."
-msgstr "送信するにはマシンの ID と名前を入力してください。"
+msgid "Fill in the machine's id to submit."
+msgstr "送信するにはマシンの ID を入力してください。"
 
 #. machine-translated
 msgid "The service refused it: {1}"

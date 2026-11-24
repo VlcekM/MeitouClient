@@ -5132,8 +5132,8 @@ msgid "Machine id (letters, digits, dashes)"
 msgstr "기기 ID(문자, 숫자, 대시)"
 
 #. machine-translated
-msgid "Machine name"
-msgstr "기기 이름"
+msgid "Machine name (optional)"
+msgstr "기기 이름(선택)"
 
 #. machine-translated
 msgid "Notes (cooling, power plan, ...)"
@@ -5216,8 +5216,8 @@ msgid "The runs were made by {1}, not {2}: they cannot be submitted."
 msgstr "실행한 빌드가 {2}이(가) 아니라 {1}입니다. 제출할 수 없습니다."
 
 #. machine-translated
-msgid "Fill in the machine's id and name to submit."
-msgstr "제출하려면 기기 ID와 이름을 입력하세요."
+msgid "Fill in the machine's id to submit."
+msgstr "제출하려면 기기 ID를 입력하세요."
 
 #. machine-translated
 msgid "The service refused it: {1}"

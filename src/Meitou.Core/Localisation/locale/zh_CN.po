@@ -5977,8 +5977,8 @@ msgid "Machine id (letters, digits, dashes)"
 msgstr "机器 ID（字母、数字、连字符）"
 
 #. machine-translated
-msgid "Machine name"
-msgstr "机器名称"
+msgid "Machine name (optional)"
+msgstr "机器名称（可选）"
 
 #. machine-translated
 msgid "Notes (cooling, power plan, ...)"
@@ -6061,8 +6061,8 @@ msgid "The runs were made by {1}, not {2}: they cannot be submitted."
 msgstr "这些运行由 {1} 而非 {2} 完成：无法提交。"
 
 #. machine-translated
-msgid "Fill in the machine's id and name to submit."
-msgstr "请填写机器 ID 和名称后再提交。"
+msgid "Fill in the machine's id to submit."
+msgstr "请填写机器 ID 后再提交。"
 
 #. machine-translated
 msgid "The service refused it: {1}"

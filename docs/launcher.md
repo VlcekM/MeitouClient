@@ -474,7 +474,7 @@ folder, never in the installed versions or Kenshi's save folder:
   while a benchmark runs and the page refuses while the game Play started runs.
 - Results: each session folder of the chosen build and platform, its `groups` in `result.json` order with each run's `avgFps`, `p99Ms`,
   `over33Pct`. Submit (`POST /bench`) needs both runs agreeing on scenario, tier, version and fingerprint, a target build whose version is
-  each run's `game.version`, and a machine id and name. The body is `{ installId, handle, machine, platform, target, runs, summary }`:
+  each run's `game.version`, and a machine id (the name is optional). The body is `{ installId, handle, machine, platform, target, runs, summary }`:
   the runs' `result.json` as written, run 2's `summary.md`, `machine` = `{id, name, notes}` as typed, `cpu`, `gpu`, `ramGb`, `os`,
   `osFamily` from run 2's `hardware` and `resolution` from the primary screen. The service's `error` (else its status and text) is shown.
 - `launcher.json` `Benchmark`: `InstallId` (a GUID made at the first submit), `Handle`, `MachineId` (default from the probed GPU and OS

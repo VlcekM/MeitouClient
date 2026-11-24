@@ -1742,7 +1742,7 @@ msgid "Fights far away"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Fill in the machine's id and name to submit."
+msgid "Fill in the machine's id to submit."
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
@@ -2983,7 +2983,7 @@ msgid "Machine id (letters, digits, dashes)"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkResultsPanel.cs
-msgid "Machine name"
+msgid "Machine name (optional)"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs

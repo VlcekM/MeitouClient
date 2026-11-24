@@ -82,7 +82,7 @@ sealed class BenchmarkResultsPanel(BenchmarkService service, LauncherConfig conf
 
         var boxes = new StackPanel { Spacing = 6 };
         boxes.Children.Add(Box(settings.MachineId, Tr("Machine id (letters, digits, dashes)"), text => settings.MachineId = text));
-        boxes.Children.Add(Box(settings.MachineName, Tr("Machine name"), text => settings.MachineName = text));
+        boxes.Children.Add(Box(settings.MachineName, Tr("Machine name (optional)"), text => settings.MachineName = text));
         boxes.Children.Add(Box(settings.MachineNotes, Tr("Notes (cooling, power plan, ...)"), text => settings.MachineNotes = text));
         foreach (var box in boxes.Children.OfType<TextBox>()) box.IsReadOnly = settings.MachineLocked;
 
@@ -252,8 +252,7 @@ sealed class BenchmarkResultsPanel(BenchmarkService service, LauncherConfig conf
         if (!target) return Tr("Not a target build: its results can be seen here but not submitted.");
         if (session.Runs.FirstOrDefault(run => run.GameVersion != version) is { } other)
             return Tr("The runs were made by {1}, not {2}: they cannot be submitted.", other.GameVersion, version);
-        if (config.Benchmark.MachineId.Trim().Length == 0 || config.Benchmark.MachineName.Trim().Length == 0)
-            return Tr("Fill in the machine's id and name to submit.");
+        if (config.Benchmark.MachineId.Trim().Length == 0) return Tr("Fill in the machine's id to submit.");
         return null;
     }
 

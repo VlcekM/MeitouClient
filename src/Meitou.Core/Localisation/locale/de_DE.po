@@ -5134,8 +5134,8 @@ msgid "Machine id (letters, digits, dashes)"
 msgstr "Rechner-ID (Buchstaben, Ziffern, Bindestriche)"
 
 #. machine-translated
-msgid "Machine name"
-msgstr "Rechnername"
+msgid "Machine name (optional)"
+msgstr "Rechnername (optional)"
 
 #. machine-translated
 msgid "Notes (cooling, power plan, ...)"
@@ -5218,8 +5218,8 @@ msgid "The runs were made by {1}, not {2}: they cannot be submitted."
 msgstr "Die Durchläufe stammen von {1}, nicht von {2}: Sie können nicht eingereicht werden."
 
 #. machine-translated
-msgid "Fill in the machine's id and name to submit."
-msgstr "Gib zum Einreichen ID und Namen des Rechners ein."
+msgid "Fill in the machine's id to submit."
+msgstr "Gib zum Einreichen die ID des Rechners ein."
 
 #. machine-translated
 msgid "The service refused it: {1}"

@@ -5136,8 +5136,8 @@ msgid "Machine id (letters, digits, dashes)"
 msgstr "ID компьютера (буквы, цифры, дефисы)"
 
 #. machine-translated
-msgid "Machine name"
-msgstr "Имя компьютера"
+msgid "Machine name (optional)"
+msgstr "Имя компьютера (необязательно)"
 
 #. machine-translated
 msgid "Notes (cooling, power plan, ...)"
@@ -5220,8 +5220,8 @@ msgid "The runs were made by {1}, not {2}: they cannot be submitted."
 msgstr "Прогоны сделаны сборкой {1}, а не {2}: их нельзя отправить."
 
 #. machine-translated
-msgid "Fill in the machine's id and name to submit."
-msgstr "Для отправки укажите ID и имя компьютера."
+msgid "Fill in the machine's id to submit."
+msgstr "Для отправки укажите ID компьютера."
 
 #. machine-translated
 msgid "The service refused it: {1}"
