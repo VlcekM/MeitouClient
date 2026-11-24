@@ -6,17 +6,32 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 ## v0.23.0
 
 - Unified AI chooser & real order queues for all NPCs, squads, raids, and town/captive duties
-- NPCs rescue downed allies to beds and bandage their own crippled legs
-- Off-screen town overrides, outpost shoppers/traders, and autonomous outpost guard/wander AI
-- Overhauled auto-haul, engineer door repair, wall upgrades, and turret/light snap nodes
-- Graphics: adaptive exposure, lit footstep dust, cross-fading weather, Metal DoF & filters
-- Characters & audio: kept gear blood stains, corpse fly sliders, weapon & animal scaling
-- Settings: per-skill Squad XP, faction/squad size sliders, and new Fixes toggles
-- UI: stack splitting, scrollable/reorderable queues, movable Settings with mod search/filters
-- Full localisations for all nine Kenshi languages and fallback font support for mods
-- Wine prefix save discovery (Heroic, Lutris, Bottles) and safer navmesh-first loading
-- Performance: faster WorkerPool, pooled navmesh builds, staggered ticks, 5x & UI caching
-- Code mods (API v3): NuGet refs, data phase, AI, observers, UI/shown-text, FX & audio hooks
+- NPCs rescue downed allies to beds (148/106) and bandage their own crippled legs (269)
+- Off-screen town overrides (with mod API) and KEP town name override support
+- Outpost life: shoppers buy from counters, wandering traders visit, autonomous squads guard
+- Campaign platoons run full minds, ransack outpost houses, and follow proper retreat rules
+- Overhauled Auto-Haul (152/124): room/stacking checks, loose-item pickups, and fuel generators
+- Engineer job repairs broken/damaged doors of complete buildings and owned town houses
+- Building: wall upgrades with attached pieces, turret/light snap nodes, and outpost build ring
+- Building: placement ghosts show usage nodes, build mode opens player interiors, 3D floor tests
+- Doors & locks: swing animations, material durability, condition/lock bars, shackle picking
+- Adaptive exposure (Meitou, 1-3x slider) and lit footstep dust/spray at night
+- Cross-fading regional weather, room GI & lamp lighting fixes, 32k traced scene instances
+- Low-end & Metal: simple terrain shading, lean shaders, GI off on --low-end, Metal DoF/filters
+- Clothes keep blood stains after healing (Advanced) and wash clean
+- Audio: Mute/Quiet corpse flies settings, turret GUN_DATA sounds, build-only loop audio
+- Characters: weapon/model scaling, live animal anim scaling, 8+ part/tail limb saves & scroll
+- Settings: per-skill Squad XP with HUD display, Max faction/squad size & Max squads sliders
+- New Fixes toggles: raid progress, guard body passing, turret Assault, buried ruins, caged idles
+- Inventory: stack split (Shift/Alt/Shift+Alt), dropped stack merge, right-click equip bags
+- Queues & panels: scrollable/reorderable queues with progress & X, full town machine/farm info
+- HUD & UI: movable/translucent Settings with mod search/filters, autoscrolling dialogue log
+- HUD & UI: carried squad name tags, hull-height tags, greyed-out menu rows, fallback mod fonts
+- Full localisations for all nine Kenshi languages and build-time translation checks
+- Saves: Wine prefix discovery (Heroic, Lutris, Bottles), navmesh-first loads, atomic configs
+- Performance: faster WorkerPool, pooled navmesh builds, staggered ticks, 5x & UI/publish cache
+- Code mods (API v3): NuGet refs, cross-version binding, IModData pre-build data phase
+- Code mods (API v3): chooser/AI, observers, world states, UI/shown-text, FX, glow & audio hooks
 - Data mods & RE_Kenshi: crossbow ammo lists, custom weapon attacks/skills, 36 more ports
 - Launcher (v1.16-v1.21): redesigned Mods page, Linux AppImage install, built-in benchmarks
 - 164+ bugs fixed since v0.22.1 across AI, combat, crime, slavery, jobs, navmesh, UI, and saves
