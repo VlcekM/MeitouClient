@@ -257,6 +257,14 @@ public sealed class CaptiveJob
     /// The ground item a fetch picks up (-1: none).
     /// </summary>
     internal int Item { get; init; } = -1;
+    /// <summary>
+    /// An order's job (<see cref="CaptiveSystem"/>'s 220 order), not a goal's: it runs while the order is the worker's queue front.
+    /// </summary>
+    internal bool Ordered { get; init; }
+    /// <summary>
+    /// The provenance of the job's walks: an order's job walks as its order, a goal's as its goal.
+    /// </summary>
+    internal TaskSource Source => Ordered ? TaskSource.Order : TaskSource.Goal;
 
     /// <summary>
     /// Hashes the job's state.
@@ -277,6 +285,7 @@ public sealed class CaptiveJob
         h.Add(Blows);
         h.Add(NextBark);
         if (Beats != 0) h.Add(Beats);
+        if (Ordered) h.Add(0x4F726472);
     }
 }
 
@@ -455,7 +464,14 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         {
             var j = _jobs[k];
             int w = table.TryResolveNext(j.Worker, out int at) ? at : -1;
-            if (w < 0 || _duties?.Runs(world, w, j.Goal) != true || Step(world, j))
+            if (j.Ordered && (w < 0 || !OrderHolds(world, w, j)))
+            {
+                _jobs.RemoveAt(k);
+                End(world, j, CaptiveEventKind.GaveUp);
+                continue;
+            }
+
+            if (w < 0 || !j.Ordered && _duties?.Runs(world, w, j.Goal) != true || Step(world, j))
             {
                 k++;
                 continue;
@@ -472,6 +488,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     void Finish(World world, int w, CaptiveJob j)
     {
+        if (j.Ordered)
+        {
+            TaskStart.Stand(world.Characters, w);
+            Goals.LookAt(world, w);
+            return;
+        }
+
         if (j.LostWalk) _duties!.LostWalk(world, w, j.Goal, j.LostKey);
         else _duties!.Done(world, w, j.Goal);
 
@@ -503,7 +526,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     internal static void WalkFor(World world, CaptiveJob j, int w, Vector2 to, byte mode)
     {
-        TaskStart.Walk(world, w, to, mode, RowOf(j.Kind), TaskSource.Goal);
+        TaskStart.Walk(world, w, to, mode, RowOf(j.Kind), j.Source);
         j.Walks++;
     }
 
@@ -1295,7 +1318,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (world.Fixtures.IsShut(cage.Building) && world.Fixtures.DoorOwner(cage.Building) == j.Faction)
             world.Fixtures.SetDoorsLocked(cage.Building, false);
 
-        TaskStart.Walk(world, w, new Vector2(cage.Position.X, cage.Position.Z), SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+        TaskStart.Walk(world, w, new Vector2(cage.Position.X, cage.Position.Z), SpeedMode.Walk, RowOf(j.Kind), j.Source);
         return true;
     }
 
@@ -1426,7 +1449,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 if (walking) return true;
                 if (Lost(j, IgnoreKey.Of(j.Captive)) || ++j.Walks > Settings.Walks)
                     return End(world, j, CaptiveEventKind.GaveUp);
-                TaskStart.Walk(world, w, new Vector2(body.X, body.Z), SpeedMode.Run, RowOf(j.Kind), TaskSource.Goal);
+                TaskStart.Walk(world, w, new Vector2(body.X, body.Z), SpeedMode.Run, RowOf(j.Kind), j.Source);
                 return true;
             }
 

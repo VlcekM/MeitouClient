@@ -81,7 +81,7 @@ public sealed partial class World
         TaskType.LootTarget when onSite => SystemOf<PlayerSystem>()?.PickUps,
         TaskType.MoveCusOrdered or TaskType.StayCloseToTarget or TaskType.Bodyguard => SystemOf<MovementSystem>(),
         TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder or TaskType.LootTarget or TaskType.StealthKnockout or TaskType.PutDownObject
-            or TaskType.LootAnimalsJob => SystemOf<Carrying.CarrySystem>(),
+            or TaskType.LootAnimalsJob or TaskType.FindWeapon => SystemOf<Carrying.CarrySystem>(),
         TaskType.FocusedMeleeAttack or TaskType.UnprovokedFocusedMeleeAttack or TaskType.MeleeAttack or TaskType.AttackEnemies
             => SystemOf<Combat.CombatSystem>(),
         TaskType.ShootAtTarget => Combat.ShootAt.Instance,
@@ -98,6 +98,7 @@ public sealed partial class World
         TaskType.GetOutOfCageLegit => Locks.FreedPrisoner.Instance,
         TaskType.GetOutOfCageEscape => Locks.CageEscape.Instance,
         TaskType.RunAway => SystemOf<Aggro.FleeSystem>(),
+        TaskType.EatTargetAlive => SystemOf<Kidnap.CaptiveSystem>(),
         TaskType.GetUp or TaskType.Aoeu or TaskType.StumbleTaskForced or TaskType.GetOutOfBed => SystemOf<Combat.CombatSystem>()?.BodyOrders,
         TaskType.PlayerTalkTo or TaskType.SeekAndTalkAndSendSignal or TaskType.FollowWhileTalking or TaskType.TownStalker
             => SystemOf<Dialogue.DialogueSystem>()?.TalkOrders,
