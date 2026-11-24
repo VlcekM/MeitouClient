@@ -1220,13 +1220,15 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// The floor half of <c>AI::isWithinChoppingRange</c>: the same floor whatever the height, else within <see cref="SiteReach.HeightLimit"/>
-    /// (<see cref="SiteReach.AtHeight(in CharacterHot, BuildSite, float, bool)"/>). Meitou knows the floor of neither a player building nor one
-    /// standing in it, so only an outdoor worker at an outdoor site counts as the same floor (both floor 0): a site whose origin lies far below the
-    /// ground it stands on is built from that ground (#1255: a sunk Outpost s-V big, 219 under its slab).
+    /// (<see cref="SiteReach.AtHeight(in CharacterHot, BuildSite, float, bool)"/>). The floors compared are the worker's (0 outdoors) and the site's
+    /// <c>floornum</c> (Building <c>+0xa4</c>, <b>Verified</b>: the state reader <c>FUN_140552b70</c> and writer <c>FUN_140552320</c>). Meitou knows the floor
+    /// of neither a player building nor one standing in it, so only an outdoor worker at a floor-0 site outdoors counts as the same floor: a site
+    /// whose origin lies far below the ground it stands on is built from that ground (#1255: a sunk Outpost s-V big, 219 under its slab), and a
+    /// light snapped to a building's outside wall from the ground under it (#1246: a Spotlight 56 over the builders).
     /// </summary>
     bool OnSiteFloor(World world, int slot, in CharacterHot n, BuildSite site)
     {
-        if (site.Parent is null && site.Floor == 0 && world.Sight.Outdoors(slot)) return true;
+        if ((site.Parent is null || site.Outside) && site.Floor == 0 && world.Sight.Outdoors(slot)) return true;
         return SiteReach.AtHeight(n, site, FloorHeight(world, site), HasDoor(world, site));
     }
 
