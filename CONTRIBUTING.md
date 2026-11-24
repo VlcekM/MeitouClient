@@ -49,13 +49,12 @@ Not accepted at the moment:
 
 1. Check the [roadmap](https://meitou.kenshi.wiki/roadmap), open issues
    and PRs so you don't build what someone else is already building.
-2. For anything beyond a small fix, open an issue describing the change
-   and wait for a go-ahead before writing code. PRs for unapproved
-   features will be closed with a pointer to this file, I am sorry, but again, code is cheap, mental bandwidth is in short supply 😓
+2. For anything beyond bugfixing, DM VlcekM first. I am sorry, but again, code is cheap, mental bandwidth is in short supply 😓
+3. If it's a PR for a code hook, consider how practical it would be to do with a regular harmony patch instead
 
 ## Sending a pull request
 
-- Keep PRs small and focused; one change per PR.
+- Bundle related bugfixes/changes into one larger PR, sensibly
 - Build, run the full test suite and follow [AGENTS.md](AGENTS.md).
 - Explain *why* in the description, not only what.
 - Reviews happen in batches, usually at weekends. A slow reply is not a no.
