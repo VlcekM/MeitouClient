@@ -394,7 +394,8 @@ sealed class TitleScreen(GameHost host)
         if (TitleBattle is not { } battle) return;
 
         foreach (var at in battle.Tornado.TakeTwisters())
-            _titleParticles?.Burst(TitleTornado.System, at, Quaternion.Identity, TitleTornado.FlightSeconds, TitleTornado.Size);
+            foreach (var (height, size) in TitleTornado.Funnel)
+                _titleParticles?.Burst(TitleTornado.System, at + new Vector3(0, height, 0), Quaternion.Identity, TitleTornado.FlightSeconds, size);
     }
 
     /// <summary>

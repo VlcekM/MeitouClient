@@ -14,9 +14,10 @@ sealed class TitleTornado
     public const string System = "kenshi_twister_dust1";
 
     /// <summary>
-    /// The twister's size against the system's own (its rings are 70 to 130 wide; smaller reads as haze round the 2.5x fighters).
+    /// The twister's funnel: bursts of <see cref="System"/> stacked up the flight, each its height above the ground and its size against the system's
+    /// own (its rings are 70 to 130 wide), narrow at the foot and wide at the top. One burst alone reads as haze round the 2.5x fighters.
     /// </summary>
-    public const float Size = 0.6f;
+    public static readonly (float Height, float Size)[] Funnel = [(0, 0.2f), (0, 0.25f), (50, 0.3f), (100, 0.4f), (150, 0.5f), (200, 0.6f)];
 
     /// <summary>
     /// The seconds a flight lasts; the twister emits as long.
@@ -31,7 +32,17 @@ sealed class TitleTornado
     /// <summary>
     /// The top of the flight above the ground, in world units (the fighters are drawn about 45 tall).
     /// </summary>
-    const float Height = 70;
+    const float Height = 210;
+
+    /// <summary>
+    /// The shares of the flight spent rising and falling; the fighter hovers at the top between them.
+    /// </summary>
+    const float Rise = 0.2f, Fall = 0.3f;
+
+    /// <summary>
+    /// How far the hovering fighter bobs up and down.
+    /// </summary>
+    const float Bob = 12;
 
     /// <summary>
     /// The whole turns a flight spins, so the fighter lands facing the way it left.
@@ -94,7 +105,27 @@ sealed class TitleTornado
         float u = flown / FlightSeconds;
         float spin = u * u * (3 - 2 * u);
 
-        return (Height * MathF.Sin(MathF.PI * u), MathF.Tau * Turns * spin);
+        return (Lift(u), MathF.Tau * Turns * spin);
+    }
+
+    /// <summary>
+    /// The height at share <paramref name="u"/> of the flight: a fast rise that slows to the top, a hover that bobs, then a fall that speeds up.
+    /// </summary>
+    static float Lift(float u)
+    {
+        if (u < Rise)
+        {
+            float r = 1 - u / Rise;
+            return Height * (1 - r * r);
+        }
+
+        if (u > 1 - Fall)
+        {
+            float f = (u - (1 - Fall)) / Fall;
+            return Height * (1 - f * f);
+        }
+
+        return Height + Bob * MathF.Sin(MathF.Tau * (u - Rise) / (1 - Rise - Fall));
     }
 
     /// <summary>
