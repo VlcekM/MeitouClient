@@ -499,7 +499,7 @@ public sealed partial class UiHost
         if (!_extensions.Add(id)) throw new InvalidOperationException($"UI extension already registered: {id}");
         if (folder is not null) _markerImages.SetFolder(id, folder);
 
-        var scope = new UiRegistration(this, id);
+        var scope = new UiRegistration(this, id, folder);
         try
         {
             extension.Register(scope);
@@ -1330,12 +1330,18 @@ public sealed class UiRegistration : IDisposable
     bool _disposed;
 
     /// <summary>
-    /// A scope for extension <paramref name="id"/>.
+    /// The folder of the code mod the extension belongs to; null for none.
     /// </summary>
-    internal UiRegistration(UiHost host, string id)
+    readonly string? _folder;
+
+    /// <summary>
+    /// A scope for extension <paramref name="id"/> of the code mod in <paramref name="folder"/> (null: none).
+    /// </summary>
+    internal UiRegistration(UiHost host, string id, string? folder = null)
     {
         this._host = host;
         Id = id;
+        _folder = folder;
     }
 
     /// <summary>
@@ -1368,6 +1374,25 @@ public sealed class UiRegistration : IDisposable
         string key = Key(name);
         _host.AddStyle(Id, key, style);
         return key;
+    }
+
+    /// <summary>
+    /// Adds font file <paramref name="path"/> (a TrueType or OpenType font with outlines; a relative path is in the mod's folder) to the fonts
+    /// every interface text draws a character from when its own font lacks it, after those added before (docs/modding.md, "Fallback fonts").
+    /// False when the file does not exist or was added already. For the life of the process: disposing the scope does not remove it.
+    /// </summary>
+    public bool AddFallbackFont(string path)
+    {
+        Check();
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        if (!Path.IsPathRooted(path))
+        {
+            if (_folder is null) return false;
+            path = Path.Combine(_folder, path);
+        }
+
+        return File.Exists(path) && Rendering.Ui.UiFontFallbacks.Add(path);
     }
 
     /// <summary>
