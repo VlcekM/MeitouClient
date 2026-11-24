@@ -2,6 +2,11 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.20.0
+
+- Linux: first-start setup and Settings can add the AppImage to the app menu
+- Benchmark page: Submit is enabled as soon as the machine id is typed; the machine name is optional
+
 ## v1.19.0
 
 - New Benchmark page: installs the benchmark builds, runs their scenarios at the chosen graphics tiers (natively or under Proton on Linux), shows the results and submits them
