@@ -30,6 +30,26 @@ sealed record BenchmarkScenario(string Id, string? Save, IReadOnlyList<string> G
     public double RunMinutes => (Seconds + OverheadSeconds) / 60;
 
     /// <summary>
+    /// The short name shown on tabs and checkboxes for scenario <paramref name="id"/>; an unknown one by its id.
+    /// </summary>
+    public static string ShortLabel(string id) => id switch
+    {
+        "bases" => LauncherText.Translate("Bases"),
+        "shark-flyby" => LauncherText.Translate("Shark fly-by"),
+        _ => id,
+    };
+
+    /// <summary>
+    /// A short description of scenario <paramref name="id"/>; empty for an unknown one.
+    /// </summary>
+    public static string Description(string id) => id switch
+    {
+        "bases" => LauncherText.Translate("The play bench on a save"),
+        "shark-flyby" => LauncherText.Translate("A new game, flying round Shark"),
+        _ => "",
+    };
+
+    /// <summary>
     /// The name shown for scenario <paramref name="id"/>; one this launcher does not know (a newer build's) by its id.
     /// </summary>
     public static string Label(string id) => id switch

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Npgsql;
 using NpgsqlTypes;
@@ -72,8 +74,69 @@ sealed class Store(NpgsqlDataSource db)
                 summary text
             );
             create index if not exists bench_session_key on bench_session (sender, target, scenario, tier, version, platform);
+            create table if not exists schema_migration (
+                name text primary key,
+                applied_at timestamptz not null default now()
+            );
             """);
         await cmd.ExecuteNonQueryAsync();
+        await MigrateBenchMachineIds();
+    }
+
+    /// <summary>
+    /// One-time migration (<c>bench_machine_id_v1</c>): regenerates <c>machine.id</c> on existing non-legacy sessions from their hardware
+    /// (<c>gpu</c> + <c>osFamily</c>) and a 6-hex hash of <c>sender</c>, and clears <c>machine.name</c>, matching the launcher's generated id format.
+    /// </summary>
+    async Task MigrateBenchMachineIds()
+    {
+        await using var connection = await db.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await using (var claim = new NpgsqlCommand(
+            "insert into schema_migration (name) values ('bench_machine_id_v1') on conflict do nothing", connection, transaction))
+        {
+            if (await claim.ExecuteNonQueryAsync() == 0) return;
+        }
+
+        var rows = new List<(long Id, string Sender, string Machine)>();
+        await using (var read = new NpgsqlCommand(
+            "select id, sender, machine::text from bench_session where not legacy", connection, transaction))
+        await using (var r = await read.ExecuteReaderAsync())
+        {
+            while (await r.ReadAsync()) rows.Add((r.GetInt64(0), r.GetString(1), r.GetString(2)));
+        }
+
+        foreach (var (id, sender, machineJson) in rows)
+        {
+            if (JsonSerializer.Deserialize(machineJson, ReportsJson.Default.BenchMachine) is not { } machine) continue;
+
+            var updated = machine with { Id = RegeneratedMachineId(sender, machine), Name = "" };
+            string json = JsonSerializer.Serialize(updated, ReportsJson.Default.BenchMachine);
+            await using var write = new NpgsqlCommand("update bench_session set machine = $2::jsonb where id = $1", connection, transaction);
+            write.Parameters.Add(new() { Value = id });
+            write.Parameters.Add(new() { Value = json, NpgsqlDbType = NpgsqlDbType.Text });
+            await write.ExecuteNonQueryAsync();
+        }
+        await transaction.CommitAsync();
+    }
+
+    /// <summary>
+    /// Deterministic machine id for an existing session: <c>&lt;gpu-os-slug&gt;-&lt;6-hex&gt;</c> (max 64 chars), hashed over <paramref name="sender"/>
+    /// and hardware so identical-spec machines from different senders get distinct ids while one sender's sessions stay grouped.
+    /// </summary>
+    static string RegeneratedMachineId(string sender, BenchMachine machine)
+    {
+        const int maxLength = 64, suffixHex = 6;
+        string gpu = machine.Gpu ?? "", osFamily = machine.OsFamily ?? "";
+        string raw = new([.. $"{gpu} {osFamily}".ToLowerInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-')]);
+        string slug = string.Join('-', raw.Split('-', StringSplitOptions.RemoveEmptyEntries));
+        if (slug.Length == 0) slug = "pc";
+
+        int maxSlug = maxLength - suffixHex - 1;
+        if (slug.Length > maxSlug) slug = slug[..maxSlug].TrimEnd('-');
+
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes($"meitou-machine-v1:{sender}:{gpu}:{osFamily}"));
+        string suffix = Convert.ToHexStringLower(hash.AsSpan(0, suffixHex / 2));
+        return $"{slug}-{suffix}";
     }
 
     #endregion

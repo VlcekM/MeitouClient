@@ -34,11 +34,11 @@ static class BenchmarkSubmission
     }
 
     /// <summary>
-    /// The machine record: the id, name and notes the player gave, the hardware of the session's last run and the screen's resolution.
+    /// The machine record: the generated id, optional notes, the hardware of the session's last run and the screen's resolution.
     /// </summary>
     static JsonObject Machine(BenchmarkSession session, BenchmarkSettings settings, string resolution)
     {
-        var machine = new JsonObject { ["id"] = settings.MachineId.Trim(), ["name"] = settings.MachineName.Trim() };
+        var machine = new JsonObject { ["id"] = settings.MachineId.Trim(), ["name"] = "" };
         var hardware = session.Runs[^1].Hardware;
         foreach (string field in HardwareFields) machine[field] = hardware?[field]?.DeepClone();
         machine["resolution"] = resolution;

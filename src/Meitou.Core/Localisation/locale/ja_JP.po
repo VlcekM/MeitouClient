@@ -5491,3 +5491,211 @@ msgstr "アプリメニューに追加"
 #. machine-translated
 msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
 msgstr "Meitou Launcher をアイコン付きでデスクトップのアプリランチャーに表示します。"
+
+#. machine-translated
+msgid "Benchmarks site"
+msgstr "ベンチマークサイト"
+
+#. machine-translated
+msgid "~{1} min per tier"
+msgstr "ティアあたり約 {1} 分"
+
+#. machine-translated
+msgid "Recommended for this computer"
+msgstr "このコンピューターに推奨"
+
+#. machine-translated
+msgid "Recommended"
+msgstr "推奨"
+
+#. machine-translated
+msgid "Submit results automatically when done"
+msgstr "完了後に結果を自動送信する"
+
+#. machine-translated
+msgid "Applies to target builds only."
+msgstr "対象ビルドのみに適用されます。"
+
+#. machine-translated
+msgid "Submit your results to the Meitou benchmarks site automatically when the benchmark finishes? Hardware specs, timings and your optional handle are sent; your computer name is not."
+msgstr "ベンチマーク完了後に結果を Meitou ベンチマークサイトへ自動送信しますか？ハードウェア仕様、計測結果、任意のハンドル名のみが送信され、コンピューター名は送信されません。"
+
+#. machine-translated
+msgid "You can change this anytime on the Benchmark page."
+msgstr "この設定はベンチマークページでいつでも変更できます。"
+
+#. machine-translated
+msgid "Don't submit"
+msgstr "送信しない"
+
+#. machine-translated
+msgid "Submit benchmark results?"
+msgstr "ベンチマーク結果を送信しますか？"
+
+#. machine-translated
+msgid "Wait for the current submission to finish."
+msgstr "現在の送信が終わるまでお待ちください。"
+
+#. machine-translated
+msgid "Open this build's benchmark results folder"
+msgstr "このビルドのベンチマーク結果フォルダーを開く"
+
+#. machine-translated
+msgid "1 session"
+msgstr "1 セッション"
+
+#. machine-translated
+msgid "{1} sessions"
+msgstr "{1} セッション"
+
+#. machine-translated
+msgid "1 session · submitted"
+msgstr "1 セッション · 送信済み"
+
+#. machine-translated
+msgid "{1} sessions · all submitted"
+msgstr "{1} セッション · すべて送信済み"
+
+#. machine-translated
+msgid "{1} of {2} submitted"
+msgstr "{2} 件中 {1} 件送信済み"
+
+#. machine-translated
+msgid "All tiers"
+msgstr "すべてのティア"
+
+#. machine-translated
+msgid "Submitted (#{1})"
+msgstr "送信済み（#{1}）"
+
+#. machine-translated
+msgid "Incomplete ({1} of {2} runs)"
+msgstr "未完了（{2} 回中 {1} 回）"
+
+#. machine-translated
+msgid "Built by {1}, not {2}"
+msgstr "{2} ではなく {1} で計測"
+
+#. machine-translated
+msgid "Not a target build"
+msgstr "対象ビルドではありません"
+
+#. machine-translated
+msgid "Ready to submit"
+msgstr "送信可能"
+
+#. machine-translated
+msgid "Submit results"
+msgstr "結果を送信"
+
+#. machine-translated
+msgid "Submit all ({1})"
+msgstr "すべて送信（{1}）"
+
+#. machine-translated
+msgid "Submit all again"
+msgstr "すべて再送信"
+
+#. machine-translated
+msgid "All {1} sessions submitted."
+msgstr "全 {1} セッションを送信しました。"
+
+#. machine-translated
+msgid "1 session ready to submit ({1} incomplete skipped)."
+msgstr "1 セッションを送信できます（未完了 {1} 件を除外）。"
+
+#. machine-translated
+msgid "{1} sessions ready to submit ({2} incomplete skipped)."
+msgstr "{1} セッションを送信できます（未完了 {2} 件を除外）。"
+
+#. machine-translated
+msgid "{1} of {2} sessions not yet submitted."
+msgstr "{2} セッション中 {1} 件が未送信です。"
+
+#. machine-translated
+msgid "1 session ready to submit."
+msgstr "1 セッションを送信できます。"
+
+#. machine-translated
+msgid "{1} sessions ready to submit."
+msgstr "{1} セッションを送信できます。"
+
+#. machine-translated
+msgid "Submitting {1} of {2}..."
+msgstr "{2} 件中 {1} 件目を送信中..."
+
+#. machine-translated
+msgid "Submitted 1 session."
+msgstr "1 セッションを送信しました。"
+
+#. machine-translated
+msgid "Submitted {1} sessions."
+msgstr "{1} セッションを送信しました。"
+
+#. machine-translated
+msgid "Submission failed."
+msgstr "送信に失敗しました。"
+
+#. machine-translated
+msgid "Submitted {1} of {2} sessions; {3} failed: {4}"
+msgstr "{2} 件中 {1} セッションを送信、{3} 件失敗: {4}"
+
+#. machine-translated
+msgid "Bases"
+msgstr "拠点"
+
+#. machine-translated
+msgid "Shark fly-by"
+msgstr "Shark 周回飛行"
+
+#. machine-translated
+msgid "The play bench on a save"
+msgstr "セーブデータ上のプレイベンチ"
+
+#. machine-translated
+msgid "A new game, flying round Shark"
+msgstr "新規ゲームで Shark の周りを飛びます"
+
+#. machine-translated
+msgid "Tier"
+msgstr "ティア"
+
+#. machine-translated
+msgid "Run {1} · Whole run"
+msgstr "実行 {1} · 全体"
+
+#. machine-translated
+msgid "Run {1}"
+msgstr "実行 {1}"
+
+#. machine-translated
+msgid "FPS"
+msgstr "FPS"
+
+#. machine-translated
+msgid "99% ms"
+msgstr "99% ms"
+
+#. machine-translated
+msgid "Over 33 ms"
+msgstr "33 ms 超"
+
+#. machine-translated
+msgid "Status"
+msgstr "状態"
+
+#. machine-translated
+msgid "Click to view groups for {1}"
+msgstr "クリックして {1} のグループを表示"
+
+#. machine-translated
+msgid "Hardware must be probed before submitting."
+msgstr "送信前にハードウェアの検出が必要です。"
+
+#. machine-translated
+msgid "Generated when hardware is probed."
+msgstr "ハードウェア検出時に生成されます。"
+
+#. machine-translated
+msgid "Generated for this computer so the site keeps your results together."
+msgstr "サイトで結果をまとめて管理するため、このコンピューター用に生成されます。"

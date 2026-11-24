@@ -5493,3 +5493,211 @@ msgstr "Aggiungi al menu delle applicazioni"
 #. machine-translated
 msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
 msgstr "Meitou Launcher, con la sua icona, nel menu delle applicazioni del tuo desktop."
+
+#. machine-translated
+msgid "Benchmarks site"
+msgstr "Sito dei benchmark"
+
+#. machine-translated
+msgid "~{1} min per tier"
+msgstr "~{1} min per livello"
+
+#. machine-translated
+msgid "Recommended for this computer"
+msgstr "Consigliato per questo computer"
+
+#. machine-translated
+msgid "Recommended"
+msgstr "Consigliato"
+
+#. machine-translated
+msgid "Submit results automatically when done"
+msgstr "Invia automaticamente i risultati al termine"
+
+#. machine-translated
+msgid "Applies to target builds only."
+msgstr "Si applica solo alle build obiettivo."
+
+#. machine-translated
+msgid "Submit your results to the Meitou benchmarks site automatically when the benchmark finishes? Hardware specs, timings and your optional handle are sent; your computer name is not."
+msgstr "Inviare automaticamente i risultati al sito dei benchmark di Meitou al termine del test? Vengono inviati i dati hardware, i tempi e il tuo nome facoltativo; il nome del computer non viene inviato."
+
+#. machine-translated
+msgid "You can change this anytime on the Benchmark page."
+msgstr "Puoi cambiare questa impostazione in qualsiasi momento nella pagina Benchmark."
+
+#. machine-translated
+msgid "Don't submit"
+msgstr "Non inviare"
+
+#. machine-translated
+msgid "Submit benchmark results?"
+msgstr "Inviare i risultati del benchmark?"
+
+#. machine-translated
+msgid "Wait for the current submission to finish."
+msgstr "Attendi il completamento dell’invio in corso."
+
+#. machine-translated
+msgid "Open this build's benchmark results folder"
+msgstr "Apri la cartella dei risultati benchmark di questa build"
+
+#. machine-translated
+msgid "1 session"
+msgstr "1 sessione"
+
+#. machine-translated
+msgid "{1} sessions"
+msgstr "{1} sessioni"
+
+#. machine-translated
+msgid "1 session · submitted"
+msgstr "1 sessione · inviata"
+
+#. machine-translated
+msgid "{1} sessions · all submitted"
+msgstr "{1} sessioni · tutte inviate"
+
+#. machine-translated
+msgid "{1} of {2} submitted"
+msgstr "{1} di {2} inviate"
+
+#. machine-translated
+msgid "All tiers"
+msgstr "Tutti i livelli"
+
+#. machine-translated
+msgid "Submitted (#{1})"
+msgstr "Inviato (#{1})"
+
+#. machine-translated
+msgid "Incomplete ({1} of {2} runs)"
+msgstr "Incompleta ({1} di {2} esecuzioni)"
+
+#. machine-translated
+msgid "Built by {1}, not {2}"
+msgstr "Eseguita con {1}, non {2}"
+
+#. machine-translated
+msgid "Not a target build"
+msgstr "Non è una build obiettivo"
+
+#. machine-translated
+msgid "Ready to submit"
+msgstr "Pronta per l’invio"
+
+#. machine-translated
+msgid "Submit results"
+msgstr "Invia risultati"
+
+#. machine-translated
+msgid "Submit all ({1})"
+msgstr "Invia tutto ({1})"
+
+#. machine-translated
+msgid "Submit all again"
+msgstr "Invia di nuovo tutto"
+
+#. machine-translated
+msgid "All {1} sessions submitted."
+msgstr "Tutte le {1} sessioni sono state inviate."
+
+#. machine-translated
+msgid "1 session ready to submit ({1} incomplete skipped)."
+msgstr "1 sessione pronta per l’invio ({1} incomplete saltate)."
+
+#. machine-translated
+msgid "{1} sessions ready to submit ({2} incomplete skipped)."
+msgstr "{1} sessioni pronte per l’invio ({2} incomplete saltate)."
+
+#. machine-translated
+msgid "{1} of {2} sessions not yet submitted."
+msgstr "{1} di {2} sessioni non ancora inviate."
+
+#. machine-translated
+msgid "1 session ready to submit."
+msgstr "1 sessione pronta per l’invio."
+
+#. machine-translated
+msgid "{1} sessions ready to submit."
+msgstr "{1} sessioni pronte per l’invio."
+
+#. machine-translated
+msgid "Submitting {1} of {2}..."
+msgstr "Invio di {1} di {2}..."
+
+#. machine-translated
+msgid "Submitted 1 session."
+msgstr "1 sessione inviata."
+
+#. machine-translated
+msgid "Submitted {1} sessions."
+msgstr "{1} sessioni inviate."
+
+#. machine-translated
+msgid "Submission failed."
+msgstr "Invio non riuscito."
+
+#. machine-translated
+msgid "Submitted {1} of {2} sessions; {3} failed: {4}"
+msgstr "Inviate {1} di {2} sessioni; {3} non riuscite: {4}"
+
+#. machine-translated
+msgid "Bases"
+msgstr "Basi"
+
+#. machine-translated
+msgid "Shark fly-by"
+msgstr "Sorvolo di Shark"
+
+#. machine-translated
+msgid "The play bench on a save"
+msgstr "Il banco di prova di gioco su un salvataggio"
+
+#. machine-translated
+msgid "A new game, flying round Shark"
+msgstr "Una nuova partita, volando intorno a Shark"
+
+#. machine-translated
+msgid "Tier"
+msgstr "Livello"
+
+#. machine-translated
+msgid "Run {1} · Whole run"
+msgstr "Esecuzione {1} · Esecuzione intera"
+
+#. machine-translated
+msgid "Run {1}"
+msgstr "Esecuzione {1}"
+
+#. machine-translated
+msgid "FPS"
+msgstr "FPS"
+
+#. machine-translated
+msgid "99% ms"
+msgstr "99% ms"
+
+#. machine-translated
+msgid "Over 33 ms"
+msgstr "Oltre 33 ms"
+
+#. machine-translated
+msgid "Status"
+msgstr "Stato"
+
+#. machine-translated
+msgid "Click to view groups for {1}"
+msgstr "Fai clic per visualizzare i gruppi per {1}"
+
+#. machine-translated
+msgid "Hardware must be probed before submitting."
+msgstr "L’hardware deve essere rilevato prima dell’invio."
+
+#. machine-translated
+msgid "Generated when hardware is probed."
+msgstr "Generato al rilevamento dell’hardware."
+
+#. machine-translated
+msgid "Generated for this computer so the site keeps your results together."
+msgstr "Generato per questo computer affinché il sito raggruppi i tuoi risultati."
