@@ -38,7 +38,11 @@ Linux runs DLSS through NGX (`Upscalers/Ngx.cs`): NVIDIA's NGX client library (t
 built into `libmeitou_ngx.so` by `tools/scripts/build-ngx-shim.sh`) over the driver's `libnvidia-ngx.so.1`, with the DLSS
 model `libnvidia-ngx-dlss.so.<version>`; each file is looked for in `MEITOU_DLSS_PATH`, then beside the executable, and
 NGX gets the same two folders to find the model. The client library is linked on Ubuntu 22.04 for releases, so it
-loads on glibc 2.35 and newer; on an older glibc the game logs the loader's error and runs without DLSS. FSR on Linux needs our build of the FidelityFX library ("Frame generation"). `MEITOU_NGX_LOG=1` prints NGX's whole log (its verbose level).
+loads on glibc 2.35 and newer; on an older glibc the game logs the loader's error and runs without DLSS. FSR on Linux needs our build of the FidelityFX library ("Frame generation"); our patch changes no shader or
+upscaler logic. FFX's Vulkan backend reports shader model 5.1, so the FSR 3 upscaler never forces wave64 there; its one choice by GPU is
+the history reprojection, a Lanczos lookup table on cards with 32-64 lane subgroups (AMD) and the computed kernel elsewhere (FFX 1.1.4
+`ffx_fsr3upscaler.cpp`, `ffx_vk.cpp`). **Verified** (2026-11-24, RTX 4070, the lookup table forced in a debug build, native scale,
+mean |Laplacian| 19.95 against 19.94): the table path is as sharp. `MEITOU_NGX_LOG=1` prints NGX's whole log (its verbose level).
 NGX is loaded only when the model and the client library are in one of those folders and `MEITOU_DLSS` is not `0`, and
 handed only a device on NVIDIA's own driver (not NVK); without DLSS (other GPU, no NVIDIA driver, no libffi) it is shut
 down at once and the game runs on. Builds copy both to the output folder, never into a publish; the Linux release zip
