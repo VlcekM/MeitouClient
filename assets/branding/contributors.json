@@ -36,8 +36,8 @@
     "areas": "Benchmark results, Animal hunger"
   },
   "dxseba": {
-    "commits": 42,
-    "areas": "Effects, Blood, Code mods"
+    "commits": 63,
+    "areas": "Mod hooks, Blood, Weapon glow"
   },
   "dfdffish": {
     "commits": 17,
@@ -48,8 +48,8 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 281,
-    "areas": "Code mods, AI, Navmesh"
+    "commits": 300,
+    "areas": "Hauling, Navmesh, Mod hooks, Ragdolls"
   },
   "robgreen490": {
     "commits": 4,
@@ -64,8 +64,8 @@
     "areas": "Benchmarks, Homepage"
   },
   "pza-mods-bot": {
-    "commits": 6,
-    "areas": "KenshiLib, Speed groups"
+    "commits": 9,
+    "areas": "KenshiLib, Speed groups, UI scale"
   },
   "dk853": {
     "commits": 3,
@@ -78,5 +78,9 @@
   "theivorydisaster": {
     "commits": 1,
     "areas": "LockSystem"
+  },
+  "leviathanu158": {
+    "commits": 1,
+    "areas": "Mod platoons"
   }
 }
