@@ -445,6 +445,13 @@ holds refuses the second mod.
   (a build order's materials) asks it between ticks on the host's thread, with the coming tick's number. One that throws is answered as allowing
   for the rest of that tick and is not asked from the next tick on; the fault enters the state hash. Without a filter nothing is asked. Engine
   API, not in the original.
+- **Ditch items:** a registered system implementing `IDitchItemFilter` (`Meitou.Simulation.Items`) is asked `Keeps(World, in DitchItemAsk)`
+  (tick, carrier, `DitchKind`, item) for each carried item the game's automatic carry-off would take (`DitchKind.Resources`: the collection of
+  Ditch all resources 242, the excess-loot store search of 114 and a town errand's ditch; more kinds may come). True keeps that item with its
+  carrier: no storage is looked for or filled for it, and the trip goes on for the rest. Unlike Storage use it is asked per item, so a mod keeps
+  some goods of a trip. The collection is read by the AI's planning on worker threads, so a filter must be quick, thread-safe and a pure read of
+  the ask and settled world state; filters run in system order, the first keep wins. A throw answers "carry it off" for the rest of that tick,
+  the filter is not asked from the next, and the fault enters the state hash. Without a filter nothing is asked. Engine API, not in the original.
 - **Inventory arrange:** a registered system implementing `IInventoryArrangeFilter` (`Meitou.Simulation.Items`) is asked
   `Arrange(World, in InventoryArrangeAsk)` before every arrange the game runs: a window's ARRANGE (a character's main grid or worn bag, a
   machine's or container's storage, the trade window's stock; `InventoryArrangeReason.Button`), making room for a held item going back
@@ -477,7 +484,8 @@ holds refuses the second mod.
   a body (not the take-all loot, NPCs' own looting or money). The report names the tick,
   the taker, the owning faction (-1 none), the character taken from (none for a container or machine), the site ("" for a character), the
   item record, the units and whether the taker was caught (the goods stayed). It includes takes the game makes no crime of, such as the
-  player's own characters taking from a container of the player's faction, so a mod can judge them by its own law. Observers are called in
+  player's own characters taking from a container of the player's faction or out of the player's own machines (a storage's grid or a
+  machine's output, by drag or click; owner the player's faction), so a mod can judge them by its own law or track where goods went. Observers are called in
   system order once the goods have moved (the units that moved) or the taker was caught; they may read the world and change their own state,
   and gameplay changes go through commands.
   One that throws is disabled for that world and the fault enters the state hash. Without an observer nothing is built. Engine API, not in
@@ -626,8 +634,10 @@ holds refuses the second mod.
   ItemCreated)` for each item the world makes of an `ItemCreatedKind`: `Loot` (a camp's ground items, a town's artifacts for its buildings'
   containers), `Crafted` (a bench's finished item, `Character` the crafter), `ShopStock` (each unit and special item of a shop's fill, before
   it is stacked; `Squad` the shop's squad, -1 for a home stocked without one) and `SpawnEquipment` (a new character's kit and what it holds,
-  once it is in the world); more kinds may come. The observer may set the item's `ModTag` (units tagged apart do not stack) and its own hashed
-  state, and nothing else. Calls run serially in system order in the step that made the item. A throw disables the observer and enters the
+  once it is in the world); more kinds may come. `Place` (`ItemCreatedPlace`), `Site` and `Town` say where loot went: `Ground` (a camp's
+  items, `Town` the camp's town site) or `Container` (a town artifact, told once it is in its stock box: `Site` the box's fixture id, `Town` the
+  town's site index); other kinds are `None`, "" and -1. The observer may set the item's `ModTag` (units tagged apart do not stack), a `Loot`
+  item's `Level` (its grade, e.g. a chance to lift it) and its own hashed state, and nothing else. Calls run serially in system order in the step that made the item. A throw disables the observer and enters the
   state hash. Without an observer nothing is walked. Engine API, not in the original.
 - **Faction list:** `ArrangeFactionList(arrange)` arranges the Overview's Faction tab: `arrange` gets the rows the tab would show
   (`FactionListRow`: faction, name, the player's relation), sorted by name, and returns the rows to show, in order. It can reorder, rename
@@ -700,6 +710,12 @@ holds refuses the second mod.
   stats, look, trade, looting, locks), and shows in the character and loot windows as a copy of the belt slot at (`x`, `y`) layout pixels
   (UI scale 1) from the window's top-left corner, clipped to the window: the mod picks a free spot; the window does not grow. Animals get none.
   Saves keep the section name ([save](formats/save.md#compatibility-exceptions)). Races' `no hats`-style closing never applies.
+  Init options: `MaxItems` (1 to its cells, default 1) above 1 makes it hold that many items, each at its footprint in the slot's cells as
+  the weapon sections do, one unit each. `Secondary = true` makes it a second section for `fcsSlot`'s items, any slot but 0, 7 and 12 (the
+  game's hat 3 and belt 14 too, several secondaries per slot allowed): it takes them only by an explicit move (drag, loot window) and the game
+  never puts an item there itself (equipping, picking up, an NPC's kit go to the slot's own section). `RollFromClothing = true`: a generated
+  character rolls one more ARMOUR of `fcsSlot` from its CHARACTER `clothing` list after the game's slots (mod slots in registration order),
+  as the game rolls a clothing slot, worn in this section; without such a slot the rolls are the game's. Engine API, not in the original.
 - **Wear rules:** `AddWearRule((item, race, animal) => bool)` (`WearRules`, `src/Meitou.Data/Gameplay`) answers "may a wearer of this race
   wear this item?" with the item's record id, the wearer's RACE id and whether it is an animal, after the item's own `races` / `races exclude`
   lists pass ([RaceLimiter](game/ui-screens.md#6-inventory-trade-dialogue-build)). False refuses the item wherever those lists are checked:
@@ -915,6 +931,18 @@ holds refuses the second mod.
   `IWorldReady` run, an NPC when its platoon is made. A character the save does not write loses its id, which is never given again. An import starts
   with none. Until a mod asks (or a save with ids loads) nothing is held, hashed or written; then the ids enter the state hash. Engine API, not in
   the original.
+- **Character save fields:** `world.SaveFields` (`CharacterSaveFields`, `Meitou.Simulation.Saving`) keeps a mod's per-character values in
+  the vanilla save, under keys of its choosing (an original plugin's own, so a save taken to the original keeps them):
+  `SetInt`/`SetFloat`/`SetBool`/`SetString(character, CharacterSaveRecord, key, value)` and `Remove`, read back with `Int`/`Float`/`Bool`/
+  `String` (null: none). `CharacterSaveRecord.Orders` is the character's GAMESTATE_AI `ai` record (the original's `OrdersReceiver`); more
+  records may come. A value set or removed is written into the record with every save, after the game's own keys; a key not set reads what the
+  loaded save held (while the character keeps its link to that save: read at World ready and set what you keep). The game's keys (`jobs`,
+  `pjob<i>`, `pjobT<i>…`, `tjob<i>`, `tjobP<i>`, `tjobT<i>…`, `meitou …`; `CharacterSaveFields.IsEngineKey`) throw, as does a set in a
+  parallel phase or during a save; set values are hashed. Without a set value nothing is hashed or written. Engine API, not in the original.
+- **Work sites:** `WorldSnapshot.WorkSites` lists, once each, every site a living player character's job names (`WorkSiteSnapshot`: `Id` as
+  jobs and commands name it, BUILDING `Record`, `Name`, `Kind`, `Owner`, `Position`): `WorkSiteKind.Building` (also in `Buildings`),
+  `ResourceNode` (a rock mined in place), `TownMachine`, `TrainingDummy` and `Seat`; more kinds may come. The same list instance is handed out
+  while unchanged. Engine API, not in the original.
 - **Interface:** `AddUi(IUiExtension)`: namespaced styles, controls, actions, overrides and slot contributions (`UiSlots`), registered
   with each new interface (`ConfigurePlayerInterface`, Vulkan and Metal). A picture from the mod's folder is an image node:
   `new UiNode(id, UiNodeKind.Image) { Image = Path.Combine(context.Folder, "face.png") }`; a CHARACTER record's portrait is
@@ -1049,7 +1077,8 @@ holds refuses the second mod.
   `registration.AddMenuVerbs(context => rows)` is the same for every target: `UiMenuTargetContext.Target` (`UiMenuTarget`: `Kind`, the
   menu's `Name`, `Position`, and by kind `Character`, `GroundItem`, or the container's, door's or building's `Id` and `Record`) with the
   selection, cursor, `Shift`, `Tick` and `Enqueue`; it is asked only with a selection. Kinds: `Character` (after the character rows, same
-  rules), `Container`, `Door` and `Building` (a player-built site, also a bed's or cage's, after the game's rows), `GroundItem` (the hold
+  rules), `Container`, `Door` and `Building` (a player-built site, also a bed's or cage's, after the game's rows), `Furniture` (a cage that
+  is no player-built site, a town's or camp's: `Id` its fixture id, `Record` its BUILDING, after the cage's rows), `GroundItem` (the hold
   menu Pick Up plus the rows; a quick click still picks up) and `WorldPoint` (the ground under the cursor, `Position` the point; an untitled
   menu of the rows; a quick click still moves there). A target that gets no rows behaves as without the mod. Engine API, not in the original.
   **Observed** headless (rows, faults; not the menus in a running game).

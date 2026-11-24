@@ -50,8 +50,9 @@ public static class PermaJobSave
         FcsRecord ai, CharacterCold cold, BuildingRegistry sites, IReadOnlyDictionary<string, FcsRecord> buildings,
         Func<CharacterId, Hand>? handleOf = null, IReadOnlyDictionary<TaskType, string>? modJobs = null)
     {
+        // Only the list's own numbered keys: other keys starting "pjob" (an original plugin's) stay as read.
         var oldInts = ai.Ints.Keys
-            .Where(k => Starts(k, Type) || Starts(k, ModJob))
+            .Where(k => IsJobKey(k) || Starts(k, ModJob))
             .ToList();
         foreach (var key in oldInts)
             ai.Ints.Remove(key);
@@ -87,6 +88,13 @@ public static class PermaJobSave
     /// Whether key <paramref name="key"/> starts with <paramref name="prefix"/>.
     /// </summary>
     static bool Starts(string key, string prefix) => key.StartsWith(prefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether <paramref name="key"/> is one of the job list's numbered keys (<c>pjob&lt;i&gt;</c>, a <c>pjobT&lt;i&gt;</c> handle part).
+    /// </summary>
+    static bool IsJobKey(string key) =>
+        (key.StartsWith(Target, StringComparison.Ordinal) || key.StartsWith(Type, StringComparison.Ordinal))
+        && CharacterSaveFields.IsEngineKey(CharacterSaveRecord.Orders, key);
 
     /// <summary>
     /// The mods' own jobs (<paramref name="modJobs"/>), each with its type, its place (how many game jobs come before it) and its building id; a
