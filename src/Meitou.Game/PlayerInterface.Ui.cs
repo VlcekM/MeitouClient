@@ -1006,7 +1006,7 @@ sealed partial class PlayerInterface
         if (ItemsWindow.PointerDown(p)) return true;
         if (WorldMap.MapPointerDown(p, MouseButton.Left)) return true;
         if (SquadWindows.SquadPointerDown(p)) return true;
-        if (FaithfulScreens.PointerDown(p))
+        if (FaithfulScreens.PointerDown(p, Production.ResearchPointerDown))
         {
             UpdateMenuPause();
             return true;
@@ -1147,10 +1147,10 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// Whether the interface takes the pointer: a screen that captures it, the map's or a scroll bar's drag, or an item lifted.
+    /// Whether the interface takes the pointer: a screen or drag that captures it, or an item lifted.
     /// </summary>
     public bool UiCapturesPointer => UiVisible && (FaithfulScreens.CapturesPointer || WorldMap.MapDrag is not null
-        || InventoryWindows.LiftPress is not null || ScrollBars.ScrollDrag is not null || _uiHost.CapturesPointer);
+        || InventoryWindows.LiftPress is not null || ScrollBars.ScrollDrag is not null || Production.ResearchCapturesPointer || _uiHost.CapturesPointer);
 
     /// <summary>
     /// A modal screen (the Esc menu, a message box) is up: the pointer is the interface's, even in the free camera.

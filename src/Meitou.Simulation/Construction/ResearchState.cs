@@ -297,6 +297,17 @@ public sealed class ResearchState
     }
 
     /// <summary>
+    /// Moves a queued entry to another index, keeping its accumulated work.
+    /// </summary>
+    internal void Move(int from, int to)
+    {
+        var item = _queue[from];
+        _queue.RemoveAt(from);
+        _queue.Insert(to, item);
+        Touch();
+    }
+
+    /// <summary>
     /// Adds the finished, queued, paid and partial researches to the world's state hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
