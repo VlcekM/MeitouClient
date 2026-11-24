@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
@@ -27,7 +28,7 @@ sealed class TitleBattle : IDisposable
     const float DrawReach = CharacterRenderer.MaxDrawDistance / CharacterRenderer.MinDrawDistance;
 
     /// <summary>
-    /// The fight's own world (combat and animation systems only).
+    /// The fight's own world (combat, animation and the pairs' spacing only).
     /// </summary>
     readonly World _world;
 
@@ -42,7 +43,18 @@ sealed class TitleBattle : IDisposable
     double _remainder;
 
     /// <summary>
-    /// The fight: its world with damage off and medical ticks off, a paladin and a bandit at each centre, run 90 ticks in.
+    /// The blows landed since the last <see cref="Advance"/> (the world's display-only hit feed), for the easter egg.
+    /// </summary>
+    readonly ConcurrentQueue<CombatHit> _hits = new();
+
+    /// <summary>
+    /// The easter egg: a rare blow throws its victim up in a twister.
+    /// </summary>
+    public TitleTornado Tornado { get; } = new();
+
+    /// <summary>
+    /// The fight: its world with damage off and medical ticks off and each pair kept apart (<see cref="TitleSpacing"/>), a paladin and a bandit at each
+    /// centre, run 90 ticks in.
     /// </summary>
     TitleBattle(PopulationData data, Func<float, float, float> ground, IReadOnlyList<Vector3> centres,
         AnimationLengths lengths, AnimationLibrary library, string paladin, string bandit, int holyNation, int bandits)
@@ -51,7 +63,7 @@ sealed class TitleBattle : IDisposable
         var combat = new CombatSystem(data.Combat.Techniques, data.Combat.Constants, data.Bodies.Constants,
             data.BodyOptions with { GlobalDamageMultiplier = 0 }, lengths, new CombatOptions { TickMedical = false });
         var animation = new AnimationSystem(library, lengths, data.Bodies.Constants.AnimationBlendRate, combat);
-        _world = new(new WorldSettings { Seed = 173 }, new OpenGroundWalkability(ground), [combat, animation]);
+        _world = new(new WorldSettings { Seed = 173 }, new OpenGroundWalkability(ground), [combat, animation, new TitleSpacing(centres.Count)]);
         using var population = new PopulationSystem(data, new PopulationSettings { Background = false });
         try
         {
@@ -59,6 +71,7 @@ sealed class TitleBattle : IDisposable
 
             // Open on a fight already in progress, rather than six people drawing their weapons together.
             for (int i = 0; i < 90; i++) _world.RunTick();
+            _world.CombatHitFeed = _hits;
         }
         catch
         {
@@ -91,21 +104,27 @@ sealed class TitleBattle : IDisposable
     }
 
     /// <summary>
-    /// Real time, independent of the paused gameplay clock; bounded catch-up after a stalled frame.
+    /// Real time, independent of the paused gameplay clock; bounded catch-up after a stalled frame. The blows landed meanwhile may throw their
+    /// victims (<see cref="Tornado"/>).
     /// </summary>
     public void Advance(double seconds)
     {
-        _remainder += Math.Clamp(seconds, 0, 0.25);
+        double step = Math.Clamp(seconds, 0, 0.25);
+        _remainder += step;
         while (_remainder >= _world.TickSeconds)
         {
             _world.RunTick();
             _remainder -= _world.TickSeconds;
         }
+
+        Tornado.Advance((float)step);
+        while (_hits.TryDequeue(out var hit))
+            if (hit.Source == CombatHitSource.Melee) Tornado.Hit(hit.Victim.Slot);
     }
 
     /// <summary>
     /// Adds the fighters to <paramref name="list"/>: interpolated between the last two ticks, each pair kept on its centre and drawn at the display
-    /// scale.
+    /// scale, a fighter the twister threw lifted and spun (<see cref="Tornado"/>).
     /// </summary>
     public void Fill(CharacterDrawList list)
     {
@@ -118,18 +137,13 @@ sealed class TitleBattle : IDisposable
             if (c.Appearance is null) continue;
 
             var before = previous.Count > i ? previous[i] : c;
-            var position = Vector3.Lerp(before.Position, c.Position, alpha);
-
-            // Keep each pair centred on the road; enlarge its spacing with its bodies so their swings still line up.
-            int pair = i / 2 * 2;
-            var middle = (current[pair].Position + current[pair + 1].Position) / 2;
-            var oldMiddle = (previous[pair].Position + previous[pair + 1].Position) / 2;
-            position = _centres[i / 2] + (position - Vector3.Lerp(oldMiddle, middle, alpha)) * DisplayScale;
-            position.Y = _world.Walkability.GroundHeight(position.X, position.Z);
+            var position = DrawnPosition(i, current, previous, alpha);
+            var (lift, spin) = Tornado.Place(i, position);
+            position.Y += lift;
+            float yaw = Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha) + spin;
             var poses = new CharacterPose[GameHost.DrawnLayerCount(before, c)];
             GameHost.BlendLayers(before, c, alpha, poses);
-            list.Add(new CharacterInstance(long.MinValue + 2 + i, c.Appearance, position,
-                Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha), poses)
+            list.Add(new CharacterInstance(long.MinValue + 2 + i, c.Appearance, position, yaw, poses)
             {
                 WeaponDrawn = c.WeaponDrawn,
                 RangedDrawn = c.RangedDrawn,
@@ -145,6 +159,22 @@ sealed class TitleBattle : IDisposable
     /// Disposes the fight's world.
     /// </summary>
     public void Dispose() => _world.Dispose();
+
+    /// <summary>
+    /// Where fighter <paramref name="i"/> stands drawn: its pair kept centred on the road, its spacing enlarged with its bodies so their swings
+    /// still line up, on the ground.
+    /// </summary>
+    Vector3 DrawnPosition(int i, IReadOnlyList<CharacterSnapshot> current, IReadOnlyList<CharacterSnapshot> previous, float alpha)
+    {
+        var before = previous.Count > i ? previous[i] : current[i];
+        var position = Vector3.Lerp(before.Position, current[i].Position, alpha);
+        int pair = i / 2 * 2;
+        var middle = (current[pair].Position + current[pair + 1].Position) / 2;
+        var oldMiddle = (previous[pair].Position + previous[pair + 1].Position) / 2;
+        position = _centres[i / 2] + (position - Vector3.Lerp(oldMiddle, middle, alpha)) * DisplayScale;
+        position.Y = _world.Walkability.GroundHeight(position.X, position.Z);
+        return position;
+    }
 
     /// <summary>
     /// Spawns a paladin and a bandit facing each other at every centre, and queues their attacks on each other.

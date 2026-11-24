@@ -110,7 +110,11 @@ sealed class TitleScreen(GameHost host)
             : (Data.Characters.BodyBuild?)null;
         _titleComposition = new(host.Install, db, host.Scene.GroundAt, host.Sandbox.SandboxRecord(db), saved) { SavedBuild = build };
         if (host.PopData is { } data && host.AnimationLengths is { } lengths && host.AnimationLibrary is { } library)
+        {
             TitleBattle = TitleBattle.Create(data, host.Scene.GroundAt, _titleComposition.Fights, lengths, library);
+            if (TitleBattle is not null) TitleBattle.Tornado.Enabled = host.WorldOptions.Screenshot is null;
+        }
+
         if (host.ActiveCharacters is { } characters)
         {
             var list = new CharacterDrawList();
@@ -307,6 +311,7 @@ sealed class TitleScreen(GameHost host)
 
         double seconds = host.RealTime.Elapsed.TotalSeconds;
         PrepareTitleDust(seconds);
+        StartTwisters();
 
         // Clear sky with a few clouds whatever the region's weather, no placed fog volumes, the sun turned into the right of the view, the moons lit
         // full face so they read by day, and thicker morning air so the hill the sun peeks over casts rays through it.
@@ -378,6 +383,18 @@ sealed class TitleScreen(GameHost host)
         foreach (var group in dust.Groups)
             foreach (var unit in group.Units)
                 unit.Tint = new Vector3(1, 0.86f, 0.68f) * ((0.4f + 0.25f * gust) * fade);
+    }
+
+    /// <summary>
+    /// Starts a twister in the title's particles under each fighter the easter egg just threw (<see cref="TitleTornado"/>); the flight goes on
+    /// without one when the system or the particles are missing.
+    /// </summary>
+    void StartTwisters()
+    {
+        if (TitleBattle is not { } battle) return;
+
+        foreach (var at in battle.Tornado.TakeTwisters())
+            _titleParticles?.Burst(TitleTornado.System, at, Quaternion.Identity, TitleTornado.FlightSeconds, TitleTornado.Size);
     }
 
     /// <summary>
