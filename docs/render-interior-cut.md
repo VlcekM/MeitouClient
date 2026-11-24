@@ -41,9 +41,11 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
 ## Meitou
 
 - The mask: masks of loaded buildings within 3000 of the eye, drawn before the scene with the scene's camera into
-  RGBA16F; every face writes depth + 1, min into R, max into A (the nearest and farthest face, the same as the game's facing
-  split for a closed mesh seen from outside; not dependent on the meshes' winding). With the eye inside a building's
-  trigger hull its masks write R = 0 (the game's value there: every face seen is a back face). `Boxes` are the drawn mask
+  RGBA16F; a face writes depth + 1 by its facing, as the game's two passes: the R pass's faces (the mesh's back side, not
+  `gl_FrontFacing`) min into R, the others max into A. Where only A's faces are seen (the eye inside the mask, or looking
+  in through an open side of one) R keeps its clear (65000), which the readers take as the game's 0: cut from the eye.
+  **Observed** (Y-House, in and outside its room): the terrain cut holds from outside, and the eye inside clears rain over
+  furniture; the collision hull Meitou tested before disagreed with the mask mesh near its sides. `Boxes` are the drawn mask
   meshes' X/Z bounds.
 - Readers: `InteriorMaskRenderer.WithCut` puts the test first in a fragment program. A `discard` costs the early depth
 - **Under the floor** (Meitou, `InteriorMaskRenderer.CutUnderFloor`, on; no setting yet): the mask pass also writes G = -(depth + 1) of the farthest face that lies flat below the eye (min blend), and where that face is the farthest of all (the mask's floor) the cut reaches 8 units further along the view. **Observed** (save grass-through interior, the Bughouse): a hump of terrain between the floor's boards and the mask's bottom (more than 1 unit behind the mask's back face, so the game's rule keeps it) came through the floor with its grass; cut with the reach, 19,300 -> 150 dark pixels. **Unknown**: whether the original shows the same hump there (its shader rule says it would; not run).
