@@ -3,6 +3,24 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.23.0
+
+- Unified AI chooser & real order queues for all NPCs, squads, raids, and town/captive duties
+- NPCs rescue downed allies to beds and bandage their own crippled legs
+- Off-screen town overrides, outpost shoppers/traders, and autonomous outpost guard/wander AI
+- Overhauled auto-haul, engineer door repair, wall upgrades, and turret/light snap nodes
+- Graphics: adaptive exposure, lit footstep dust, cross-fading weather, Metal DoF & filters
+- Characters & audio: kept gear blood stains, corpse fly sliders, weapon & animal scaling
+- Settings: per-skill Squad XP, faction/squad size sliders, and new Fixes toggles
+- UI: stack splitting, scrollable/reorderable queues, movable Settings with mod search/filters
+- Full localisations for all nine Kenshi languages and fallback font support for mods
+- Wine prefix save discovery (Heroic, Lutris, Bottles) and safer navmesh-first loading
+- Performance: faster WorkerPool, pooled navmesh builds, staggered ticks, 5x & UI caching
+- Code mods (API v3): NuGet refs, data phase, AI, observers, UI/shown-text, FX & audio hooks
+- Data mods & RE_Kenshi: crossbow ammo lists, custom weapon attacks/skills, 36 more ports
+- Launcher (v1.16-v1.21): redesigned Mods page, Linux AppImage install, built-in benchmarks
+- 164+ bugs fixed since v0.22.1 across AI, combat, crime, slavery, jobs, navmesh, UI, and saves
+
 ## v0.22.1
 
 - RE_Kenshi ports are no longer shipped with the game: they are workshop mods kept up by their maintainers, and the launcher offers the ones Meitou endorses. Proving Grounds players: subscribe to [Meitou] Proving Grounds by roscatoday (launcher v1.15.0 does it in one click)
