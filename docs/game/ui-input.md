@@ -736,7 +736,7 @@ there), so the portraits stay free to drop on; the title bar moves it.
   (any part, ignoring case; by name, each at every quality) up to 100 cells, the last item cut to the qualities that fit; "Nothing found" for none. CLEAR
   empties the box and brings the lists back at once.
 - Drag (left button, 5 px; Esc or a right click cancels; the cell is empty while dragged; the stock never runs out). Released over a squad bar portrait
-  (`PortraitBar.SquadBarMemberAt`): given to that character (`DebugGiveItem`: worn when its slot is free, else the grid, else at its feet). Over the world:
+  (`PortraitBar.SquadBarMemberAt`): given to that character (`DebugGiveItem`: worn when its slot is free, else the grid (a live animal's worn bag only, its grid being shut), else at its feet). Over the world:
   placed at the camera's target (`DebugPlaceItem` with the quality or exact grade, at the ground or floor height). Over any other interface: nothing. Shift
   at the release gives five single units (a weapon cannot stack), on the ground 0.6 apart. A paused world runs one tick to apply them.
 
