@@ -48,7 +48,7 @@
   ];
 
   /** Platforms the launcher submits. */
-  const PLAT = { native: "Native", proton: "Proton", windows: "Windows", macos: "macOS" };
+  const PLAT = { native: "Linux", proton: "Linux (Proton)", windows: "Windows", macos: "macOS" };
 
   const NS = "http://www.w3.org/2000/svg";
   const root = document.getElementById("bench-root");
@@ -56,7 +56,7 @@
 
   /** Everything drawn comes from these: the loaded data and the current selection. */
   let D = null;
-  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "all", metric: "avgFps", hidden: {}, search: "" };
+  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "all", metric: "avgFps", hidden: {}, search: "", sort: { col: null, dir: 1 } };
 
   // #endregion
 
@@ -781,7 +781,7 @@
 
   // #region Machines
 
-  /** One row per machine+platform of the selected version matching the active filter, with its newest session's hardware and metric. */
+  /** One row per machine+platform of the selected version matching the active filter, sortable by any column. */
   function renderMachines() {
     const host = document.getElementById("machines");
     host.innerHTML = "";
@@ -793,11 +793,49 @@
       if (rows.length) host.appendChild(el("p", { class: "muted small" }, "No machines match this filter."));
       return;
     }
+
+    const items = keys.map((k) => machineData(k, lines[k], metric));
+    sortMachines(items);
+
+    const cols = [
+      { id: "machine", label: "Machine", cls: "", num: false },
+      { id: "platform", label: "Platform", cls: "l", num: false },
+      { id: "cpu", label: "CPU", cls: "l", num: false },
+      { id: "gpu", label: "GPU", cls: "l", num: false },
+      { id: "ram", label: "RAM", cls: "", num: true },
+      { id: "os", label: "OS", cls: "l", num: false },
+      { id: "res", label: "Resolution", cls: "", num: true },
+      { id: "builds", label: "Builds", cls: "", num: true },
+      { id: "newest", label: "Newest", cls: "l", num: true },
+      { id: "metric", label: metric.label, cls: "", num: true }
+    ];
+
     const wrap = el("div", { class: "tablewrap" }), table = el("table", { class: "mtable" });
-    table.innerHTML = "<thead><tr><th>Machine</th><th class=\"l\">Platform</th><th class=\"l\">CPU</th><th class=\"l\">GPU</th><th>RAM</th>" +
-      "<th class=\"l\">OS</th><th>Resolution</th><th>Builds</th><th class=\"l\">Newest</th><th>" + esc(metric.label) + "</th></tr></thead>";
+    const thead = el("thead"), headRow = el("tr");
+    cols.forEach((c) => {
+      const active = state.sort.col === c.id;
+      const thAttrs = c.cls ? { class: c.cls } : {};
+      thAttrs["aria-sort"] = active ? (state.sort.dir > 0 ? "ascending" : "descending") : "none";
+      const th = el("th", thAttrs);
+      const btn = el("button", { type: "button", class: active ? "sort-btn is-active" : "sort-btn" });
+      btn.appendChild(document.createTextNode(c.label));
+      btn.appendChild(el("span", { class: "sort-ind", "aria-hidden": "true" }, active ? (state.sort.dir > 0 ? "▲" : "▼") : "⇅"));
+      btn.addEventListener("click", () => {
+        if (state.sort.col === c.id) state.sort.dir = -state.sort.dir;
+        else {
+          state.sort.col = c.id;
+          state.sort.dir = c.id === "metric" ? (metric.higher ? -1 : 1) : (c.num ? -1 : 1);
+        }
+        renderMachines();
+      });
+      th.appendChild(btn);
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
     const body = el("tbody");
-    keys.forEach((k) => body.appendChild(machineRow(k, lines[k], metric)));
+    items.forEach((item) => body.appendChild(machineRow(item, metric)));
     table.appendChild(body);
     wrap.appendChild(table);
     host.appendChild(wrap);
@@ -805,23 +843,68 @@
     host.appendChild(el("p", { class: "muted small" }, note));
   }
 
-  function machineRow(key, entries, metric) {
+  function machineData(key, entries, metric) {
     const newest = entries.slice().sort((a, b) => D.targets.findIndex((t) => t.id === b.target) - D.targets.findIndex((t) => t.id === a.target))[0];
-    const m = newest.machine, hw = newest.info.hardware || {}, tr = el("tr");
+    const m = newest.machine, hw = newest.info.hardware || {}, t = targetOf(newest.target);
+    const ram = num(m.ramGb != null ? m.ramGb : hw.ramGb);
+    const res = str(m.resolution || newest.info.resolution);
+    const resMatch = res.match(/^(\d+)\s*[x×]\s*(\d+)$/i);
+    const resPixels = resMatch ? Number(resMatch[1]) * Number(resMatch[2]) : null;
+    const shown = shownRun(newest, metric.key);
+    const metricVal = shown >= 0 ? num(newest.runs[shown][metric.key]) : null;
+    return {
+      key: key,
+      entries: entries,
+      newest: newest,
+      m: m,
+      hw: hw,
+      t: t,
+      ram: ram,
+      res: res,
+      sort: {
+        machine: str(m.name || m.id).toLowerCase(),
+        platform: (PLAT[newest.platform] || newest.platform || "").toLowerCase(),
+        cpu: str(m.cpu || hw.cpu).toLowerCase(),
+        gpu: str(m.gpu || hw.gpu).toLowerCase(),
+        ram: ram,
+        os: str(m.os || hw.os).toLowerCase(),
+        res: resPixels,
+        builds: entries.length,
+        newest: D.targets.findIndex((x) => x.id === newest.target),
+        metric: metricVal
+      }
+    };
+  }
+
+  function sortMachines(items) {
+    const col = state.sort.col, dir = state.sort.dir;
+    if (!col) return;
+    items.sort((a, b) => {
+      const av = a.sort[col], bv = b.sort[col];
+      const aEmpty = av == null || av === "", bEmpty = bv == null || bv === "";
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+  }
+
+  function machineRow(item, metric) {
+    const key = item.key, entries = item.entries, newest = item.newest, m = item.m, hw = item.hw, t = item.t, ram = item.ram;
+    const tr = el("tr");
     const name = el("td");
     const by = newest.handle ? ' <span class="muted">by ' + esc(newest.handle) + "</span>" : "";
     name.innerHTML = ldot(key) + "<b>" + esc(str(m.name || m.id) || "unnamed") + "</b>" + by;
     if (m.notes) name.title = str(m.notes);
     tr.appendChild(name);
-    const t = targetOf(newest.target);
-    const ram = num(m.ramGb != null ? m.ramGb : hw.ramGb);
     [
       [PLAT[newest.platform] || newest.platform, "l"],
       [str(m.cpu || hw.cpu), "l"],
       [str(m.gpu || hw.gpu), "l", hw.driver ? "Driver " + str(hw.driver) : ""],
       [ram != null ? ram + " GB" : "", ""],
       [str(m.os || hw.os), "l", hw.kernel ? "Kernel " + str(hw.kernel) : ""],
-      [str(m.resolution || newest.info.resolution), ""],
+      [item.res, ""],
       [String(entries.length), ""],
       [t ? t.label : newest.target, "l", t ? targetTitle(t) : ""],
       [valueText(newest, metric), ""]
