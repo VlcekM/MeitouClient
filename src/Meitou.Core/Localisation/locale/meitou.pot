@@ -762,11 +762,19 @@ msgid "Benchmark finished."
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Benchmark settings"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
 msgid "Benchmarking: the game window opens and closes by itself."
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
 msgid "Benchmarks"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "Benchmarks always use fixed settings so results stay comparable:"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
@@ -7149,4 +7157,20 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
 msgid "~{1} min per tier"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "• Ray tracing only on Ultra and Extreme"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "• Your saved graphics settings and mods are ignored and never modified"
 msgstr ""

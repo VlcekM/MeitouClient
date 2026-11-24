@@ -122,11 +122,12 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     }
 
     /// <summary>
-    /// The page's title bar, with the targets' count and a link to the public benchmarks site at its right.
+    /// The page's title bar, with the targets' count, a hover tooltip listing the fixed benchmark settings, and a link to the benchmarks site.
     /// </summary>
     Border Header()
     {
         string aside = _targets is null ? _targetsProblem ?? Tr("Loading the target builds...") : Tr("{1} target builds", _targets.Count);
+        var settingsInfo = SettingsInfoBadge();
         var site = new Button { Classes = { "aside" }, Content = Tr("Benchmarks site") };
         ToolTip.SetTip(site, BenchmarksSiteUrl);
         site.Click += async (_, _) =>
@@ -136,6 +137,7 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
         right.Children.Add(new TextBlock { Classes = { "aside" }, Text = aside, VerticalAlignment = VerticalAlignment.Center });
+        right.Children.Add(settingsInfo);
         right.Children.Add(site);
 
         var dock = new DockPanel();
@@ -144,6 +146,43 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
         dock.Children.Add(new TextBlock { Text = Tr("Benchmark") });
         return new Border { Classes = { "header" }, Margin = new(0, 0, 0, 10), Child = dock };
     }
+
+    /// <summary>
+    /// A compact hover target in the header explaining the fixed display, graphics and isolation settings used during every benchmark run.
+    /// </summary>
+    static Border SettingsInfoBadge()
+    {
+        var icon = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M8,1 A7,7 0 1 0 8,15 A7,7 0 1 0 8,1 Z M7.2,4.2 H8.8 V5.8 H7.2 Z M7.2,7 H8.8 V12 H7.2 Z"),
+            Fill = Brush.Parse("#c4a062"), Width = 14, Height = 14, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center,
+        };
+        var label = new TextBlock
+        {
+            Classes = { "aside" }, Text = Tr("Benchmark settings"), VerticalAlignment = VerticalAlignment.Center,
+            TextDecorations = TextDecorations.Underline,
+        };
+        var badge = new Border
+        {
+            Background = Brushes.Transparent, Padding = new(4, 2), VerticalAlignment = VerticalAlignment.Center,
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { icon, label } },
+        };
+        ToolTip.SetTip(badge, BenchmarkSettingsTip());
+        ToolTip.SetShowDelay(badge, 150);
+        return badge;
+    }
+
+    /// <summary>
+    /// Multi-line tooltip detailing the fixed settings the game enforces during <c>--benchmark</c>.
+    /// </summary>
+    static string BenchmarkSettingsTip() => string.Join("\n", new[]
+    {
+        Tr("Benchmarks always use fixed settings so results stay comparable:"),
+        Tr("• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"),
+        Tr("• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"),
+        Tr("• Ray tracing only on Ultra and Extreme"),
+        Tr("• Your saved graphics settings and mods are ignored and never modified"),
+    });
 
     /// <summary>
     /// The primary screen's size in pixels, for the machine record; empty when unknown.

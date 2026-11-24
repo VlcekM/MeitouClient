@@ -5703,3 +5703,27 @@ msgstr "Создаётся при определении оборудовани�
 #. machine-translated
 msgid "Generated for this computer so the site keeps your results together."
 msgstr "Создаётся для этого компьютера, чтобы сайт объединял ваши результаты."
+
+#. machine-translated
+msgid "Benchmark settings"
+msgstr "Настройки бенчмарка"
+
+#. machine-translated
+msgid "Benchmarks always use fixed settings so results stay comparable:"
+msgstr "Бенчмарки всегда используют фиксированные настройки, чтобы результаты оставались сопоставимыми:"
+
+#. machine-translated
+msgid "• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"
+msgstr "• Оконный режим 1920×1080, Vulkan, без VSync и лимита FPS, без HDR"
+
+#. machine-translated
+msgid "• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"
+msgstr "• Выбранный уровень качества (стиль Meitou), TAA при масштабе 100% (Низкий: без сглаживания при 83%), без апскейлера"
+
+#. machine-translated
+msgid "• Ray tracing only on Ultra and Extreme"
+msgstr "• Трассировка лучей только на Ультра и Экстрим"
+
+#. machine-translated
+msgid "• Your saved graphics settings and mods are ignored and never modified"
+msgstr "• Ваши сохранённые настройки графики и моды игнорируются и не изменяются"

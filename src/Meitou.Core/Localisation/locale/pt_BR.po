@@ -6128,3 +6128,27 @@ msgstr "Gerado quando o hardware é detectado."
 #. machine-translated
 msgid "Generated for this computer so the site keeps your results together."
 msgstr "Gerado para este computador para que o site mantenha seus resultados juntos."
+
+#. machine-translated
+msgid "Benchmark settings"
+msgstr "Configurações do benchmark"
+
+#. machine-translated
+msgid "Benchmarks always use fixed settings so results stay comparable:"
+msgstr "Os benchmarks sempre usam configurações fixas para que os resultados sejam comparáveis:"
+
+#. machine-translated
+msgid "• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"
+msgstr "• Janela 1920×1080, Vulkan, VSync e limite de FPS desligados, HDR desligado"
+
+#. machine-translated
+msgid "• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"
+msgstr "• Nível de qualidade escolhido (visual Meitou), TAA em escala de 100% (Baixo: sem AA a 83%), sem upscaler"
+
+#. machine-translated
+msgid "• Ray tracing only on Ultra and Extreme"
+msgstr "• Ray tracing apenas em Ultra e Extremo"
+
+#. machine-translated
+msgid "• Your saved graphics settings and mods are ignored and never modified"
+msgstr "• Suas configurações gráficas salvas e mods são ignorados e nunca modificados"

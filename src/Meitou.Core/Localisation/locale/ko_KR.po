@@ -5699,3 +5699,27 @@ msgstr "하드웨어가 감지될 때 생성됩니다."
 #. machine-translated
 msgid "Generated for this computer so the site keeps your results together."
 msgstr "사이트에서 결과를 함께 묶어 두도록 이 컴퓨터용으로 생성됩니다."
+
+#. machine-translated
+msgid "Benchmark settings"
+msgstr "벤치마크 설정"
+
+#. machine-translated
+msgid "Benchmarks always use fixed settings so results stay comparable:"
+msgstr "결과를 비교할 수 있도록 벤치마크는 항상 고정 설정으로 실행됩니다:"
+
+#. machine-translated
+msgid "• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"
+msgstr "• 창 모드 1920×1080, Vulkan, VSync 및 프레임 제한 끔, HDR 끔"
+
+#. machine-translated
+msgid "• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"
+msgstr "• 선택한 품질 등급(Meitou 스타일), TAA 100% 스케일(낮음: 83% AA 없음), 업스케일러 없음"
+
+#. machine-translated
+msgid "• Ray tracing only on Ultra and Extreme"
+msgstr "• 울트라 및 익스트림에서만 레이 트레이싱 사용"
+
+#. machine-translated
+msgid "• Your saved graphics settings and mods are ignored and never modified"
+msgstr "• 저장된 그래픽 설정과 모드는 무시되며 수정되지 않습니다"

@@ -6532,3 +6532,27 @@ msgstr "检测硬件时自动生成。"
 #. machine-translated
 msgid "Generated for this computer so the site keeps your results together."
 msgstr "为此电脑自动生成，以便网站将您的结果归集在一起。"
+
+#. machine-translated
+msgid "Benchmark settings"
+msgstr "基准测试设置"
+
+#. machine-translated
+msgid "Benchmarks always use fixed settings so results stay comparable:"
+msgstr "基准测试始终使用固定设置，以保证结果具有可比性："
+
+#. machine-translated
+msgid "• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"
+msgstr "• 窗口化 1920×1080，Vulkan，关闭垂直同步与帧率上限，关闭 HDR"
+
+#. machine-translated
+msgid "• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"
+msgstr "• 所选画质档位（Meitou 风格），TAA 100% 缩放（低档：83% 无抗锯齿），不使用超分"
+
+#. machine-translated
+msgid "• Ray tracing only on Ultra and Extreme"
+msgstr "• 仅在超高和极致档位启用光线追踪"
+
+#. machine-translated
+msgid "• Your saved graphics settings and mods are ignored and never modified"
+msgstr "• 您保存的图形设置与模组将被忽略，且绝不会被修改"
