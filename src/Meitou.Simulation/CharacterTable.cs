@@ -118,6 +118,11 @@ public sealed class CharacterCold
     /// </summary>
     public LastingId LastingId { get; internal set; }
     /// <summary>
+    /// The code mods' fields for its records in the vanilla save, by record and key (a null value removes the key); null until one is set
+    /// (<see cref="Saving.CharacterSaveFields"/>).
+    /// </summary>
+    internal Dictionary<(Saving.CharacterSaveRecord Record, string Key), object?>? SaveFields { get; set; }
+    /// <summary>
     /// The character's id while it is in the table (set when it enters, none once it leaves): for code that holds the character's state but not its
     /// slot.
     /// </summary>

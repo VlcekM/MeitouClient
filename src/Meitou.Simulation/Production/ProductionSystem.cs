@@ -2419,11 +2419,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             || !Near(world, take.Character, site, out var cold))
             return;
         var goods = TownGoods(take.Site);
-        var (record, wanted) = world.GoodsTakenObservers.Active && goods is { Owner: >= 0 } ? Wanted(m, take) : ("", 0);
+        int owner = goods?.Owner ?? site.Owner;
+        var (record, wanted) = world.GoodsTakenObservers.Active && owner >= 0 ? Wanted(m, take) : ("", 0);
         if (CaughtTaking(world, goods, take.Character, cold, with => RoomFor(world, m, cold, take, with), out var mark))
         {
-            if (wanted > 0)
-                Crime.GoodsTakenObservers.Report(world, take.Character, goods!.Value.Owner, CharacterId.None, take.Site, record, wanted, true);
+            if (wanted > 0) Crime.GoodsTakenObservers.Report(world, take.Character, owner, CharacterId.None, take.Site, record, wanted, true);
             return;
         }
 
@@ -2432,7 +2432,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (wanted > 0)
         {
             int moved = Units(cold.Inventory!, record) - before;
-            Crime.GoodsTakenObservers.Report(world, take.Character, goods!.Value.Owner, CharacterId.None, take.Site, record, moved, caught: false);
+            Crime.GoodsTakenObservers.Report(world, take.Character, owner, CharacterId.None, take.Site, record, moved, caught: false);
         }
     }
 

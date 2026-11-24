@@ -968,6 +968,9 @@ public static partial class SaveCapture
             });
         }
 
+        // The code mods' fields, over the game's own keys of the record (CharacterSaveFields).
+        if (sc.Ai is { } fieldsAi) CharacterSaveFields.Write(fieldsAi, cold);
+
         // A new record has no held keys of the save to leave as read: a captive of a save's platoon split into one of its own (#677).
         HeldSave.Write(g, cold, isNew ? null : link, world.Fixtures, buildings);
 

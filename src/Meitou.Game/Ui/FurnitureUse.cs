@@ -317,13 +317,18 @@ sealed class FurnitureUse(PlayerInterface player)
 
     /// <summary>
     /// The cage's menu: its verbs, and for one the player built its site's (Repair 95, Dismantle 96, sorted in by order number as the original's
-    /// building rows, so the own cage reads Unlock, Dismantle, Put in; #1089) and the code mods' job offers.
+    /// building rows, so the own cage reads Unlock, Dismantle, Put in; #1089) and the code mods' job offers; any other cage gets the code mods'
+    /// furniture rows (<see cref="UiMenuTargetKind.Furniture"/>) after its own.
     /// </summary>
     internal ContextMenuWindow.ContextMenu? CageMenu(CageSpot cage, Vector2 at)
     {
         var verbs = CageVerbs(cage);
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == cage.Id) is not { } site)
+        {
+            var target = new UiMenuTarget(UiMenuTargetKind.Furniture, Loc.Tr("Cage"), cage.Position) { Id = cage.Id, Record = cage.Record };
+            verbs.AddRange(player.ModTargetVerbs(target));
             return player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, verbs);
+        }
 
         verbs.AddRange(player.Build.SiteVerbs(site));
         return player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, verbs, player.Build.OfferedJobs(site));

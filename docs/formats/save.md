@@ -817,7 +817,10 @@ Job lists (`Saving/PermaJobSave`): the original's GAMESTATE_AI (`ai`) keys `jobs
 A mod's own job type ([mod jobs](../modding.md#registration-surface)) is not in that list: int `meitou mjob<k>` (task type), int `meitou mjobAt<k>`
 (its place: how many game jobs come before it) and string `meitou mjob<k>` (its building id) keep it, and the `pjob` numbers skip it. A job on a
 character writes that character's handle once every character has one, as `pjobT<i>`, so one new to the save is named too. Every character's list
-is read, an NPC's too (the original's records hold NPCs' 57 and 187); an NPC's is written while it has one. The squad AI
+is read, an NPC's too (the original's records hold NPCs' 57 and 187); an NPC's is written while it has one. A rewrite clears only the list's
+numbered keys (`pjob<i>`, the `pjobT<i>` handle parts), so other `ai` keys, an original plugin's among them (JobTabs' `jt_active` and
+per-tab job keys, layout **Unknown**), stay as read; code mods' [character save fields](../modding.md#registration-surface) are written over them
+last. The squad AI
 options are CAMERA bools (**Verified**, writer `FUN_1403eb710`; the key of each option and new-game values in
 [squad AI options](../game/ai-tasks.md#squad-ai-options)); Meitou reads and writes nine (not `stay`, `eject`), an absent one keeps its default.
 

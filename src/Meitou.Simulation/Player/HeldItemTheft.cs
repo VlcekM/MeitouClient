@@ -114,8 +114,8 @@ static class HeldItemTheft
     }
 
     /// <summary>
-    /// Tells the goods-taken observers of <paramref name="units"/> of the held item leaving an owned container or another character, once placed
-    /// (or caught) (<see cref="Crime.GoodsTakenObservers"/>).
+    /// Tells the goods-taken observers of <paramref name="units"/> of the held item leaving an owned container, a machine (the player's own
+    /// storage too, owned by the player's faction) or another character, once placed (or caught) (<see cref="Crime.GoodsTakenObservers"/>).
     /// </summary>
     internal static void ReportTake(World world, HeldItem held, int units, bool caught)
     {
@@ -124,8 +124,9 @@ static class HeldItemTheft
         var item = held.Item;
         if (held.From.Holder == ItemHolder.Site)
         {
-            if (Goods(world, held.From.Site) is { Owner: >= 0 } box)
-                Crime.GoodsTakenObservers.Report(world, held.Actor, box.Owner, CharacterId.None, held.From.Site, item.Record, units, caught);
+            int keeper = Goods(world, held.From.Site) is { } box ? box.Owner
+                : world.Machines.Find(held.From.Site) is not null ? world.Player.Faction : -1;
+            Crime.GoodsTakenObservers.Report(world, held.Actor, keeper, CharacterId.None, held.From.Site, item.Record, units, caught);
             return;
         }
 

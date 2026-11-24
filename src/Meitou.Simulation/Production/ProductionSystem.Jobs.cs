@@ -395,15 +395,16 @@ public sealed partial class ProductionSystem
             if (on == TaskType.DitchAllResources && cold.HaulTo is { } keep && !PlayerOrders.Holds(world, slot) && cold.Inventory is { } held
                 && Site(world, keep) is { Complete: true } keptSite && keptSite.Owner == world.Player.Faction
                 && Ensure(world, keptSite) is { } keptStore && keptStore.Data.IsStorage && keptStore.Storage is not null
-                && Ditchable(held).Any(item => Stores(keptStore, item)) && world.StorageAllows(cold, keep, StorageUse.Put, DitchRecord(world, held)))
+                && Ditchable(world, cold, held).Any(item => Stores(keptStore, item))
+                && world.StorageAllows(cold, keep, StorageUse.Put, DitchRecord(world, cold, held)))
                 return (TaskType.DitchAllResources, keep);
 
-            bool ditching = !PlayerOrders.Holds(world, slot) && cold.Inventory is { } carried && Ditchable(carried).Any();
+            bool ditching = !PlayerOrders.Holds(world, slot) && cold.Inventory is { } carried && Ditchable(world, cold, carried).Any();
             if (ditching && NearestSite(world, at, float.MaxValue, IsStore, Ditches) is { } store)
                 return (TaskType.DitchAllResources, store);
 
-            bool Ditches(BuildSite s, Machine m) => InFinderRange(s.Position, at) && TakesDitched(m, cold.Inventory!)
-                && world.StorageAllows(cold, s.Id, StorageUse.Put, DitchRecord(world, cold.Inventory!));
+            bool Ditches(BuildSite s, Machine m) => InFinderRange(s.Position, at) && TakesDitched(world, cold, m)
+                && world.StorageAllows(cold, s.Id, StorageUse.Put, DitchRecord(world, cold, cold.Inventory!));
         }
 
         // Sleep and Sit not while holding position (FUN_1402b2b90), carrying someone (+0x348) or selected by the player (FUN_1407f4d20, the
@@ -848,8 +849,8 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The record the storage filters are asked about for a ditch trip: the one every ditchable item shares, else null; none without a filter.
     /// </summary>
-    static string? DitchRecord(World world, Items.Inventory inv) =>
-        world.StorageFilters.Active ? Meitou.Simulation.Items.StorageFilters.OneRecord(Ditchable(inv)) : null;
+    static string? DitchRecord(World world, CharacterCold cold, Items.Inventory inv) =>
+        world.StorageFilters.Active ? Meitou.Simulation.Items.StorageFilters.OneRecord(Ditchable(world, cold, inv)) : null;
 
     /// <summary>
     /// A storage machine with its grid (what <see cref="TakesDitched"/> asks first).
@@ -862,16 +863,27 @@ public sealed partial class ProductionSystem
     static bool IsMaker(Machine m) => !m.Data.IsStorage;
 
     /// <summary>
-    /// A storage machine that takes something 242 Ditch all resources carries off from <paramref name="inv"/>.
+    /// A storage machine that takes something 242 Ditch all resources carries off from <paramref name="cold"/>'s inventory.
     /// </summary>
-    static bool TakesDitched(Machine m, Items.Inventory inv) =>
-        m.Data.IsStorage && m.Storage is not null && Ditchable(inv).Any(item => Stores(m, item));
+    static bool TakesDitched(World world, CharacterCold cold, Machine m) =>
+        m.Data.IsStorage && m.Storage is not null && Ditchable(world, cold, cold.Inventory!).Any(item => Stores(m, item));
 
     /// <summary>
     /// What 242 Ditch all resources carries off (finder <c>FUN_1405a59a0</c>, its item collection <c>FUN_140749490</c>, <b>Verified</b>): ITEMs with
-    /// <c>item function</c> 0 or 15, and food (function 3) but the first, in inventory order.
+    /// <c>item function</c> 0 or 15, and food (function 3) but the first, in inventory order; an item a code mod's ditch filter keeps with
+    /// <paramref name="cold"/> (<see cref="Items.IDitchItemFilter"/>) is left out.
     /// </summary>
-    internal static IEnumerable<Items.ItemInstance> Ditchable(Items.Inventory inv)
+    internal static IEnumerable<Items.ItemInstance> Ditchable(World world, CharacterCold cold, Items.Inventory inv)
+    {
+        var all = Ditchable(inv);
+        var filters = world.DitchItemFilters;
+        return filters.Active ? all.Where(item => !filters.Keeps(world, cold.Id, Meitou.Simulation.Items.DitchKind.Resources, item)) : all;
+    }
+
+    /// <summary>
+    /// <see cref="Ditchable(World, CharacterCold, Items.Inventory)"/> before the code mods' filters.
+    /// </summary>
+    static IEnumerable<Items.ItemInstance> Ditchable(Items.Inventory inv)
     {
         bool fed = false;
         foreach (var item in inv.All())
@@ -890,8 +902,8 @@ public sealed partial class ProductionSystem
     /// What a hauler puts into the storage: for a ditch run what <see cref="Ditchable"/> lists and the storage takes, else what <see cref="Takes"/>
     /// allows.
     /// </summary>
-    static IEnumerable<Items.ItemInstance> Delivered(World world, Items.Inventory inv, Machine store, bool ditch) =>
-        ditch ? Ditchable(inv).Where(i => Stores(store, i)) : inv.All().Where(i => Takes(world, store, i));
+    static IEnumerable<Items.ItemInstance> Delivered(World world, CharacterCold cold, Items.Inventory inv, Machine store, bool ditch) =>
+        ditch ? Ditchable(world, cold, inv).Where(i => Stores(store, i)) : inv.All().Where(i => Takes(world, store, i));
 
     /// <summary>
     /// The player's complete machine (not a storage) nearest a storage within <see cref="InFinderRange"/> whose output (a bench's:
@@ -973,7 +985,7 @@ public sealed partial class ProductionSystem
         n.Task = (byte)CharacterTask.Haul;
         n.Mode = SpeedMode.Free;
         n.TaskTime = 0;
-        bool carries = cold.Inventory is { } inv && Delivered(world, inv, store, ditch).Any();
+        bool carries = cold.Inventory is { } inv && Delivered(world, cold, inv, store, ditch).Any();
         cold.HaulTo = storage.Id;
         cold.HaulItem = null;
         if (!carries && !ditch && LooseFor(world, cold, n.Position, store) is { } loose)
@@ -1039,12 +1051,12 @@ public sealed partial class ProductionSystem
 
             // The walk stops here, as at a loose item (PickUpLoose), so the leg to the storage starts after the beat.
             StopWalk(ref n, cold);
-            if (Delivered(world, inv, store, Ditching(cold)).Any()) cold.HaulSite = storeId;
+            if (Delivered(world, cold, inv, store, Ditching(cold)).Any()) cold.HaulSite = storeId;
             else End(world, slot);
             return;
         }
 
-        foreach (var item in Delivered(world, inv, store, Ditching(cold)).ToList())
+        foreach (var item in Delivered(world, cold, inv, store, Ditching(cold)).ToList())
         {
             inv.Remove(item);
             if (store.Storage!.Add(item)) continue;
@@ -1097,7 +1109,7 @@ public sealed partial class ProductionSystem
 
         cold.HaulItem = null;
         StopWalk(ref n, cold);
-        if (Delivered(world, inv, store, ditch: false).Any()) cold.HaulSite = store.Site;
+        if (Delivered(world, cold, inv, store, ditch: false).Any()) cold.HaulSite = store.Site;
         else End(world, slot);
     }
 

@@ -204,8 +204,8 @@ public static class InventoryCommands
             : SlotSection(item.AttachSlot) is { } worn && worn != "backpack_attach" ? [worn] : [];
         foreach (string section in sections)
         {
-            if (SectionClosed(wearer, section)) continue;
-            if (section is not ("back" or "hip"))
+            if (SectionClosed(wearer, section) || SectionFull(root, section)) continue;
+            if (!LiesInCells(section))
             {
                 if (root.Items.Any(i => i.Section == section)) continue;
                 return (section, 0, 0);
@@ -325,7 +325,7 @@ public static class InventoryCommands
 
         // A bag cannot contain itself or another container; moving it preserves all its contents.
         if (section == "backpack_content" && item.Contents is not null) return false;
-        var size = section is "back" or "hip" ? SectionSize(section) : IsEquipmentSection(section) || IsLimbSection(section)
+        var size = LiesInCells(section) ? SectionSize(section) : IsEquipmentSection(section) || IsLimbSection(section)
                 ? (item.Width, item.Height) : (target?.Width ?? 0, target?.Height ?? 0);
         if (owner is null || target is null || !owner.Items.Contains(item) || x < 0 || y < 0 || item.Width <= 0 || item.Height <= 0 ||
             x > size.Item1 - item.Width || y > size.Item2 - item.Height || item.Quantity > target.LimitOf(item)) return false;
@@ -333,8 +333,8 @@ public static class InventoryCommands
         if (SectionClosed(wearer, section) || section == "main" && MainClosed(wearer)) return false;
         if (IsEquipmentSection(section))
         {
-            if (SectionSlot(section) != item.AttachSlot || item.Quantity != 1) return false;
-            if (section is not ("back" or "hip") && (x != 0 || y != 0 || target.Items.Any(i => i != item && i.Section == section)))
+            if (SectionSlot(section) != item.AttachSlot || item.Quantity != 1 || SectionFull(target, section, item)) return false;
+            if (!LiesInCells(section) && (x != 0 || y != 0 || target.Items.Any(i => i != item && i.Section == section)))
                 return false;
         }
 
@@ -627,9 +627,23 @@ public static class InventoryCommands
     };
 
     /// <summary>
-    /// A section holding one item whatever its footprint (clothing, the bag slot, the prosthetic slots); the others are grids.
+    /// A section holding one item whatever its footprint (clothing, the bag slot, the prosthetic slots, a mod slot of one item); the others are
+    /// grids.
     /// </summary>
-    public static bool IsSingleSlot(string section) => IsLimbSection(section) || IsEquipmentSection(section) && section is not ("back" or "hip");
+    public static bool IsSingleSlot(string section) => IsLimbSection(section) || IsEquipmentSection(section) && !LiesInCells(section);
+
+    /// <summary>
+    /// An equipment section whose items lie in its cells at their footprints: <c>back</c>, <c>hip</c> and a mod slot of several items
+    /// (<see cref="ModSlot.MaxItems"/>).
+    /// </summary>
+    public static bool LiesInCells(string section) => section is "back" or "hip" || ModSlots.IsMultiItem(section);
+
+    /// <summary>
+    /// Whether a mod slot of several items (<see cref="ModSlot.MaxItems"/>) in <paramref name="root"/> holds as many as it may, not counting
+    /// <paramref name="except"/> (an item moving within it); false for every other section.
+    /// </summary>
+    public static bool SectionFull(Inventory root, string section, ItemInstance? except = null) =>
+        ModSlots.Of(section) is { MaxItems: > 1 } slot && root.Items.Count(i => i != except && i.Section == section) >= slot.MaxItems;
 
     /// <summary>
     /// The right click's move into another character (<c>FUN_140713d20</c>, its target <c>FUN_14070dcd0</c>): one unit at a time, at most <paramref
