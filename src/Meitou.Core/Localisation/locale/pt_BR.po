@@ -6199,3 +6199,33 @@ msgstr "Monitor {1}: {2}"
 #. machine-translated
 msgid "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor)."
 msgstr "O monitor em que o jogo inicia e entra em tela cheia. Automático: aquele em que a janela está (no Wayland, o primeiro monitor)."
+msgid "Put priority:"
+msgstr "Prioridade de guardar:"
+
+#. machine-translated
+msgid "Take priority:"
+msgstr "Prioridade de retirar:"
+
+#. machine-translated
+msgid "Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower."
+msgstr "Carregadores e trabalhadores guardam as coisas primeiro no armazém com a maior prioridade de guardar e, em empate, no mais próximo. Proibido: nunca. Clique para subir, Shift+clique para baixar."
+
+#. machine-translated
+msgid "Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower."
+msgstr "Trabalhadores e construtores retiram as coisas primeiro do armazém com a maior prioridade de retirar e, em empate, do mais próximo. Proibido: nunca. Clique para subir, Shift+clique para baixar."
+
+#. machine-translated
+msgid "Forbidden"
+msgstr "Proibido"
+
+#. machine-translated
+msgid "Deferred"
+msgstr "Adiado"
+
+#. machine-translated
+msgid "Preferred"
+msgstr "Preferido"
+
+#. machine-translated
+msgid "Important"
+msgstr "Importante"

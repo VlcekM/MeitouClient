@@ -443,6 +443,7 @@ sealed class BuildingSelection(PlayerInterface player)
         }
 
         AddPublicLines(focus, site, detail, mine, playerSite, stats);
+        if (playerSite && site is { Complete: true }) AddPriorityLines(focus, stats);
         var header = HeaderLine(focus, detail, rock, mine, inspected);
         return (header, [.. state], [.. stats], status, bad, [.. extended]);
     }
@@ -596,6 +597,68 @@ sealed class BuildingSelection(PlayerInterface player)
             stats.Add(new("For sale:", Loc.Tr("c.{1,num}", price), PlayerInterface.GoodColour, PlayerInterface.GoodColour,
                 Action: "meitou:building-buy", ButtonWidth: 0.4f));
         }
+    }
+
+    /// <summary>
+    /// A complete storage of the player's: its Put priority and Take priority buttons (<see cref="Simulation.Items.StoragePriority"/>), a click
+    /// raising the level, Shift+click lowering it (each wraps). Meitou's setting, not in the original.
+    /// </summary>
+    void AddPriorityLines(SelectedBuilding focus, List<PlayerInterface.HudLine> stats)
+    {
+        if (player.Production.Machine(focus.SiteId) is not { IsStorage: true, HasStorage: true } storage) return;
+
+        stats.Add(PriorityLine(Loc.Tr("Put priority:"), storage.PutPriority, PutTip, "meitou:building-put-priority"));
+        stats.Add(PriorityLine(Loc.Tr("Take priority:"), storage.TakePriority, TakeTip, "meitou:building-take-priority"));
+    }
+
+    /// <summary>
+    /// The Put priority button's tooltip.
+    /// </summary>
+    static string PutTip => Loc.Tr("Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower.");
+
+    /// <summary>
+    /// The Take priority button's tooltip.
+    /// </summary>
+    static string TakeTip => Loc.Tr("Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower.");
+
+    /// <summary>
+    /// One priority button line: the level's name, coloured bad for Forbidden, good above Normal.
+    /// </summary>
+    static PlayerInterface.HudLine PriorityLine(string label, Simulation.Items.StoragePriority level, string tip, string action)
+    {
+        var colour = level switch
+        {
+            Simulation.Items.StoragePriority.Forbidden => PlayerInterface.BadBrightColour,
+            > Simulation.Items.StoragePriority.Normal => PlayerInterface.GoodColour,
+            _ => PlayerInterface.MainColour,
+        };
+        return new(label, PriorityName(level), PlayerInterface.MainColour, colour, tip, action, ButtonWidth: 0.4f);
+    }
+
+    /// <summary>
+    /// A storage priority's name on its button.
+    /// </summary>
+    static string PriorityName(Simulation.Items.StoragePriority level) => level switch
+    {
+        Simulation.Items.StoragePriority.Forbidden => Loc.Tr("Forbidden"),
+        Simulation.Items.StoragePriority.Low => Loc.Tr("Low"),
+        Simulation.Items.StoragePriority.Deferred => Loc.Tr("Deferred"),
+        Simulation.Items.StoragePriority.Preferred => Loc.Tr("Preferred"),
+        Simulation.Items.StoragePriority.Important => Loc.Tr("Important"),
+        Simulation.Items.StoragePriority.High => Loc.Tr("High"),
+        Simulation.Items.StoragePriority.Critical => Loc.Tr("Critical"),
+        _ => Loc.Tr("Normal"),
+    };
+
+    /// <summary>
+    /// The level after <paramref name="level"/>: one up, or one down when <paramref name="down"/>, wrapping round the ends.
+    /// </summary>
+    static Simulation.Items.StoragePriority NextPriority(Simulation.Items.StoragePriority level, bool down)
+    {
+        const int first = (int)Simulation.Items.StoragePriority.Forbidden;
+        const int count = Simulation.Items.StoragePriority.Critical - Simulation.Items.StoragePriority.Forbidden + 1;
+        int step = down ? count - 1 : 1;
+        return (Simulation.Items.StoragePriority)(((int)level - first + step) % count + first);
     }
 
     /// <summary>
@@ -1026,10 +1089,23 @@ sealed class BuildingSelection(PlayerInterface player)
             player.InterfaceSounds.Sound("General_Click");   // engine choice: the button's own sound is not traced
             player.Say(new Simulation.Production.IncinerateFurnace(id) { Tick = player.Session.World.Tick });
         }
+        else if (action is "building-put-priority" or "building-take-priority" && player.Production.Machine(id) is { IsStorage: true } storage)
+            SetPriority(id, storage, action == "building-put-priority");
         else if (action == "building-pause" && site is { Complete: false })
             player.Say(new Simulation.Construction.PauseSite(id, !site.Paused) { Tick = player.Session.World.Tick });
         else if (action == "building-doors") player.Say(new Simulation.Locks.ToggleDoorsOrder(id) { Tick = player.Session.World.Tick });
         else if (action == "building-locks") player.Say(new Simulation.Locks.ToggleDoorLocksOrder(id) { Tick = player.Session.World.Tick });
+    }
+
+    /// <summary>
+    /// A press of a storage's Put or Take priority button: the next level up, or down with Shift, with the click sound.
+    /// </summary>
+    void SetPriority(string id, Simulation.Production.MachineSnapshot storage, bool put)
+    {
+        var use = put ? Simulation.Items.StorageUse.Put : Simulation.Items.StorageUse.Take;
+        var level = NextPriority(put ? storage.PutPriority : storage.TakePriority, player.SlowModifier);
+        player.InterfaceSounds.Sound("General_Click");
+        player.Say(new Simulation.Production.SetStoragePriority(id, use, level) { Tick = player.Session.World.Tick });
     }
 
     #endregion

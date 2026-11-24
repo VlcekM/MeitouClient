@@ -481,10 +481,12 @@ holds refuses the second mod.
   highest priority and, among equals, the storage it takes without one (the nearest, its own tie rule); `Forbidden` passes the storage over as a
   refusal does. Take and put are asked apart, so a store can be the last place things are put and the first they are taken from (put `Low`, take
   `Critical`: an overstock store). Systems combine as: any `Forbidden` wins, else the first answer other than `Normal` in system order (mods in
-  load order); an answer outside the levels counts as `Normal`. A squad's kept ditch trip keeps its storage while it still takes something (only
+  load order); an answer outside the levels counts as `Normal`. The player sets each storage's own put and take level on its panel
+  (`Machine.PutPriority`, `Machine.TakePriority`, saved with the building, [save](formats/save.md)): its `Forbidden` wins too, and a level other than
+  `Normal` comes before the systems' answers, which apply where the player left a storage at `Normal`. A squad's kept ditch trip keeps its storage while it still takes something (only
   `Forbidden` ends it). `world.StorageRank(who, storage, use, record)` gives the filters' and priority systems' combined answer (`Forbidden` for
   a refusal), so a mod ranks its own storage picks as the game's searches do. Same threading, paused-order and fault rules as `IStorageFilter`;
-  one that throws answers `Normal`. Without a priority system nothing is asked and every search is the original's. Engine API, not in the
+  one that throws answers `Normal`. Without a priority system or a storage's own level every search is the original's. Engine API, not in the
   original.
 - **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the first
   (`world.Start` then says how: `WorldStartKind.NewGame`, `Load` or `Import`, with `SaveFolder` the full path of the save read, null for a new

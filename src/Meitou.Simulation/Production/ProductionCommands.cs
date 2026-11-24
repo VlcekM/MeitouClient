@@ -113,6 +113,12 @@ public sealed record RepeatCrafts(string Site, bool Repeat) : SimCommand;
 public sealed record SetMachinePower(string Site, bool? PowerOn = null, bool? GetsBattery = null) : SimCommand;
 
 /// <summary>
+/// A storage's put or take priority, from its panel (<see cref="Machine.PutPriority"/>, <see cref="Machine.TakePriority"/>): applied to a complete
+/// storage of the player's faction. Engine setting, not in the original.
+/// </summary>
+public sealed record SetStoragePriority(string Site, Items.StorageUse Use, Items.StoragePriority Level) : SimCommand;
+
+/// <summary>
 /// An item furnace's Active button: starts burning its grid, or stops it (<c>FurnaceBuilding::incinerate</c>).
 /// </summary>
 public sealed record IncinerateFurnace(string Site) : SimCommand;

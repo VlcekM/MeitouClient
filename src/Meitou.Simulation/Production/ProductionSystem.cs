@@ -329,6 +329,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
 
         (m.PowerOn, m.GetsBattery, m.Charge, m.Broken) = (old.PowerOn, old.GetsBattery, old.Charge, old.Broken);
+        if (m.Data.IsStorage) (m.PutPriority, m.TakePriority) = (old.PutPriority, old.TakePriority);
         world.Machines.Replace(m);
         _sweep = true;
     }
@@ -494,6 +495,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                     if (set.PowerOn is { } on) powered.PowerOn = on;
                     if (set.GetsBattery is { } battery && powered.Data.IsConsumer) powered.GetsBattery = battery;
                     world.Machines.Touch();
+                    break;
+                case SetStoragePriority set:
+                    SetStoragePriority(world, set);
                     break;
                 case IncinerateFurnace burn when world.Machines.Find(burn.Site) is { Data.IsFurnace: true } furnace
                     && Site(world, burn.Site) is { Complete: true } lit && lit.Owner == world.Player.Faction:

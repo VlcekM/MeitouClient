@@ -428,4 +428,17 @@ public sealed partial class ProductionSystem
     /// Whether two points are within the source finder's range (<c>FUN_14059d000</c> keeps a building at the bound: <c>&lt;=</c>).
     /// </summary>
     static bool InSourceRange(Vector3 a, Vector3 b) => Vector3.DistanceSquared(a, b) <= ConstructionSystem.SourceRangeSquared;
+
+    /// <summary>
+    /// Applies a storage panel's priority (<see cref="SetStoragePriority"/>) to a complete storage of the player's faction; an unknown level is
+    /// ignored.
+    /// </summary>
+    void SetStoragePriority(World world, SetStoragePriority set)
+    {
+        if (!Enum.IsDefined(set.Level) || !Enum.IsDefined(set.Use)) return;
+        if (world.Machines.Find(set.Site) is not { Data.IsStorage: true, Storage: not null } storage) return;
+        if (Site(world, set.Site) is not { Complete: true } site || site.Owner != world.Player.Faction) return;
+
+        world.Machines.SetPriority(storage, set.Use, set.Level);
+    }
 }

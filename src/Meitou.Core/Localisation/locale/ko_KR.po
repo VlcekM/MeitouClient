@@ -5769,3 +5769,33 @@ msgstr "모니터 {1}: {2}"
 #. machine-translated
 msgid "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor)."
 msgstr "게임이 시작되고 전체 화면이 되는 모니터입니다. 자동: 창이 있는 모니터(Wayland에서는 첫 번째 모니터)."
+msgid "Put priority:"
+msgstr "넣기 우선순위:"
+
+#. machine-translated
+msgid "Take priority:"
+msgstr "꺼내기 우선순위:"
+
+#. machine-translated
+msgid "Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower."
+msgstr "운반꾼과 일꾼은 넣기 우선순위가 가장 높은 저장고에 먼저 물건을 넣고, 같으면 가장 가까운 곳에 넣습니다. 금지: 사용 안 함. 클릭하면 올리고, Shift+클릭하면 내립니다."
+
+#. machine-translated
+msgid "Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, Shift+click to lower."
+msgstr "일꾼과 건설꾼은 꺼내기 우선순위가 가장 높은 저장고에서 먼저 물건을 꺼내고, 같으면 가장 가까운 곳에서 꺼냅니다. 금지: 사용 안 함. 클릭하면 올리고, Shift+클릭하면 내립니다."
+
+#. machine-translated
+msgid "Forbidden"
+msgstr "금지"
+
+#. machine-translated
+msgid "Deferred"
+msgstr "미룸"
+
+#. machine-translated
+msgid "Preferred"
+msgstr "선호"
+
+#. machine-translated
+msgid "Important"
+msgstr "중요"

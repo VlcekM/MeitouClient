@@ -796,15 +796,21 @@ public sealed partial class World : IDisposable
 
     /// <summary>
     /// How much <paramref name="who"/> prefers <paramref name="storage"/> for <paramref name="record"/> (null: not one item) when the game picks a
-    /// storage for it: <see cref="Items.StoragePriority.Forbidden"/> when a storage filter refuses it (<see cref="Items.IStorageFilter"/>), else
-    /// the priority systems' answer (<see cref="Items.IStoragePriority"/>), <see cref="Items.StoragePriority.Normal"/> without one. Thread-safe;
+    /// storage for it: <see cref="Items.StoragePriority.Forbidden"/> when a storage filter refuses it (<see cref="Items.IStorageFilter"/>) or the
+    /// storage's own setting or a priority system forbids it; else the storage's own setting on its panel (<see cref="Production.Machine.PutPriority"/>,
+    /// <see cref="Production.Machine.TakePriority"/>) unless Normal, then the priority systems' answer (<see cref="Items.IStoragePriority"/>), Normal
+    /// without one. Thread-safe;
     /// a mod ranks its own storage picks with it as the game's searches do (docs/modding.md "Storage priority").
     /// </summary>
     public Items.StoragePriority StorageRank(CharacterId who, string storage, Items.StorageUse use, string? record)
     {
         if (StorageFilters.Active && !StorageFilters.Allows(this, who, storage, use, record)) return Items.StoragePriority.Forbidden;
 
-        return StoragePriorities.Of(this, who, storage, use, record);
+        var own = Machines.AnyStoragePriority && Machines.Find(storage) is { } m ? m.PriorityFor(use) : Items.StoragePriority.Normal;
+        if (own == Items.StoragePriority.Forbidden) return own;
+
+        var modded = StoragePriorities.Of(this, who, storage, use, record);
+        return modded == Items.StoragePriority.Forbidden || own == Items.StoragePriority.Normal ? modded : own;
     }
 
     /// <summary>
@@ -814,10 +820,12 @@ public sealed partial class World : IDisposable
         StorageRank(who.Id, storage, use, record);
 
     /// <summary>
-    /// Whether a storage farther than the best a search has found could still outrank it: a priority system is registered and the best is below
-    /// <see cref="Items.StoragePriority.Critical"/>. Without one a search keeps the original's nearest-first shortcuts.
+    /// Whether a storage farther than the best a search has found could still outrank it: a priority system is registered or a storage has a
+    /// priority of its own, and the best is below <see cref="Items.StoragePriority.Critical"/>. Without either a search keeps the original's
+    /// nearest-first shortcuts.
     /// </summary>
-    internal bool StorageMayOutrank(Items.StoragePriority best) => StoragePriorities.Active && best < Items.StoragePriority.Critical;
+    internal bool StorageMayOutrank(Items.StoragePriority best) =>
+        (StoragePriorities.Active || Machines.AnyStoragePriority) && best < Items.StoragePriority.Critical;
 
     /// <summary>
     /// Game seconds per game hour (docs/game/game-loop.md "The clock", Verified; the engine's <c>GameClock</c> has the same).

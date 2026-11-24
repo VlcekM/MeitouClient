@@ -284,6 +284,14 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
     /// </summary>
     public bool IsStorage { get; init; }
     /// <summary>
+    /// A storage's put priority, set on its panel (<see cref="Machine.PutPriority"/>).
+    /// </summary>
+    public Items.StoragePriority PutPriority { get; init; }
+    /// <summary>
+    /// A storage's take priority, set on its panel (<see cref="Machine.TakePriority"/>).
+    /// </summary>
+    public Items.StoragePriority TakePriority { get; init; }
+    /// <summary>
     /// Its BUILDING_FUNCTIONALITY <c>function</c> (-1: none; 12 a turret, 14 a furnace).
     /// </summary>
     public int Function { get; init; } = -1;
@@ -434,6 +442,8 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
             IsAutomatic = m.Data.IsAutomatic,
             InputsEmpty = m.HasEmptyInputs,
             IsStorage = m.Data.IsStorage,
+            PutPriority = m.PutPriority,
+            TakePriority = m.TakePriority,
             Function = m.Data.Function,
             StorageLimitName = m.Data.StorageLimit is [var only] ? Name(only) : null,
             StorageCapacity = m.Data.StorageLimit is [_] ? (int)m.Data.StackBonusMult : 0,

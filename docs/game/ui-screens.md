@@ -694,6 +694,9 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     function 19 is not among them); its members are ordered GO_HOMEBUILDING (19) on the new home, or with no home found PATROL (22) and the platoon's
     +0x115 (`persistent`) set to 0 (`FUN_1407ebdd0`), each order with the clear flag (**Verified**, disassembly; [order givers](ai-tasks.md#order-givers)); `FUN_14038a720` and `FUN_1404d2dd0` with the building;
     "Building purchased!". Meitou: [house purchases](../simulation.md#town-house-purchases).
+  - Meitou's addition, not in the original: a complete storage of the player's gets `Put priority:` and `Take priority:` buttons (width 0.4)
+    naming its [storage priority](../modding.md) level (Forbidden in BadBright, above Normal in Good); a click raises the level, Shift+click lowers it,
+    each wrapping (`General_Click`; `SetStoragePriority`).
   - 4 is the medical panel's section (**Observed**: `MedicalDatapanel`'s constructor `FUN_140726a70` passes 4 to `FUN_1406fd7d0`; it finds the
     `LifeBarN` widgets and their `Value`, `Yellow`, `Green`, `White`, `Datapanel`, `Tooltip`, `Robot` and `Crushed` children (and one more whose name string was not read), and `HealthText`). The
     header word is slot 114 (`FUN_1402fe040`: Normal / Broken / Under construction with a tooltip); the rows slot 115 (`FUN_140302380`): `Condition`, or
