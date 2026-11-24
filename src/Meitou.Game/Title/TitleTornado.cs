@@ -14,10 +14,31 @@ sealed class TitleTornado
     public const string System = "kenshi_twister_dust1";
 
     /// <summary>
-    /// The twister's funnel: bursts of <see cref="System"/> stacked up the flight, each its height above the ground and its size against the system's
-    /// own (its rings are 70 to 130 wide), narrow at the foot and wide at the top. One burst alone reads as haze round the 2.5x fighters.
+    /// The bursts stacked up the funnel.
     /// </summary>
-    public static readonly (float Height, float Size)[] Funnel = [(0, 0.2f), (0, 0.25f), (50, 0.3f), (100, 0.4f), (150, 0.5f), (200, 0.6f)];
+    const int FunnelLevels = 24;
+    /// <summary>
+    /// The funnel's top above the ground, over the flight's (<see cref="Height"/>).
+    /// </summary>
+    const float FunnelTop = 330;
+    /// <summary>
+    /// The size of the funnel's foot and of its top against the system's own (its rings are 70 to 130 wide).
+    /// </summary>
+    const float FootSize = 0.04f, TopSize = 1.8f;
+
+    /// <summary>
+    /// The share of their own life the funnel's particles live: the system's swell and climb for 6 to 10 s, which turns a stack into one cloud; shorter,
+    /// each ring stays at its height and the stack keeps its funnel's outline.
+    /// </summary>
+    public const float LifeScale = 0.6f;
+
+    /// <summary>
+    /// The twister's funnel: bursts of <see cref="System"/> stacked up from the ground, each its height and its size, a thin foot flaring out to a
+    /// wide top. One burst alone reads as haze round the 2.5x fighters.
+    /// </summary>
+    public static readonly (float Height, float Size)[] Funnel = Enumerable.Range(0, FunnelLevels)
+        .Select(FunnelLevel)
+        .ToArray();
 
     /// <summary>
     /// The seconds a flight lasts; the twister emits as long.
@@ -126,6 +147,15 @@ sealed class TitleTornado
         }
 
         return Height + Bob * MathF.Sin(MathF.Tau * (u - Rise) / (1 - Rise - Fall));
+    }
+
+    /// <summary>
+    /// The funnel's level <paramref name="k"/>: evenly up to <see cref="FunnelTop"/>, its width growing with the cube of its height.
+    /// </summary>
+    static (float Height, float Size) FunnelLevel(int k)
+    {
+        float t = k / (float)(FunnelLevels - 1);
+        return (FunnelTop * t, FootSize + (TopSize - FootSize) * t * t * t);
     }
 
     /// <summary>
