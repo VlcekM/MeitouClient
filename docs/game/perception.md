@@ -102,7 +102,8 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
   pass 0 `colour` = (rgb, 1); with its last argument set (this call) pass 1 is kept as (rgb, 0.2), else removed. The
   sneaker's state +0xe8 (`stealthUnseen`, **Observed** `FUN_1408586d0`) becomes 0 when it is fighting or a looker's meter is red, 2 when only yellow, else 1 (unseen).
 - Name tag (`FUN_1406e8100`, colours loaded in `FUN_1406eb3a0`): shown within 10954 of the camera (1.2e8
-  squared). Tag state 1/2/3 tints a stealth icon with the GUI colours `NameTagStealthHidden` / `AlmostSeen` / `Seen`,
+  squared) while its tag flag is on; nothing in the interior or floor view sets that flag (`setNameTagVisible` `FUN_1405c8bb0`, called by the names
+  toggles `FUN_1406e2a20` / `FUN_1406e2c70` and riding code), so a character undrawn above the viewed floor or on a roof keeps its tag (**Verified**, decompile callers). Tag state 1/2/3 tints a stealth icon with the GUI colours `NameTagStealthHidden` / `AlmostSeen` / `Seen`,
   fallbacks (0.25, 0.521, 0.745), (0.745, 0.721, 0.25), (0.745, 0.25, 0.29) (**Verified** literals; the GUI XML may
   override). A second icon's frame is round((1 - x) x (frames - 1)), x = clamp(character +0xd8, 0, 1): the
   `LightLevel` image of `Kenshi_CharacterNameTags` (7 frames, frame 0 full light; **Verified**, kenshi_images.xml), on the
