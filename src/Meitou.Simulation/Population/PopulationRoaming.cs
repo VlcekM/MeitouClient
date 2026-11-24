@@ -1094,24 +1094,26 @@ public sealed partial class PopulationSystem
             return;
         }
 
-        if (_work is null) FinishRoamer(world, new BuiltRoamer(id, BuildRoamer(p.TemplateId, p.Faction, p.Key, seed, position)));
+        if (_work is null) FinishRoamer(world, new BuiltRoamer(id, BuildRoamer(p.TemplateId, p.Faction, p.Key, seed, position, p.MemberCap)));
         else
         {
             string template = p.TemplateId;
             int faction = p.Faction;
             ulong key = p.Key;
-            _work.Add(() => _builtRoamers.Enqueue(new BuiltRoamer(id, BuildRoamer(template, faction, key, seed, position))));
+            int cap = p.MemberCap;
+            _work.Add(() => _builtRoamers.Enqueue(new BuiltRoamer(id, BuildRoamer(template, faction, key, seed, position, cap))));
         }
     }
 
     /// <summary>
-    /// Null when the template is gone or plans no one now (e.g. a save's platoon whose members are all dead or unique).
+    /// Null when the template is gone or plans no one now (e.g. a save's platoon whose members are all dead or unique). A code mod's spawn
+    /// keeps its member cap (<paramref name="cap"/>, 0: none).
     /// </summary>
-    BuiltSquad? BuildRoamer(string templateId, int faction, ulong key, ulong seed, Vector2 position)
+    BuiltSquad? BuildRoamer(string templateId, int faction, ulong key, ulong seed, Vector2 position, int cap = 0)
     {
         if (_data.Db.Find(templateId) is not { } record) return null;
         var townFaction = faction >= 0 ? _data.Factions[faction] : null;
-        return BuildOne(SquadTemplate.From(record), faction, townFaction, key, seed, position);
+        return BuildOne(SquadTemplate.From(record), faction, townFaction, key, seed, position, cap);
     }
 
     /// <summary>
@@ -1402,12 +1404,13 @@ public sealed partial class PopulationSystem
     /// <paramref name="maxRadius"/> of <paramref name="around"/> (<see cref="ModSpot"/>; never outside that ring). Its package and job come from the
     /// template (<see cref="PlatoonJobs.For"/>), so a trader template walks as a trader; it loads like any roaming platoon near the player (its squad
     /// id is then <see cref="Platoon.SquadId"/>), is kept off screen whatever the keep switches say and is saved also before it first loads
-    /// (<see cref="Platoon.ModSpawned"/>). Its purse starts at <paramref name="money"/>. Returns the platoon id, or -1,
-    /// adding nothing, for an unknown template, faction or site, a point or radius that is not finite, a template that plans no one, or a ring with
-    /// no walkable point found. Serial phases only.
+    /// (<see cref="Platoon.ModSpawned"/>). Its purse starts at <paramref name="money"/>. With <paramref name="maxMembers"/> above 0 it has at
+    /// most that many members, then and whenever its squad is made again (<see cref="Platoon.MemberCap"/>, <see cref="SquadPlan.Capped"/>).
+    /// Returns the platoon id, or -1, adding nothing, for an unknown template, faction or site, a point or radius that is not finite, a template
+    /// that plans no one, or a ring with no walkable point found. Serial phases only.
     /// </summary>
     public int SpawnPlatoon(World world, int faction, string templateId, int homeSite, Vector2 around, float minRadius, float maxRadius,
-        long money = 0)
+        long money = 0, int maxMembers = 0)
     {
         if (faction < 0 || faction >= _data.Factions.Count || homeSite < 0 || homeSite >= _data.Sites.Count) return -1;
         if (!float.IsFinite(around.X) || !float.IsFinite(around.Y) || !float.IsFinite(minRadius) || !float.IsFinite(maxRadius)) return -1;
@@ -1416,7 +1419,7 @@ public sealed partial class PopulationSystem
         var template = SquadTemplate.From(record);
         int id = world.Platoons.PeekId;   // taken only once the spawn succeeds, so a refusal leaves the world as it was
         ulong key = Rng.Mix(SeedSalts.ModPlatoon ^ (ulong)id << 8 ^ (ulong)faction << 40);
-        var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, world.Seed, key, States);
+        var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, world.Seed, key, States).Capped(maxMembers);
         if (plan.TotalMembers == 0 || ModSpot(world, key, around, minRadius, maxRadius) is not { } spot) return -1;
 
         var (package, job) = PlatoonJobs.For(_data.Ai, template, _data.FactionId(faction));
@@ -1434,6 +1437,7 @@ public sealed partial class PopulationSystem
             Job = job,
             Money = Math.Max(0, money),
             ModSpawned = true,
+            MemberCap = Math.Max(0, maxMembers),
         });
         return id;
     }

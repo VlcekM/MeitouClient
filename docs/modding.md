@@ -1404,7 +1404,9 @@ holds refuses the second mod.
   the player comes near). Saved with the squad; a load without the owner mod running wakes it, with a notice. Engine API, not in the original.
 - **World hooks** (engine API, not in the original; serial phases): `PopulationSystem.RequestCampaign` queues a
   FACTION_CAMPAIGN against a town as a dialogue trigger does (the request pass then applies the game's gates); `PopulationSystem.SpawnPlatoon`
-  adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse, that loads like a roaming one, is
+  adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse (and, with `maxMembers` above 0, at most that
+  many members: the plan's first members, leader first, then whole slave squads that fit, kept whenever its squad is made again, saved and
+  hashed), that loads like a roaming one, is
   kept off screen whatever the keep switches say (and stays loaded while a member lies knocked out in the loaded zones,
   [roaming](simulation.md#off-screen-tier)), is saved also before it first loads and loads back as the same roaming squad (-1 and nothing
   added when no walkable point is found); platoon ids are given anew at every load, so `Platoon.ModTags[context.Id]` holds one tag per mod

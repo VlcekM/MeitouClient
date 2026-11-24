@@ -281,6 +281,12 @@ public sealed class Platoon
     /// </summary>
     public bool ModSpawned { get; set; }
     /// <summary>
+    /// The most members a code mod's spawn may have (<c>PopulationSystem.SpawnPlatoon</c>'s <c>maxMembers</c>; 0: the template's full plan): its
+    /// plan is cut to it whenever its squad is made (<see cref="Factions.SquadPlan.Capped"/>). Saved as <see cref="Saving.ModPlatoonSave.CapKey"/>
+    /// and hashed only when set.
+    /// </summary>
+    public int MemberCap { get; set; }
+    /// <summary>
     /// A free string a code mod sets to find its platoon again after a load, when platoon ids are given anew (saved as
     /// <see cref="Saving.ModPlatoonSave.TagKey"/> only when set). Shared by every mod, so one mod's tag replaces another's; <see cref="ModTags"/>
     /// keeps one per mod.
@@ -583,6 +589,11 @@ public sealed class PlatoonRegistry
     static void HashMod(ref StateHasher h, Platoon p)
     {
         if (p.ModSpawned) h.Add(0x4D6F6453);
+        if (p.MemberCap > 0)
+        {
+            h.Add(0x43617020);
+            h.Add(p.MemberCap);
+        }
         if (p.ModTag.Length > 0) Items.Inventory.HashTag(ref h, p.ModTag);
         HashModHold(ref h, p);
         if (p.ModTags.Count > 0) HashModTags(ref h, p.ModTags);

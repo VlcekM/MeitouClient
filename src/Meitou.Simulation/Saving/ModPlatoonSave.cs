@@ -7,7 +7,8 @@ namespace Meitou.Simulation.Saving;
 /// <summary>
 /// A code mod's marks on a PLATOON record (engine keys, not in the original, which reads keys by name and ignores them; docs/formats/save.md
 /// "NPC platoons"): <c>meitou mod spawn</c> (a bool, only when set) and <c>meitou mod key</c> (its <see cref="Platoon.Key"/> in hex, so a stand-in
-/// that never loaded is planned again as the same squad) for a platoon <c>PopulationSystem.SpawnPlatoon</c> made, <c>meitou mod tag</c> (a
+/// that never loaded is planned again as the same squad) for a platoon <c>PopulationSystem.SpawnPlatoon</c> made, with <c>meitou mod cap</c> (an
+/// int, only when set: its <see cref="Platoon.MemberCap"/>), <c>meitou mod tag</c> (a
 /// string, only when set) for <see cref="Platoon.ModTag"/>, one <c>meitou mod tag &lt;mod id&gt;</c> per mod for <see cref="Platoon.ModTags"/>
 /// (<see cref="ModTagSave"/>), and a hold a mod took in its name: <c>meitou mod hold</c> (the mod id), <c>meitou mod goal</c> (a point, Y 0),
 /// <c>meitou mod follow</c> (the followed character's lasting id in hex) and <c>meitou mod arrived</c> (a bool), each only when set.
@@ -18,6 +19,11 @@ public static class ModPlatoonSave
     /// The PLATOON keys: the mod-spawn flag and the mod tag.
     /// </summary>
     public const string SpawnKey = "meitou mod spawn", KeyKey = "meitou mod key", TagKey = "meitou mod tag";
+
+    /// <summary>
+    /// The PLATOON key of a mod spawn's member cap.
+    /// </summary>
+    public const string CapKey = "meitou mod cap";
 
     /// <summary>
     /// The PLATOON keys of a hold a mod took in its name (<see cref="Platoon.HoldOwner"/>).
@@ -40,6 +46,9 @@ public static class ModPlatoonSave
             record.Strings.Remove(KeyKey);
         }
 
+        if (platoon.ModSpawned && platoon.MemberCap > 0) record.Ints[CapKey] = platoon.MemberCap;
+        else record.Ints.Remove(CapKey);
+
         if (platoon.ModTag.Length > 0) record.Strings[TagKey] = platoon.ModTag;
         else record.Strings.Remove(TagKey);
 
@@ -59,6 +68,11 @@ public static class ModPlatoonSave
         record.Strings.GetValueOrDefault(KeyKey) is { } hex && ulong.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong key)
             ? key
             : null;
+
+    /// <summary>
+    /// A mod spawn's member cap; 0 when the record has none.
+    /// </summary>
+    public static int Cap(FcsRecord record) => Math.Max(0, record.Ints.GetValueOrDefault(CapKey));
 
     /// <summary>
     /// The record's mod tag ("" when it has none).

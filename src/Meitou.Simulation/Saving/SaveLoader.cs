@@ -643,7 +643,8 @@ public static class SaveLoader
         if (data.Db.Find(platoon.SquadTemplate) is not { } template || !SquadFactory.IsTemplate(template)) return (key, 0);
 
         var states = world.SystemOf<PopulationSystem>()?.States ?? data.States;
-        return (key, SquadFactory.Plan(data.Db, SquadTemplate.From(template), 1, world.Seed, key, states).TotalMembers);
+        var plan = SquadFactory.Plan(data.Db, SquadTemplate.From(template), 1, world.Seed, key, states);
+        return (key, plan.Capped(ModPlatoonSave.Spawned(platoon.Record) ? ModPlatoonSave.Cap(platoon.Record) : 0).TotalMembers);
     }
 
     /// <summary>
@@ -893,6 +894,7 @@ public static class SaveLoader
         p.Dead = record.Bools.GetValueOrDefault("dead");
         p.IntactFlag = record.Bools.GetValueOrDefault("intact", true);
         p.ModSpawned = ModPlatoonSave.Spawned(record);
+        p.MemberCap = p.ModSpawned ? ModPlatoonSave.Cap(record) : 0;
         p.ModTag = ModPlatoonSave.Tag(record);
         ModPlatoonSave.Read(record, p);
         p.SavedTown = CurrentTownSave.Read(record);
