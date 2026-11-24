@@ -52,11 +52,6 @@ sealed class Releases(HttpClient http, Config config, GithubAuth github, ILogger
     const string DailyNotes = "Daily build";
 
     /// <summary>
-    /// The UTC hour of the daily run (nightly.yml); a nightly with <see cref="DailyNotes"/> published earlier in its day is not that run.
-    /// </summary>
-    const int DailyHourUtc = 16;
-
-    /// <summary>
     /// One fetch at a time.
     /// </summary>
     readonly SemaphoreSlim _gate = new(1, 1);
@@ -81,7 +76,7 @@ sealed class Releases(HttpClient http, Config config, GithubAuth github, ILogger
     }
 
     /// <summary>
-    /// The benchmark targets, newest first: every full release and every daily nightly (<see cref="IsDaily"/>); null while no
+    /// The benchmark targets, newest first: every full release and every nightly whose notes start with <see cref="DailyNotes"/>; null while no
     /// game release is known (GitHub not read yet or unreachable).
     /// </summary>
     public async Task<List<BenchTarget>?> Targets()
@@ -97,20 +92,10 @@ sealed class Releases(HttpClient http, Config config, GithubAuth github, ILogger
     /// </summary>
     static BenchTarget? AsTarget(GithubRelease r)
     {
-        bool daily = r.Prerelease && IsDaily(r);
+        bool daily = r.Prerelease && r.Body is { } body && body.StartsWith(DailyNotes, StringComparison.Ordinal);
         if (r.Prerelease && !daily) return null;
 
         return new BenchTarget(r.Tag, r.Tag[1..], daily ? "daily" : "release", r.Published!.Value);
-    }
-
-    /// <summary>
-    /// Whether a nightly is the scheduled daily run: notes starting with <see cref="DailyNotes"/>, published at or after <see cref="DailyHourUtc"/>.
-    /// </summary>
-    static bool IsDaily(GithubRelease r)
-    {
-        if (r.Body is not { } body || !body.StartsWith(DailyNotes, StringComparison.Ordinal)) return false;
-
-        return r.Published is { } at && at.UtcDateTime.Hour >= DailyHourUtc;
     }
 
     /// <summary>

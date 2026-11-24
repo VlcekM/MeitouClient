@@ -305,7 +305,7 @@
   }
 
   /**
-   * Whether the session's build is a benchmark target (/bench/targets: full releases and the 16:00 UTC daily nightlies). Legacy kit
+   * Whether the session's build is a benchmark target (/bench/targets: full releases and the nightlies whose notes say "Daily build"). Legacy kit
    * commits are never targets there, and without the target list nothing can be told apart, so both count as on target.
    */
   function onTarget(e) {
@@ -521,13 +521,13 @@
     return select(opts, String(state.version), (v) => selectVersion(Number(v)));
   }
 
-  /** Off-target builds (not a release or the day's 16:00 UTC daily) are hidden until "All builds" is picked. */
+  /** Off-target builds (neither a full release nor a daily nightly) are hidden until "All builds" is picked. */
   function buildsToggle() {
     const names = { targets: "Targets only", all: "All builds" };
     return segmented(["targets", "all"], state.offTarget ? "all" : "targets", (k) => names[k], (k) => {
       state.offTarget = k === "all";
       render();
-    }, (k) => (k === "targets" ? "Full releases and the daily 16:00 UTC nightly only" : "Also manual and 05:00 UTC nightlies"));
+    }, (k) => (k === "targets" ? "Full releases and daily nightlies only" : "Also the other nightlies"));
   }
 
   function fingerprintSelect() {
