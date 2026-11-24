@@ -47,4 +47,4 @@ either Meitou replacements or compatibility patches for RE_Kenshi mods, with the
 
 And a lot more.
 
-The full list is in the [release notes](https://github.com/VlcekM/MeitouClient/releases).
+The full list is in the [release notes](https://github.com/VlcekM/MeitouClient/releases/tag/v0.23.0).
