@@ -240,4 +240,13 @@ public static class CharacterFacts
     /// The planner's <c>iAmBeingMeleeAttacked immediate</c> (<c>+0x2b0</c>, <c>FUN_1404378f0</c>, <see cref="CombatSystem.ImmediateThreat"/>).
     /// </summary>
     internal static bool ImmediateThreat(CombatSystem combat, World world, int self) => combat.ImmediateThreat(world, self);
+
+    /// <summary>
+    /// <c>Character::isLiterallyUnderMeleeAttackRightNowForSure</c> (Character <c>+0x2b0</c>, <c>FUN_140333cd0</c> reads the byte, <b>Verified</b>
+    /// decompile): a sensed threat or a pusher of the character in <paramref name="slot"/> stands as an immediate threat (alive, not down, free, not
+    /// getting up, within 40, no closed gate between; <see cref="CombatSystem.ImmediateThreat"/>), the same read the AI's state 16, 39 and 158
+    /// use. False without a combat system. Last tick's positions; a pure read, any thread (docs/modding.md "Combat reads").
+    /// </summary>
+    public static bool UnderMeleeAttack(World world, int slot) =>
+        world.SystemOf<CombatSystem>() is { } combat && world.Characters.Cold(slot) is not null && combat.ImmediateThreat(world, slot);
 }

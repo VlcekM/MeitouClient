@@ -318,6 +318,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         events ??= [];
         events.Clear();
         HealthObservers.Before(world, i);
+        world.PartMaxFilters.Apply(world, i, medical);
         medical.Tick(dt, ctx, events);
         HealthObservers.After(world, i, HealthChangeKind.Body);
         cold.SwimSpeed = Speed.Swim(race, stats, medical, encumbrance);

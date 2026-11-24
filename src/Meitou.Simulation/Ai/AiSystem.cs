@@ -1012,8 +1012,24 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // While the running task's class says it is not finished (its slot 4, TaskFinished), a score below 1 is raised once more
             // (FUN_14050df10, Verified).
             if (score < 1 && TaskFinished.Unfinished(world, id.Slot, mind.Step)) score *= Settings.Continuity;
+            score = HeldScore(world, g.Task.Type, mind, id, score);
         }
 
+        return score;
+    }
+
+    /// <summary>
+    /// The current goal's score after the desire filters' held-score asks (<see cref="GoalDesireKind.HeldScore"/>), kept on the mind for its next
+    /// think; as it is without a filter. The think's own partition.
+    /// </summary>
+    static float HeldScore(World world, TaskType type, AiMind mind, CharacterId id, float score)
+    {
+        var filters = world.Decisions.DesireFilters;
+        if (!filters.Active) return score;
+
+        float held = mind.HeldScore.Type == type ? mind.HeldScore.Score : float.NaN;
+        score = filters.Pass(world, id, type, GoalDesireKind.HeldScore, score, held: held);
+        mind.HeldScore = (type, score);
         return score;
     }
 
@@ -1754,8 +1770,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The operator slots of workplace <paramref name="building"/> (docs/modding.md "Workplace slots"): its <see cref="TownBuilding.Key"/> (a town
-    /// building's <c>x.y:instance</c>, a player-built one's site id). <see cref="WorkplaceSlots.Held"/> counts the AI workers holding it and the
-    /// player's operators on a job at an outpost machine, as of the last package cadence pass; null for a building that is no workplace of a town
+    /// building's <c>x.y:instance</c>, a player-built one's site id). <see cref="WorkplaceSlots.Held"/> counts the AI workers holding it, the
+    /// player's operators on a job at an outpost machine and the mods' workers (<see cref="HoldWorkSlot"/>), as of the last package cadence pass; null for a building that is no workplace of a town
     /// or outpost the AI looked at then. Read only, in the serial phases (the pass changes it in the serial step).
     /// </summary>
     public WorkplaceSlots? WorkSlots(string building)
@@ -1832,7 +1848,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         TownBuilding? held = null)
     {
         if (!WorkAllowed(world, self.Slot, town)) return null;
+        if (AssignedWorkOf(world, self) is { } assigned) return HasFreeSlot(assigned, held) && WorksAt(world, assigned, type) ? assigned : null;
+
         var list = WorkplacesFor(town, type);
+        if (world.JobScoreFilters.Active) return PickScoredWork(world, self, list, epoch, type, held);
+
         int free = 0;
         foreach (var b in list) if (HasFreeSlot(b, held)) free++;
         if (free == 0) return null;
@@ -1845,7 +1865,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Whether a mind holds a workplace that is still one its goal <paramref name="type"/> may work at.
     /// </summary>
-    bool HoldsWork(AiMind mind, CampaignTown town, TaskType type) => mind.WorkPost is { } post && WorkplacesFor(town, type).Contains(post);
+    bool HoldsWork(AiMind mind, CampaignTown town, TaskType type) => mind.WorkPost is { } post
+        && (AssignedWorkOf(mind.Squad) is { } assigned ? ReferenceEquals(post, assigned) : WorkplacesFor(town, type).Contains(post));
 
     /// <summary>
     /// Whether a workplace has an operator slot no one holds in this cadence pass (73 <c>machineHasFreeOperatorSlot</c>; the finder's
@@ -1900,6 +1921,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     _workTaken[post] = _workTaken.GetValueOrDefault(post) + 1;
             }
         }
+
+        ReserveModWork(world);
     }
 
     /// <summary>
@@ -4096,9 +4119,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        if (board.Gate?.Building == gate) return;
+        bool inside = gate.RuntimeKey is not null || (squad.Conduct & SquadConduct.GateInside) != 0;
+        if (board.Gate is { } kept && kept.Building == gate && kept.Inside == inside) return;
         var centre = town.IsNone ? Flat(gate.Position) : TownExit.Centre(world, data, town);
-        board.Gate = PostOf(world, gate, centre, inside: gate.RuntimeKey is not null);
+        board.Gate = PostOf(world, gate, centre, inside);
     }
 
     /// <summary>

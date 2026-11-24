@@ -396,7 +396,10 @@ holds refuses the second mod.
   order, each seeing the earlier one's answer, on any thread and concurrently: quick, thread-safe, a pure read of the ask and of world state the
   tick has settled. A throw or a non-finite answer keeps the score; the filter is still asked for the rest of that tick, not from the next, and
   the fault enters the state hash. `TargetCandidate.ChooserHasTarget` is true in a fighter's own choice while it fights someone (the original's
-  `AI::chooseBestAttackTarget` given a valid old target), false in the other choices; no engine score reads it. Engine API, not in the original.
+  `AI::chooseBestAttackTarget` given a valid old target), false in the other choices; no engine score reads it. The ask's `CombatMode` is the
+  original's last flag of that call (`FUN_14059e300` param_7, the range clamp: set by the in-fight chooser only, **Verified**), true for `Fight`;
+  `LawEnforcer` its flag before (param_6, which adds a term from the candidate's state broadcast `+0xa0`, **Observed**; its callers
+  **Unknown**), false in every kind, as Meitou scores no such term. Engine API, not in the original.
   **Observed** by a scratch run (not in the repo; a 1-against-2 fight, `Fight` asks only): an unchanged answer keeps hash and log and is asked
   the same on 1 and 4 threads; lowering one candidate's score changes the pick, the same on 4 threads; a throw or a NaN or infinite answer keeps
   the scores, is asked in one tick and is hashed.
@@ -603,6 +606,16 @@ holds refuses the second mod.
   read of the ask, the character's own state and world state the tick has settled. A throw or an answer that is negative or not finite keeps
   the rate; the filter is still asked for the rest of that tick and not from the next, and the fault enters the state hash. Without a filter
   nothing is asked. Engine API, not in the original.
+- **Combat reads** (`Meitou.Simulation.Combat` / `Bodies`; pure reads of the settled tick, any thread): `CombatSystem.AttackSkill(world, slot)`
+  (the melee attack skill every blow is contested with: the fist rating unarmed, else trained melee attack plus the gear's and weapon's attack
+  bonus, indoors modifier, less the dust penalty), `MeleeDefence(world, slot, guard)` (the block contest's defence) and `EffectiveDodge(world,
+  slot, guard)` (the original's `CharStats::getDodge`: stored dodge plus the gear's dodge term, through encumbrance and legs, the guard bonus for
+  a guarding unarmed fighter), null for no fighter; `CharacterFacts.UnderMeleeAttack(world, slot)`, the original's
+  `isLiterallyUnderMeleeAttackRightNowForSure` (Character `+0x2b0`, **Verified** getter decompile `FUN_140333cd0`): an immediate threat within
+  40, the AI's states 16, 39 and 158. Engine API.
+- **Medical reads** (`MedicalState`, `Meitou.Simulation.Bodies`; pure reads as of the last medical tick, any thread), named after the original's
+  `MedicalSystem` tests ([character-stats](game/character-stats.md#medical-tests)): `ProbablyDying`, `CanGetUpWakeUp`, `ReallyHungry`,
+  `CanKick`; `isCrippled` is `Crawling`, `isInBloodlossTrauma` is `BloodKo`. The original's extra blood loss has no counterpart. Engine API.
 - **Health changes:** a registered system implementing `IHealthChangeObserver` (`Meitou.Simulation.Bodies`) receives `HealthChanged(World, in
   HealthChange)` for every change of a body part's flesh, stun, bandage or splint (`HealthValue`, the part's index in `MedicalState.Parts`) or
   of the blood (part -1) of a character in the world, whatever made it, with before and after and a `HealthChangeKind`: `Hit` (melee, bolt,
@@ -634,6 +647,24 @@ holds refuses the second mod.
   original. **Observed** by a scratch run (not in the repo) of the roaming town without kept roamers: a veto keeping nothing keeps the hashes on
   1 and 4 threads; keeping `PlatoonDespawned` stores the leaving platoons' characters; keeping both kinds stops the orphan timer, the same
   hashes and asks on 1 and 4 threads; a throwing veto is asked once and hashed.
+- **Part maximum:** a registered system implementing `IPartMaxFilter` (`Meitou.Simulation.Bodies`) is asked `Max(World, in PartMaxAsk)` for each
+  body part of each character at the start of its body step, before its medical tick: the tick, character, part index, its LOCATIONAL_DAMAGE id
+  and `HealthPart.StoredMaxHp` (base x multiplier x scale - wear, the original's `HealthPartStatus::maxHealth` `FUN_140296c70`, **Verified**).
+  The answer holds as a factor on the stored maximum until the next step, and `HealthPart.MaxHp` (the medical tick, hits, the health panel,
+  every reader) returns it: a getter-only bonus, as a hook on the original's `maxHealth` (Limb Toughness's mode 0); what is saved stays the
+  game's terms. Not asked for a stored maximum of 0 or below. Filters run in system order, each seeing the earlier answer, in the parallel body
+  step: quick, thread-safe, a pure read. A throw or an answer not finite and above 0 keeps the maximum; the filter is still asked for the rest
+  of that tick, not from the next, and the fault enters the state hash. Without a filter nothing is asked and the factor is 1. Engine API.
+- **Bed search:** a registered system implementing `IBedFilter` (`Meitou.Simulation.Locks`) is asked `Allows(World, in BedAsk)` by the bed search
+  (`FixtureRegistry.FindBed`: the go-to-bed goals, rescue, the bed orders' spare bed): the tick, sleeper, bed fixture id, its building and owner
+  faction and `Allowed`, the game's verdict; it answers whether the bed may be taken. For a player character every free, reachable bed in reach
+  is asked, so a filter admits one the game refuses (a rented inn bed, another faction's), weighed as an ally's (0.01 before the material,
+  indoor and walls factors); for anyone else only the beds the game takes, which a filter may refuse. Filters run in system order, each seeing
+  the earlier answer, on any thread (the think searches too): quick, thread-safe, a pure read. A throw keeps the answer; the filter is still
+  asked for the rest of that tick, not from the next, and the fault enters the state hash. Without a filter nothing is asked. Engine API.
+- **Sleep clock:** `CharacterCold.BedUsedHours` is the game hours of the last update of a bed the character lay in (status `+0xc0`, stamped by
+  `Task_UseBed`'s update, which row 98's desire reads; **Observed** as the original's last-slept time): hours since it slept are
+  `world.GameHours - BedUsedHours`. Derived, not saved (0 after a load until it sleeps).
 - **Items created:** a registered system implementing `IItemCreatedObserver` (`Meitou.Simulation.Items`) receives `Created(World, in
   ItemCreated)` for each item the world makes of an `ItemCreatedKind`: `Loot` (a camp's ground items, a town's artifacts for its buildings'
   containers), `Crafted` (a bench's finished item, `Character` the crafter), `ShopStock` (each unit and special item of a shop's fill, before
@@ -1286,7 +1317,8 @@ holds refuses the second mod.
   icon. Engine API, not in the original.
 - **Dialogue replies:** in `Register`, `registration.AddDialogueReplies(context => replies)` adds player replies to the open conversation,
   after the game's own choices, numbered on with them (the number keys pick them too). `UiDialogueContext` gives the `Conversation`
-  (`ConversationView`: NPC, player and speaker ids, the line, the game's choices, the log), the `Npc`, `Player` and `Speaker` snapshots (record
+  (`ConversationView`: NPC, player and speaker ids, the line, the game's choices, the log, `PlayerStarted`: opened by a player character's talk
+  order, false for an NPC's approach or any other event), the `Npc`, `Player` and `Speaker` snapshots (record
   id, faction, name; null when not in the snapshot), the `Snapshot`, `Tick`, `Enqueue` and `Leave()` (queues `EndConversation`). Answer the
   `UiDialogueReply`s (text, press) to offer for that line, or none; the source is asked again only when the NPC, the line or the choices
   change, so it must not decide by time. A chosen reply runs its press on the host thread (it may open the mod's own window, queue commands
@@ -1464,6 +1496,20 @@ holds refuses the second mod.
   minds and the independence. Ids: `SquadManagement.PlayerSquads(world)`, `world.Buildings.All`, `PopulationData.Sites[i].Buildings`.
   **Observed** (2026-11-13, headless, two saves, 'Guard building, residents'): members without a job patrol, go home and lie in the home's beds, a
   move order takes them at once and they resume after it, and a re-saved game loads autonomous.
+- **Job choice** (`Meitou.Simulation.Ai`; engine API, not in the original): `SetSquadWork(squadId, building)` gives a player's squad a work
+  building apart from its home (a workplace key as `WorkSlots` takes; null clears it): its members on 189 / 190 work there while it has a free
+  operator slot (189 only where it can really work), else not at all, wherever their home is. `SetSquadConduct(squadId, conduct)` sets
+  `SquadConduct` flags (more may come): `GateInside` posts its gate guard (180) and the gate's flanking guards on the town's side of the gate,
+  as the game posts them at a gate the player built; `CloseDoors` closes a door or gate a member opened on a walk (the movement's own
+  opening) once that member is through it, 20 past the leaf, with nobody else within 20 of it (left open after 60 s). Both are saved on the
+  squad (`meitou work`, `meitou conduct`, [save](formats/save.md)), hashed while set, and cleared with the home when the autonomy's owner mod
+  is missing at a load. A registered system implementing `IJobScoreFilter` is asked `Score(World, in JobScoreAsk)` for each workplace with a
+  free slot a worker on 189 / 190 may pick in its work town (`JobCandidateKind.Workplace`; more kinds may come): the tick, character, task
+  type, the workplace key, its BUILDING record id (a mod finds the stat it trains in its data) and the score, 1 as the game weighs them
+  alike. The best wins, ties drawn by the game's own roll, so asking again names the same; 0 or below leaves one out. An assigned work
+  building is not scored. Filters run in system order, each seeing the earlier answer, on any thread (the think picks too): quick,
+  thread-safe, a pure read. A throw or a non-finite answer keeps the score; the filter is still asked for the rest of that tick, not from the
+  next, and the fault enters the state hash. Without a filter nothing is asked.
 - **Squads outside the faction size count** (`Meitou.Simulation.Factions`): `SetSquadUncounted(squadId, on, Owner: context.Id)` keeps a squad of
   the player's faction out of the `max faction size` count (`Squad.Uncounted`; recruiting, slave trading, `SpawnIntoPlayerSquad` and the squads
   screen's count use `SquadManagement.CappedHeads`), for townspeople, staff or followers a mod adds beside the player's own characters; the
@@ -1529,7 +1575,8 @@ holds refuses the second mod.
   player squad, leading it when it has no leader. Only player squads: an NPC squad loaded from a save keeps only the save's members, so an
   added NPC would be lost at the next save or unload (`SpawnPlatoon` adds NPCs). `SpawnIntoPlayerSquad(world, squadId, recordId, at, age)`
   makes an ANIMAL_CHARACTER at that age, its stats multiplier and size ([animals](game/animals.md#ageing)), where the four-argument call
-  makes the adult of age 1; a CHARACTER ignores the age. It returns the character's id, or none and adds nothing for another squad, another
+  makes the adult of age 1; a CHARACTER ignores the age; `SpawnIntoPlayerSquad(world, squadId, recordId, at, new SpawnOptions(Age, IgnoreCaps))`
+  with `IgnoreCaps` skips the squad and faction size caps, as the original's birth through `createRandomCharacter` checks none. It returns the character's id, or none and adds nothing for another squad, another
   record type, a point that is not finite or not walkable, an age that is not finite or below 0, a unique already claimed, or the recruit's caps
   (`max squad size`, `max faction size`); `PopulationSystem.JoinPlayerSquad(world, character, squadId)` moves a living character that is not
   the player's (a traveller who settles) into a living player squad as a recruit joins (the player's faction, orders and class; no AI, jobs or
@@ -1685,7 +1732,10 @@ holds refuses the second mod.
     the character, the type, a `GoalDesireKind` and the desire, and answers the desire to use: `Goal` (a list goal as the goal scorer weighs
     it, before the list's weight, crowding and continuity; a bed goal whose bed search found no bed is not asked), `PlanStep` (a row on the
     way of a plan, 0 or below a dead end, such as getting out of bed once healed), `Order` (the order queue's front, which leaves at 0 or below,
-    and the second list), `Job` (a job of the list that could run, `Job` its index, asked as 1: 0 or below passes over it). Filters run in
+    and the second list), `Job` (a job of the list that could run, `Job` its index, asked as 1: 0 or below passes over it), `HeldScore` (the current goal's whole score
+    this think, after weight, crowding, continuity and commitment, with `GoalDesireAsk.HeldScore` the score that type was held at after its last
+    scoring as the current goal, NaN the first time or after a load; the answer is what it competes with and is held for the next, as the
+    original AI keeps its current goal's score: SquadAutonomy's patrol decay is the answer max(0.0001, held x 0.95)). Filters run in
     registration order, each seeing the desire the earlier ones left, on any thread (the think is parallel): quick, thread-safe, a pure read. A
     throw or a desire that is not finite keeps the desire; the filter is still asked for the rest of that tick and not from the next, and the
     fault enters the state hash. Raising a goal's desire from 0 can pick a goal that then finds nothing to act on. Engine API, not in the
@@ -1698,11 +1748,17 @@ holds refuses the second mod.
   prisoner's waits queued in its cage, a sleeper gets up, a follow order ends, an animal a building keeps out goes past its first door); any
   other row is given as a saved order of that row is loaded, with its owner's detail (an attack is the player's pick, a lock order a walk to its
   row's work) and readying (`IOrderOwner.LoadDetail`, `Restored`). Without `queued` it replaces the queue. Serial phases only (it throws in a
-  parallel one). It answers the check of the order's start when it is the only order queued and the character takes orders now: `Run`,
+  parallel one); between ticks the start is written into the state the next tick computes from, as the paused step's commands are. It answers the check of the order's start when it is the only order queued and the character takes orders now: `Run`,
   `Blocked` (with the text the player's order would show) or `Gone` (it left the queue); else `Run` (queued). `Gone` too for an actor not in the
   world or a row no system owns (nothing queued). An NPC's front starts only while its chooser runs (it has a squad and is not carried, out
   cold or dead), else it waits queued; its start ends a goal holding the character (`ModGoalEnd.Order`), and the chooser takes the character
-  back once the queue is empty. `CanOrder` asks the same without giving.
+  back once the queue is empty. `CanOrder` asks the same without giving. Engine jobs given as orders (engine API): `TaskType.FindWeapon` (8, no
+  target) runs the original's `AI::findWeapon` from the character (`CarrySystem.FindWeapon`) and picks up the ground weapon it finds (row 3,
+  worn into a free slot), or for a character that is not the player's loots the body it finds (a player character's takes the ground pass
+  only); gone once it carries a weapon or nothing is found; one find per order. `TaskType.EatTargetAlive` (220, a target) eats a live caged
+  occupant at its cage, or a body down or dead on the ground where it lies, through the cannibal goals' own job (bites, barks, limb loss, death
+  report), for any character; it stays the queue's front while the meal goes on, another order ends the meal, and an order's meal resets no
+  town's kill timer. Carrying is the lift orders (`LiftPersonPlayerOrder`, `KidnapOrder`).
 - **Moving from the old hooks** (the hooks are gone; a mod built on them gets the notice under [Versioning](#versioning)):
   - `IDecisionOwner` with `DecisionSystem.Register(source)`: a chooser goal (`ChooserRegistry.Goal`) or an order (`World.GiveOrder`);
     `DecisionSystem.RegisterJob(type, source)`: `ChooserRegistry.Jobs(type, source)`.
@@ -1731,7 +1787,10 @@ holds refuses the second mod.
   workplace's operator slots as `WorkplaceSlots(Held, Max)` (`Free`): `building` is its `TownBuilding.Key` (a town building's `x.y:instance`,
   an outpost machine's site id), `Held` the AI workers holding it and the player's operators on a job at an outpost machine, `Max` its
   functionality's `max operators`, as of the last package cadence pass; null for a building that is no workplace of a town or outpost the AI
-  looked at then. Read only, in the serial phases. A mod's own worker holds no slot: a mod job checks `Free` before it hires. Engine API.
+  looked at then. Read only, in the serial phases. `AiSystem.HoldWorkSlot(world, building, worker)` holds a slot for a mod's worker: counted in
+  `Held` at once and in every pass after, so the AI's workers leave it (false for a worker not living, no such workplace or no free slot); one
+  hold a worker, moved by holding another building; `ReleaseWorkSlot(world, worker)` lets it go, as the worker leaving the world or dying does
+  at the next pass. Hashed while any; not saved (hold again after a load). Serial phases only. Engine API.
  
 - **Seats** (`Meitou.Simulation.Production`; the system from `SystemBuildContext.Find<ProductionSystem>()` or `world.Systems`):
   `SitOn(world, slot, seat, row, source)` puts a character, the player's or an NPC, on a chair or throne through the player's Use order's
