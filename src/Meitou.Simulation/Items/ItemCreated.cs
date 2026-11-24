@@ -27,14 +27,51 @@ public enum ItemCreatedKind : byte
 }
 
 /// <summary>
-/// An item the world just made (<see cref="IItemCreatedObserver"/>): the tick, the kind, the item itself, the character it is for or by (none) and
-/// the squad (-1 none).
+/// Where a new item was put (<see cref="ItemCreated.Place"/>); room for more places.
 /// </summary>
-public readonly record struct ItemCreated(long Tick, ItemCreatedKind Kind, ItemInstance Item, CharacterId Character, int Squad);
+public enum ItemCreatedPlace : byte
+{
+    /// <summary>
+    /// Not told: a crafted item, a shop's unit, a character's kit.
+    /// </summary>
+    None,
+    /// <summary>
+    /// On the ground: a camp's items (<see cref="ItemCreated.Site"/> empty).
+    /// </summary>
+    Ground,
+    /// <summary>
+    /// In a container (<see cref="ItemCreated.Site"/> its fixture id): a town building's stock box.
+    /// </summary>
+    Container,
+}
+
+/// <summary>
+/// An item the world just made (<see cref="IItemCreatedObserver"/>): the tick, the kind, the item itself, the character it is for or by (none),
+/// the squad (-1 none), where it was put, the container's fixture id there ("" for none) and the town or camp site (the level's town index,
+/// <c>PopulationData.Sites</c>; -1 none).
+/// </summary>
+public readonly record struct ItemCreated(long Tick, ItemCreatedKind Kind, ItemInstance Item, CharacterId Character, int Squad)
+{
+    /// <summary>
+    /// Where the item was put; <see cref="ItemCreatedPlace.None"/> when not told.
+    /// </summary>
+    public ItemCreatedPlace Place { get; init; }
+
+    /// <summary>
+    /// The container's fixture id for <see cref="ItemCreatedPlace.Container"/>; "" otherwise.
+    /// </summary>
+    public string Site { get; init; } = "";
+
+    /// <summary>
+    /// The town or camp site the item was laid out in (the level's town index); -1 none.
+    /// </summary>
+    public int Town { get; init; } = -1;
+}
 
 /// <summary>
 /// A system told of every item the world makes of a <see cref="ItemCreatedKind"/> (docs/modding.md "Items created"), so a mod can tag or roll it:
-/// it may set the item's <see cref="ItemInstance.ModTag"/> (and its own hashed state), and must not change other items, characters or world state.
+/// it may set the item's <see cref="ItemInstance.ModTag"/>, a <see cref="ItemCreatedKind.Loot"/> item's <see cref="ItemInstance.Level"/> (and its
+/// own hashed state), and must not change other items, characters or world state.
 /// Called serially in system order, in the step that made the item; a shop's units are told before they are stacked, so units tagged apart stay
 /// apart. One that throws is disabled for that world, and the fault enters the state hash. Engine API, not in the original.
 /// </summary>
@@ -80,6 +117,23 @@ sealed class ItemCreatedObservers
         if (!observers.Active) return;
 
         observers.Observe(world, new ItemCreated(world.Tick, kind, item, character, squad));
+    }
+
+    /// <summary>
+    /// Tells every enabled observer of the loot <paramref name="item"/> put at <paramref name="place"/> (the container <paramref name="site"/>) of
+    /// town <paramref name="town"/>; nothing without one. Serial phases.
+    /// </summary>
+    internal static void ReportLoot(World world, ItemInstance item, ItemCreatedPlace place, string site, int town)
+    {
+        var observers = world.ItemCreatedObservers;
+        if (!observers.Active) return;
+
+        observers.Observe(world, new ItemCreated(world.Tick, ItemCreatedKind.Loot, item, CharacterId.None, -1)
+        {
+            Place = place,
+            Site = site,
+            Town = town,
+        });
     }
 
     /// <summary>

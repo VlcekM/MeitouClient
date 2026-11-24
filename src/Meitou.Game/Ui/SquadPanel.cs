@@ -37,6 +37,11 @@ sealed class SquadPanel(PlayerInterface player)
     const float SquadCellWidth = 0.0416667f, SquadCellHeight = 0.0740741f;
 
     /// <summary>
+    /// The property of a squad box's root control naming its squad (the code mods' <see cref="UiScreens.SquadCells"/> anchor).
+    /// </summary>
+    const string SquadCellProperty = "SquadCell";
+
+    /// <summary>
     /// The prefix of a squad box's scroll id (<see cref="SquadScrollKey"/>), which names its scroll bar's parts too.
     /// </summary>
     const string SquadScrollPrefix = "squads-rows-";
@@ -217,6 +222,15 @@ sealed class SquadPanel(PlayerInterface player)
     }
 
     /// <summary>
+    /// The squad whose box <paramref name="c"/> is the root of (<see cref="UiScreens.SquadCells"/>); null for any other control.
+    /// </summary>
+    internal static int? SquadOfCell(UiControl c) =>
+        c.Properties.TryGetValue(SquadCellProperty, out string? id)
+            && int.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out int squad)
+            ? squad
+            : null;
+
+    /// <summary>
     /// The squad box's name box or a part of its skin.
     /// </summary>
     static bool IsSquadNameWidget(MyGuiWidget w) => w.Name == "SquadNameText" || w.Properties.GetValueOrDefault("CaptionOwner") == "SquadNameText";
@@ -227,6 +241,7 @@ sealed class SquadPanel(PlayerInterface player)
     UiRect? AddSquadBox(List<UiControl> controls, UiBindings b, UiRect box, UiRect clip, string squadId, string nameBox)
     {
         UiRect? portraitsArea = null;
+        bool root = true;
 
         foreach (var c in MyGuiPresentation.Arrange(SquadBoxLayout!, (int)MathF.Round(box.Width), (int)MathF.Round(box.Height), b,
             player.UiResources.Layers))
@@ -234,6 +249,8 @@ sealed class SquadPanel(PlayerInterface player)
             var bounds = c.Bounds with { X = c.Bounds.X + box.X, Y = c.Bounds.Y + box.Y };
             var own = c.Clip is { } inner ? (inner with { X = inner.X + box.X, Y = inner.Y + box.Y }).Intersect(clip) : clip;
             var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { ["SquadOf"] = squadId };
+            if (root) properties[SquadCellProperty] = squadId;
+            root = false;
 
             // The box is dragged by its frame and panels: anything but the name box, DELETE and their skins' parts.
             if (c.Type is not ("EditBox" or "Button") && c.Action.Length == 0

@@ -229,6 +229,7 @@ public sealed partial class World : IDisposable
         GameHours = settings.StartHours;
         Walkability = walkability;
         LastingIds = new LastingIds(this);
+        SaveFields = new Saving.CharacterSaveFields(this);
         this._systems = [.. systems ?? []];
         foreach (var system in this._systems) ModFaults.Add(system);
         for (int k = 0; k < this._systems.Count; k++) _phases.Add(new SystemPhases(this, this._systems[k], k));
@@ -269,6 +270,10 @@ public sealed partial class World : IDisposable
             CombatDefenceFilters.Register(this._systems[k], k);
             ArrangeFilters.Register(this._systems[k], k);
             TargetScoreFilters.Register(this._systems[k], k);
+            DitchItemFilters.Register(this._systems[k], k);
+            BedFilters.Register(this._systems[k], k);
+            JobScoreFilters.Register(this._systems[k], k);
+            PartMaxFilters.Register(this._systems[k], k);
         }
         for (int k = 0; k < this._systems.Count; k++) RegisterTasks(this._systems[k], k);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) Decisions.RegisterFrom(owner);
@@ -619,6 +624,10 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Items.ItemCreatedObservers ItemCreatedObservers { get; } = new();
     /// <summary>
+    /// The systems asked which carried items the automatic carry-off leaves with their carrier (<see cref="Items.IDitchItemFilter"/>).
+    /// </summary>
+    internal Items.DitchItemFilters DitchItemFilters { get; } = new();
+    /// <summary>
     /// The systems asked whether a fighter may take on a target (<see cref="Combat.ICombatEngageFilter"/>).
     /// </summary>
     internal Combat.CombatEngageFilters CombatEngageFilters { get; } = new();
@@ -634,6 +643,18 @@ public sealed partial class World : IDisposable
     /// The systems asked about the scores of target choice candidates (<see cref="Combat.ITargetScoreFilter"/>).
     /// </summary>
     internal Combat.TargetScoreFilters TargetScoreFilters { get; } = new();
+    /// <summary>
+    /// The systems asked about the beds the bed search weighs (<see cref="Locks.IBedFilter"/>).
+    /// </summary>
+    internal Locks.BedFilters BedFilters { get; } = new();
+    /// <summary>
+    /// The systems asked to score the AI's job candidates (<see cref="Ai.IJobScoreFilter"/>).
+    /// </summary>
+    internal Ai.JobScoreFilters JobScoreFilters { get; } = new();
+    /// <summary>
+    /// The systems asked about the body parts' maximum health (<see cref="Bodies.IPartMaxFilter"/>).
+    /// </summary>
+    internal Bodies.PartMaxFilters PartMaxFilters { get; } = new();
     /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
@@ -655,6 +676,10 @@ public sealed partial class World : IDisposable
     /// The characters' lasting ids, which code mods key their data per character by (docs/modding.md "Character ids").
     /// </summary>
     public LastingIds LastingIds { get; }
+    /// <summary>
+    /// The code mods' per-character fields in the vanilla save (docs/modding.md "Character save fields").
+    /// </summary>
+    public Saving.CharacterSaveFields SaveFields { get; }
     /// <summary>
     /// The values code mods set on their world states (docs/modding.md "World states"), to read; null until the first, so a world without one is the
     /// game's. Values are set only through the claimed <see cref="ModWorldState"/> handles.
@@ -908,6 +933,10 @@ public sealed partial class World : IDisposable
         CombatDefenceFilters.Register(system, _systems.Count - 1);
         ArrangeFilters.Register(system, _systems.Count - 1);
         TargetScoreFilters.Register(system, _systems.Count - 1);
+        DitchItemFilters.Register(system, _systems.Count - 1);
+        BedFilters.Register(system, _systems.Count - 1);
+        JobScoreFilters.Register(system, _systems.Count - 1);
+        PartMaxFilters.Register(system, _systems.Count - 1);
         RegisterTasks(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner);
         Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
@@ -1502,6 +1531,9 @@ public sealed partial class World : IDisposable
         // only once a mod asked for a character id or a save held some
         ("lasting ids", static (World w, ref StateHasher h) => { if (w.LastingIds.Any) w.LastingIds.Hash(ref h); }),
 
+        // only once a code mod set a character save field
+        ("save fields", static (World w, ref StateHasher h) => { if (w.SaveFields.Any) w.SaveFields.Hash(ref h); }),
+
         // only while a code mod's world state has a value
         ("mod states", static (World w, ref StateHasher h) => w.HashModStates(ref h)),
 
@@ -1594,6 +1626,10 @@ public sealed partial class World : IDisposable
         CombatDefenceFilters.HashFaults(ref h);
         ArrangeFilters.HashFaults(ref h);
         TargetScoreFilters.HashFaults(ref h);
+        DitchItemFilters.HashFaults(ref h);
+        BedFilters.HashFaults(ref h);
+        JobScoreFilters.HashFaults(ref h);
+        PartMaxFilters.HashFaults(ref h);
         Decisions.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
     }

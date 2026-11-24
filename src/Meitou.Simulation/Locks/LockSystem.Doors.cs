@@ -382,6 +382,7 @@ public sealed partial class LockSystem
         HoldAtLeaves(world);
         DoorWalkers(world);
         if (world.Tick % WalkerEveryTicks == 0) OpenForWalkers(world);
+        _closeBehind.Step(world);
     }
 
     /// <summary>
@@ -449,6 +450,10 @@ public sealed partial class LockSystem
         /// </summary>
         public int OpenerFaction;
         /// <summary>
+        /// The slot of the walker that opened the door (-1: none).
+        /// </summary>
+        public int OpenerSlot;
+        /// <summary>
         /// The walkers whose next path leg crosses the door while it is locked (null: none).
         /// </summary>
         public List<int>? Stopped;
@@ -465,7 +470,7 @@ public sealed partial class LockSystem
         {
             if (f.Kind != FixtureKind.Door || f.DoorBroken || f.Motion is DoorMotion.Open or DoorMotion.Opening) continue;
             if (fixtures.DoorSpotOf(f) is not { } spot) continue;
-            var scan = new WalkerScan { World = world, Door = f, Spot = spot, OpenerFaction = -1 };
+            var scan = new WalkerScan { World = world, Door = f, Spot = spot, OpenerFaction = -1, OpenerSlot = -1 };
             world.Grid.Query(spot.Centre.X, spot.Centre.Z, OpenReach + spot.HalfWidth, ref scan, static (int slot, ref WalkerScan s) =>
             {
                 if (s.Opened) return;
@@ -486,9 +491,14 @@ public sealed partial class LockSystem
 
                 if (!Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 2)) return;
                 s.Opened = FixtureRegistry.OpenDoor(s.Door) || s.Door.Motion == DoorMotion.Opening;
-                if (s.Opened) s.OpenerFaction = c.Faction;
+                if (s.Opened) (s.OpenerFaction, s.OpenerSlot) = (c.Faction, slot);
             });
-            if (scan.Opened) NoteDoorOpened(world, f, scan.OpenerFaction);
+            if (scan.Opened)
+            {
+                NoteDoorOpened(world, f, scan.OpenerFaction);
+                _closeBehind.Note(world, f, spot, scan.OpenerSlot);
+            }
+
             if (scan.Stopped is { } stopped) AtLockedDoor(world, f, stopped);
         }
     }
@@ -643,7 +653,7 @@ public sealed partial class LockSystem
     /// How far <paramref name="at"/> is from the leaf's closed width in X/Z: its centre line, <see cref="DoorSpot.HalfWidth"/> each way along the
     /// wall.
     /// </summary>
-    static float FromLeaf(Vector3 at, DoorSpot door)
+    internal static float FromLeaf(Vector3 at, DoorSpot door)
     {
         var d = new Vector2(at.X - door.Centre.X, at.Z - door.Centre.Z);
         var along = new Vector2(-door.Normal.Z, door.Normal.X);

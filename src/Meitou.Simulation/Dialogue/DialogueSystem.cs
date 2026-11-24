@@ -33,7 +33,14 @@ public sealed record DialogueEvent(CharacterId Npc, CharacterId Target, int Even
 /// The open player conversation as the conversation window shows it (published with the snapshot).
 /// </summary>
 public sealed record ConversationView(CharacterId Npc, CharacterId Player, CharacterId Speaker, string SpeakerName, string PlayerName, string Text,
-    IReadOnlyList<string> Choices, IReadOnlyList<string> Log, long PlayerMoney);
+    IReadOnlyList<string> Choices, IReadOnlyList<string> Log, long PlayerMoney)
+{
+    /// <summary>
+    /// Whether the player started it: opened by a player character's talk order (the menu's Talk, a walk to the NPC ending in it); false for a
+    /// conversation an NPC's approach, a bail or any other event opened (docs/modding.md "Dialogue replies").
+    /// </summary>
+    public bool PlayerStarted { get; init; }
+}
 
 /// <summary>
 /// What a conversation asks the host to do once it has ended: DA_CHARACTER_EDITOR, the surgeon's editor on <see cref="DialogueRequest.Player"/>,
@@ -308,6 +315,10 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         /// </summary>
         public bool DryRun { get; init; }
         /// <summary>
+        /// Opened by a player character's talk order (<see cref="ConversationView.PlayerStarted"/>).
+        /// </summary>
+        public bool PlayerStarted { get; init; }
+        /// <summary>
         /// The dialogue root the conversation runs.
         /// </summary>
         public DialogueNode? Root;
@@ -526,9 +537,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     /// <summary>
     /// Fires <paramref name="ev"/> at <paramref name="npc"/> with <paramref name="player"/> as its target and opens the conversation
-    /// (docs/game/dialogue.md "Player conversation").
+    /// (docs/game/dialogue.md "Player conversation"); <paramref name="playerStarted"/>: a player character's talk order opens it.
     /// </summary>
-    internal void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false)
+    internal void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false, bool playerStarted = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || table.Cold(n) is not { } nc) return;
@@ -549,7 +560,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             return;
         }
 
-        var c = new Conversation { Npc = npc, Player = player, Event = ev };
+        var c = new Conversation { Npc = npc, Player = player, Event = ev, PlayerStarted = playerStarted };
         var interrupt = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } root ? root : null;
         IReadOnlyList<DialogueNode> roots = interrupt is not null ? [interrupt] : SetOf(world, n).For(ev);
         string from = pending is null ? $"{roots.Count} root(s) of the event" : $"pending interrupt {pending}";
@@ -832,8 +843,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             _view = null;
             return;
         }
-        _view = new ConversationView(c.Npc, c.Player, c.Speaker, world.ShownName(c.Speaker.IsNone ? c.Npc : c.Speaker), world.ShownName(c.Player),
-            c.Text, [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
+        var speaker = world.ShownName(c.Speaker.IsNone ? c.Npc : c.Speaker);
+        _view = new ConversationView(c.Npc, c.Player, c.Speaker, speaker, world.ShownName(c.Player), c.Text,
+            [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money) { PlayerStarted = c.PlayerStarted };
     }
 
     /// <summary>

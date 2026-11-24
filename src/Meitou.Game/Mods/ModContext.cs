@@ -148,47 +148,71 @@ public sealed class ModContext
     /// string?, string?)"/> on the running world; nothing before the first world or without audio. A name ending in <c>.wav</c> is a loose file
     /// under the mod's folder (<see cref="PostSound(string, EffectAnchor, float)"/>), here and in the other two calls.
     /// </summary>
-    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null)
+    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null) =>
+        PostSound(eventName, on, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostSound(string, CharacterId, string?, string?)"/>, giving the <paramref name="handle"/> that stops it
+    /// (<see cref="Simulation.SoundHandle.Stop"/>; <see cref="Simulation.SoundHandle.None"/> when nothing was queued).
+    /// </summary>
+    public void PostSound(string eventName, CharacterId on, out Simulation.SoundHandle handle, string? switchGroup = null, string? switchValue = null)
     {
         CheckSound(eventName, default);
-        if (PostLoose(eventName, on, default, false)) return;
+        handle = Simulation.SoundHandle.None;
+        if (PostLoose(eventName, on, default, false, ref handle)) return;
 
-        _world()?.PostSound(eventName, on, switchGroup, switchValue);
+        _world()?.PostSound(eventName, on, out handle, switchGroup, switchValue);
     }
 
     /// <summary>
     /// Plays a named sound event at a world point, from any thread: <see cref="World.PostSound(string, System.Numerics.Vector3, string?,
     /// string?)"/> on the running world; nothing before the first world or without audio.
     /// </summary>
-    public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null)
+    public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null) =>
+        PostSound(eventName, at, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostSound(string, System.Numerics.Vector3, string?, string?)"/>, giving the <paramref name="handle"/> that stops it.
+    /// </summary>
+    public void PostSound(string eventName, System.Numerics.Vector3 at, out Simulation.SoundHandle handle, string? switchGroup = null,
+        string? switchValue = null)
     {
         CheckSound(eventName, at);
-        if (PostLoose(eventName, CharacterId.None, at, false)) return;
+        handle = Simulation.SoundHandle.None;
+        if (PostLoose(eventName, CharacterId.None, at, false, ref handle)) return;
 
-        _world()?.PostSound(eventName, at, switchGroup, switchValue);
+        _world()?.PostSound(eventName, at, out handle, switchGroup, switchValue);
     }
 
     /// <summary>
-    /// Plays a named sound event on the interface, from any thread: <see cref="World.PostInterfaceSound"/> on the running world; nothing before the
-    /// first world or without audio.
+    /// Plays a named sound event on the interface, from any thread: <see cref="World.PostInterfaceSound(string, string?, string?)"/> on the
+    /// running world; nothing before the first world or without audio.
     /// </summary>
-    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null)
+    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null) =>
+        PostInterfaceSound(eventName, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostInterfaceSound(string, string?, string?)"/>, giving the <paramref name="handle"/> that stops it.
+    /// </summary>
+    public void PostInterfaceSound(string eventName, out Simulation.SoundHandle handle, string? switchGroup = null, string? switchValue = null)
     {
         CheckSound(eventName, default);
-        if (PostLoose(eventName, CharacterId.None, default, true)) return;
+        handle = Simulation.SoundHandle.None;
+        if (PostLoose(eventName, CharacterId.None, default, true, ref handle)) return;
 
-        _world()?.PostInterfaceSound(eventName, switchGroup, switchValue);
+        _world()?.PostInterfaceSound(eventName, out handle, switchGroup, switchValue);
     }
 
     /// <summary>
-    /// Posts <paramref name="sound"/> as a loose file when it names a <c>.wav</c> (true: handled, whether it was found or not); false for a bank
-    /// event.
+    /// Posts <paramref name="sound"/> as a loose file when it names a <c>.wav</c> (true: handled, whether it was found or not, its handle in
+    /// <paramref name="handle"/>); false for a bank event.
     /// </summary>
-    bool PostLoose(string sound, CharacterId on, System.Numerics.Vector3 at, bool onInterface)
+    bool PostLoose(string sound, CharacterId on, System.Numerics.Vector3 at, bool onInterface, ref Simulation.SoundHandle handle)
     {
         if (!sound.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)) return false;
 
-        if (ResolveSound(sound) is { } path) _world()?.PostSound(new Simulation.PostedSound(path), on, at, onInterface);
+        if (ResolveSound(sound) is { } path)
+            _world()?.PostSound(new Simulation.PostedSound(path), on, at, out handle, onInterface);
         return true;
     }
 
@@ -198,13 +222,20 @@ public sealed class ModContext
     /// plays there, a bone or weapon on its character; a building or bolt where it is drawn now, which needs the host's thread. False when nothing
     /// was queued: no such file (logged once), a volume out of range, an anchor not there or one that needs the host's thread off it.
     /// </summary>
-    public bool PostSound(string sound, EffectAnchor at, float volume = 1)
+    public bool PostSound(string sound, EffectAnchor at, float volume = 1) => PostSound(sound, at, out _, volume);
+
+    /// <summary>
+    /// <see cref="PostSound(string, EffectAnchor, float)"/>, giving the <paramref name="handle"/> that stops it
+    /// (<see cref="Simulation.SoundHandle.None"/> when nothing was queued, also with no world or no audio, where the answer is still true).
+    /// </summary>
+    public bool PostSound(string sound, EffectAnchor at, out Simulation.SoundHandle handle, float volume = 1)
     {
         ArgumentException.ThrowIfNullOrEmpty(sound);
+        handle = Simulation.SoundHandle.None;
         if (!float.IsFinite(volume) || volume < 0 || volume > 4 || ResolveSound(sound) is not { } name) return false;
         if (SoundPlace(at) is not var (on, point)) return false;
 
-        _world()?.PostSound(new Simulation.PostedSound(name) { Volume = volume }, on, point);
+        _world()?.PostSound(new Simulation.PostedSound(name) { Volume = volume }, on, point, out handle);
         return true;
     }
 
@@ -335,6 +366,26 @@ public sealed class ModContext
         if (Pending.Slots.Any(s => s.Section == slot.Section || s.FcsSlot == slot.FcsSlot))
             throw new ArgumentException($"The mod already has a slot with section '{slot.Section}' or FCS slot {slot.FcsSlot}.", nameof(slot));
         Pending.Slots.Add(slot);
+    }
+
+    /// <summary>
+    /// Replaces the game's interface layout <paramref name="layout"/> (a MyGUI layout file name such as
+    /// <c>Kenshi_InventoryCharacterWindow.layout</c>; <c>.layout</c> may be left out) with <paramref name="file"/> (a <c>.layout</c> file,
+    /// relative to the mod's folder or a full path) wherever the interface loads it (docs/modding.md "Layout replacements"). The first mod in load
+    /// order to replace a layout keeps it; a later one's is left out and logged.
+    /// </summary>
+    public void AddLayoutReplacement(string layout, string file)
+    {
+        CheckOpen();
+        ArgumentException.ThrowIfNullOrWhiteSpace(file);
+        string name = Game.Ui.ModLayouts.FileName(layout) ?? throw new ArgumentException("A layout is named by its file name.", nameof(layout));
+        string path = Path.GetFullPath(Path.IsPathRooted(file) ? file : Path.Combine(Folder, file));
+        if (!path.EndsWith(".layout", StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
+            throw new ArgumentException($"A layout replacement is an existing .layout file: {path}", nameof(file));
+        if (Pending.Layouts.Any(l => string.Equals(l.Layout, name, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException($"The mod already replaces {name}.", nameof(layout));
+
+        Pending.Layouts.Add((name, path));
     }
 
     /// <summary>
@@ -551,6 +602,7 @@ public sealed class ModContext
         ArgumentNullException.ThrowIfNull(extension);
         Pending.Ui.Add(extension);
         Pending.UiFolders[extension] = Folder;
+        Pending.UiTexts[extension] = Texts;
     }
 
     /// <summary>
@@ -774,7 +826,7 @@ public sealed class ModContext
         if (Game.Host.Input.ModKeyAction.Refusal(name, label, defaults, Pending.KeyActions) is { } refusal)
             throw new ArgumentException(refusal, nameof(name));
 
-        var action = new Game.Host.Input.ModKeyAction(Id, Name, name, label, pressed, [.. defaults]);
+        var action = new Game.Host.Input.ModKeyAction(Id, Name, name, label, pressed, [.. defaults]) { Texts = Texts };
         Pending.KeyActions.Add(action);
         return action;
     }
@@ -791,12 +843,79 @@ public sealed class ModContext
         if (settings.GetType().IsValueType)
             throw new ArgumentException($"{settings.GetType().Name} is a struct: the page would change a copy. Use a class.", nameof(settings));
         if (Pending.Settings is not null) throw new InvalidOperationException($"{Id}: AddSettings is allowed once per mod.");
-        var group = new ModSettingsGroup(Id, Name, settings);
+        var group = new ModSettingsGroup(Id, Name, settings) { Texts = Texts };
         if (_savedSettings is not null)
             foreach (string key in group.Load(_savedSettings)) Log($"saved setting '{key}' is not a value of a setting; ignored");
         Pending.Settings = group;
         return group;
     }
+
+    /// <summary>
+    /// The mod's gettext catalogues (docs/modding.md "Translations"), added by <see cref="AddTranslations(string, string?)"/> (or given directly);
+    /// its interface texts, menu rows, settings and key action labels are shown through them.
+    /// </summary>
+    internal Localisation.ModTranslations Texts { get; } = new();
+
+    /// <summary>
+    /// The game's language: the locale code of the texts shown (<c>en_GB</c> for English, <c>ru_RU</c>, <c>zh_CN</c>, a translation mod's own),
+    /// fixed for the process.
+    /// </summary>
+    public string Language => Localisation.Loc.Language.Code;
+
+    /// <summary>
+    /// Reads the gettext catalogue <paramref name="domain"/> (<c>locale/&lt;language&gt;/LC_MESSAGES/&lt;domain&gt;.mo</c>, else <c>.po</c>) of the
+    /// game's <see cref="Language"/> under <paramref name="folder"/> (the mod's folder when null; a relative path is under it, a full path may name
+    /// another folder, such as an installed original's). Catalogues are looked up in the order added. False when the folder has none for the
+    /// language or it cannot be read (logged). During <see cref="IMod.Initialize"/>.
+    /// </summary>
+    public bool AddTranslations(string domain, string? folder = null)
+    {
+        CheckOpen();
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        if (domain.IndexOfAny(['/', '\\']) >= 0 || domain.Contains("..", StringComparison.Ordinal))
+            throw new ArgumentException($"Translation domain '{domain}' must be a file name without a folder.", nameof(domain));
+
+        string root = folder is null ? Folder : Path.GetFullPath(folder, Folder);
+        return Texts.Add(root, domain, Language);
+    }
+
+    /// <summary>
+    /// Adds translations given directly, as a catalogue <see cref="AddTranslations(string, string?)"/> reads would: <paramref name="messages"/>, each
+    /// English source text to its translation in <paramref name="language"/> (a locale code, <c>ru_RU</c> or <c>ru</c>), under the message context
+    /// <paramref name="context"/> when given (as <see cref="TrIn"/> looks them up). Kept only when <paramref name="language"/> is the game's
+    /// <see cref="Language"/> (the same code ignoring case, else the same part before <c>_</c>); false otherwise. Looked up with the file catalogues
+    /// in the order added. During <see cref="IMod.Initialize"/>.
+    /// </summary>
+    public bool AddTranslations(string language, IEnumerable<KeyValuePair<string, string>> messages, string? context = null)
+    {
+        CheckOpen();
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentNullException.ThrowIfNull(messages);
+
+        return Texts.Add(language, Language, messages, context);
+    }
+
+    /// <summary>
+    /// <paramref name="english"/> in the game's language: the mod's catalogues, then the game's and Meitou's, else unchanged. Any thread.
+    /// </summary>
+    public string Tr(string english) => Texts.Tr(english);
+
+    /// <summary>
+    /// <see cref="Tr(string)"/> with the placeholders <c>{1}</c>, <c>{1,num}</c>... filled with <paramref name="args"/> (1-based, so a translation
+    /// may reorder them).
+    /// </summary>
+    public string Tr(string english, params object?[] args) => Localisation.Loc.Format(Texts.Tr(english), args);
+
+    /// <summary>
+    /// <paramref name="english"/> under the message context <paramref name="context"/> (<c>msgctxt</c>), as <see cref="Tr(string)"/>.
+    /// </summary>
+    public string TrIn(string context, string english) => Texts.TrIn(context, english);
+
+    /// <summary>
+    /// The plural message <paramref name="singular"/> / <paramref name="plural"/> for <paramref name="n"/> by the catalogue's plural rule, its
+    /// placeholders filled with <paramref name="args"/>.
+    /// </summary>
+    public string Plural(string singular, string plural, long n, params object?[] args) => Texts.Plural(singular, plural, n, args);
 
     /// <summary>
     /// Throws once <see cref="IMod.Initialize"/> has returned: registering is only allowed during it.

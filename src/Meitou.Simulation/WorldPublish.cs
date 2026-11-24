@@ -348,6 +348,7 @@ public sealed partial class World
             MachinesVersion = Machines.Version,
             Research = _production?.ResearchView(this) ?? Production.ResearchSnapshot.Empty,
             Outposts = _production?.OutpostView(this) ?? [],
+            WorkSites = _production?.WorkSitesView(this) ?? [],
             MapSquads = _mapSquads.Published(this),
             Crafts = _production?.CraftsView(this) ?? Snapshot.Crafts,
             Smiths = _production?.SmithsView(this) ?? Snapshot.Smiths
@@ -635,6 +636,7 @@ public sealed partial class World
         var population = f.Population;
 
         s.InCombat = cold?.InCombat ?? false;
+        s.Attacking = combat?.Playing(id, Tick) is { IsAttack: true };
         s.CombatMode = cold is not null && combat is not null && CharacterFacts.InCombatMode(combat, table, id, cold, true, true);
         s.FightsPlayer = fightsPlayer;
         s.HostileToPlayer = cold is not null && CharacterFacts.HostileToPlayer(population?.Relations, Player.Faction, cold.Faction, fightsPlayer);

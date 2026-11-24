@@ -129,6 +129,27 @@ public sealed class GettextCatalog
     }
 
     /// <summary>
+    /// A catalog of messages given directly: each English source text (<c>msgid</c>) to its one translated form, under <paramref name="context"/>
+    /// (<c>msgctxt</c>) when given. An empty translation is left out, as gettext leaves out an untranslated entry; a later pair of the same text
+    /// wins. The plural rule stays <see cref="PluralRule.Germanic"/>.
+    /// </summary>
+    public static GettextCatalog Of(IEnumerable<KeyValuePair<string, string>> messages, string? context = null)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+
+        var catalog = new GettextCatalog();
+        foreach (var (english, translated) in messages)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(english, nameof(messages));
+            if (string.IsNullOrEmpty(translated)) continue;
+
+            catalog.Set(context is null ? english : context + ContextSeparator + english, [translated]);
+        }
+
+        return catalog;
+    }
+
+    /// <summary>
     /// The catalog of a <c>.mo</c> file (either byte order; revision 0 or 1).
     /// </summary>
     public static GettextCatalog ReadMo(byte[] data)

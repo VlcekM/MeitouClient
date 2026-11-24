@@ -925,6 +925,10 @@ public static partial class SaveCapture
         stats ??= cold.Stats ?? link?.Stats;
         medical ??= cold.Medical ?? link?.Medical;
         WriteBody(sc, cold.RecordId, stats, medical, isNew, data, races);
+
+        // The code mods' fields of the STATS record, over the game's own keys (CharacterSaveFields).
+        if (sc.Stats is { } fieldsStats) CharacterSaveFields.Write(fieldsStats, cold, CharacterSaveRecord.Stats);
+
         if (isNew || cold.LookEdited) WriteAppearance(sc, cold, data.Db, races, replace: !isNew);
 
         // What it carries and wears, as it is now; items read from a save keep their records' other keys.
@@ -967,6 +971,9 @@ public static partial class SaveCapture
                     held.Source.Handle.Write(record, prefix);
             });
         }
+
+        // The code mods' fields, over the game's own keys of the record (CharacterSaveFields).
+        if (sc.Ai is { } fieldsAi) CharacterSaveFields.Write(fieldsAi, cold, CharacterSaveRecord.Orders);
 
         // A new record has no held keys of the save to leave as read: a captive of a save's platoon split into one of its own (#677).
         HeldSave.Write(g, cold, isNew ? null : link, world.Fixtures, buildings);

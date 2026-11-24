@@ -704,6 +704,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool InCombat { get; internal set; }
     /// <summary>
+    /// A melee swing of its own is in progress (the combat system's attack technique playing, as the animation shows it), for a mod's weapon
+    /// effects (docs/modding.md "Trails"). Display only.
+    /// </summary>
+    public bool Attacking { get; internal set; }
+    /// <summary>
     /// In combat mode (<c>Character::isInCombatMode(1, 1)</c>, <see cref="Combat.CombatSystem.IsInCombatMode"/>): the portrait's <c>Combat</c>
     /// overlay.
     /// </summary>
@@ -1084,6 +1089,11 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// The player outposts with their power totals (the town panel, docs/game/ui-screens.md "Town panel").
     /// </summary>
     public IReadOnlyList<Production.OutpostSnapshot> Outposts { get; init; } = [];
+    /// <summary>
+    /// The sites the player's characters' jobs name (player buildings, resource nodes, town machines, dummies, seats), once each; the same list
+    /// while unchanged (docs/modding.md "Work sites").
+    /// </summary>
+    public IReadOnlyList<Production.WorkSiteSnapshot> WorkSites { get; init; } = [];
     /// <summary>
     /// The other factions' squads the world map shows (<see cref="Population.MapSquads"/>): campaign platoons and squads hired by the player.
     /// </summary>

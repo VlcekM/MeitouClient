@@ -106,7 +106,7 @@ sealed class PlayerTalks(DialogueSystem dialogue)
 
         if (talk.Trade) world.SystemOf<Trading.TradeSystem>()?.OpenAt(world, talk.Talker, talk.Target);
         else
-            dialogue.Start(world, talk.Target, talk.Talker, DialogueEvents.PlayerTalkToMe);
+            dialogue.Start(world, talk.Target, talk.Talker, DialogueEvents.PlayerTalkToMe, playerStarted: true);
     }
 
     /// <summary>

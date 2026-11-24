@@ -79,12 +79,7 @@ public sealed partial class CombatSystem
     /// </summary>
     void DodgeXp(CharacterCold dc, float attackerRating, bool dodged)
     {
-        var f = dc.Fighter!;
-        float dodge = dc.Stats!.Stored(StatsEnumerated.Dodge);
-        float gear = dodge * f.DodgeMult - dodge;
-        float effective = DefenceFormulas.EffectiveDefence(dodge, f.EncumbranceFactor, Speed.LegFactor(dc.Medical!), gear,
-            Guarding(dc) && f.TechniqueCategory == (int)WeaponCategory.Unarmed);
-        _xp.Dodge(dc.Stats, dc.Race!, effective, attackerRating, f.EncumbranceFactor, dodged);
+        _xp.Dodge(dc.Stats!, dc.Race!, DodgeRating(dc, guard: true), attackerRating, dc.Fighter!.EncumbranceFactor, dodged);
     }
 
     /// <summary>

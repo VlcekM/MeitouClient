@@ -310,11 +310,43 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public CombatMove? ModMove(World world, CharacterId id, long tick)
     {
         if (_modMoves is not { } mods) return null;
-
-        var s = StateOf(id);
-        if (s.Down || s.AttackTech >= 0 || s.ReactTech >= 0 || s.StumbleClip >= 0 || tick < s.StunUntil) return null;
+        if (HeldBy(StateOf(id), tick) != ModMoveBlock.None) return null;
 
         return mods.Move(world, id, tick);
+    }
+
+    /// <summary>
+    /// What keeps a mod's move off the character at the world's tick, as the animation decides (<c>AnimationSystem.TechniqueOf</c>: a technique
+    /// or crossbow pose of its own, being carried or getting up, then <see cref="ModMove"/>'s own tests), from state as of the last finished
+    /// tick; <see cref="ModMoveBlock.None"/> when a mod's move would play. Read only, so any phase may ask: a mod whose clip stands for work in
+    /// progress (a repair) cancels that work when this turns other than None (docs/modding.md "Combat moves").
+    /// </summary>
+    public ModMoveBlock ModMoveBlockOf(World world, CharacterId id)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(id, out int slot) || !table.Previous[slot].Alive || table.Cold(slot) is not { } cold)
+            return ModMoveBlock.Gone;
+
+        long tick = world.Tick;
+        if (Playing(id, tick) is { } playing) return playing.IsAttack ? ModMoveBlock.Attacking : ModMoveBlock.Reacting;
+        if (RangedPoseOf(id, tick, world.StepSeconds(slot)) is not null) return ModMoveBlock.RangedPose;
+        if (!cold.CarriedBy.IsNone) return ModMoveBlock.Carried;
+        if (CharacterFacts.GettingUp(cold, tick)) return ModMoveBlock.GettingUp;
+
+        return HeldBy(StateOf(id), tick);
+    }
+
+    /// <summary>
+    /// The combat state that keeps a mod's move off (<see cref="ModMove"/>): down, a swing or reaction of its own, a stumble, a stun.
+    /// </summary>
+    static ModMoveBlock HeldBy(in CombatSlot s, long tick)
+    {
+        if (s.Down) return ModMoveBlock.Down;
+        if (s.AttackTech >= 0) return ModMoveBlock.Attacking;
+        if (s.ReactTech >= 0) return ModMoveBlock.Reacting;
+        if (s.StumbleClip >= 0) return ModMoveBlock.Stumbling;
+
+        return tick < s.StunUntil ? ModMoveBlock.Stunned : ModMoveBlock.None;
     }
 
     /// <summary>

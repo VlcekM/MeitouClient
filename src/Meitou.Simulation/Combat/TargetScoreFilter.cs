@@ -32,7 +32,22 @@ public enum TargetChoiceKind : byte
 /// the candidate's facts (<see cref="TargetCandidate"/>) and the score (<see cref="TargetScore.Score"/>, or a filter before's answer).
 /// </summary>
 public readonly record struct TargetScoreAsk(
-    long Tick, CharacterId Chooser, CharacterId Target, TargetChoiceKind Kind, TargetCandidate Candidate, float Score);
+    long Tick, CharacterId Chooser, CharacterId Target, TargetChoiceKind Kind, TargetCandidate Candidate, float Score)
+{
+    /// <summary>
+    /// The choice's combat-mode flag, the original's last argument of <c>AI::chooseBestAttackTarget</c> (<c>FUN_14059e300</c> param_7, the name
+    /// the original TauntExpansion logs it under): set by the in-fight chooser (<c>CombatClassAI::chooseAttackTarget</c>), clear in every goal
+    /// finder and the sight look (<b>Verified</b>, docs/game/combat.md "Target score"). True for <see cref="TargetChoiceKind.Fight"/> only.
+    /// </summary>
+    public bool CombatMode => Kind == TargetChoiceKind.Fight;
+
+    /// <summary>
+    /// The choice's law-enforcer flag, the argument before (<c>FUN_14059e300</c> param_6, named so by the original TauntExpansion): set, the
+    /// original adds a term from the candidate's state broadcast <c>+0xa0</c> and the chooser's faction (<b>Observed</b> decompile). Meitou's
+    /// choices score no such term, so it is false in every kind.
+    /// </summary>
+    public bool LawEnforcer => false;
+}
 
 /// <summary>
 /// A system asked about every scored candidate of every target choice (docs/modding.md "Target choice"); it answers the score to use (higher is

@@ -349,6 +349,38 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     #endregion
 
+    #region Work sites
+
+    /// <summary>
+    /// The work site lists last handed out (<see cref="WorkSitesView"/>).
+    /// </summary>
+    readonly WorkSiteViews _workSites = new();
+
+    /// <summary>
+    /// Every site a job of a living player character names (its perma-job list), once each in the order first named: player buildings, natural
+    /// resource nodes, town machines, dummies and seats; a site that no longer resolves is left out. The same list while unchanged. Serial (the
+    /// publish).
+    /// </summary>
+    public IReadOnlyList<WorkSiteSnapshot> WorkSitesView(World world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        return _workSites.Of(WorkSiteViews.JobSiteIds(world), id => WorkSiteOf(world, id));
+    }
+
+    /// <summary>
+    /// The snapshot of the work site <paramref name="id"/>; null when it does not resolve.
+    /// </summary>
+    WorkSiteSnapshot? WorkSiteOf(World world, string id)
+    {
+        if (Site(world, id) is not { } site) return null;
+
+        string name = site.Name.Length > 0 ? site.Name : _db.Find(site.Record)?.Name ?? site.Record;
+        return new WorkSiteSnapshot(id, site.Record, name, WorkSiteViews.KindOf(world, id), site.Owner, site.Position);
+    }
+
+    #endregion
+
     #region Orders and the operators' walk
 
     /// <summary>
@@ -2521,11 +2553,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             || !Near(world, take.Character, site, fromSite: true, out var cold))
             return;
         var goods = TownGoods(take.Site);
-        var (record, wanted) = world.GoodsTakenObservers.Active && goods is { Owner: >= 0 } ? Wanted(m, take) : ("", 0);
+        int owner = goods?.Owner ?? site.Owner;
+        var (record, wanted) = world.GoodsTakenObservers.Active && owner >= 0 ? Wanted(m, take) : ("", 0);
         if (CaughtTaking(world, goods, take.Character, cold, with => RoomFor(world, m, cold, take, with), out var mark))
         {
             if (wanted > 0)
-                Crime.GoodsTakenObservers.Report(world, take.Character, goods!.Value.Owner, CharacterId.None, take.Site, record, wanted, true);
+                Crime.GoodsTakenObservers.Report(world, take.Character, owner, CharacterId.None, take.Site, record, wanted, true);
             return;
         }
 
@@ -2534,7 +2567,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (wanted > 0)
         {
             int moved = Units(cold.Inventory!, record) - before;
-            Crime.GoodsTakenObservers.Report(world, take.Character, goods!.Value.Owner, CharacterId.None, take.Site, record, moved, caught: false);
+            Crime.GoodsTakenObservers.Report(world, take.Character, owner, CharacterId.None, take.Site, record, moved, caught: false);
         }
     }
 

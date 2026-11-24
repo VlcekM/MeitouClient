@@ -3026,6 +3026,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 {
                     _characters.PortraitRequests.Add(new PortraitRequest(host.PortraitKey(member.Id), cell, member.PortraitSerial));
                 }
+
+                foreach (var (id, cell) in _hud.RecordPortraits.Live)
+                    _characters.PortraitRequests.Add(new PortraitRequest(host.PortraitKey(id), cell, _hud.PortraitBar.PortraitSerial(id)));
             }
         }
         // Saved pictures have neither the ground items' labels nor the hover and building outlines.

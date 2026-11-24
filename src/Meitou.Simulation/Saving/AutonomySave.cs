@@ -18,12 +18,23 @@ public static class AutonomySave
         OwnerKey = "meitou autonomy owner";
 
     /// <summary>
+    /// The PLATOON keys of the assigned work building (string: <see cref="Squad.AssignedWork"/>) and the conduct (int: <see cref="Squad.Conduct"/>).
+    /// </summary>
+    public const string WorkKey = "meitou work", ConductKey = "meitou conduct";
+
+    /// <summary>
     /// Writes the squad's autonomy over the platoon's; a squad no longer autonomous loses the keys, and the AI keys they came with are cleared.
     /// </summary>
     public static void Write(FcsRecord platoon, Squad squad)
     {
         if (squad.AssignedHome is { } home) platoon.Strings[HomeKey] = home;
         else platoon.Strings.Remove(HomeKey);
+
+        if (squad.AssignedWork is { } work) platoon.Strings[WorkKey] = work;
+        else platoon.Strings.Remove(WorkKey);
+
+        if (squad.Conduct != Ai.SquadConduct.None) platoon.Ints[ConductKey] = (int)squad.Conduct;
+        else platoon.Ints.Remove(ConductKey);
 
         if (squad.Independent) platoon.Bools[IndependentKey] = true;
         else platoon.Bools.Remove(IndependentKey);
@@ -49,6 +60,8 @@ public static class AutonomySave
     public static void Read(FcsRecord platoon, Squad squad)
     {
         squad.AssignedHome = platoon.Strings.GetValueOrDefault(HomeKey) is { Length: > 0 } home ? home : null;
+        squad.AssignedWork = platoon.Strings.GetValueOrDefault(WorkKey) is { Length: > 0 } work ? work : null;
+        squad.Conduct = (Ai.SquadConduct)(platoon.Ints.GetValueOrDefault(ConductKey) & (int)Ai.SquadConduct.All);
         squad.Autonomous = platoon.Bools.GetValueOrDefault(AutonomousKey);
         squad.Independent = squad.Autonomous && platoon.Bools.GetValueOrDefault(IndependentKey);
         squad.AutonomyOwner = squad.Autonomous && platoon.Strings.GetValueOrDefault(OwnerKey) is { Length: > 0 } owner ? owner : null;

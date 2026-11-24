@@ -702,6 +702,19 @@ drops and the part stays drawn. **Observed** (2026-11-17, scratch run of a Green
 | +0x54 / +0x58 / +0x5c | base HP (ref value 1; forced to 5 for a stump) / multiplier (set by the constructor and rewritten each tick from the character slot-0x390 factor) / body scale (character slot 0x238) |
 | +0x60 | health fraction `((h - s) + extra) / M` |
 
+### Medical tests
+
+**Verified** (decompile, 1.0.68; offsets from the medical system's start, Character `+0x458`):
+- `isProbablyDying` (`FUN_140884a70`): some part with the vital byte (`+0x32`) has flesh + bandaged pool (`+0x40` + `+0x48`) below 0.
+- `canGetUpWakeUp` (`FUN_140596460`): KO byte `+0x161` and dead byte `+0x164` clear and `isHungerKO` (`FUN_140644320`) false. `isHungerKO` is
+  true below hunger 0.1 (`DAT_14167fad0`), or below the starvation point once its refractory timer (`+0x150`, `+0x158`) has run, which it
+  then re-arms (a side effect). Meitou: `MedicalState.CanGetUpWakeUp` reads the first branch; the second is its starvation knock-out.
+- `isReallyHungry` (`FUN_1404120e0`): hunger (`+0x60`) below 1.25 (`DAT_14168ba14`).
+- `canIkick` (`FUN_140883fa0`): crippled byte `+0x160` clear and both leg parts (`+0x80`, `+0x88`) at flesh - stun + rig (`+0x40` - `+0x44` +
+  `+0x4c`) of at least 0. `isCrippled` (`FUN_14051c790`) returns `+0x160`; `isInBloodlossTrauma` (`FUN_1408836e0`) returns `+0x163`.
+- `pointOfCollapseBloodloss` (`FUN_140643980`): -25 (`DAT_1416fb68c`) while `+0x163` is set, else 0.
+- **Observed** (the Vital Read DLL's state log): `+0x74` is logged as extra blood loss beside the bleed rate `+0x78`; its writer is **Unknown**.
+
 ### Limb replacements and robots
 
 A LIMB_REPLACEMENT record (`slot` 50 left arm, 51 right arm, 52 left leg, 53 right leg; **Verified**) becomes a

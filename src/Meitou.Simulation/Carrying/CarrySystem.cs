@@ -533,6 +533,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             return cold.Medical is { Incapacitated: false } ? OrderCheck.Run : OrderCheck.Blocked();
         }
         if (order.Row == TaskType.LootAnimalsJob) return ForageEntryCheck(world, slot, cold);
+        if (order.Row == TaskType.FindWeapon) return FindWeaponCheck(world, slot, cold);
         if (!table.TryResolveNext(order.Target, out int target) || target == slot) return OrderCheck.Gone;
         var tc = table.Cold(target)!;
         switch (order.Row)
@@ -563,6 +564,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         }
         switch (order.Row)
         {
+            case TaskType.FindWeapon:
+                StartFindWeapon(world, slot, cold);
+                break;
             case TaskType.PutDownObject:
                 BeginPutDown(world, slot, TaskSource.Order);
                 break;

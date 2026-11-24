@@ -57,6 +57,12 @@ public static class UiScreens
     /// portrait, with <see cref="UiScreenContext.Character"/> the member.
     /// </summary>
     public const string Portraits = "*portraits";
+
+    /// <summary>
+    /// An anchor of the overview that stands for every squad box its Squads tab shows (the box's root widget, clipped to the list): the controls are
+    /// built once per box, with <see cref="UiScreenContext.Squad"/> the squad.
+    /// </summary>
+    public const string SquadCells = "*squad-cells";
 }
 
 /// <summary>
@@ -85,6 +91,11 @@ internal sealed record ScreenView(string Screen, string Kind, CharacterSnapshot?
     /// What the screen keeps to itself that its extensions may read (<see cref="UiScreenContext.State"/>); empty for none.
     /// </summary>
     public IReadOnlyDictionary<string, string> State { get; init; } = UiScreenContext.NoState;
+
+    /// <summary>
+    /// The squad a squad box's root control stands for (the overview's Squads tab); null for any other control.
+    /// </summary>
+    public Func<UiControl, int?>? SquadOf { get; init; }
 }
 
 /// <summary>
@@ -116,6 +127,7 @@ public sealed class UiScreenContext
     internal UiScreenContext(ScreenView view, string anchorWidget, UiRect anchor, UiScreenItem? item, UiFrameContext frame,
         CharacterSnapshot? member = null, UiControl? widget = null)
     {
+        Squad = widget is null ? null : view.SquadOf?.Invoke(widget);
         _view = view;
         _member = member;
         AnchorWidget = anchorWidget;
@@ -183,6 +195,12 @@ public sealed class UiScreenContext
     /// The item cell the controls are built for (anchor <see cref="UiScreens.ItemCells"/>); null otherwise.
     /// </summary>
     public UiScreenItem? Item { get; }
+
+    /// <summary>
+    /// The squad of the squad box the controls are built for (anchor <see cref="UiScreens.SquadCells"/>; its id as <c>SquadView.Id</c> and the
+    /// squad commands name it); null otherwise.
+    /// </summary>
+    public int? Squad { get; }
 
     /// <summary>
     /// The snapshot the screen is laid out from (the one on screen).
@@ -377,6 +395,12 @@ sealed class ScreenControls
             return;
         }
 
+        if (entry.Anchor == UiScreens.SquadCells)
+        {
+            BuildSquadCells(host, entry, view, controls, frame, local);
+            return;
+        }
+
         if (entry.Anchor != UiScreens.ItemCells)
         {
             if (controls.FirstOrDefault(c => c.Name == entry.Anchor) is { } anchor) Build(host, entry, view, anchor, null, frame, local);
@@ -405,6 +429,20 @@ sealed class ScreenControls
             .Where(c => c.Member is not null)
             .ToList();
         foreach (var (portrait, member) in portraits) Build(host, entry, view, portrait, null, frame, local, member);
+    }
+
+    /// <summary>
+    /// <paramref name="entry"/>'s controls once per squad box shown, at most <see cref="MaxCells"/>.
+    /// </summary>
+    static void BuildSquadCells(UiHost host, Entry entry, ScreenView view, List<UiControl> controls, UiFrameContext frame, BuildOutput local)
+    {
+        if (view.SquadOf is null) return;
+
+        var boxes = controls
+            .Where(c => view.SquadOf(c) is not null)
+            .Take(MaxCells)
+            .ToList();
+        foreach (var box in boxes) Build(host, entry, view, box, null, frame, local);
     }
 
     /// <summary>

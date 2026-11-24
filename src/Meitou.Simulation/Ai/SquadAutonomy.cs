@@ -25,6 +25,46 @@ public sealed record SetSquadAutonomy(int SquadId, bool On, bool Independent = f
 public sealed record SetSquadHome(int SquadId, string? Building) : SimCommand;
 
 /// <summary>
+/// Gives a player's squad its work building (<see cref="Squad.AssignedWork"/>): a workplace's <see cref="TownBuilding.Key"/> (a town building's
+/// key or an outpost machine's site id); null: none, its workers pick in their work town again. While the squad is autonomous its workers on
+/// 189 / 190 work there (while it has a free operator slot, and for 189 while it can really work), whatever its home.
+/// </summary>
+public sealed record SetSquadWork(int SquadId, string? Building) : SimCommand;
+
+/// <summary>
+/// How a player's squad goes about the AI's work (<see cref="Squad.Conduct"/>); more may come.
+/// </summary>
+[Flags]
+public enum SquadConduct
+{
+    /// <summary>
+    /// The game's ways.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// Its gate guard (180 Man the gate) and the guards flanking the gate stand on the town's side of the gate (the side the game keeps for a gate
+    /// the player built).
+    /// </summary>
+    GateInside = 1,
+
+    /// <summary>
+    /// A door or gate one of its members opened on a walk is closed once the member is through it and nobody else stands at it.
+    /// </summary>
+    CloseDoors = 2,
+
+    /// <summary>
+    /// Every flag known.
+    /// </summary>
+    All = GateInside | CloseDoors,
+}
+
+/// <summary>
+/// Sets a player's squad's <see cref="Squad.Conduct"/> (unknown bits are dropped).
+/// </summary>
+public sealed record SetSquadConduct(int SquadId, SquadConduct Conduct) : SimCommand;
+
+/// <summary>
 /// The player's squads the AI runs (docs/simulation.md "Autonomous player squads"): the switch and home commands, the home's building, and the
 /// player's places the AI keeps to. A member of such a squad keeps its player-faction mind (<see cref="AiMind.PlayerSide"/>) and runs the one
 /// chooser on the ordinary route; only its role list is its squad's package's (<see cref="AiSystem.PlayerSideRoles"/>), so orders, jobs and every
@@ -49,6 +89,14 @@ public sealed class SquadAutonomy(PopulationData data)
             case SetSquadHome h:
                 squad = PlayerSquad(world, h.SquadId);
                 if (squad is not null) GiveHome(world, squad, h.Building);
+                return true;
+            case SetSquadWork w:
+                squad = PlayerSquad(world, w.SquadId);
+                if (squad is not null) squad.AssignedWork = string.IsNullOrEmpty(w.Building) ? null : w.Building;
+                return true;
+            case SetSquadConduct c:
+                squad = PlayerSquad(world, c.SquadId);
+                if (squad is not null) squad.Conduct = c.Conduct & SquadConduct.All;
                 return true;
             default:
                 return false;
@@ -101,6 +149,8 @@ public sealed class SquadAutonomy(PopulationData data)
 
             Switch(world, squad, false, false, null);
             squad.AssignedHome = null;
+            squad.AssignedWork = null;
+            squad.Conduct = SquadConduct.None;
             dropped++;
         }
 

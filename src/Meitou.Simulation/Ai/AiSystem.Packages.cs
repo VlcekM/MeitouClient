@@ -31,7 +31,7 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// The faction assault clocks once there is one (worlds without a passing-by assault hash as before), the characters the engine goals hold while
-    /// any, and the code mods' faulted goals once one faulted.
+    /// any, the code mods' faulted goals once one faulted, and the mods' held work slots while any.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
@@ -42,6 +42,7 @@ public sealed partial class AiSystem
         }
 
         _duties?.Hash(ref hasher);
+        _modWork?.Hash(ref hasher);
     }
 
     #endregion

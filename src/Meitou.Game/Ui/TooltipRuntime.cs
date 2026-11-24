@@ -1111,21 +1111,36 @@ sealed class TooltipRuntime(PlayerInterface player)
     }
 
     /// <summary>
-    /// The code mods' lines for the item (<see cref="UiRegistration.AddItemTooltipLines"/>), each a label and an optional value.
+    /// The code mods' lines for the item (<see cref="UiRegistration.AddItemTooltipLines"/>), each a label and an optional value: after the game's row
+    /// a line names (<see cref="UiItemTooltipLine.After"/>), else after the game's rows.
     /// </summary>
     void AddModRows(List<TooltipLine> lines, ItemTip t)
     {
         bool first = !Equals(t, _modRowsShownFor);
         _modRowsShownFor = t;
+        int game = lines.Count;
+        var placed = new List<(int At, TooltipLine Line)>();
         foreach (var line in player.ModItemTooltipLines(t, first))
         {
-            lines.Add(new TooltipLine(line.Label, line.Value ?? "")
+            var row = new TooltipLine(line.Label, line.Value ?? "")
             {
                 KeyColour = UiLineStyle.Ink(line.Style?.Label),
                 ValueColour = UiLineStyle.Ink(line.Style?.Value),
-            });
+            };
+            int at = line.After is { } after && game > 0 ? lines.FindLastIndex(game - 1, game, l => GameRowIs(l, after)) : -1;
+            if (at < 0) lines.Add(row);
+            else placed.Add((at + 1, row));
         }
+
+        // From the last place up, so the places above keep their index; lines at one place keep their order.
+        foreach (var group in placed.GroupBy(p => p.At).OrderByDescending(g => g.Key))
+            lines.InsertRange(group.Key, group.Select(p => p.Line));
     }
+
+    /// <summary>
+    /// Whether <paramref name="row"/> is the game's row labelled <paramref name="label"/> (its key without the leading <c>-</c> of a price row).
+    /// </summary>
+    static bool GameRowIs(TooltipLine row, string label) => row.Key.AsSpan().TrimStart('-').SequenceEqual(label);
 
     /// <summary>
     /// The item tooltip the mods' lines were last asked for: a tooltip built again for an equal tip (each frame it shows) is not a first showing

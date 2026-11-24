@@ -567,37 +567,52 @@ sealed class CharacterAudio(GameHost host)
     /// <summary>
     /// A code mod's event (docs/modding.md "Sounds"), never setting a switch on an object of the game's: on the mods' interface object; on a
     /// character, its own object when there is no switch (the sound follows it), else a mods' pooled object at its place; or a mods' pooled object
-    /// at the point. A character too far to have an object hears nothing.
+    /// at the point. A character too far to have an object hears nothing. Its sounds are tagged with a playback the mod's handle stops
+    /// (<see cref="SoundHandle.Stop"/>); one the mod stopped before this frame plays nothing.
     /// </summary>
     void PlayModSound(CharacterSounds sounds, in SoundEvent e, PostedSound posted, ulong subject, Vector3 eye)
     {
         var (name, group, value) = (posted.Event, posted.SwitchGroup, posted.SwitchValue);
         if (_characterAudioFor is not { } audio) return;
+        if (PlayingFor(e.Handle, audio.Player) is not { } playing) return;
 
         var posts = _modPosts ??= new ModSoundPosts(audio.Player);
         if (posted.Loose)
         {
-            PlayLooseSound(sounds, in e, posted, subject, eye, posts);
+            PlayLooseSound(sounds, in e, posted, subject, eye, posts, playing);
             return;
         }
-        if (e.Kind == SoundKind.PostedInterface) posts.OnInterface(name, group, value);
-        else if (e.Subject.IsNone) posts.At(e.Position, eye, name, group, value);
-        else if (group is null) sounds.Job(subject, name, CharacterSounds.EventLimit);
-        else if (sounds.TryPlace(subject, out var at)) posts.At(at, eye, name, group, value);
+        if (e.Kind == SoundKind.PostedInterface) posts.OnInterface(name, group, value, playing);
+        else if (e.Subject.IsNone) posts.At(e.Position, eye, name, group, value, playing);
+        else if (group is null) sounds.Job(subject, name, CharacterSounds.EventLimit, playing: playing);
+        else if (sounds.TryPlace(subject, out var at)) posts.At(at, eye, name, group, value, playing);
+    }
+
+    /// <summary>
+    /// The playback a mod's sound plays as, bound to <paramref name="handle"/> so that its stop ends it: 0 without a handle, null when the mod
+    /// stopped it already.
+    /// </summary>
+    static uint? PlayingFor(SoundHandle? handle, WwisePlayer player)
+    {
+        if (handle is null) return 0;
+
+        uint playing = player.NewPlaying();
+        return handle.Bind(seconds => player.StopPlaying(playing, seconds)) ? playing : null;
     }
 
     /// <summary>
     /// A code mod's loose sound file (docs/modding.md "Sounds"): on the mods' interface object, or on a mods' pooled object at the character's place
     /// or the point. A file that cannot be read as a short 16-bit PCM WAV is logged once and plays nothing.
     /// </summary>
-    void PlayLooseSound(CharacterSounds sounds, in SoundEvent e, PostedSound posted, ulong subject, Vector3 eye, ModSoundPosts posts)
+    void PlayLooseSound(CharacterSounds sounds, in SoundEvent e, PostedSound posted, ulong subject, Vector3 eye, ModSoundPosts posts,
+        uint playing)
     {
         if (posts.Loose(posted.Event) is not { } pcm) return;
 
         float db = 20 * MathF.Log10(Math.Clamp(posted.Volume, 1e-4f, 4));
-        if (e.Kind == SoundKind.PostedInterface) posts.LooseOnInterface(posted.Event, pcm, db);
-        else if (e.Subject.IsNone) posts.LooseAt(e.Position, eye, posted.Event, pcm, db);
-        else if (sounds.TryPlace(subject, out var at)) posts.LooseAt(at, eye, posted.Event, pcm, db);
+        if (e.Kind == SoundKind.PostedInterface) posts.LooseOnInterface(posted.Event, pcm, db, playing);
+        else if (e.Subject.IsNone) posts.LooseAt(e.Position, eye, posted.Event, pcm, db, playing);
+        else if (sounds.TryPlace(subject, out var at)) posts.LooseAt(at, eye, posted.Event, pcm, db, playing);
     }
 
 

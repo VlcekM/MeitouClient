@@ -741,7 +741,8 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// The clip index and progress of the technique or crossbow pose the character plays, else of a mod's move (<see cref="CombatSystem.ModMove"/>;
-    /// not while carried or getting up); -1 and 0 when none.
+    /// not while carried or getting up); -1 and 0 when none. <see cref="CombatSystem.ModMoveBlockOf"/> answers the same tests for mods: keep the
+    /// two in step.
     /// </summary>
     (int Technique, float Progress) TechniqueOf(World world, CharacterId id, CharacterCold cold, float tickSeconds)
     {

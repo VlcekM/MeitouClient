@@ -768,7 +768,7 @@ sealed class InventoryWindows(PlayerInterface player)
                 return section == "main" && player.Production.Machine(window.Site)?.StorageSize is { } storage ? storage : (0, 0);
             default:
                 if (InventoryCommands.IsSingleSlot(section)) return (0, 0);
-                if (section is "back" or "hip") return InventoryCommands.SectionSize(section);
+                if (InventoryCommands.LiesInCells(section)) return InventoryCommands.SectionSize(section);
 
                 var grid = snapshot.Characters.FirstOrDefault(c => c.Id == window.Character)?.ItemGrid;
                 return section == "backpack_content" ? (grid?.BagWidth ?? 0, grid?.BagHeight ?? 0) : (grid?.Width ?? 0, grid?.Height ?? 0);

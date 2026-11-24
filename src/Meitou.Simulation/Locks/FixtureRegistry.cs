@@ -1766,15 +1766,18 @@ public sealed partial class FixtureRegistry
         Fixture? best = null;
         float bestWeight = 0, r2 = BedSearchRange * BedSearchRange;
         var regions = world.SystemOf<LockSystem>()?.Regions;
+        bool filtered = world.BedFilters.Active;
         foreach (var f in _all)
         {
             if (f.Kind != FixtureKind.Bed || f.Bed.Function != TownBuildings.BedFunction || f.Owner < 0) continue;
             float weight = f.Owner == c.Faction ? 0.5f : relations is not null && relations.Contains(f.Owner) && relations.Contains(c.Faction)
                     && relations.IsAlly(f.Owner, c.Faction) ? 0.01f : 0;
-            if (weight <= 0 || Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z)) > r2)
+            if (weight <= 0 && !filtered || Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z)) > r2)
                 continue;
 
             if (!IsFree(table, f) || !Reachable(world, f, c.Faction) || skip?.Invoke(f) == true) continue;
+            if (filtered) weight = AdmittedWeight(world, slot, f, weight);
+            if (weight <= 0) continue;
             if (f.Bed.Materials > 1) weight *= 3;
             if (f.Indoors) weight *= 2;
             if (regions?.CodeAt(f.Position) is > 0) weight *= InsideWallsBedFactor;
@@ -1782,6 +1785,17 @@ public sealed partial class FixtureRegistry
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// A player-side bed's base weight after the bed filters (<see cref="IBedFilter"/>): <paramref name="weight"/> when they keep the game's verdict,
+    /// 0 when they refuse it, and an ally's 0.01 for a bed the game refused (weight 0) that they admit.
+    /// </summary>
+    static float AdmittedWeight(World world, int slot, Fixture f, float weight)
+    {
+        if (!world.BedFilters.Pass(world, slot, f, weight > 0)) return 0;
+
+        return weight > 0 ? weight : 0.01f;
     }
 
     /// <summary>
@@ -1832,7 +1846,7 @@ public sealed partial class FixtureRegistry
         if (squad?.HomeBuilding is { } home)
         {
             foreach (var f in OfBuilding(home.Key))
-                if (Usable(f)) return f;
+                if (Usable(f) && world.BedFilters.Pass(world, slot, f, true)) return f;
         }
 
         Fixture? best = null;
@@ -1841,6 +1855,7 @@ public sealed partial class FixtureRegistry
         {
             if (!Usable(f) || squad is { Town: >= 0 } && f.Site != squad.Town) continue;
             if (f.Owner >= 0 && !CanUse(world, c, f)) continue;
+            if (!world.BedFilters.Pass(world, slot, f, true)) continue;
 
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);

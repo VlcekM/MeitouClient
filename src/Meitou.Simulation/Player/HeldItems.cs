@@ -342,7 +342,8 @@ sealed class HeldItems(PopulationData? data)
             return;
         }
 
-        if (Under(target, item, place, out int x, out int y) is not { Count: < 2 } under)
+        if (Under(target, item, place, out int x, out int y) is not { Count: < 2 } under
+            || under.Count == 0 && InventoryCommands.SectionFull(target.Grid, target.Section))
         {
             ReturnHeldItem(world);
             return;
@@ -359,7 +360,9 @@ sealed class HeldItems(PopulationData? data)
             return;
         }
 
-        int limit = target.Columns == 0 ? 1 : target.Grid.LimitOf(item);
+        // A slot (one item, or a mod slot of several) takes one unit.
+        bool slot = target.Columns == 0 || ModSlots.IsMultiItem(target.Section);
+        int limit = slot ? 1 : target.Grid.LimitOf(item);
         // Leaving its window for another owner's: no longer a death item, maybe stolen. Put back on a refusal; the units that stay on the mouse keep
         // the old marks.
         bool changes = into != held.From, death = item.Death;
@@ -369,7 +372,7 @@ sealed class HeldItems(PopulationData? data)
         var p = new Placing(world, held, into, target, x, y, limit, buy, sell, trade, changes, death, mark);
         if (under is [var other])
         {
-            bool kind = target.Columns > 0 && InventoryCommands.Stackable(item, other);
+            bool kind = !slot && InventoryCommands.Stackable(item, other);
             if (kind && !buy && !sell && item.Buyback is null && other.Buyback is null) Combine(in p, other);
             else if (kind && limit > 1) Merge(in p, other);
             else

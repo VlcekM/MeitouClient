@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO.Enumeration;
 using System.Numerics;
 using Meitou.Data.Ui;
@@ -20,7 +19,7 @@ public sealed record UiScreenWidget(string Name, string Type, string Caption, st
 /// <summary>
 /// What an extension changes on one of a screen's own widgets (<see cref="UiRegistration.AddScreenOverrides"/>): each member left null keeps the
 /// screen's own. <see cref="Caption"/> replaces its text (inline <c>#RRGGBB</c> tags colour it, as the game's texts), <see cref="TextColour"/> its
-/// text colour (0 to 1 each), and <see cref="Visible"/> false leaves the widget out (not drawn, not clicked).
+/// text colour (0 to 1 each), <see cref="Visible"/> false leaves the widget out (not drawn, not clicked), and <see cref="Bounds"/> places it.
 /// </summary>
 public sealed record UiWidgetOverride
 {
@@ -38,6 +37,12 @@ public sealed record UiWidgetOverride
     /// False leaves the widget out of the screen; null or true keeps it.
     /// </summary>
     public bool? Visible { get; init; }
+
+    /// <summary>
+    /// The widget's rectangle on screen (pixels, finite, size not below 0) instead of its arranged one; null keeps it. Its skin's template parts
+    /// move with its top-left corner; its child widgets are widgets of their own. It keeps the clip its parent gives it.
+    /// </summary>
+    public UiRect? Bounds { get; init; }
 }
 
 /// <summary>
@@ -142,6 +147,8 @@ sealed class ScreenOverrides
             throw new InvalidOperationException($"A screen override's caption is at most {MaxCaption} characters.");
         if (over.TextColour is { } c && !InUnit(c.X, c.Y, c.Z, c.W))
             throw new InvalidOperationException("A screen override's colour is 0 to 1 each.");
+        if (over.Bounds is { } b && !(float.IsFinite(b.X + b.Y + b.Width + b.Height) && b.Width >= 0 && b.Height >= 0))
+            throw new InvalidOperationException("A screen override's bounds are finite, their size not below 0.");
     }
 
     /// <summary>
@@ -155,10 +162,14 @@ sealed class ScreenOverrides
     }
 
     /// <summary>
-    /// Puts <paramref name="asked"/> into <paramref name="controls"/>: the hidden widgets left out, the others changed.
+    /// Puts <paramref name="asked"/> into <paramref name="controls"/>: the moved widgets' template parts moved with them, the hidden widgets left
+    /// out, the others changed.
     /// </summary>
     static void Commit(List<UiControl> controls, List<(int Index, UiWidgetOverride Override)> asked)
     {
+        foreach (var (i, over) in asked)
+            if (over.Bounds is { } to && over.Visible != false) MoveParts(controls, controls[i], to);
+
         for (int k = asked.Count - 1; k >= 0; k--)
         {
             var (i, over) = asked[k];
@@ -168,15 +179,33 @@ sealed class ScreenOverrides
     }
 
     /// <summary>
-    /// <paramref name="c"/> with <paramref name="over"/>'s caption and colour (the colour also as its <c>TextColour</c> property, which comes before a
-    /// skin's).
+    /// Moves the template parts of <paramref name="widget"/> (the controls whose <c>TemplateOwner</c> is its name) by its move to
+    /// <paramref name="to"/>.
+    /// </summary>
+    static void MoveParts(List<UiControl> controls, UiControl widget, UiRect to)
+    {
+        float dx = to.X - widget.Bounds.X, dy = to.Y - widget.Bounds.Y;
+        if (widget.Name.Length == 0 || dx == 0 && dy == 0) return;
+
+        for (int j = 0; j < controls.Count; j++)
+        {
+            var c = controls[j];
+            if (c.Properties.GetValueOrDefault("TemplateOwner") != widget.Name) continue;
+
+            controls[j] = c with { Bounds = c.Bounds with { X = c.Bounds.X + dx, Y = c.Bounds.Y + dy } };
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="c"/> with <paramref name="over"/>'s rectangle, caption and colour (the colour also as its <c>TextColour</c> property, which
+    /// comes before a skin's).
     /// </summary>
     static UiControl Changed(UiControl c, UiWidgetOverride over)
     {
+        c = c with { Bounds = over.Bounds ?? c.Bounds };
         if (over.TextColour is not { } colour) return c with { Caption = over.Caption ?? c.Caption };
 
-        string value = string.Create(CultureInfo.InvariantCulture, $"{colour.X:R} {colour.Y:R} {colour.Z:R} {colour.W:R}");
-        var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { ["TextColour"] = value };
+        var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { ["TextColour"] = UiHost.Format(colour) };
         return c with { Caption = over.Caption ?? c.Caption, TextColour = colour, Properties = properties };
     }
 }

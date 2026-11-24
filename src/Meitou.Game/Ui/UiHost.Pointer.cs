@@ -26,9 +26,16 @@ public sealed partial class UiHost
             || float.IsFinite(r.Rect.X + r.Rect.Y + r.Rect.Width + r.Rect.Height) && r.Rect.Width > 0 && r.Rect.Height > 0;
         bool scale = node.TextScale is null or (> 0 and <= MaxTextScale);
         bool step = float.IsFinite(node.ScrollStep) && node.ScrollStep > 0;
-        if (!float.IsFinite(node.Opacity) || !colour || !crop || !scale || !step)
+        bool tint = node.Tint is not { } t || InUnit(t);
+        bool layer = Enum.IsDefined(node.Layer);
+        if (!float.IsFinite(node.Opacity) || !colour || !crop || !scale || !step || !tint || !layer)
             throw new InvalidOperationException($"Invalid UI node looks: {node.Id}");
     }
+
+    /// <summary>
+    /// Whether each channel of <paramref name="c"/> is finite and within 0 to 1.
+    /// </summary>
+    static bool InUnit(Vector4 c) => float.IsFinite(c.X + c.Y + c.Z + c.W) && Vector4.Clamp(c, Vector4.Zero, Vector4.One) == c;
 
     /// <summary>
     /// The properties of <paramref name="node"/>'s own looks: its inherited <paramref name="opacity"/> (<c>Alpha</c>, only below 1) and an image's
@@ -37,7 +44,11 @@ public sealed partial class UiHost
     static void AddLooks(UiNode node, float opacity, Dictionary<string, string> properties)
     {
         if (opacity < 1) properties["Alpha"] = opacity.ToString("R", CultureInfo.InvariantCulture);
-        if (node.Kind == UiNodeKind.Image && node.Portrait.Length == 0 && node.ImageCrop is { } crop)
+        if (node.Tint is { } t)
+            properties["Colour"] = Format(t);
+
+        bool portrait = node.Portrait.Length > 0 || node.PortraitOf is not null;
+        if (node.Kind == UiNodeKind.Image && !portrait && node.ImageCrop is { } crop)
             properties[crop.Normalized ? "ImageUv" : "ImageRect"] = Format(crop.Rect);
     }
 
@@ -45,6 +56,11 @@ public sealed partial class UiHost
     /// <paramref name="r"/> as four numbers (<see cref="UiRect.Parse"/>'s form).
     /// </summary>
     static string Format(UiRect r) => string.Create(CultureInfo.InvariantCulture, $"{r.X} {r.Y} {r.Width} {r.Height}");
+
+    /// <summary>
+    /// <paramref name="c"/> as four round-trip numbers (x y z w), the form a control's colour properties take.
+    /// </summary>
+    internal static string Format(Vector4 c) => string.Create(CultureInfo.InvariantCulture, $"{c.X:R} {c.Y:R} {c.Z:R} {c.W:R}");
 
     #endregion
 

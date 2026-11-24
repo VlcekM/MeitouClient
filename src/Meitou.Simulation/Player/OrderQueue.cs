@@ -190,6 +190,11 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// </summary>
     public object? Detail { get; init; }
     /// <summary>
+    /// The distance from its target within which the order's job starts its work, in place of the row's own; null: the row's own
+    /// (<see cref="OrderOptions.Reach"/>). Read by 220 Eat target alive (the cannibal meal's <c>CaptiveSettings.Reach</c>).
+    /// </summary>
+    public float? Reach { get; init; }
+    /// <summary>
     /// Whether the order's start ran: it then stands for the character's task.
     /// </summary>
     public bool Started { get; internal set; }
@@ -320,6 +325,7 @@ public sealed class OrderQueue : IReadOnlyList<OrderEntry>
             hasher.Add(e.Target);
             hasher.Add(e.Site is { } site ? Rng.StableHash(site) : 0UL);
             hasher.Add(e.Point);
+            if (e.Reach is { } reach) hasher.Add(reach);
         }
     }
 }
