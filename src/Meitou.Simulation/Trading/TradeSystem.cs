@@ -99,6 +99,11 @@ public sealed record TradeItemView(int Index, string Record, string Name, string
     float Quality, long Price, long UnitPrice, bool Stolen)
 {
     /// <summary>
+    /// The item's code-mod tag ("" none; the mods' item names, docs/modding.md "Item names").
+    /// </summary>
+    public string ModTag { get; init; } = "";
+
+    /// <summary>
     /// The current transfer reverses a purchase or sale from this trade window at its original price.
     /// </summary>
     public bool Buyback { get; init; }
@@ -1993,6 +1998,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return new(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity, item.Quality, stackPrice,
                 unitPrice, stolen)
             {
+                ModTag = item.ModTag,
                 Buyback = buyback,
                 Container = item.Contents is not null,
                 BagItems = item.Contents?.Items.Count ?? -1,

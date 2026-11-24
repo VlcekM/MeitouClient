@@ -1138,13 +1138,13 @@ holds refuses the second mod.
   button without a caption or press, is logged once and dropped for the session; a press that throws is logged. Without a source the panel
   is as before. Engine API, not in the original.
 - **Item names:** in `Register`, `registration.AddItemNames(context => name)` renames items where the interface shows them: inventory, trade
-  and machine cells (and their caption while the icon loads), the held item, item tooltips' titles, and the labels and right-click menu title of
-  items on the ground. `UiItemNameContext` gives the item's `Record`, the `Name` so far (the game's, or an earlier mod's) and its `ModTag`, so a
+  and machine cells (and their caption while the icon loads), the held item, item tooltips' titles, backpack windows' titles, and the labels and
+  right-click menu title of items on the ground. `UiItemNameContext` gives the item's `Record`, the `Name` so far (the game's, or an earlier mod's) and its `ModTag`, so a
   mod can name one tagged item alone; return the name to show, or null or blank to keep it. Several mods chain in load order, each getting the
   last one's name, so a translation and a mod that tweaks a few names stack. Display only: the item, its record, the simulation, messages and
   saves keep the game's name, and the tooltip lines' context keeps it too. Crafting lists keep theirs (they name recipes). The answer for a
   record, name and tag is kept until `registration.RefreshItemNames()`, which a mod calls when its answers change (a word learned, an item
-  identified); so the source runs on the host's thread once per name shown, not per frame, and must read only its context and the mod's own
+  identified, a save loaded whose state its answers read); so the source runs on the host's thread once per name shown, not per frame, and must read only its context and the mod's own
   state. Names are put on one line and cut to 80 characters. A source that throws is reported once and dropped. With none, names show as
   before at the cost of one count check. Engine API, not in the original.
 - **Item tooltip lines:** in `Register`, `registration.AddItemTooltipLines(context => lines)` adds `UiItemTooltipLine`s (a label and an

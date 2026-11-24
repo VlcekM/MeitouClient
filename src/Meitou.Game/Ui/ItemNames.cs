@@ -83,6 +83,7 @@ sealed class ItemNames
             catch (Exception e)
             {
                 _sources.Remove(source);
+                _shown.Clear();
                 report?.Invoke(new UiDiagnostic(source.Owner, "item names (dropped)", e));
             }
         }
@@ -93,11 +94,11 @@ sealed class ItemNames
     }
 
     /// <summary>
-    /// <paramref name="text"/> put on one line and cut to <see cref="MaxText"/> characters.
+    /// <paramref name="text"/> cut to <see cref="MaxText"/> characters (never inside a character) and put on one line (<see cref="UiHost.Cut"/>).
     /// </summary>
-    static string Text(string text)
-    {
-        string line = text.ReplaceLineEndings(" ").Trim();
-        return line.Length > MaxText ? line[..MaxText] : line;
-    }
+    static string Text(string text) => UiHost.Cut(text, MaxText)
+        .ReplaceLineEndings(" ")
+        .Replace(@"\n", " ", StringComparison.Ordinal)
+        .Replace('\t', ' ')
+        .Trim();
 }

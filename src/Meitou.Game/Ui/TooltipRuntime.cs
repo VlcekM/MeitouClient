@@ -880,6 +880,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         public static ItemTip Of(TradeItemView v) =>
             new(v.Record, v.Material, v.Name, v.Quantity, v.Weight, v.Quality, v.Company, v.Level, v.Charges, v.MaxCharges, v.StolenFrom, v, null)
             {
+                ModTag = v.ModTag,
                 Unique = v.Unique,
                 BagItems = v.BagItems,
                 StolenOwner = v.StolenOwner,
