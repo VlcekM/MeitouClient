@@ -169,7 +169,7 @@ sealed class GroundItemPicks(PlayerInterface player)
         if (player.ModTargetVerbs(target) is not { Count: > 0 }) return false;
 
         var window = player.ContextMenuWindow;
-        return window.ContextPressOn(p, at => window.Menu(g.Name, at, [("Pick Up", pickUp), .. player.ModTargetVerbs(target)]), pickUp);
+        return window.ContextPressOn(p, at => window.Menu(LabelName(g), at, [("Pick Up", pickUp), .. player.ModTargetVerbs(target)]), pickUp);
     }
 
     /// <summary>
@@ -267,7 +267,7 @@ sealed class GroundItemPicks(PlayerInterface player)
         var placed = new List<(int Id, UiRect Rect)>();
         foreach (var (g, _, at) in near)
         {
-            float width = MathF.Ceiling(LabelTextWidth(painter, g.Name)) + em;
+            float width = MathF.Ceiling(LabelTextWidth(painter, LabelName(g))) + em;
             var rect = new UiRect(at.X - width / 2, at.Y - 6 * scale - height, width, height);
             for (bool moved = true; moved;)
             {
@@ -288,6 +288,11 @@ sealed class GroundItemPicks(PlayerInterface player)
         _itemLabels.AddRange(placed);
         AddLabelControls(controls, near, placed);
     }
+
+    /// <summary>
+    /// The name a ground item's label shows: the mods' item names (<see cref="PlayerInterface.ShownItemName"/>), else the item's.
+    /// </summary>
+    string LabelName(Simulation.Items.GroundItemSnapshot g) => player.ShownItemName(g.Record, g.Name, g.ModTag);
 
     /// <summary>
     /// <paramref name="name"/>'s width as its label draws it: <see cref="ItemLabelFont"/> at <see cref="ItemLabelTextScale"/>, which a locale can map
@@ -356,7 +361,7 @@ sealed class GroundItemPicks(PlayerInterface player)
                 ["TextAlign"] = "Center",
                 ["TextColour"] = text,
             };
-            controls.Add(new($"itemlabel-text-{i}", "TextBox", rect, near[i].Item.Name, "", "", true, font, Vector4.Zero, Pickable: false,
+            controls.Add(new($"itemlabel-text-{i}", "TextBox", rect, LabelName(near[i].Item), "", "", true, font, Vector4.Zero, Pickable: false,
                 TextScale: ItemLabelTextScale));
         }
     }

@@ -397,6 +397,11 @@ public sealed partial class UiHost
     internal ItemTooltipLines ItemTips { get; } = new();
 
     /// <summary>
+    /// The extensions' item name sources (<see cref="UiRegistration.AddItemNames"/>).
+    /// </summary>
+    internal ItemNames ItemNameSources { get; } = new();
+
+    /// <summary>
     /// The town panel line sources, with their owners, in registration order.
     /// </summary>
     readonly List<(string Owner, Func<UiTownContext, IEnumerable<UiTownLine>> Lines)> _townLines = [];
@@ -604,6 +609,7 @@ public sealed partial class UiHost
         _buildingActions.RemoveAll(a => a.Owner == owner);
         _townLines.RemoveAll(l => l.Owner == owner);
         ItemTips.Remove(owner);
+        ItemNameSources.Remove(owner);
         CharacterPanel.Remove(owner);
         Screens.Remove(owner);
         ScreenOverrides.Remove(owner);
@@ -873,6 +879,12 @@ public sealed partial class UiHost
     /// <see cref="Diagnostic"/> and dropped.
     /// </summary>
     public IReadOnlyList<UiItemTooltipLine> ItemTooltipLines(UiItemTooltipContext item) => ItemTips.For(item, Diagnostic);
+
+    /// <summary>
+    /// The name the interface shows for an item of <paramref name="record"/> named <paramref name="name"/> with tag <paramref name="modTag"/>
+    /// (<see cref="ItemNames.Shown"/>); a failing source is reported as a <see cref="Diagnostic"/> and dropped.
+    /// </summary>
+    public string ItemName(string record, string name, string modTag = "") => ItemNameSources.Shown(record, name, modTag, Diagnostic);
 
     /// <summary>
     /// Whether any extension adds character panel lines (<see cref="CharacterPanelLines"/>).
@@ -1489,6 +1501,30 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(lines);
         _host.ItemTips.Add(Id, lines);
+    }
+
+    /// <summary>
+    /// Renames items where the interface shows their names: inventory, trade and machine cells, the held item, item tooltips and the labels of
+    /// items on the ground (docs/modding.md "Item names"). <paramref name="names"/> gets the item's record, the name so far (the game's, or an
+    /// earlier extension's) and its code-mod tag, and returns the name to show (null or blank: keep it). Display only: the item and its record keep
+    /// their names. It runs on the host's thread the first time a record, name and tag is shown, the answer kept until
+    /// <see cref="RefreshItemNames"/>, so it may be slow-ish but must read only its context and the mod's own state.
+    /// </summary>
+    public void AddItemNames(Func<UiItemNameContext, string?> names)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(names);
+        _host.ItemNameSources.Add(Id, names);
+    }
+
+    /// <summary>
+    /// Asks every item name source again (<see cref="AddItemNames"/>): call it when the mod's answers change, e.g. a word it teaches was learned.
+    /// Host's thread.
+    /// </summary>
+    public void RefreshItemNames()
+    {
+        Check();
+        _host.ItemNameSources.Refresh();
     }
 
     /// <summary>

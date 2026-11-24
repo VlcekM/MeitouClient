@@ -282,6 +282,13 @@ sealed partial class PlayerInterface
         _uiHost.BuildingActions(new UiBuildingContext(building, snapshot, () => Session.World.Tick, Say));
 
     /// <summary>
+    /// The name shown for an item of <paramref name="record"/> named <paramref name="name"/> (<see cref="UiHost.ItemName"/>): the extensions'
+    /// item names, else <paramref name="name"/>.
+    /// </summary>
+    internal string ShownItemName(string record, string name, string modTag) =>
+        _uiHost.ItemNameSources.Any ? _uiHost.ItemName(record, name, modTag) : name;
+
+    /// <summary>
     /// The lines the interface extensions add to an item's tooltip (<see cref="UiHost.ItemTooltipLines"/>); none without an extension that adds any.
     /// </summary>
     internal IReadOnlyList<UiItemTooltipLine> ModItemTooltipLines(TooltipRuntime.ItemTip t, bool first)
