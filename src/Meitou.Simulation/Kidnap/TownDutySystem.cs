@@ -1248,16 +1248,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     {
         if (!Accepts(f, item)) return false;
 
-        var box = f.Contents!;
-        int room = box.LimitOf(item);
-        foreach (var other in box.Items)
-        {
-            if (other.Record == item.Record && other.Quality == item.Quality && other.Mark == item.Mark && other.Section == "main"
-                    && other.Quantity < room)
-                return true;
-        }
-
-        return box.FindCell("main", item.Width, item.Height, out _, out _);
+        // The stacking rule the put follows (Inventory.SameStack), so a container chosen for a stack always takes some of it.
+        return f.Contents!.HasRoomIn("main", item);
     }
 
     /// <summary>

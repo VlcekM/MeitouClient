@@ -169,7 +169,8 @@ public static class SavedKit
         // Meitou saves from before armour took its level from its quality have level 0 and a grade quality below 100: that quality. The original
         // saves some armour at level 0 and quality 100 (Observed, docs/game/ui-screens.md "Item tooltip"), which stays level 0.
         item.Level = s.Level == 0 && item.Type == FcsRecordType.Armour && s.Quality is > 0 and < 100 ? (int)s.Quality : s.Level;
-        item.MaterialId = s.MaterialId;
+        // "" keeps the record's material the factory gave an ITEM: Meitou saves from before ITEMs took it wrote "" (the original writes it).
+        if (s.MaterialId.Length > 0) item.MaterialId = s.MaterialId;
         item.CompanyId = s.CompanyId;
         item.Crafter = s.Crafter;
         item.Uniform = s.Uniform;

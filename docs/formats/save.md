@@ -74,6 +74,13 @@ progress of research taken off the queue is not saved (as the original).
 **Blueprint items** (**Verified**: 1954 INVENTORY_ITEM_STATEs in the owner's saves): `base data sid` is the look ITEM (`BLUEPRINT_ITEM`,
 `BLUEPRINT_ITEM_ARMOUR`, ...), `company sid` = `material sid` = the RESEARCH id, `item function` 11. Meitou (`SavedKit`) rebuilds them from the research.
 
+**Item material** (**Observed**: all 3101 ITEMs the characters carry in four saves the original 1.0.68 made, and Building Material in a storage;
+ITEMs a Meitou save brought in keep the "" they were loaded with when the original saves them again): an ITEM's
+`material sid` is the MATERIAL_SPECS_CLOTHING its record's `material` list names (`Item_Atlas_ottos` for first aid kits, ration packs and Building
+Material); "" when the list is empty. No record of the base game lists more than one. Items stack only with the same material
+([trader window](../game/economy.md)), so a Meitou ITEM takes it when made (`ItemFactory`), and one loaded with "" (a Meitou save from before) takes it
+too (`SavedKit`).
+
 **Item function** saved is the constructed value, not the record's: a weapon 5, armour 6, container 4, food of one charge 0 ([item construction](../game/economy.md#units-stacks-and-traders), **Verified** in the constructors, not checked against a save).
 
 **Terrain decals** (TERRAIN_DECALS in `quick.save`, **Verified**: two saves, writer `FUN_1408de5d0`): int `total`; one instance per cell copy of a decal
