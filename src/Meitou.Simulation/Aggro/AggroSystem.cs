@@ -2081,8 +2081,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
             if (!enemy)
             {
-                if (c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat or FundamentalType.Slaver)
-                    continue;
+                if (c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat) continue;
 
                 if (c.NpcClass == FundamentalType.Military
                     && (c.Faction == owner || world.Squads.Find(c.SquadId)?.Ai?.Town == town.Site && town.Site >= 0))
@@ -2090,10 +2089,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
                     continue;
                 }
 
-                if (!(intends || aggressor || TaskAggression.OfTask(c) > 0 && (c.NpcClass == FundamentalType.Bandit || c.Fighter?.IsAnimal == true)))
-                    continue;
-
-                if (!AttacksProtected(world, fights, cold, c, t, e.Generation)) continue;
+                if (!Threatens(world, fights, cold, c, t, e.Generation)) continue;
             }
             else if (!intends && !aggressor) continue;
 
@@ -2108,6 +2104,24 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
 
         return scan.Best >= 0 ? new CharacterId(scan.Best, prev[scan.Best].Generation) : CharacterId.None;
+    }
+
+    /// <summary>
+    /// <c>FUN_14099b820</c> (<b>Verified</b>), 34's pass-2 test and the NPC turret gunner's last pass: the neutral <paramref name="c"/> in
+    /// <paramref name="slot"/> is no slaver; its current goal intends aggression, <paramref name="looker"/>'s squad tags it AGGRESSOR, or it is a
+    /// bandit or an animal whose running task intends it; and it attacks one the looker protects (<see cref="AttacksProtected"/>). The area test
+    /// <c>FUN_140599f30</c> is not modelled.
+    /// </summary>
+    internal bool Threatens(World world, CombatSystem? fights, CharacterCold looker, CharacterCold c, int slot, int generation)
+    {
+        if (c.NpcClass == FundamentalType.Slaver) return false;
+
+        var id = new CharacterId(slot, generation);
+        bool aggressor = Memory is { } memory && looker.SquadId >= 0 && memory.HasShort(world, looker.SquadId, id, Dialogue.MemoryTag.Aggressor);
+        bool bandit = c.NpcClass == FundamentalType.Bandit || c.Fighter?.IsAnimal == true;
+        if (!(TaskAggression.OfGoal(c) > 0 || aggressor || TaskAggression.OfTask(c) > 0 && bandit)) return false;
+
+        return AttacksProtected(world, fights, looker, c, slot, generation);
     }
 
     /// <summary>

@@ -869,13 +869,16 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
   perception), deviation, 0)))`; harpoon damage = U[min, max] × P × hM, range = P × range × hM, speed = shot speed × (0.8 P hM + 0.2), h = height factor from the muzzle; friendly
   avoidance min(1, 0.015 FF); `Attack` on the building's object; the target is told it is attacked (`FUN_140999d50`). The harpoon is a bolt of the gunner (hit `FUN_140439c90`, [Bolt visuals](#bolt-visuals)).
 - **Target choice** (`FUN_140437f40`, `FUN_1404374d0`, score `FUN_140435d70`): the preferred/current target is kept if it still scores and equals the order's; else every
-  sensed character (list category 4, mask 0x210) scores s = (f·g)² with g = 1 − d/(k × range) (k 1), f 1 (0.1 for slot 0x360, ×0.1 for slot 0x368; slot 0x368 > 0 is 0 for a gunner not of
+  sense entry tagged ENEMY and neither dead nor imprisoned (`FUN_140853960(4, 0x210)`, **Verified**; so a slave is a candidate only when the gunner is hostile to its owner too, [sense tags](perception.md#sense-tags-who-is-an-enemy)) scores s = (f·g)² with g = 1 − d/(k × range) (k 1), f 1 (0.1 for slot 0x360, ×0.1 for slot 0x368; slot 0x368 > 0 is 0 for a gunner not of
   the player's faction); down for any gunner (slot 0x30: out, dead, ragdolled, carried, posture ≥ 3), `+0x2f8` ≠ 0 or `+0x3d4` (carried) → 0, and an ordered target that scores 0 is dropped (**Verified**; Meitou `CombatSystem.ScoresZero`); out of range → 0.001; then × weight (slot 6), × 1.5 when `FUN_1405ca6f0`, + 0.1 when it is the
   current target; × 0.1 when its sense entry is not seen, × 1.5 for the current; best above 1e-6. A candidate with diplomatic status (`FUN_140796240`, the biome factored in
   for a gunner not with the player, `FUN_140856bc0`) scores 0 unless its intended aggression (vfunc 0x1e8, the current goal's) is above 0 (**Verified**, decompile of
-  `FUN_140435d70`; Meitou `CombatSystem.SparedDiplomat`). None: with the player's **Shoot first** option (`DAT_142134690 +0x11a`) a player gunner takes
-  sensed characters of fundamental type 0 or 8 or a default-hostile faction (k 0.6); an NPC gunner takes default-hostile ones it is aware of (`FUN_14099b820`) and those fighting a member
-  of its own group. An unseen chosen target is looked at (slot 0x3b0).
+  `FUN_140435d70`; Meitou `CombatSystem.SparedDiplomat`). None (**Verified**, `FUN_1404374d0`): with the player's **Shoot first** option (`DAT_142134690 +0x11a`) a player gunner takes
+  the entries tagged NEUTRAL (mask 2, 0x210) of fundamental type 0 or 8 or a default-hostile faction (k 0.6); an NPC gunner takes the NEUTRAL entries of a default-hostile faction
+  (default relation below -30) or whose target has the gunner's Ownerships town (`FUN_1407956a0` `+0x30`) and is no enemy of the gunner (slot 125), either only when it passes
+  `FUN_14099b820`, the threat test of [34 ATTACK_TROUBLE_MAKERS](ai-tasks.md#combat-goals)'s pass 2 (no slaver; intends aggression, AGGRESSOR, or a bandit or animal whose task
+  intends it; attacking one the gunner protects). So a slave led past a town's turrets is never shot (#1359). Meitou: `CombatSystem.TurretSenses`, `AggroSystem.Threatens`; the
+  gunner's faction stands in for the victim's Ownerships town. An unseen chosen target is looked at (slot 0x3b0).
 - **NPC turret goals** 149/222/234 have list A `isNoEnemiesInVicinity` (with the `*` flag): done, so not chosen, while the gunner senses no enemy (state 6 is AI `+0xbc`
   `numEnemies` == 0, `FUN_140597630`, **Verified**; no radius of its own: the senses' reach, [perception](perception.md#senses); [ai-tasks](ai-tasks.md#perma-jobs)).
   So in peace a town's turrets stand empty and its guards keep their other goals.

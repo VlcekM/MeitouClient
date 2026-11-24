@@ -329,14 +329,16 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The target choice (<c>FUN_140437f40</c>, <c>FUN_1404374d0</c>, the score <c>FUN_140435d70</c>): every candidate within 1.5 x range of the
-    /// gunner scores <see cref="TurretFormulas.Closeness"/> x <see cref="TurretFormulas.Arc"/>, x 1.5 when it fights the gunner, + 0.1 for the
-    /// current target, and the current target's score is x 1.5 again in the pass; the best above 1e-6 wins, else the current one is kept. The first
-    /// pass takes the gunner's enemies (the faction relations, or anyone fighting it). With none, an NPC gunner's turret takes characters of
-    /// default-hostile factions (own default relation below -30) and anyone fighting a member of the gunner's faction. Not targets: the dead, the
-    /// carried, the caged; a target down scores 0 for an NPC gunner and x 0.01 for the player's. <b>Engine choices</b>: every candidate counts as
-    /// seen (the original's sense list and its seen flag), the 1.5 for "fights the gunner" (<c>FUN_1405ca6f0</c>), the candidate radius. A player
-    /// gunner with Shoot first then takes the neutrals of <see cref="SquadAiRules.ShootsFirstAt"/>.
+    /// The target choice (<c>FUN_140437f40</c>, <c>FUN_1404374d0</c>, the score <c>FUN_140435d70</c>): the characters within 1.5 x range of the
+    /// gunner that its senses hold (not imprisoned) score <see cref="TurretFormulas.Closeness"/> x <see cref="TurretFormulas.Arc"/>, x 1.5 when it
+    /// fights the gunner, + 0.1 for the current target, x 0.1 when not seen at the last look, and the current target's score is x 1.5 again in the
+    /// first pass; the best above 1e-6 wins, else the current one is kept. The first pass takes the entries tagged ENEMY (slot 125: a slave only when
+    /// the gunner is hostile to its owner too). With none, an NPC gunner takes the NEUTRAL ones of default-hostile factions (own default relation
+    /// below -30) or fighting a member of the gunner's faction, either only when it threatens (<see cref="AggroSystem.Threatens"/>,
+    /// <c>FUN_14099b820</c>). Not targets: the dead, the carried, the caged; a target down scores 0 for an NPC gunner and x 0.01 for the player's.
+    /// <b>Engine choices</b>: the 1.5 for "fights the gunner" (<c>FUN_1405ca6f0</c>), the candidate radius, the gunner's faction for the victim's
+    /// Ownerships town; a world without senses takes the faction relations for the tags. A player gunner with Shoot first then takes the NEUTRAL
+    /// ones of <see cref="SquadAiRules.ShootsFirstAt"/>.
     /// </summary>
     int ChooseTurretTarget(World world, TurretState t, int g, CharacterCold gc)
     {
@@ -353,7 +355,9 @@ public sealed partial class CombatSystem
         var found = TurretCandidates(world, at, range);
         var facing = new Vector3(MathF.Sin(t.Yaw), 0, MathF.Cos(t.Yaw));
         int generation = prev[g].Generation;
-        var choice = new TurretChoice(world, Towns, _read, t, g, gc, at, range, facing, generation, found);
+        var look = world.SystemOf<AggroSystem>();
+        var senses = new TurretSenses(look, look?.SensesOf(g), this);
+        var choice = new TurretChoice(world, Towns, _read, t, g, gc, at, range, facing, generation, found, senses);
 
         // Shoot At (FUN_140437f40, Verified): the ordered target is taken while it scores above 0 (closeness x arc: in range and not blocked) and the
         // gunner does not regard it as friendly; otherwise the gunner chooses as it always does this tick, the order going on. A target out of range
@@ -417,10 +421,10 @@ public sealed partial class CombatSystem
     /// One turret's choice among its <paramref name="found"/> candidates (<see cref="ChooseTurretTarget"/>): gunner <paramref name="g"/>
     /// (<paramref name="gc"/>, of <paramref name="generation"/>) at <paramref name="at"/>, the turret <paramref name="t"/> facing
     /// <paramref name="facing"/> with the gun's <paramref name="range"/>, <paramref name="read"/> the last tick's combat slots and
-    /// <paramref name="towns"/> the population data (the diplomats' biomes).
+    /// <paramref name="towns"/> the population data (the diplomats' biomes), <paramref name="senses"/> the gunner's.
     /// </summary>
     readonly struct TurretChoice(World world, PopulationData? towns, CombatSlot[] read, TurretState t, int g, CharacterCold gc, Vector3 at,
-        float range, Vector3 facing, int generation, List<int> found)
+        float range, Vector3 facing, int generation, List<int> found, TurretSenses senses)
     {
         /// <summary>
         /// The score of candidate <paramref name="o"/> (<c>FUN_140435d70</c>) at <paramref name="rangeFactor"/> x the range, + 0.1 when it is the
@@ -452,8 +456,9 @@ public sealed partial class CombatSystem
         }
 
         /// <summary>
-        /// The first pass: the gunner's enemies (the faction relations, or anyone fighting it; another faction without relations), the current target
-        /// x 1.5 again. Returns the best above <see cref="TurretFormulas.MinScore"/>, -1 for none, and its score.
+        /// The first pass: the entries the gunner's senses tag ENEMY (without senses: the faction relations, or anyone fighting it; another faction
+        /// without relations), the current target x 1.5 again. Returns the best above <see cref="TurretFormulas.MinScore"/>, -1 for none, and its
+        /// score.
         /// </summary>
         public int BestEnemy(FactionRelations? relations, int current, out float bestScore)
         {
@@ -468,11 +473,9 @@ public sealed partial class CombatSystem
                 var oc = table.Cold(o);
                 if (oc is null) continue;
 
-                bool enemy = read[o].TargetSlot == g && read[o].TargetGeneration == generation
-                    || (relations is not null ? AggroSystem.IsEnemy(relations, gc.Faction, oc.Faction) : oc.Faction != gc.Faction);
-                if (!enemy) continue;
+                if (!senses.Holds(table, o, SenseTag.Enemy, out float seen) || !senses.Sensing && !FactionEnemy(relations, o, oc)) continue;
 
-                float s = Score(o, TurretFormulas.FullRange, current);
+                float s = Score(o, TurretFormulas.FullRange, current) * seen;
                 if (o == current) s *= 1.5f;
                 if (s > bestScore) (best, bestScore) = (o, s);
             }
@@ -481,8 +484,15 @@ public sealed partial class CombatSystem
         }
 
         /// <summary>
-        /// Shoot first (the squad AI option): with no enemy in its sights a player gunner also takes dangerous neutrals, scored at range factor 0.6
-        /// (no extra weight).
+        /// The first pass's test without senses: one fighting the gunner, else the faction relations (another faction without them).
+        /// </summary>
+        bool FactionEnemy(FactionRelations? relations, int o, CharacterCold oc) =>
+            read[o].TargetSlot == g && read[o].TargetGeneration == generation
+            || (relations is not null ? AggroSystem.IsEnemy(relations, gc.Faction, oc.Faction) : oc.Faction != gc.Faction);
+
+        /// <summary>
+        /// Shoot first (the squad AI option): with no enemy in its sights a player gunner also takes dangerous neutrals (entries tagged NEUTRAL),
+        /// scored at range factor 0.6.
         /// </summary>
         public int ShootFirst(FactionRelations relations, int current, int best, float bestScore)
         {
@@ -494,11 +504,12 @@ public sealed partial class CombatSystem
             foreach (int o in found)
             {
                 if (o == g || !prev[o].Alive || table.Cold(o) is not { } oc || !relations.Contains(oc.Faction)) continue;
+                if (!senses.Holds(table, o, SenseTag.Neutral, out float seen)) continue;
 
                 var faction = relations.Factions[oc.Faction];
                 if (!SquadAiRules.ShootsFirstAt(options, (int)faction.FundamentalType, faction.DefaultRelation)) continue;
 
-                float s = Score(o, TurretFormulas.ShootFirstRange, current);
+                float s = Score(o, TurretFormulas.ShootFirstRange, current) * seen;
                 if (s > bestScore) (best, bestScore) = (o, s);
             }
 
@@ -506,8 +517,9 @@ public sealed partial class CombatSystem
         }
 
         /// <summary>
-        /// An NPC gunner's pass with no enemy: characters of default-hostile factions (own default relation below -30) and anyone fighting a member
-        /// of the gunner's faction.
+        /// An NPC gunner's pass with no enemy (<c>FUN_1404374d0</c>'s last, <b>Verified</b>): the entries tagged NEUTRAL of default-hostile factions
+        /// (own default relation below -30) or fighting a member of the gunner's faction, either only when it threatens
+        /// (<see cref="AggroSystem.Threatens"/>): so a slave led past the turret is spared, whatever its faction.
         /// </summary>
         public int HostileOrAttacker(FactionRelations relations, int current, int best, float bestScore)
         {
@@ -521,13 +533,58 @@ public sealed partial class CombatSystem
                 int their = read[o].TargetSlot;
                 bool attacksFriend = their >= 0 && their < prev.Length && prev[their].Alive
                     && table.Cold(their) is { } victim && victim.Faction == gc.Faction;
-                if (!hostile && !attacksFriend) continue;
+                if (!hostile && !attacksFriend || !senses.Holds(table, o, SenseTag.Neutral, out float seen)) continue;
+                if (!senses.Threatens(world, gc, oc, o)) continue;
 
-                float s = Score(o, TurretFormulas.FullRange, current);
+                float s = Score(o, TurretFormulas.FullRange, current) * seen;
                 if (s > bestScore) (best, bestScore) = (o, s);
             }
 
             return best;
+        }
+    }
+
+    /// <summary>
+    /// The gunner's senses as its turret's target choice reads them (<c>FUN_140853960</c> over the gunner's entries, <b>Verified</b>): its
+    /// <paramref name="look"/> system (null: the world has no senses, every candidate passes), its <paramref name="block"/> (null: no look yet, none
+    /// passes) and the <paramref name="fights"/>.
+    /// </summary>
+    readonly struct TurretSenses(AggroSystem? look, SenseBlock? block, CombatSystem fights)
+    {
+        /// <summary>
+        /// The weight of a candidate the last look did not see (<c>DAT_14167fad0</c>).
+        /// </summary>
+        const float Unseen = 0.1f;
+
+        /// <summary>
+        /// Whether this world has senses (an <see cref="AggroSystem"/>).
+        /// </summary>
+        public bool Sensing => look is not null;
+
+        /// <summary>
+        /// Whether the gunner's senses hold <paramref name="o"/> with a tag of <paramref name="want"/> and not imprisoned (the iterator's masks: the
+        /// dead are not candidates either), and <paramref name="seen"/>, the score's weight: 1 when the last look saw it, else 0.1.
+        /// </summary>
+        public bool Holds(CharacterTable table, int o, SenseTag want, out float seen)
+        {
+            seen = 1;
+            if (look is null) return true;
+            if (block is null || !block.TryGet(new CharacterId(o, table.Previous[o].Generation), out var e)) return false;
+            if ((e.Tags & want) == 0 || (e.Tags & SenseTag.Imprisoned) != 0) return false;
+
+            if (!e.Seen) seen = Unseen;
+            return true;
+        }
+
+        /// <summary>
+        /// <see cref="AggroSystem.Threatens"/> of the gunner <paramref name="gc"/> on <paramref name="oc"/> in <paramref name="o"/>; without senses,
+        /// true.
+        /// </summary>
+        public bool Threatens(World world, CharacterCold gc, CharacterCold oc, int o)
+        {
+            if (look is null) return true;
+
+            return look.Threatens(world, fights, gc, oc, o, world.Characters.Previous[o].Generation);
         }
     }
 
