@@ -77,9 +77,10 @@ progress of research taken off the queue is not saved (as the original).
 **Item material** (**Observed**: all 3101 ITEMs the characters carry in four saves the original 1.0.68 made, and Building Material in a storage;
 ITEMs a Meitou save brought in keep the "" they were loaded with when the original saves them again): an ITEM's
 `material sid` is the MATERIAL_SPECS_CLOTHING its record's `material` list names (`Item_Atlas_ottos` for first aid kits, ration packs and Building
-Material); "" when the list is empty. No record of the base game lists more than one. Items stack only with the same material
-([trader window](../game/economy.md)), so a Meitou ITEM takes it when made (`ItemFactory`), and one loaded with "" (a Meitou save from before) takes it
-too (`SavedKit`).
+Material); "" when the list is empty. No record of the base game lists more than one; for a mod's that does, Meitou takes the one the item's
+icon is drawn with (`ItemIcons.MaterialOf`). Items of different material never share a stack (`Inventory.SameStack`; the original's likeness test
+`FUN_14075d510`, [units, stacks and traders](../game/economy.md#units-stacks-and-traders)), so a Meitou ITEM takes its material when made
+(`ItemFactory`). Engine choice: one loaded with "" (a Meitou save from before) takes it too (`SavedKit`), where the original keeps the "".
 
 **Item function** saved is the constructed value, not the record's: a weapon 5, armour 6, container 4, food of one charge 0 ([item construction](../game/economy.md#units-stacks-and-traders), **Verified** in the constructors, not checked against a save).
 

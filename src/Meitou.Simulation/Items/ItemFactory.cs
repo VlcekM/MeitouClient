@@ -190,11 +190,27 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
             && Db.Find(item.CompanyId) is { Type: FcsRecordType.Research } r ? r : null;
 
     /// <summary>
-    /// The material a new ITEM of record <paramref name="recordId"/> carries: the one its <c>material</c> list names (no record lists more than
-    /// one), "" when it lists none or the material is not loaded.
+    /// The material a new ITEM of each record carries, by record id (<see cref="RecordMaterial"/>).
     /// </summary>
-    string RecordMaterial(string recordId) =>
-        Db.Find(recordId)?.GetReferences("material").Select(r => r.TargetStringId).FirstOrDefault(id => Db.Find(id) is not null) ?? "";
+    readonly ConcurrentDictionary<string, string> _materials = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The material a new ITEM of record <paramref name="recordId"/> carries: the material spec its <c>material</c> list names, the one its icon
+    /// is drawn with when it lists several (<see cref="ItemIcons.MaterialOf"/>; no base game record does), "" when it lists none. Worked out once
+    /// per record.
+    /// </summary>
+    string RecordMaterial(string recordId) => _materials.GetOrAdd(recordId, _recordMaterial ??= MaterialOfRecord);
+
+    /// <summary>
+    /// <see cref="RecordMaterial"/>'s lookup, kept so asking allocates no delegate.
+    /// </summary>
+    Func<string, string>? _recordMaterial;
+
+    /// <summary>
+    /// <see cref="RecordMaterial"/> worked out from the data.
+    /// </summary>
+    string MaterialOfRecord(string recordId) =>
+        Db.Find(recordId) is { } record && ItemIcons.MaterialOf(Db, record, "") is { } material ? material.StringId : "";
 
     /// <summary>
     /// A new instance of <paramref name="info"/>'s record as an item of <paramref name="type"/>: its colour, section, race limits, lock, weight
