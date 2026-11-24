@@ -594,8 +594,12 @@ also finds `MessagesTextBox`). The tag replaces the `Kenshi_EditBoxStandardText`
 character, test `FUN_1407916d0`), the conversation window's NPC line (`140674170`, ML_NORMAL), the player's chosen reply (`140683df0`, the player character's name or
 "Player", ML_PLAYER) and each MessageRoller message (`140724a20`, empty owner, ML_SYSTEM).
 
+**Observed** (Steam 1.0.68 `14049a130` and MyGUI 3.2.2 `EditBox::setCaption`): the visible Dialogue tab refreshes when new lines arrive.
+Replacing the caption moves the cursor to the end of the text and scrolls it into view.
+
 Meitou: `World.Said` from `DialogueSystem` (bubble lines, conversation lines, replies) → `DialogueLog.LogMessage`, each line tagged with its colour (ML_NORMAL is
 the kit's Main colour in the Meitou mode, for its dark panel); notices log as ML_SYSTEM without the `[`. The newest 200 lines are kept; not saved.
+The tab scrolls to the newest line when it shows an updated log. Manual scrolling holds its position between updates.
 
 ### Inline colour tags
 

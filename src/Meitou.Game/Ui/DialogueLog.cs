@@ -29,9 +29,19 @@ enum MessageTone
 sealed class DialogueLog(PlayerInterface player)
 {
     /// <summary>
+    /// The Overview's dialogue history widget.
+    /// </summary>
+    const string TextBox = "MessagesTextBox";
+
+    /// <summary>
     /// The log's lines, oldest first, each with its tone.
     /// </summary>
     readonly List<(string Text, MessageTone Tone)> _uiMessages = [];
+
+    /// <summary>
+    /// New lines are waiting to be shown at the end of the history.
+    /// </summary>
+    bool _scrollToLatest;
 
     /// <summary>
     /// Adds a line to the Overview's DIALOGUE log only ("owner: text", docs/game/ui-screens.md "Dialogue log"); the newest 200 are kept.
@@ -40,13 +50,30 @@ sealed class DialogueLog(PlayerInterface player)
     {
         _uiMessages.Add((owner.Length == 0 ? text : $"{owner}: {text}", tone));
         if (_uiMessages.Count > 200) _uiMessages.RemoveAt(0);
+
+        _scrollToLatest = true;
+    }
+
+    /// <summary>
+    /// Binds the visible Dialogue tab and moves to the latest line when the history has changed.
+    /// </summary>
+    internal void Bind(UiBindings b)
+    {
+        b.Text[TextBox] = MessagesText();
+        b.Properties[TextBox] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true", ["TextAlign"] = "Left Top" };
+
+        if (!_scrollToLatest) return;
+
+        // The EditBox clamps the offset to the end of the wrapped text after measuring it.
+        player.FaithfulScreens.SetScroll("overview", TextBox, float.PositiveInfinity);
+        _scrollToLatest = false;
     }
 
     /// <summary>
     /// The DIALOGUE log as the text box's text: each line after the colour tag of its tone (the original's MessageLogColor: #000000,
     /// <c>DialogueTextOption</c>, #c6ac6a), its own <c>#</c> doubled. The Meitou mode's dark panel takes the kit's text colour for the black.
     /// </summary>
-    internal string MessagesText()
+    string MessagesText()
     {
         string normal = player.UiMode == UiMode.Meitou ? PlayerInterface.Tag(PlayerInterface.MainColour) : "#000000";
         string own = PlayerInterface.Tag(MyGuiColours.Named("DialogueTextOption", "b3b3b3"));

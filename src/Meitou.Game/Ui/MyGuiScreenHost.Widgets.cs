@@ -513,7 +513,11 @@ public sealed partial class MyGuiScreenHost
     /// <summary>
     /// Scrolls offset <paramref name="key"/> by <paramref name="delta"/>, within 0 and <paramref name="max"/>.
     /// </summary>
-    static void Scroll(Screen s, string key, float max, float delta) => s.Scroll[key] = Math.Clamp(s.Scroll.GetValueOrDefault(key) + delta, 0, max);
+    static void Scroll(Screen s, string key, float max, float delta)
+    {
+        float position = Math.Clamp(s.Scroll.GetValueOrDefault(key), 0, max);
+        s.Scroll[key] = Math.Clamp(position + delta, 0, max);
+    }
 
     // ---- lists and combo boxes
 
