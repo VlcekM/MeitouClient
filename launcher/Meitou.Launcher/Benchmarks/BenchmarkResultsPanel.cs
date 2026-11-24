@@ -28,6 +28,11 @@ sealed class BenchmarkResultsPanel(BenchmarkService service, LauncherConfig conf
     readonly HashSet<string> _submitting = [];
 
     /// <summary>
+    /// Updates each shown Submit button and its line from the machine record as typed, so filling it in enables them without a rebuild.
+    /// </summary>
+    readonly List<Action> _submitStates = [];
+
+    /// <summary>
     /// Fills the panel for build <paramref name="version"/> on <paramref name="platform"/>; <paramref name="target"/> says whether it may be
     /// submitted. Null shows nothing (no build chosen).
     /// </summary>
@@ -48,6 +53,7 @@ sealed class BenchmarkResultsPanel(BenchmarkService service, LauncherConfig conf
     void Refill()
     {
         Children.Clear();
+        _submitStates.Clear();
         if (_shown is not var (version, platform, target)) return;
 
         var sessions = BenchmarkSession.List(version, platform);
@@ -97,16 +103,18 @@ sealed class BenchmarkResultsPanel(BenchmarkService service, LauncherConfig conf
     }
 
     /// <summary>
-    /// A text box that saves its text through <paramref name="store"/> into <c>launcher.json</c> when it loses focus.
+    /// A text box that hands its text to <paramref name="store"/> as it is typed (updating the Submit buttons) and saves
+    /// <c>launcher.json</c> when it loses focus.
     /// </summary>
     TextBox Box(string text, string placeholder, Action<string> store)
     {
         var box = new TextBox { Text = text, PlaceholderText = placeholder };
-        box.LostFocus += (_, _) =>
+        box.TextChanged += (_, _) =>
         {
             store(box.Text?.Trim() ?? "");
-            config.Save();
+            foreach (var update in _submitStates) update();
         };
+        box.LostFocus += (_, _) => config.Save();
         return box;
     }
 
@@ -213,18 +221,25 @@ sealed class BenchmarkResultsPanel(BenchmarkService service, LauncherConfig conf
     /// </summary>
     StackPanel SubmitLine(BenchmarkSession session, string version, string platform, bool target)
     {
-        string? blocked = WhyNotSubmittable(session, version, target);
         string? submitted = session.SubmittedId;
         var line = BenchmarkLayout.Line();
-        BenchmarkLayout.SetLine(line, _answers.GetValueOrDefault(session.Folder)
-            ?? (submitted is not null ? Tr("Submitted (#{1}).", submitted) : blocked));
         var button = new Button
         {
             Content = _submitting.Contains(session.Folder) ? Tr("Submitting...") : submitted is null ? Tr("Submit") : Tr("Submit again"),
-            IsEnabled = blocked is null && !_submitting.Contains(session.Folder),
         };
         button.Click += async (_, _) => await SubmitAsync(session, version, platform);
         line.VerticalAlignment = VerticalAlignment.Center;
+
+        void Update()
+        {
+            string? blocked = WhyNotSubmittable(session, version, target);
+            BenchmarkLayout.SetLine(line, _answers.GetValueOrDefault(session.Folder)
+                ?? (submitted is not null ? Tr("Submitted (#{1}).", submitted) : blocked));
+            button.IsEnabled = blocked is null && !_submitting.Contains(session.Folder);
+        }
+
+        Update();
+        _submitStates.Add(Update);
         return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { button, line } };
     }
 
