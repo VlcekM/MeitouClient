@@ -32,6 +32,14 @@ public sealed record NavAgent
     /// The default agent: a human's radius 4, water cost 7, no road preference, doors open.
     /// </summary>
     public static NavAgent Human { get; } = new();
+
+    /// <summary>
+    /// The radius a walker wider than it is asked again at when its own radius finds no path (engine choice; docs/game/pathfinding.md "Wide
+    /// walkers"): half <see cref="SeedPruner.MinPortalWidth"/>, so every passage the kept mesh spreads over lets it by. The portal test reads a
+    /// polygon edge's length, which the triangulation sets: the neck up to Squin is 9 wide in both meshes, but its edge is 10.2 in Meitou's and 13 in
+    /// the original's, so a Bonedog of radius 5.9 found no way in (#1367).
+    /// </summary>
+    public const float SqueezeRadius = SeedPruner.MinPortalWidth / 2;
 }
 
 /// <summary>

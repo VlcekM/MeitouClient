@@ -80,7 +80,10 @@ sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Locks.IDoor
     /// </summary>
     public PathResult FindPath(Vector3 from, Vector3 to) => nav.FindPath(from, to);
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// A path for an agent of the footprint radius; a walker wider than <see cref="NavAgent.SqueezeRadius"/> that finds none is asked again at that
+    /// radius (<see cref="NavAgent.SqueezeRadius"/>, engine choice).
+    /// </summary>
     public PathResult FindPath(Vector3 from, Vector3 to, float footprintRadius, WaterCost water, float roadPreference = 0)
     {
         var agent = new NavAgent
@@ -89,6 +92,9 @@ sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Locks.IDoor
             Water = water.IsSet ? water : NavAgent.Human.Water,
             RoadPreference = roadPreference,
         };
-        return nav.FindPath(from, to, agent);
+        var path = nav.FindPath(from, to, agent);
+        if (path.Found || agent.Radius <= NavAgent.SqueezeRadius) return path;
+
+        return nav.FindPath(from, to, agent with { Radius = NavAgent.SqueezeRadius });
     }
 }

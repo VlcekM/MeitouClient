@@ -151,6 +151,12 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   copies it as its radius. So a small animal (a Bonedog pup: footprint 10 x its size, 0.35..0.85 by age) passes stairs and doorways an adult of its race does not.
   Meitou: path requests (`MovementSystem`, `Fighting`) and the sweep take `CombatSteering.Radius` (footprint x `ScaleK`); **Observed** (#1006, `probe walk`):
   a Bonedog pup ordered to a shack's floor 1 stopped on floor 0 with the unscaled radius and climbs the stair with it.
+- <a id="wide-walkers"></a>**Wide walkers** (engine choice, `NavAgent.SqueezeRadius`, `NavAdapter.FindPath`): Meitou's portal test reads the edge's
+  length, which the triangulation sets, not the passage's width. A walker wider than 4.5 (half `SeedPruner.MinPortalWidth`) that gets no path is asked again at 4.5, so it takes a route that fits it where there is one and
+  every passage the kept mesh holds otherwise. **Observed** (#1367 save, zone 18.35, `probe path --nav`): the neck at the foot of the ramp up to Squin
+  beside Bughouse `18.35:11-rebirth-INGAME` (-62208,16555) is 9.2 across from the steep hole's corner to the roof's edge in Meitou's mesh, 9.0 in the
+  original's tile. Its edge there is 10.2 in Meitou's mesh (radius 5.0 at most), 13 in the original's. The player's Bonedog (radius 5.9) got no path to
+  any goal on the hill above the ramp while radius 4 did.
 - Meitou root motion (`AnimationSystem.Relocate`): after the slide, an end point with no stand-on surface (`IsWalkable(x, z, y)`: off the mesh, a drop or step beyond `StandRise`/`StandDrop`) keeps the
   farthest walkable part of the step (bisection) instead of dropping all of it; when no part has one but the ground is within `StandRise`, the step is made (the sweep saw no wall, and the original has no such test), and a body already standing where no surface is (pushed onto a mesh edge or into a hole) is not refused at all
   (**Observed**, siwa-test6: characters stood for 10+ ticks with every root step refused; `root-log`: 21 refusals over three fights fell to 1). Standing bodies no longer cut a root step short: the original only pushes
