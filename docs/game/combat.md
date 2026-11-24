@@ -394,6 +394,8 @@ as the fighters whose target it is stand for it), stamped with the owner's `List
     Passive one −1;
   - +10 when the candidate's intended target (state broadcast +0x68) is the chooser's AI-task target, that target is not fighting it back, and
     the candidate has under 2 attackers;
+  - with param_6 set (named LawEnforcer by the original TauntExpansion mod) a term from the candidate's state broadcast `+0xa0` and the chooser's
+    faction is added first (**Observed**, decompile; which callers set it **Unknown**; Meitou scores none);
   - a player-faction chooser drops candidates beyond a limit only when its caller sets the clamp flag (`FUN_14059e300` param_7, **Verified**): the in-fight chooser `CombatClassAI::chooseAttackTarget` does, every goal finder and the sight look pass 0 (no clamp, so the attack-on-sight look reaches the sight range). The limit is 400 (`DAT_1416abf04`) while the shooting gate `FUN_1407f2840` is false; with a ranged weapon ready (gate true) it is `FUN_140436910`: 800 (`DAT_1416d4750`) without aim data, else the aim object's range x a height factor (1 within a height difference of 20, down to 0.6 when the target is higher, up to 1.5 when lower). Meitou: `TargetScore.PlayerRange` 400 for the in-fight chooser only (the ranged limit is not modelled); on Hold ×0.01 beyond 40;
   - when the Hold test `FUN_140598630` passes: + range term (×20 for a crippled chooser), + murderous (−2) for a candidate whose fight is off
     (then the whole score ×0.5 when its intended aggression, vfunc 0x1e8 `getIntendedAggression`, is ≤ 0), the whole score ×0.1 while it gets up
