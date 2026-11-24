@@ -191,7 +191,8 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         if (player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { Appearance: { } look } snapshot
                 || RecordOf(look) is not { } record)
             return null;
-        draft = new CharacterDraft(data.Db, data.InstallRoot, record, snapshot.Name) { Creation = Editor.Kind == EditKind.Creation };
+        // A save's race from a mod no longer loaded: the race the character is drawn with (#1344), not the data's first race.
+        draft = new CharacterDraft(data.Db, data.InstallRoot, record, snapshot.Name, look.Race) { Creation = Editor.Kind == EditKind.Creation };
         Editor.Drafts[id] = draft;
         Editor.StartNames[id] = snapshot.Name;
         return draft;

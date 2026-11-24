@@ -187,16 +187,19 @@ public sealed class CharacterDraft
     public bool Creation { get; init; }
 
     /// <summary>
-    /// A draft of a copy of <paramref name="appearance"/> named <paramref name="name"/>.
+    /// A draft of a copy of <paramref name="appearance"/> named <paramref name="name"/>. When the appearance names no race the data has (a race mod
+    /// no longer loaded), the draft takes <paramref name="shown"/>, the race the character is drawn with, else the data's first race.
     /// </summary>
-    public CharacterDraft(GameDatabase db, string installRoot, FcsRecord appearance, string name)
+    public CharacterDraft(GameDatabase db, string installRoot, FcsRecord appearance, string name, GameRecord? shown = null)
     {
         this._db = db;
         this._installRoot = installRoot;
         Record = Copy(appearance);
         Name = name;
         _limitsCache = [];
-        Race = RaceOf(db, Record) ?? db.OfType(FcsRecordType.Race).First();
+        var named = RaceOf(db, Record);
+        Race = named ?? shown ?? db.OfType(FcsRecordType.Race).First();
+        if (named is null) Record.References["race"] = [new FcsReference(Race.StringId, 0, 0, 0)];
         Limits = LimitsFor(Race, Female);
     }
 
