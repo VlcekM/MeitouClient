@@ -561,7 +561,7 @@ static class HudTips
 
     /// <summary>
     /// The weapon model a weaponsmith of <paramref name="level"/> makes (<c>FUN_1408b0f90</c>): of <c>PLAYER_WEAPONS</c>' <c>weapon models</c>, the
-    /// highest v0 above 0 and at or below the level, else the record <c>913-gamedata.base</c>'s name.
+    /// highest v0 above 0 and at or below the level, else the record <c>913-gamedata.base</c>'s name; as the mods' text sources show it.
     /// </summary>
     static string? WeaponModel(Data.GameDatabase db, float level)
     {
@@ -569,7 +569,7 @@ static class HudTips
             .Select(r => (Record: db.Find(r.TargetStringId), Level: r.Values.Value0))
             .Where(m => m.Record is not null && m.Level > 0 && m.Level <= level)
             .OrderByDescending(m => m.Level).FirstOrDefault();
-        return (best.Record ?? db.Find("913-gamedata.base"))?.Name;
+        return (best.Record ?? db.Find("913-gamedata.base"))?.ShownName();
     }
 
     /// <summary>

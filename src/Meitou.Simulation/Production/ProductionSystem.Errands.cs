@@ -471,7 +471,7 @@ public sealed partial class ProductionSystem
     /// Meitou removes it at once.
     /// </summary>
     void Incinerate(World world, int i, CorpseMachine machine) =>
-        CorpseDisposal.Feed(world, Carry!, i, machine.Position, Data(machine.RecordId)?.Label ?? "");
+        CorpseDisposal.Feed(world, Carry!, i, machine.Position, Data(machine.RecordId)?.ShownLabel() ?? "");
 
     /// <summary>
     /// Where the carrier at <paramref name="from"/> walks to: a player machine's operator goal (<see cref="GoalOf"/>), else the floor point at or

@@ -438,4 +438,11 @@ public sealed record CampView(
     string FactionId,
     bool Wildlife,
     System.Numerics.Vector3? Position,
-    TownKnowledge Known);
+    TownKnowledge Known)
+{
+    /// <summary>
+    /// <see cref="Name"/> as the mods' text sources show it (<see cref="ShownText.Record"/>, the TOWN record's name), for the map. Display only:
+    /// the saved camp keeps <see cref="Name"/>.
+    /// </summary>
+    public string ShownName() => ShownText.Record(TownId, Name);
+}

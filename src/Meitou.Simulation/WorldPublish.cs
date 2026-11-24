@@ -793,7 +793,9 @@ public sealed partial class World
 
         bool Marked(int k) => marks is not null && marks[k] > 0;
 
-        string name = data is { Factions: { } factions } && (uint)c.DisguiseFaction < (uint)factions.Count ? factions[c.DisguiseFaction].Name : "";
+        string name = data is { Factions: { } factions } && (uint)c.DisguiseFaction < (uint)factions.Count
+            ? ShownName(factions[c.DisguiseFaction])
+            : "";
         bool secure = SystemOf<Crime.ArrestSystem>()?.SecureLocation(this, at) ?? false;
         return new DisguiseView(c.DisguiseLevel, name, c.RecentlyWanted, Crime.ArrestSystem.SeenFaction(c) != c.Faction, secure,
             Marked(Crime.ArrestSystem.SameFactionMark), Marked(Crime.ArrestSystem.SlaveOwnerMark), Marked(Crime.ArrestSystem.KnowsMeMark));
@@ -868,12 +870,12 @@ public sealed partial class World
             .. Items.InventoryCommands.MainClosed(cold) ? MainGrid : []];
 
     /// <summary>
-    /// The health panel's rows: each body part's flesh, stun, bandage and rig.
+    /// The health panel's rows: each body part's name as the mods' text sources show it, flesh, stun, bandage and rig.
     /// </summary>
     static IReadOnlyList<HealthPartView> HealthPartsOf(MedicalState health, RaceData anatomy) =>
         Array.AsReadOnly(health.Parts
-            .Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp,
-                p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb, Wear = p.Wear })
+            .Select(p => new HealthPartView(p.Template.StringId, ShownText.Record(p.Template.StringId, p.Template.Name), p.Flesh, p.Stun, p.Bandage,
+                p.Rig, p.MaxHp, p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb, Wear = p.Wear })
             .ToArray());
 
     /// <summary>
@@ -930,7 +932,7 @@ public sealed partial class World
         return InventoryItemView.Of(index, item) with
         {
             StolenFrom = stolen ? item.StolenFrom : -1,
-            StolenOwner = stolen ? Characters.OwnerNameOf(item.Owner) : null,
+            StolenOwner = stolen ? ShownOwnerNameOf(item.Owner) : null,
             StealChance = steal?.Invoke(item)
         };
     }

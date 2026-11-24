@@ -222,7 +222,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         world.Player.Money -= price;
         if (pc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, cage.Owner) is { } entry)
             CrimeSystem.ClearBounty(world, p, pc, ledger, entry);
-        world.Post(Loc.Tr("{1} paid a bail of c.{2} for {3}", table.Cold(payer)!.Name, price, pc.Name));
+        world.Post(Loc.Tr("{1} paid a bail of c.{2} for {3}", world.ShownName(table.Cold(payer)!), price, world.ShownName(pc)));
         FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
         pc.Freed = true;
         pc.Recognition = 0;
@@ -378,7 +378,8 @@ public sealed partial class ArrestSystem : IOrderOwner
         {
             if (FindCageFor(world, s, c, k) is not { } other)
             {
-                if (DestinationAccess.PlayerSide(world, c)) world.Post(Loc.Tr("{1}: no free cage nearby", c.Name));
+                if (DestinationAccess.PlayerSide(world, c))
+                    world.Post(Loc.Tr("{1}: no free cage nearby", world.ShownName(c)));
                 return false;
             }
             k.Cage = other.Id;
@@ -395,7 +396,8 @@ public sealed partial class ArrestSystem : IOrderOwner
             Carry!.LetGo(world, s);
             if (!world.Fixtures.Imprison(world, k.Captive, cage, constants.PrisonTime))
             {
-                if (DestinationAccess.PlayerSide(world, c)) world.Post(Loc.Tr("{1} could not put the captive in the cage", c.Name));
+                if (DestinationAccess.PlayerSide(world, c))
+                    world.Post(Loc.Tr("{1} could not put the captive in the cage", world.ShownName(c)));
                 return false;
             }
             Claim(world, s, k.Captive, cage);

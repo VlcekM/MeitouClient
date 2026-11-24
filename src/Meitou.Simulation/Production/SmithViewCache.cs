@@ -87,7 +87,7 @@ sealed class SmithViewCache(GameDatabase db)
                 continue;
             }
 
-            var view = new CraftSmithView(cold.Name, (int)level, penalty, Predictions(m, bench, state, level));
+            var view = new CraftSmithView(world.ShownName(cold), (int)level, penalty, Predictions(m, bench, state, level));
             _fresh.Add((m.Site, new Entry(m, m.Smith, cold.Name, level, penalty, [.. state.Queue.Select(j => j.Option)], view)));
             changed = true;
         }
@@ -141,7 +141,7 @@ sealed class SmithViewCache(GameDatabase db)
                 var model = ProductionSystem.WeaponModel(bench, option, level, false);
                 return none with
                 {
-                    Model = model.Model is { } id ? db.Find(id)?.Name ?? id : "",
+                    Model = model.Model is { } id ? db.Find(id)?.ShownName() ?? id : "",
                     ModelChanged = model.Model != option.Model,
                     MaterialCost = db.Find(option.Item)?.GetInt("material cost", 4) ?? 4,
                     Critical = critical,

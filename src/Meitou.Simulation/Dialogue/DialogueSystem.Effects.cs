@@ -78,9 +78,10 @@ public sealed partial class DialogueSystem
             int f = _data.Relations.IndexOf(factionId);
             if (f < 0 || amount == 0 || world.Player.Faction < 0) continue;
             ChangeRelation(world, f, world.Player.Faction, amount, new(RelationCauseType.Dialogue, speaker));
+            string name = World.ShownName(_data.Factions[f]);
             world.Post(amount > 0
-                ? Loc.Tr("Relations with {1} improved by {2}", _data.Factions[f].Name, amount)
-                : Loc.Tr("Relations with {1} decreased by {2}", _data.Factions[f].Name, -amount));
+                ? Loc.Tr("Relations with {1} improved by {2}", name, amount)
+                : Loc.Tr("Relations with {1} decreased by {2}", name, -amount));
         }
     }
 
@@ -450,7 +451,7 @@ public sealed partial class DialogueSystem
         foreach (var (id, count) in line.GiveItems)
         {
             if (_data.Items.Create(id, count is >= 2 and <= 49 ? count : 1) is not { } item) continue;
-            string name = item.Name;
+            string name = item.ShownName();
             if (tc.Inventory?.Add(item) != true && Position(world, target) is { } at) world.GroundItems.Drop(item, at, 0);
             world.Post($"{Loc.Tr("Received")} {name}");
         }
@@ -691,7 +692,7 @@ public sealed partial class DialogueSystem
     /// The text tokens (docs/game/dialogue.md "Tokens"): <c>/NAME/</c> pairs until none is left; COST, MYNAME, YOURNAME, TARGETFACTION and
     /// PLAYERFACTION are built in, any other name is the WORD_SWAPS record of that name (its lines chosen like a line's children, one of their texts;
     /// none: empty). A token at the start or after ". ", "! ", "? " is capitalised. With <paramref name="tokens"/>, each token's name, value and
-    /// shown value (a word swap's line as the mods' text sources show it) are added to it in order, for <see cref="Fill"/>.
+    /// shown value (a word swap's line or a built-in name as the mods' text sources show it) are added to it in order, for <see cref="Fill"/>.
     /// </summary>
     string Expand(World world, Conversation c, DialogueNode? line, string text, CharacterId me, CharacterId other, int depth = 0,
         List<(string Token, string Value, string Shown)>? tokens = null)
@@ -706,9 +707,9 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// One token's text: a built-in name's value, else a line of the WORD_SWAPS record of that name, itself expanded. With
-    /// <paramref name="showing"/>, a word swap's line as the mods' text sources show it goes in <paramref name="swapped"/> (else, and for a built-in
-    /// name, null).
+    /// One token's text: a built-in name's value (<see cref="BuiltIn"/>), else a line of the WORD_SWAPS record of that name, itself expanded. With
+    /// <paramref name="showing"/>, a word swap's line or a built-in name as the mods' text sources show it goes in <paramref name="swapped"/>
+    /// (else, and for COST, null).
     /// </summary>
     string Token(World world, Conversation c, DialogueNode? line, string token, CharacterId me, CharacterId other, int depth, bool showing,
         out string? swapped)
@@ -717,10 +718,11 @@ public sealed partial class DialogueSystem
         switch (token)
         {
             case "COST": return line?.Cost is { } cost ? cost.ToString("N0", CultureInfo.InvariantCulture) : "";
-            case "MYNAME": return NameOf(world, me);
-            case "YOURNAME": return Cold(world, other)?.Name ?? "you";
-            case "TARGETFACTION": return Cold(world, other) is { } o && _data.Relations.Contains(o.Faction) ? _data.Factions[o.Faction].Name : "you";
-            case "PLAYERFACTION": return _data.Relations.Contains(world.Player.Faction) ? _data.Factions[world.Player.Faction].Name : "";
+            case "MYNAME":
+            case "YOURNAME":
+            case "TARGETFACTION":
+            case "PLAYERFACTION":
+                return BuiltIn(world, token, me, other, showing, out swapped);
         }
         if (_dialogue.WordSwap(token) is not { } swap) return "";
         // The full line walk over the swap's lines (FUN_14067a530 :168-220 into FUN_14067a0c0): the target is the conversation's, or the passed one
@@ -740,6 +742,34 @@ public sealed partial class DialogueSystem
         string value = Expand(world, c, p.Line, template, me, other, depth + 1, inner);
         swapped = ShownLine(p.Line, template, value, inner);
         return value;
+    }
+
+    /// <summary>
+    /// A built-in name token's text: MYNAME the speaker's name, YOURNAME the other's ("you" without one), TARGETFACTION the other's faction ("you"
+    /// without one), PLAYERFACTION the player faction's data name. With <paramref name="showing"/>, the name as the mods' text sources show it goes
+    /// in <paramref name="swapped"/>; the returned text stays the game's, which decisions read.
+    /// </summary>
+    string BuiltIn(World world, string token, CharacterId me, CharacterId other, bool showing, out string? swapped)
+    {
+        swapped = null;
+        switch (token)
+        {
+            case "MYNAME":
+                if (showing) swapped = world.ShownName(me);
+                return NameOf(world, me);
+            case "YOURNAME":
+                if (Cold(world, other) is not { } you) return "you";
+                if (showing) swapped = world.ShownName(you);
+                return you.Name;
+            case "TARGETFACTION":
+                if (Cold(world, other) is not { } o || !_data.Relations.Contains(o.Faction)) return "you";
+                if (showing) swapped = World.ShownName(_data.Factions[o.Faction]);
+                return _data.Factions[o.Faction].Name;
+            default:
+                if (!_data.Relations.Contains(world.Player.Faction)) return "";
+                if (showing) swapped = World.ShownName(_data.Factions[world.Player.Faction]);
+                return _data.Factions[world.Player.Faction].Name;
+        }
     }
 
     #endregion

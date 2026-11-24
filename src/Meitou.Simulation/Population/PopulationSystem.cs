@@ -456,7 +456,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
                     player.Meet(_data.SiteFactions[site.Index]);
             }
             else if (d2 < far * far && player.Know(site.Index, TownKnowledge.Discovered) && site.Town.Type != TownType.Nest)
-                world.Post(Loc.Tr("Discovered {1}", site.Town.UnexploredName is { Length: > 0 } unexplored ? unexplored : site.Town.Name));
+                world.Post(Loc.Tr("Discovered {1}", World.ShownName(site.Town, unexplored: site.Town.UnexploredName.Length > 0)));
         }
 
         var wild = WildSites;

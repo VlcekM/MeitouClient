@@ -74,13 +74,15 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The name of what a contract protects: a base defender's mission town, a bodyguard's mission target; null when it does not resolve.
+    /// The name of what a contract protects as the mods' text sources show it: a base defender's mission town, a bodyguard's mission target; null
+    /// when it does not resolve.
     /// </summary>
     string? ProtectedName(Ai.Blackboard board)
     {
-        if (board.Contract?.Signal == DefendBaseSignal) return Buildings.FindTown(board.ContractTown.PlayerTown)?.Name;
+        if (board.Contract?.Signal == DefendBaseSignal)
+            return Buildings.FindTown(board.ContractTown.PlayerTown) is { } town ? ShownName(town) : null;
 
         var table = Characters;
-        return table.TryResolveNext(board.MissionTarget, out int slot) ? table.Cold(slot)?.Name : null;
+        return table.TryResolveNext(board.MissionTarget, out int slot) && table.Cold(slot) is { } c ? ShownName(c) : null;
     }
 }

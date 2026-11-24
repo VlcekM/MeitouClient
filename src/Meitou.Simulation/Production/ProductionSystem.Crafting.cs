@@ -329,8 +329,9 @@ public sealed partial class ProductionSystem
     CraftOptionView OptionView(World world, Machine m, CraftBench bench, CraftOption option)
     {
         var recipe = RecipeOf(m, option);
-        var inputs = recipe.Inputs.Select(i => (_items.Info(i.Item)?.Name ?? i.Item, i.PerItem)).ToArray();
-        return new CraftOptionView(option.Key, recipe.Name, option.Kind, option.Level, recipe.Hours, inputs, CanCraft(world, bench, option));
+        var inputs = recipe.Inputs.Select(i => (ShownItemName(i.Item), i.PerItem)).ToArray();
+        bool can = CanCraft(world, bench, option);
+        return new CraftOptionView(option.Key, recipe.ShownName(_db), option.Kind, option.Level, recipe.Hours, inputs, can);
     }
 
     /// <summary>

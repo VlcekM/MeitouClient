@@ -105,7 +105,7 @@ public sealed partial class ProductionSystem
         if (swamp > 0) environment.Add(new("Swamp", swamp));
         var found = new ProspectLine[ProspectResources.Length];
         for (int k = 0; k < found.Length; k++) found[k] = new(ProspectResources[k].Name, _resources.Yield(ProspectResources[k].Resource, at));
-        world.Prospected = new ProspectReport((world.Prospected?.Serial ?? 0) + 1, at, prospector.Name, (int)skill,
+        world.Prospected = new ProspectReport((world.Prospected?.Serial ?? 0) + 1, at, world.ShownName(prospector), (int)skill,
             _resources.ZoneName(at.X, at.Z) ?? "", (int)at.Y,
             (int)((skill * 0.01f * 6000 + 2000) * 0.2f), environment, found, SampleProspectMap(world, at, skill * 0.01f),
             world.Weather?.At(at.X, at.Z)?.WindSpeed ?? 0);

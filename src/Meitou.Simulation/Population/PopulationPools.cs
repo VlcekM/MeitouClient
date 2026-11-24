@@ -928,9 +928,10 @@ public sealed partial class PopulationSystem
 
         pools.Ded = true;
         pools.DiedAt = (float)Hours(world);
-        world.Post(Loc.Tr("{1} has been wiped out", site.Nest!.Name));
+        var nest = site.Nest!;
+        world.Post(Loc.Tr("{1} has been wiped out", World.ShownName(nest)));
         if (_townLog.Count >= 256) _townLog.RemoveAt(0);
-        _townLog.Add($"{site.Nest.Name} (wild site {site.Index}) wiped out");
+        _townLog.Add($"{nest.Name} (wild site {site.Index}) wiped out");
     }
 
     /// <summary>

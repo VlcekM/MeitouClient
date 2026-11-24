@@ -1973,7 +1973,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             research.Complete(_db, item.Id);
             _publishedResearch = null;
-            world.Post(Loc.Tr("Research complete: {1}", data.Name));
+            world.Post(Loc.Tr("Research complete: {1}", ShownText.Record(data.Id, data.Name)));
         }
 
         return true;
@@ -2001,7 +2001,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
         world.Research.Complete(_db, id);
         _publishedResearch = null;
-        world.Post(Loc.Tr("Research complete: {1}", data.Name));
+        world.Post(Loc.Tr("Research complete: {1}", ShownText.Record(data.Id, data.Name)));
         return true;
     }
 
@@ -2109,13 +2109,15 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         int level = r.LevelAt(world.Research.Times(id));
         if (level > world.Research.BenchLevel)
         {
-            world.Post(world.Research.BenchLevel == 0 ? "Research needs a research bench." : $"{r.Name} needs a level {level} research bench.");
+            world.Post(world.Research.BenchLevel == 0
+                ? "Research needs a research bench."
+                : $"{ShownText.Record(r.Id, r.Name)} needs a level {level} research bench.");
             return;
         }
 
         if (!Affordable(world, r))
         {
-            world.Post($"Not enough materials in the research benches for {r.Name}.");
+            world.Post($"Not enough materials in the research benches for {ShownText.Record(r.Id, r.Name)}.");
             return;
         }
 
@@ -2147,6 +2149,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
+    /// The name of item record <paramref name="record"/> as the mods' text sources show it (the record id when it is not an item), for the views
+    /// the host shows.
+    /// </summary>
+    string ShownItemName(string record) => _items.Info(record) is { } info ? ShownText.Record(record, info.Name) : record;
+
+    /// <summary>
     /// The research state for the host (rebuilt when it or the machines changed).
     /// </summary>
     public ResearchSnapshot ResearchView(World world)
@@ -2169,27 +2177,30 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         _machinesVersion = machines;
         _allResearch ??= ResearchData.LoadAll(_db);
         var state = world.Research;
-        var queue = state.Queue.Select(q => (q.Id, Research(q.Id)?.Name ?? q.Id,
+        var queue = state.Queue.Select(q => (q.Id, Research(q.Id) is { } named ? ShownText.Record(q.Id, named.Name) : q.Id,
             Research(q.Id) is { } d
                 ? Math.Clamp(q.Seconds / (d.Hours(_constants, Settings.ResearchOption, state.Times(q.Id)) * (MachineData.DaySeconds / 24)), 0, 1)
                 : 0)).ToArray();
         var available = _allResearch.Where(r => Available(world, r))
-            .Select(r => new ResearchOption(r.Id, r.Name, r.Category, r.LevelAt(state.Times(r.Id)),
+            .Select(r => new ResearchOption(r.Id, ShownText.Record(r.Id, r.Name), ShownText.Record(r.Id, r.Category, "category"),
+                r.LevelAt(state.Times(r.Id)),
                 r.Hours(_constants, Settings.ResearchOption, state.Times(r.Id)), Affordable(world, r),
                 r.LevelAt(state.Times(r.Id)) > state.BenchLevel,
                 state.Partial.TryGetValue(r.Id, out float s)
                     ? Math.Clamp(s / (r.Hours(_constants, Settings.ResearchOption, state.Times(r.Id)) * (MachineData.DaySeconds / 24)), 0, 1)
                     : 0)
             {
-                Description = r.Description,
+                Description = ShownText.Record(r.Id, r.Description, "description"),
                 Paid = state.Paid.Contains(r.Id, StringComparer.Ordinal),
                 Cost = state.Paid.Contains(r.Id, StringComparer.Ordinal) ? []
-                    : [.. r.CostAt(state.Times(r.Id)).Select(c => (_items.Info(c.Item)?.Name ?? c.Item, c.Count,
+                    : [.. r.CostAt(state.Times(r.Id)).Select(c => (ShownItemName(c.Item), c.Count,
                         CountInBenches(world, c.Item) >= c.Count))],
                 // The description lists the RESEARCH requirements only (FUN_140495e00 looks them up as type 21).
                 Requirements = [.. r.Requirements.Select(_db.Find).Where(q => q is { Type: FcsRecordType.Research })
-                    .Select(q => (q!.Name, state.IsDone(q.StringId), state.IsQueued(q.StringId)))],
-                Unlocks = [.. r.Unlocks.Select(u => (u.Field, _db.Find(u.Id)?.Name)).Where(u => u.Name is not null).Select(u => (u.Field, u.Name!))],
+                    .Select(q => (q!.ShownName(), state.IsDone(q.StringId), state.IsQueued(q.StringId)))],
+                Unlocks = [.. r.Unlocks.Select(u => (u.Field, Name: _db.Find(u.Id)?.ShownName()))
+                    .Where(u => u.Name is not null)
+                    .Select(u => (u.Field, u.Name!))],
             }).ToArray();
         return _publishedResearch = new ResearchSnapshot(state.TechLevel, state.BenchLevel, queue, state.Rate, available)
         {
@@ -2397,7 +2408,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (m.Storage is not { } storage || m.Closed || item.Contents is not null && item.Section == "backpack_attach") return false;
         if (m.Data.IsStorage && !m.Data.TakesByHand(item.Record, item.Type))
         {
-            world.Post($"{m.Data.Name} does not take {item.Name}.");
+            world.Post($"{ShownText.Record(m.Data.Id, m.Data.Name)} does not take {item.ShownName()}.");
             return false;
         }
 
