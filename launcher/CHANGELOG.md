@@ -2,6 +2,10 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.21.2
+
+- Tooltips open beside the mouse pointer, never under it, so they no longer swallow a click on Main menu, Continue or other buttons near the bottom of the screen
+
 ## v1.21.1
 
 - Benchmark page: added a "Benchmark settings" tooltip in the header listing the fixed display, quality, and isolation settings used during every benchmark run
