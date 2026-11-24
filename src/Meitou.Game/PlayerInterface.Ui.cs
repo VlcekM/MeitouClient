@@ -442,6 +442,12 @@ sealed partial class PlayerInterface
     public IDisposable RegisterUiExtension(IUiExtension extension, string? folder) => _uiHost.Register(extension, folder);
 
     /// <summary>
+    /// Registers a code mod's extension with its mod's folder and translations (docs/modding.md "Translations").
+    /// </summary>
+    public IDisposable RegisterUiExtension(IUiExtension extension, string? folder, Localisation.ModTranslations? texts) =>
+        _uiHost.Register(extension, folder, texts);
+
+    /// <summary>
     /// Whether any UI extension adds markers to the world map.
     /// </summary>
     internal bool HasModMapMarkers => _uiHost.HasMapMarkers;
@@ -502,6 +508,24 @@ sealed partial class PlayerInterface
     /// Whether any interface extension handles world map input.
     /// </summary>
     internal bool HasModMapInput => _uiHost.HasMapInput;
+
+    /// <summary>
+    /// A key going down to the interface, first to the extensions' key handlers (<see cref="UiHost.KeyInputTaken"/>, docs/modding.md "Interface
+    /// keys"); true when one took it. Not while a text box has the keys or over the title.
+    /// </summary>
+    bool ModKeyInput(Key key, bool ctrl, bool shift)
+    {
+        if (!_uiHost.HasKeyInput || FaithfulScreens.HasKeyboardFocus || TitleOpen) return false;
+
+        bool alt = Session.Input.IsHeld(Key.LeftAlt) || Session.Input.IsHeld(Key.RightAlt);
+        var input = new UiKeyInput(UiKeyInputKind.Down, key, [.. FaithfulScreens.OpenIds], Session.CurrentSnapshot, () => Session.World.Tick, Say)
+        {
+            Ctrl = ctrl,
+            Shift = shift,
+            Alt = alt,
+        };
+        return _uiHost.KeyInputTaken(input);
+    }
 
     /// <summary>
     /// Switches the interface style; a drag or a held order under way ends.
@@ -1418,6 +1442,7 @@ sealed partial class PlayerInterface
     {
         UiInput++;
         if (!UiVisible) return false;
+        if (ModKeyInput(key, ctrl, shift)) return true;
         if (key == Key.Escape && (InventoryWindows.CancelInventoryDrag() || ItemsWindow.CancelDrag())) return true;
 
         // toggle_camera_grid (Shift+; fixed: a binding carries no modifier, and ; alone is the free camera's).

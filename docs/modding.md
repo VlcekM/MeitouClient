@@ -1087,6 +1087,14 @@ holds refuses the second mod.
   first handler in registration order that takes it ends the round. It runs on the host thread and must not touch the world. A handler
   that throws is logged once and dropped. Draw on the map with `AddScreenControls("overview", "MapImage", ...)`. Engine API, not in the
   original.
+- **Interface keys:** `registration.AddKeyInput(input => taken)` gets each key going down to the game's interface (`UiKeyInput`: `Kind`
+  `Down`, `Key`, `Ctrl`, `Shift`, `Alt`, `Modifiers`, `Cancel` (Esc), `OpenScreens`, `Snapshot`, `Tick`, `Enqueue`) before the interface uses
+  it: before Esc cancels a drag, closes the top window or opens the game menu, before window hotkeys, map input and the game's bindings
+  (key actions included). Returning true takes the key from all of them; the first handler in registration order that takes it ends the
+  round. So a mod cancels its pending action on Esc, gives Tab a meaning while its window is open, or captures a key for `Rebind`, only while
+  it wants to. Not while a text box has the keys, over the title or while the interface is hidden; keys the host takes before the interface
+  (a mod's chord, photo mode's P, F7, the settings and console keys, the F10 menu) never arrive. Host thread; it must not touch the world. A
+  handler that throws is logged once and dropped. Without a handler keys go as before. Engine API, not in the original.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.
@@ -1125,6 +1133,11 @@ holds refuses the second mod.
   `Alt`: either key of each held as it was pressed, so a mod can give Ctrl+key its own meaning) runs on the host thread at the control tick,
   so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at the last control tick, for
   host-thread readers. A throw is logged with the mod id and the name and that action gets no more presses.
+  `action.After = InputAction.ToggleSneak` (set in `Initialize`) puts its Controls row right after that game row (mod rows after the same row
+  in load order; null, a mod action or a hidden row: after the game's rows). `action.Keys` reads its keys now, and `action.Rebind(keys)` binds
+  it from the mod's own window on the host's thread as the page does (each key taken from the other actions of its key map, chords allowed,
+  none unbinds, kept in `meitou.user.json` as the page's change); it answers false and changes nothing before the bindings take the actions or
+  for a key the page refuses. A key capture ("press a shortcut") reads the next key through "Interface keys".
   `name` (1 to 48 letters, digits, `_ . -`, unique within the mod) keys the saved keys; a bad name, or a label that is empty or blank, over 48
   characters or on more than one line, refuses the mod. The actions are numbered `InputAction` from `InputBindings.FirstModAction` (1000) in
   load order, for this session only. Without key actions the bindings, the page and `meitou.user.json` are the game's. Engine API, not in the
@@ -1259,8 +1272,27 @@ holds refuses the second mod.
   they were, not snapped to the step (Restore defaults also drops every kept mod value). The page sets a changed property at once on the interface's
   thread, outside the tick, and raises the returned group's `Changed`; a throw from the setter or a handler is logged and shown as the page's
   notice. A value the mod sets itself with `ModSetting.Set` or `Reset` (a window's place, an in-game slider) raises `Changed` the same way and is
-  kept in `meitou.user.json` like the page's; call them on the interface's thread. A slider's arrow keys move one Step. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
+  kept in `meitou.user.json` like the page's; call them on the interface's thread. A slider's arrow keys move one Step. A property of type `Action`
+  (a public get is enough) is a button row: its caption the attribute's `Button` (else the label), a click (or `ModSetting.Press()`) runs the
+  delegate on the interface's thread, a throw logged and shown as the page's notice; it keeps no value and Reset passes it by. Named presets
+  (`ModSettingsGroup`): `SavePreset(name)` keeps every value setting's value under a name (1 to 64 characters on one line, at most 64 presets;
+  the same name replaces), `ApplyPreset(name)` sets the values back as `Set` does (raising `Changed`; a value no longer valid is skipped),
+  `DeletePreset(name)`, `Presets` (names, in the order first saved) and `PresetsChanged`; kept in `meitou.user.json` (`modSettingPresets`: mod
+  id, preset, key, text), not dropped by Restore defaults, and read once the game starts the mods (after `Initialize`). With buttons and a text
+  setting for the name a mod builds its own preset slots. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
   `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group).
+- **Translations:** `context.Language` is the game's locale code (`en_GB` for English, `ru_RU`, `zh_CN`, a translation mod's own; fixed for
+  the process). `context.AddTranslations(domain, folder = null)` (in `Initialize`) reads the gettext catalogue
+  `<folder>/locale/<language>/LC_MESSAGES/<domain>.mo` (else `.po`) of that language: the folder named by the code ignoring case, else the first
+  of the same language part (`de` of `de_DE`); English reads `en_GB` when there is one. `folder` is the mod's own when null, a relative path is
+  under it, and a full path may name another, such as an installed original's mod folder ([catalogue layout](formats/localisation.md#code-mods-catalogues)).
+  False when there is none or it cannot be read (logged). Catalogues are looked up by the English text in the order added. Then the mod's
+  `UiNode` texts (not a text box's), right-click menu rows, squad AI options and building panel buttons (captions and tooltips), its settings'
+  labels, hints, sub-groups, buttons and choices (a choice is still saved by its own text) and its key actions' labels show through them, the
+  game's own lookup after as before; other texts the mod passes through `context.Tr(english)` (the mod's catalogues, then the game's and
+  Meitou's, else unchanged; any thread), `Tr(english, args)` (`{1}` placeholders, as `Loc.Tr`), `TrIn(context, english)` (`msgctxt`) and
+  `Plural(singular, plural, n, args)` (the catalogue's `Plural-Forms`). Without catalogues every text shows as written. Engine API, not in the
+  original.
 - **Weather kinds:** a WEATHER or EFFECT `affect type` outside 1-5 is kept as its number, with ARMOUR `weather protection<N>` and RACE `weather
   immunity<N>` naming it the same way, so a mod defines a hazard in data and acts on it from its own system
   ([weather](formats/weather.md#effects-on-characters), "Undefined kinds": what the vanilla systems still do with such a kind). Nothing

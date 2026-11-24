@@ -571,6 +571,7 @@ public sealed class ModContext
         ArgumentNullException.ThrowIfNull(extension);
         Pending.Ui.Add(extension);
         Pending.UiFolders[extension] = Folder;
+        Pending.UiTexts[extension] = Texts;
     }
 
     /// <summary>
@@ -794,7 +795,7 @@ public sealed class ModContext
         if (Game.Host.Input.ModKeyAction.Refusal(name, label, defaults, Pending.KeyActions) is { } refusal)
             throw new ArgumentException(refusal, nameof(name));
 
-        var action = new Game.Host.Input.ModKeyAction(Id, Name, name, label, pressed, [.. defaults]);
+        var action = new Game.Host.Input.ModKeyAction(Id, Name, name, label, pressed, [.. defaults]) { Texts = Texts };
         Pending.KeyActions.Add(action);
         return action;
     }
@@ -811,12 +812,63 @@ public sealed class ModContext
         if (settings.GetType().IsValueType)
             throw new ArgumentException($"{settings.GetType().Name} is a struct: the page would change a copy. Use a class.", nameof(settings));
         if (Pending.Settings is not null) throw new InvalidOperationException($"{Id}: AddSettings is allowed once per mod.");
-        var group = new ModSettingsGroup(Id, Name, settings);
+        var group = new ModSettingsGroup(Id, Name, settings) { Texts = Texts };
         if (_savedSettings is not null)
             foreach (string key in group.Load(_savedSettings)) Log($"saved setting '{key}' is not a value of a setting; ignored");
         Pending.Settings = group;
         return group;
     }
+
+    /// <summary>
+    /// The mod's gettext catalogues (docs/modding.md "Translations"), added by <see cref="AddTranslations"/>; its interface texts, menu rows,
+    /// settings and key action labels are shown through them.
+    /// </summary>
+    internal Localisation.ModTranslations Texts { get; } = new();
+
+    /// <summary>
+    /// The game's language: the locale code of the texts shown (<c>en_GB</c> for English, <c>ru_RU</c>, <c>zh_CN</c>, a translation mod's own),
+    /// fixed for the process.
+    /// </summary>
+    public string Language => Localisation.Loc.Language.Code;
+
+    /// <summary>
+    /// Reads the gettext catalogue <paramref name="domain"/> (<c>locale/&lt;language&gt;/LC_MESSAGES/&lt;domain&gt;.mo</c>, else <c>.po</c>) of the
+    /// game's <see cref="Language"/> under <paramref name="folder"/> (the mod's folder when null; a relative path is under it, a full path may name
+    /// another folder, such as an installed original's). Catalogues are looked up in the order added. False when the folder has none for the
+    /// language or it cannot be read (logged). During <see cref="IMod.Initialize"/>.
+    /// </summary>
+    public bool AddTranslations(string domain, string? folder = null)
+    {
+        CheckOpen();
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        if (domain.IndexOfAny(['/', '\\']) >= 0 || domain.Contains("..", StringComparison.Ordinal))
+            throw new ArgumentException($"Translation domain '{domain}' must be a file name without a folder.", nameof(domain));
+
+        string root = folder is null ? Folder : Path.GetFullPath(folder, Folder);
+        return Texts.Add(root, domain, Language);
+    }
+
+    /// <summary>
+    /// <paramref name="english"/> in the game's language: the mod's catalogues, then the game's and Meitou's, else unchanged. Any thread.
+    /// </summary>
+    public string Tr(string english) => Texts.Tr(english);
+
+    /// <summary>
+    /// <see cref="Tr(string)"/> with the placeholders <c>{1}</c>, <c>{1,num}</c>... filled with <paramref name="args"/> (1-based, so a translation
+    /// may reorder them).
+    /// </summary>
+    public string Tr(string english, params object?[] args) => Localisation.Loc.Format(Texts.Tr(english), args);
+
+    /// <summary>
+    /// <paramref name="english"/> under the message context <paramref name="context"/> (<c>msgctxt</c>), as <see cref="Tr(string)"/>.
+    /// </summary>
+    public string TrIn(string context, string english) => Texts.TrIn(context, english);
+
+    /// <summary>
+    /// The plural message <paramref name="singular"/> / <paramref name="plural"/> for <paramref name="n"/> by the catalogue's plural rule, its
+    /// placeholders filled with <paramref name="args"/>.
+    /// </summary>
+    public string Plural(string singular, string plural, long n, params object?[] args) => Texts.Plural(singular, plural, n, args);
 
     /// <summary>
     /// Throws once <see cref="IMod.Initialize"/> has returned: registering is only allowed during it.

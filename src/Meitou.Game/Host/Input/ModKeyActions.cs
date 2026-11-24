@@ -66,9 +66,53 @@ public sealed class ModKeyAction
     internal bool Faulted { get; set; }
 
     /// <summary>
+    /// The game action whose Controls row this action's row follows (docs/modding.md "Key actions"); null, a mod's action or a row the page does
+    /// not show: after the game's rows. Mod rows after the same game row keep load order. Set it during <c>IMod.Initialize</c>.
+    /// </summary>
+    public InputAction? After { get; set; }
+
+    /// <summary>
+    /// The keys and buttons the action has now, as the Controls page shows them; none before the bindings take the mods' actions.
+    /// </summary>
+    public IReadOnlyList<Binding> Keys => Bindings?.Get(Action) ?? [];
+
+    /// <summary>
+    /// The bindings the action is in, set when they take the mods' actions; null before.
+    /// </summary>
+    internal InputBindings? Bindings { get; set; }
+
+    /// <summary>
+    /// The mod's translations its label is shown through.
+    /// </summary>
+    internal Meitou.Localisation.ModTranslations? Texts { get; init; }
+
+    /// <summary>
+    /// The label in the game's language (the mod's catalogues).
+    /// </summary>
+    internal string ShownLabel => Texts?.Text(Label) ?? Label;
+
+    /// <summary>
     /// The row's caption: the label, then the mod's name in brackets.
     /// </summary>
-    internal string Caption => $"{Label} [{OwnerName}]";
+    internal string Caption => $"{ShownLabel} [{OwnerName}]";
+
+    /// <summary>
+    /// Binds the action to <paramref name="keys"/> (none unbinds it) from the mod's own window, as the Controls page binds it (docs/modding.md "Key
+    /// actions"): each key is taken from the other actions of its key map that have it, chords included, and the keys are kept in
+    /// <c>meitou.user.json</c> as the page's are. False, with nothing changed, before the bindings take the mods' actions or when a key is one the
+    /// page refuses (reserved, or the host's). On the host's thread.
+    /// </summary>
+    public bool Rebind(params Binding[] keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        if (Bindings is not { } bindings) return false;
+        if (keys.Any(k => InputBindings.Reserved(k) || InputBindings.HostKey(k))) return false;
+
+        var distinct = keys.Distinct().ToArray();
+        foreach (var key in distinct) bindings.TakeFrom(Action, key);
+        bindings.Set(Action, distinct);
+        return true;
+    }
 
     /// <summary>
     /// Runs the press; a throw is logged with the mod and the action, and the action gets no more presses.

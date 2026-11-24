@@ -142,28 +142,37 @@ sealed class ModSettingsRows(SettingsMenu menu)
         var members = group.Settings.Where(s => s.SubGroup == subGroup).ToList();
         bool changed = members.Any(s => !s.IsDefault);
         Action? reset = changed ? () => ResetModSubGroup(members) : null;
-        lines.Add(new(-1, new(subGroup, "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset, Depth: 1)));
+        lines.Add(new(-1, new(group.Shown(subGroup), "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset, Depth: 1)));
         if (!open) return;
 
         foreach (var member in members.Where(s => s.Visible)) lines.Add(new(-1, ModSettingEntry(member, id, depth: 2)));
     }
 
     /// <summary>
-    /// A setting's row: a switch, a slider or a choice by its kind, its reset back to the default.
+    /// A setting's row: a switch, a slider, a free text, a button or a choice by its kind, its reset back to the default; its label, hint, button
+    /// and choices in the mod's translation (the page's own lookup follows).
     /// </summary>
     SettingsMenu.Entry ModSettingEntry(ModSetting setting, string group, int depth)
     {
         string raw = $"{group}{KeySeparator}{setting.Key}";
-        var entry = new SettingsMenu.Entry(setting.Label, setting.Hint, Changed: !setting.IsDefault, Raw: raw, Depth: depth,
-            Reset: () => ChangeModSetting(setting, setting.Reset));
+        var shown = setting.Group;
+        var entry = new SettingsMenu.Entry(shown.Shown(setting.Label), shown.Shown(setting.Hint), Changed: !setting.IsDefault, Raw: raw,
+            Depth: depth, Reset: () => ChangeModSetting(setting, setting.Reset));
         return setting.Kind switch
         {
             ModSettingKind.Switch => entry with { Toggle = new Toggle(raw, () => setting.Get() is true, v => SetModSetting(setting, v)) },
             ModSettingKind.Slider => entry with { Slider = ModSlider(setting, raw) },
             ModSettingKind.Text => entry with { Text = new(raw, () => setting.Text, v => SetModSetting(setting, v), setting.MaxLength) },
-            _ => entry with { Choice = new(() => setting.Options, () => setting.Choice, i => SetModSetting(setting, setting.Options[i])) },
+            ModSettingKind.Action => entry with { Run = () => ChangeModSetting(setting, setting.Press), RunLabel = shown.Shown(setting.Button) },
+            _ => entry with { Choice = new(() => ShownOptions(setting), () => setting.Choice, i => SetModSetting(setting, setting.Options[i])) },
         };
     }
+
+    /// <summary>
+    /// A list's choices as the page shows them: in the mod's translation (the saved value stays the choice's own).
+    /// </summary>
+    static IReadOnlyList<string> ShownOptions(ModSetting setting) =>
+        setting.Group.Texts is { Any: true } ? [.. setting.Options.Select(setting.Group.Shown)] : setting.Options;
 
     /// <summary>
     /// A number setting's slider; its label is the row's key, so two mods' sliders of one name stay apart.
