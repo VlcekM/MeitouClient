@@ -453,9 +453,9 @@ public static partial class SaveCapture
 
         // The carry links (FUN_1406280a0 writes the partner's handle under `carrying`, the null one when it is not saved).
         foreach (var (state, partner) in pass.Carries)
-            (pass.Handles.TryGetValue(partner, out var hand) ? hand : Hand.Null).Write(state, "carrying");
+            WriteCarryPartner(state, pass.Handles.TryGetValue(partner, out var hand) ? hand : Hand.Null);
         foreach (var (state, partner) in pass.KeptCarries)
-            (pass.ColdHandles.TryGetValue(partner, out var kept) ? kept : Hand.Null).Write(state, "carrying");
+            WriteCarryPartner(state, pass.ColdHandles.TryGetValue(partner, out var kept) ? kept : Hand.Null);
 
         // The slaves' owners (FUN_1406280a0 writes the owner handle, character +0x328, under `slaver`); one not saved leaves the keys as written.
         foreach (var (state, owner) in pass.Slavers)
@@ -478,6 +478,16 @@ public static partial class SaveCapture
         {
             if (item.Written is { } record && pass.Handles.TryGetValue(owner, out var hand)) hand.Write(record, "ownedby");
         }
+    }
+
+    /// <summary>
+    /// Writes a character's <c>carrying</c> partner handle, clearing its <c>carrying</c> bool when the partner was not written to the save so no
+    /// record is left claiming to carry a null handle.
+    /// </summary>
+    static void WriteCarryPartner(FcsRecord state, Hand hand)
+    {
+        if (hand.IsNull) state.Bools["carrying"] = false;
+        hand.Write(state, "carrying");
     }
 
     #endregion
@@ -1390,6 +1400,11 @@ public static partial class SaveCapture
                 WriteCharacter(builder, world, data, options, clock, buildings, races, platoon, sc, m.Live, sc.OwnerFactionId,
                     squad?.Leader == m.Live, orders: false);
             }
+            else if (m.Cold is { } left && m.Position is { } leftAt)
+            {
+                WriteCharacter(builder, world, data, options, clock, buildings, races, platoon, sc, left, leftAt, m.Yaw, CharacterId.None,
+                    sc.OwnerFactionId, m.Leader, orders: false);
+            }
             else if (m.Position is { } at)
             {
                 WriteLeftCharacter(builder, world, data, clock, races, platoon, sc, m, at);
@@ -1398,7 +1413,8 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// A character of a saved platoon that left the world: written as it was when its platoon left (place, facing, body, bounties and kit).
+    /// A character of a saved platoon that left the world without a kept cold state: written with its place, facing, body, bounties, kit and cleared
+    /// ragdoll and carry keys.
     /// </summary>
     static void WriteLeftCharacter(SaveBuilder builder, World world, PopulationData data, SaveClock clock, Dictionary<string, RaceData?> races,
         SavePlatoon platoon, SaveCharacter sc, SavedMember m, Vector3 at)
@@ -1411,6 +1427,8 @@ public static partial class SaveCapture
         {
             BountySave.Write(g, m.Bounties, data.Relations, clock, world.Tick, world.TickSeconds);
             RagdollSave.Write(g, null);   // its ragdoll went with it
+            g.Bools["carrying"] = false;
+            Hand.Null.Write(g, "carrying");
         }
 
         if (m.Inventory is { } inventory) builder.SetInventory(platoon, sc, SavedKit.FromInventory(inventory));

@@ -809,8 +809,8 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
         Recentres(focus) || world.LoadedZones is { } loaded && loaded.Count < _active.Count;
 
     /// <summary>
-    /// Whether a living member of one of a wild site's squads stands in an active zone (a nest then stays loaded). A town does not use it: its squads
-    /// are platoons that unload by their own place (<see cref="KeepLoaded"/>).
+    /// Whether a living member of one of a wild site's squads stands in an active zone or carries a player-faction character (a nest then stays
+    /// loaded). A town does not use it: its squads are platoons that unload by their own place (<see cref="KeepLoaded"/>).
     /// </summary>
     bool AnyMemberActive(World world, SiteState state)
     {
@@ -818,6 +818,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
         foreach (int id in state.Squads)
         {
             if (world.Squads.Find(id) is not { } squad) continue;
+            if (SquadCarriesPlayer(world, squad)) return true;
             foreach (var m in squad.Members)
             {
                 if (table.TryResolveNext(m, out int slot) && table.IsAlive(m)

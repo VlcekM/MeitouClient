@@ -802,10 +802,13 @@ Carry links (**Observed**, decompile: `FUN_1406280a0` writes, `FUN_140627b30` re
 (deferred until the partner is loaded, with no give-up). The reader links from either side, the roles by the side's bool (**Verified** `FUN_140627b30`). An unloading
 platoon's record is written before its members are destroyed (`FUN_1407ef4b0`: `FUN_1404ff410`, then `FUN_1404feed0`), and each destroy (`FUN_140799af0`) runs the
 put-down unlink `FUN_1405ce1e0`, so the partner is let go where it is while the record keeps the link; when the platoon loads again the carry is made again if the
-partner is free (**Verified**). Meitou (`SaveCapture`, `CarrySystem.RestoreLinks`): the same keys; the link is made without a lift, from either side, checked every 20
-ticks; it skips a carrier that is carried or carries and a carried body, tests no incapacitation (the carry step drops an incapacitated carrier's body afterwards,
-**Verified** `FUN_1405cff90`), and lets the body go from a bed or cage. A squad stored as it leaves the world lets its carries go and keeps the links
-(`CarrySystem.DropForUnload`, `CharacterCold.CarryRelink`), written as these keys and made again once both are in the world.
+partner is free (**Verified**). Meitou (`SaveCapture`, `CarrySystem.RestoreLinks`): the same keys (writing `carrying` false when the partner is not in the save);
+the link is matched on the full handle (`C`, `CS`, `I`, `S`) and made without a lift, from either side, checked every 20 ticks; it skips a carrier that is carried
+or carries and a carried body, tests no incapacitation (the carry step drops an incapacitated carrier's body afterwards, **Verified** `FUN_1405cff90`), and lets
+the body go from a bed or cage. Because neither a player squad nor a squad carrying a player character unloads (`FUN_1404febd0`, **Verified**), a link involving
+a player-faction character must be mutual; a one-sided one is dropped (#1300). Both stored squads and unloaded saved platoons let their carries go on unload and
+keep their detached cold state and unload links (`CarrySystem.DropForUnload`, `CharacterCold.CarryRelink`, `SavedMember.Cold`), written as these keys instead of
+the loaded save's stale records and made again once both are in the world.
 
 Meitou (`Saving/HeldSave`): reads building keys from the zones' GAMESTATE_BUILDING records when the town registers and writes them back into
 them (the visited zones' files, [Zone files](#zone-files)); the save ids of generated interiors are not mapped, so interior cages and

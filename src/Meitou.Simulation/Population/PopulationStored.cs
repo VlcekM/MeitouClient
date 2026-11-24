@@ -71,9 +71,10 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// Clears what a character's cold state holds only while it is in the world: paths, AI, carrying, treatment, combat and stealth state, a pending
-    /// crime (reported as lapsed, <see cref="Crime.CrimeSystem.DropPending"/>), jobs.
+    /// crime (reported as lapsed, <see cref="Crime.CrimeSystem.DropPending"/>), and runtime job targets (or the whole job list when
+    /// <paramref name="clearJobs"/> is set).
     /// </summary>
-    static void Detach(World world, int slot, CharacterCold c)
+    internal static void Detach(World world, int slot, CharacterCold c, bool clearJobs = true)
     {
         c.Path = [];
         c.PathExact = int.MaxValue;
@@ -96,7 +97,12 @@ public sealed partial class PopulationSystem
         c.TreatTarget = CharacterId.None;
         c.TreatSplint = false;
         c.TreatKit = null;
-        c.Jobs.Clear();
+        if (clearJobs) c.Jobs.Clear();
+        else
+        {
+            for (int j = 0; j < c.Jobs.Count; j++)
+                if (!c.Jobs[j].Character.IsNone) c.Jobs[j] = c.Jobs[j] with { Character = CharacterId.None };
+        }
         c.Running = null;
         c.Carrying = CharacterId.None;
         c.CarriedBy = CharacterId.None;
@@ -245,8 +251,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The slaves that obeyed squad <paramref name="from"/>, in the world or stored with another platoon or wild site, obey <paramref name="to"/>, the
-    /// squad the same characters came back as (<see cref="StoredSquad.SquadId"/>).
+    /// The slaves that obeyed squad <paramref name="from"/>, in the world or stored with another platoon, saved platoon or wild site, obey
+    /// <paramref name="to"/>, the squad the same characters came back as (<see cref="StoredSquad.SquadId"/>).
     /// </summary>
     void RepointSlaves(World world, int from, int to)
     {
@@ -258,6 +264,10 @@ public sealed partial class PopulationSystem
 
         foreach (var p in world.Platoons.All)
             if (p.Stored is { } stored) RepointStored(stored, from, to);
+
+        foreach (var sp in world.Saved?.Platoons ?? [])
+            foreach (var m in sp.Members)
+                if (m.Cold is { } left && left.SlaveMaster == from) left.SlaveMaster = to;
 
         foreach (var site in _keptWild.Values)
             foreach (var k in site) RepointStored(k.Stored, from, to);
