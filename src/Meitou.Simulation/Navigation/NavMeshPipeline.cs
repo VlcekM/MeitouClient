@@ -109,12 +109,33 @@ internal static class NavMeshPipeline
     const int InteriorEdgeCells = 24;
 
     /// <summary>
-    /// The settings an interior is built with: one tile over its box, monotone regions, edges of at most <see cref="InteriorEdgeCells"/>.
+    /// How many interior cells a side of a zone cell holds: an interior is built at half the zone's cell size. A triangle marks every cell it
+    /// touches, so at 2 units a cell furniture grew by up to 2 on each side and a 10.4 gap between a safe and a chest on the Squin Watchtower's
+    /// floor 2 came out as a 7.2 portal no radius-4 walker passes (docs/game/pathfinding.md, "Interior cells").
+    /// </summary>
+    const int InteriorCellDivisor = 2;
+
+    /// <summary>
+    /// The settings an interior is built with: one tile over its box at <see cref="InteriorCellDivisor"/> times finer cells, monotone regions,
+    /// edges of at most <see cref="InteriorEdgeCells"/> zone cells. Region areas, edge length and door inflation keep their size in units; the
+    /// simplification error stays in cells (finer).
     /// </summary>
     public static NavBuildSettings InteriorSettings(NavBuildSettings settings, ZoneGeometry interior)
     {
-        int side = (int)MathF.Round((interior.ZoneMax.X - interior.ZoneMin.X) / settings.CellSize);
-        return settings with { Threads = 1, TileCells = side, Watershed = false, MaxEdgeLength = InteriorEdgeCells };
+        const int d = InteriorCellDivisor;
+        float cell = settings.CellSize / d;
+        int side = (int)MathF.Round((interior.ZoneMax.X - interior.ZoneMin.X) / cell);
+        return settings with
+        {
+            Threads = 1,
+            CellSize = cell,
+            TileCells = side,
+            Watershed = false,
+            MaxEdgeLength = InteriorEdgeCells * d,
+            MinRegionArea = settings.MinRegionArea * d * d,
+            MergeRegionArea = settings.MergeRegionArea * d * d,
+            DoorInflateCells = settings.DoorInflateCells * d,
+        };
     }
 
     /// <summary>
