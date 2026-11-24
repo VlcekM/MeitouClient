@@ -90,7 +90,7 @@ sealed class SquadPanel(PlayerInterface player)
             return;
         }
 
-        b.TabCaptions["SquadPanel"] = [.. tabs.Select(s => s.Name)];
+        b.TabCaptions["SquadPanel"] = [.. tabs.Select(s => player.ShownName("squad", s.TemplateId, s.Name))];
         b.SelectedTabs["SquadPanel"] = Math.Max(0, tabs.FindIndex(s => s.Id == player.Session.CurrentSnapshot.ActiveSquad));
     }
 
@@ -509,7 +509,7 @@ sealed class SquadPanel(PlayerInterface player)
             return;
         }
 
-        string name = player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.Name ?? "";
+        string name = player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } who ? player.ShownName(who) : "";
         player.Confirm("Dismiss character", Loc.Tr("Dismiss character '{1}'?", name),
             () => player.Say(new DismissCommand(id) { Tick = player.Session.World.Tick }));
     }

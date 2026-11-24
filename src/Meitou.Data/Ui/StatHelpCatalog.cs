@@ -9,10 +9,10 @@ namespace Meitou.Data.Ui;
 public sealed class StatHelpCatalog
 {
     /// <summary>
-    /// A stat paragraph of the template: the <c>statswindow.cpp</c> lines that reference it, its text in the active language and the length of its
-    /// English msgid.
+    /// A stat paragraph of the template: the <c>statswindow.cpp</c> lines that reference it and its English msgid, translated when shown (so the
+    /// mods' shown text follows a refresh).
     /// </summary>
-    sealed record Entry(int[] Lines, string Text, int EnglishLength);
+    sealed record Entry(int[] Lines, string English);
     /// <summary>
     /// Every template entry referenced from <c>kenshi/statswindow.cpp</c>, in template order.
     /// </summary>
@@ -25,7 +25,8 @@ public sealed class StatHelpCatalog
     /// <summary>
     /// The text referenced from source line <paramref name="line"/>, the longest English msgid when several share it; "" when none.
     /// </summary>
-    public string TextAt(int line) => _entries.Where(e => e.Lines.Contains(line)).MaxBy(e => e.EnglishLength)?.Text ?? "";
+    public string TextAt(int line) =>
+        _entries.Where(e => e.Lines.Contains(line)).MaxBy(e => e.English.Length) is { } entry ? Loc.Tr(entry.English) : "";
 
     /// <summary>
     /// <see cref="From"/> the gettext template at <paramref name="path"/>.
@@ -42,7 +43,7 @@ public sealed class StatHelpCatalog
         // has one.
         foreach (var entry in template)
             if (entry.References.Where(r => r.File == "kenshi/statswindow.cpp").Select(r => r.Line).Distinct().ToArray() is { Length: > 0 } lines)
-                result._entries.Add(new(lines, Loc.Tr(entry.Id), entry.Id.Length));
+                result._entries.Add(new(lines, entry.Id));
         return result;
     }
 
@@ -90,8 +91,8 @@ public sealed class StatHelpCatalog
             StatsEnumerated.Polearms => (955, 681, 684, 688, 0),
             _ => (0, 0, 0, 0, 0),
         };
-        string[] Between(int from, int to) => _entries.SelectMany(e => e.Lines.Where(l => l > from && l < to).Select(l => (Line: l, e.Text)))
-            .OrderBy(e => e.Line).Select(e => e.Text).Distinct().ToArray();
+        string[] Between(int from, int to) => _entries.SelectMany(e => e.Lines.Where(l => l > from && l < to).Select(l => (Line: l, e.English)))
+            .OrderBy(e => e.Line).Select(e => Loc.Tr(e.English)).Distinct().ToArray();
         return new(TextAt(description), Between(affected, training), Between(training, end + 1), TextAt(physical));
     }
 }

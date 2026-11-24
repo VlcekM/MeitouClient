@@ -358,6 +358,13 @@ public sealed class PopulationData
     public required IReadOnlyList<FactionData> Factions { get; init; }
 
     /// <summary>
+    /// The name of faction <paramref name="faction"/> (<paramref name="name"/> when the player renamed it, else the data's) as the mods' text
+    /// sources show it, asked with the faction's record (<see cref="GameDatabase.ShownName"/>); display only.
+    /// </summary>
+    public string ShownFactionName(int faction, string? name = null) =>
+        Db.ShownName("faction", Factions[faction].Id, name ?? Factions[faction].Name);
+
+    /// <summary>
     /// Rolls the characters' looks; null leaves them without (headless tests, markers only).
     /// </summary>
     public IAppearanceSource? Appearances { get; init; }

@@ -246,7 +246,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// Frees the painter and removes the interface's UI extension.
+    /// Frees the painter and removes the interface's UI extension and the extensions' text sources.
     /// </summary>
     public void DisposeUi()
     {
@@ -256,6 +256,7 @@ sealed partial class PlayerInterface
         _uiRegistration = null;
         _xpLabelRegistration?.Dispose();
         _xpLabelRegistration = null;
+        ShownText.Remove(_uiHost);
     }
 
     /// <summary>
@@ -280,6 +281,72 @@ sealed partial class PlayerInterface
     /// </summary>
     internal IReadOnlyList<UiBuildingAction> ModBuildingActions(UiSelectedBuilding building, WorldSnapshot snapshot) =>
         _uiHost.BuildingActions(new UiBuildingContext(building, snapshot, () => Session.World.Tick, Say));
+
+    /// <summary>
+    /// The name shown for an item of <paramref name="record"/> named <paramref name="name"/> (<see cref="UiHost.ItemName"/>): the extensions'
+    /// item names, else <paramref name="name"/>.
+    /// </summary>
+    internal string ShownItemName(string record, string name, string modTag) => _uiHost.ItemName(record, name, modTag);
+
+    /// <summary>
+    /// The name of a <paramref name="what"/> (<c>character</c>, <c>squad</c>, <c>outpost</c>, <c>faction</c>, <c>place</c>) made from
+    /// <paramref name="record"/> ("" unknown) as the mods' text sources show it (<see cref="Data.GameDatabase.ShownName"/>); display only.
+    /// <paramref name="name"/> itself when no mod adds a source or no world is loaded.
+    /// </summary>
+    internal string ShownName(string what, string record, string name) =>
+        ShownText.Any && PopulationOf?.Invoke() is { } d ? d.Db.ShownName(what, record, name) : name;
+
+    /// <summary>
+    /// Character <paramref name="c"/>'s name as shown (<see cref="ShownName(string, string, string)"/>, with the record it was made from).
+    /// </summary>
+    internal string ShownName(CharacterSnapshot c) => ShownName("character", c.RecordId, c.Name);
+
+    /// <summary>
+    /// <paramref name="lead"/>'s name as shown (<see cref="ShownName(CharacterSnapshot)"/>); null when there is no character.
+    /// </summary>
+    internal string? ShownLeadName(CharacterSnapshot? lead) => lead is null ? null : ShownName(lead);
+
+    /// <summary>
+    /// The name of the backpack <paramref name="lead"/> wears (the item in its <c>backpack_attach</c> section) as shown
+    /// (<see cref="ShownItemName"/>); null when there is none.
+    /// </summary>
+    internal string? ShownBackpackName(CharacterSnapshot? lead) =>
+        lead?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach") is { } bag ? ShownItemName(bag.Record, bag.Name, bag.ModTag) : null;
+
+    /// <summary>
+    /// Faction <paramref name="faction"/>'s name (<see cref="FactionName"/>: the player's as renamed, else the data's) as shown, with its record;
+    /// null as <see cref="FactionName"/>.
+    /// </summary>
+    internal string? ShownFactionName(int faction)
+    {
+        var name = FactionName?.Invoke(faction);
+        if (name is null || !ShownText.Any) return name;
+
+        return PopulationOf?.Invoke() is { } d && faction >= 0 && faction < d.Factions.Count
+            ? d.ShownFactionName(faction, name)
+            : ShownName("faction", "", name);
+    }
+
+    /// <summary>
+    /// A faction name kept as text (a bounty's, frozen when it was raised) as shown: asked with the record of the data's faction of that name, if
+    /// any.
+    /// </summary>
+    internal string ShownFactionName(string name)
+    {
+        if (!ShownText.Any || PopulationOf?.Invoke() is not { } d) return name;
+
+        string record = "";
+        foreach (var f in d.Factions)
+        {
+            if (f.Name == name)
+            {
+                record = f.Id;
+                break;
+            }
+        }
+
+        return d.Db.ShownName("faction", record, name);
+    }
 
     /// <summary>
     /// The lines the interface extensions add to an item's tooltip (<see cref="UiHost.ItemTooltipLines"/>); none without an extension that adds any.
@@ -536,7 +603,7 @@ sealed partial class PlayerInterface
         b.Text["MoneyAmountText"] = "c." + Session.World.Player.Money.ToString("N0", CultureInfo.InvariantCulture);
 
         // The name bar draws its own lines over the widget (HudPanels).
-        b.Text["NameText"] = lead?.Name ?? "No character selected";
+        b.Text["NameText"] = lead is null ? "No character selected" : ShownName(lead);
         b.Properties["NameText"] = new Dictionary<string, string> { ["SkipCaption"] = "true" };
         b.Text["hunger"] = lead?.Body is { } hungry ? $"Hunger {hungry.Hunger:0.00} / 3" : "";
         b.Text["condition"] = lead?.Body is { } status
@@ -578,7 +645,7 @@ sealed partial class PlayerInterface
         {
             if (!c.IsPlayer) continue;
 
-            if (count < 8) b.Text[RosterNameKeys[count]] = c.Name;
+            if (count < 8) b.Text[RosterNameKeys[count]] = ShownName(c);
             count++;
         }
 

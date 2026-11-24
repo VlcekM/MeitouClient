@@ -842,8 +842,8 @@ sealed class TradeWindows(PlayerInterface player)
     {
         var body = LootBody();
         string caption = id == "loot-bag"
-            ? body?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach")?.Name ?? "BACKPACK"
-            : body?.Name ?? "INVENTORY";
+            ? player.ShownBackpackName(body) ?? "BACKPACK"
+            : player.ShownLeadName(body) ?? "INVENTORY";
         b.Text["Root"] = caption.ToUpperInvariant();
 
         if (id == "loot-bag")

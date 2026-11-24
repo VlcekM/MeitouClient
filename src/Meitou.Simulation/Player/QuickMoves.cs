@@ -177,7 +177,7 @@ sealed class QuickMoves(PopulationData? data)
         if (InventoryCommands.MoveInto(holder, item, InventoryCommands.ClickCount(item, quick.All ? 0 : 1), into, quick.IntoBag, out bool wear,
                 taker) == 0)
         {
-            world.Post($"{taker.Name} has no room for {item.Name}.");
+            world.Post($"{world.ShownName(taker)} has no room for {item.ShownName()}.");
             return;
         }
         if (worn) _assembly?.RefreshEquipment(from);

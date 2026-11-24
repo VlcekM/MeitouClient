@@ -1,4 +1,5 @@
 using Meitou.Data.Fcs;
+using Meitou.Localisation;
 
 namespace Meitou.Data.Gameplay.Construction;
 
@@ -54,7 +55,20 @@ public readonly record struct CraftInput(string Item, float PerItem);
 /// <summary>
 /// A craft's cost and time, computed when it starts (<b>Observed</b>, <c>FUN_1402b5ca0</c> and <c>CraftingBuilding::vfunc_182</c>).
 /// </summary>
-public sealed record CraftRecipe(CraftOption Option, string Name, float Hours, IReadOnlyList<CraftInput> Inputs, float Quality);
+public sealed record CraftRecipe(CraftOption Option, string Name, float Hours, IReadOnlyList<CraftInput> Inputs, float Quality)
+{
+    /// <summary>
+    /// <see cref="Name"/> as the mods' text sources show it (<see cref="ShownText.Record"/>): the item's record name, after
+    /// its weapon model's when it has one. Display only.
+    /// </summary>
+    public string ShownName(GameDatabase db)
+    {
+        if (!ShownText.Any || db.Find(Option.Item) is not { } item) return Name;
+
+        string name = item.ShownName();
+        return Option.Model is { } model && db.Find(model) is { } spec ? spec.ShownName() + " " + name : name;
+    }
+}
 
 /// <summary>
 /// A crafting bench (function 10, <c>CraftingBuilding</c>; docs/game/buildings-production.md "Crafting"): its crafts lists, the <c>tech level</c>

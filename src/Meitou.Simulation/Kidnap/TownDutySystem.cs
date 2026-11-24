@@ -1594,7 +1594,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
         Deeds?.Caged(world, g, b);
         Arrests?.Claim(world, g, d.Body, cage);
-        if (table.Cold(b) is { IsPlayer: true } body) world.Post($"{body.Name} has been locked in a cage by {data.Factions[d.Faction].Name}");
+        if (table.Cold(b) is { IsPlayer: true } body)
+            world.Post($"{world.ShownName(body)} has been locked in a cage by {World.ShownName(data.Factions[d.Faction])}");
         return End(world, d);
     }
 
@@ -1735,7 +1736,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (AtDisposal(world, gn, machine))
         {
             TaskStart.Stand(table, g);
-            string label = world.SystemOf<Production.ProductionSystem>()?.Data(machine.RecordId)?.Label ?? "";
+            string label = world.SystemOf<Production.ProductionSystem>()?.Data(machine.RecordId)?.ShownLabel() ?? "";
             CorpseDisposal.Feed(world, carry, g, machine.Position, label);
             return End(world, d);
         }

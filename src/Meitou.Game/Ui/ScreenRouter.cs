@@ -155,13 +155,23 @@ sealed class ScreenRouter(PlayerInterface player)
     }
 
     /// <summary>
+    /// The caption of the character window <paramref name="id"/> (stats, bag, limbs or inventory): the lead's name, the backpack's name or the
+    /// window's own title when there is none.
+    /// </summary>
+    string CharacterWindowCaption(string id, CharacterSnapshot? lead) => id switch
+    {
+        "stats" => player.ShownLeadName(lead) ?? "CHARACTER STATS",
+        "bag" => player.ShownBackpackName(lead) ?? "BACKPACK",
+        "limbs" => "LIMBS",
+        _ => player.ShownLeadName(lead) ?? "INVENTORY",
+    };
+
+    /// <summary>
     /// The character windows: the inventory, stats, bag and limbs windows' captions and buttons, the stats window's geometry.
     /// </summary>
     void BindCharacterWindow(string id, UiBindings b, MyGuiLayout layout, CharacterSnapshot? lead, bool pinned)
     {
-        b.Text["Root"] = id == "stats" ? lead?.Name.ToUpperInvariant() ?? "CHARACTER STATS"
-            : id == "bag" ? lead?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach")?.Name.ToUpperInvariant() ?? "BACKPACK"
-            : id == "limbs" ? "LIMBS" : lead?.Name.ToUpperInvariant() ?? "INVENTORY";
+        b.Text["Root"] = CharacterWindowCaption(id, lead).ToUpperInvariant();
         if (id == "limbs")
         {
             b.Text["lbLeftArm"] = "-ARMS-";

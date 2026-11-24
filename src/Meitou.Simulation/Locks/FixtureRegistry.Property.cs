@@ -633,7 +633,7 @@ public sealed partial class FixtureRegistry
             Position = b.Position,
             Rotation = placement.Rotation,
             LevelPlacement = placement,
-            LevelTownName = p.Data.Sites[p.Site].Town.Name,
+            LevelTown = p.Data.Sites[p.Site].Town,
             Owner = p.Owner,
             Target = data.Target,
             Rate = data.Rate,

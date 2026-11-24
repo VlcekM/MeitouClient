@@ -56,7 +56,8 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   combo items), HUD `AddLines`, context-menu verbs, `Notice`, `Confirm`/`UpperTr`, `PlaceTooltip` (keys and values; bracketed headings by their
   inside), stat help (`StatHelpCatalog`), the loading tip, the day text, and the interpolated simulation messages (relations, bounties, research,
   campaigns, construction, fixtures, discoveries, crime names ([economy 11.2](../game/economy.md#112-how-a-bounty-is-gained)), crimes, arrests, bail,
-  locks, shackles, trade; the host's save/load notices). The simulation keeps its English markers (the dialogue's engine `[Leave]` choice,
+  locks, shackles, trade; the host's save/load notices). After the catalogs, code mods' text sources may change the text
+  ([modding](../modding.md) "Shown text"; Meitou's own, not in the original). The simulation keeps its English markers (the dialogue's engine `[Leave]` choice,
   matched by that text) and translates only the text it publishes or posts; the world hash and saves never contain translated text. Layout
   captions the original leaves English stay English.
 - **Meitou's own texts** (`MeitouTranslations`): the launcher, the title menu (`UpperTr`) and the settings menu's drawn captions, hints and choices

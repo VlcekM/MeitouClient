@@ -43,9 +43,9 @@ sealed class ItemCells(PlayerInterface player)
     /// </summary>
     internal void AddItemCell(List<UiControl> controls, string name, UiRect area, string record, string material, string itemName, int quantity,
         TooltipRuntime.ItemTip? tip, string property, int index, UiRect? clip, bool pickable = true, float? charge = null, string colour = "",
-        bool rotated = false, bool tipAtPointer = false)
+        bool rotated = false, bool tipAtPointer = false, string modTag = "")
     {
-        player.TooltipRuntime.ItemTips[name] = tip ?? TooltipRuntime.ItemTip.NameOnly(record, material, itemName, quantity);
+        player.TooltipRuntime.ItemTips[name] = tip ?? TooltipRuntime.ItemTip.NameOnly(record, material, itemName, quantity) with { ModTag = modTag };
         string count = quantity > 1 ? quantity.ToString(CultureInfo.InvariantCulture) : "";
         Dictionary<string, string>? image = null;
         if (ItemIcons?.Choose(record, material, colour) is { } choice && player.UiPainter is { } painter)
@@ -71,7 +71,7 @@ sealed class ItemCells(PlayerInterface player)
         if (charge is { } fill)
             AddCharge(controls, name, area, fill, clip);
 
-        string caption = shown ? count : itemName + (count.Length > 0 ? " x" + count : "");
+        string caption = shown ? count : player.ShownItemName(record, itemName, tip?.ModTag ?? modTag) + (count.Length > 0 ? " x" + count : "");
         var properties = new Dictionary<string, string>
         {
             ["WordWrap"] = "true",

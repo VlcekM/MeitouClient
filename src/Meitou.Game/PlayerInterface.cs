@@ -972,7 +972,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     bool PortraitRightDown(Vector2 p, CharacterId member, bool shift)
     {
         if (Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == member) is { } shown
-            && ContextMenuWindow.ContextPressOn(p, at => ContextMenuWindow.Menu(shown.Name, at, ContextMenuWindow.Verbs(shown)),
+            && ContextMenuWindow.ContextPressOn(p, at => ContextMenuWindow.Menu(ShownName(shown), at, ContextMenuWindow.Verbs(shown)),
                 () => FocusMember(member, shift), ContextMenuWindow.PortraitHoldSeconds)) return true;
         _memberPress = member;
         return true;
@@ -1521,11 +1521,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     public Func<TooltipRuntime.ItemTip, (int Value, int Sell, int? Average)?>? PricesOf { get; set; }
     /// <summary>
-    /// The player faction's name (what the dialogue token PLAYERFACTION expands to); the host sets it.
+    /// The player faction's name as shown (<see cref="ShownFactionName(int)"/>); the host sets it. Display only.
     /// </summary>
     public Func<string>? PlayerFactionName { get; set; }
     /// <summary>
-    /// The name of a record by string id (a body part of an armour's coverage); the host sets it.
+    /// The name of a record by string id (a body part of an armour's coverage) as the mods' text sources show it; the host sets it. Display only.
     /// </summary>
     public Func<string, string?>? RecordName { get; set; }
     /// <summary>

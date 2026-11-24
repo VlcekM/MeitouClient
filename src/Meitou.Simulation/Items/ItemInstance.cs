@@ -23,6 +23,11 @@ public sealed class ItemInstance
     /// </summary>
     public string Name { get; init; } = "";
     /// <summary>
+    /// <see cref="Name"/> as the mods' text sources show it (<see cref="ShownText.Record"/>, the record's name, for this item's
+    /// <see cref="ModTag"/>). Display only: anything the game decides reads <see cref="Name"/>.
+    /// </summary>
+    public string ShownName() => ShownText.Record(Record, Name, ShownText.RecordName, ModTag);
+    /// <summary>
     /// The item's type: its record's, or <see cref="FcsRecordType.Blueprint"/> for a blueprint.
     /// </summary>
     public FcsRecordType Type { get; init; }

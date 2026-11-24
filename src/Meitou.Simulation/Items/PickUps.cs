@@ -266,7 +266,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
 
                 // The notice is for the player's own characters (engine choice): an NPC or animal whose goal keeps trying an item it has no
                 // room for (ground food, a weapon while unarmed) would post it at every try (#683).
-                if (c.IsPlayer) world.Post($"{c.Name}: Not enough room in my inventory");
+                if (c.IsPlayer) world.Post($"{world.ShownName(c)}: Not enough room in my inventory");
             }
         }
     }

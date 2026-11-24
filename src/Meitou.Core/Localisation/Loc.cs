@@ -60,9 +60,48 @@ public static class Loc
 
     /// <summary>
     /// <paramref name="english"/> in the active language: the game's translation, else Meitou's own, else unchanged (so a text that was never a
-    /// <c>msgid</c> passes through).
+    /// <c>msgid</c> passes through); then the mods' text sources (<see cref="ShownText"/>, a <see cref="ShownTextKind.Message"/>).
     /// </summary>
-    public static string Tr(string english) => !Translating ? english : s_catalog.Find(english) ?? s_meitou.Find(english) ?? english;
+    public static string Tr(string english) => Shown(english, "", Translated(english));
+
+    /// <summary>
+    /// <paramref name="english"/> in the active language, before the mods' text sources.
+    /// </summary>
+    static string Translated(string english) => !Translating ? english : s_catalog.Find(english) ?? s_meitou.Find(english) ?? english;
+
+    /// <summary>
+    /// <paramref name="english"/> under the message context <paramref name="context"/> in the active language, before the mods' text sources: the
+    /// context's entry, else <see cref="Translated"/>.
+    /// </summary>
+    static string TranslatedIn(string context, string english) =>
+        !Translating ? english : s_catalog.Find(english, context) ?? s_meitou.Find(english, context) ?? Translated(english);
+
+    /// <summary>
+    /// A layout caption in the active language, before the mods' text sources: the exact <c>msgid</c>, else the same text ignoring case, else
+    /// unchanged.
+    /// </summary>
+    static string TranslatedCaption(string english)
+    {
+        if (!Translating) return english;
+        return s_catalog.Find(english) ?? s_meitou.Find(english) ?? s_catalog.FindIgnoringCase(english) ?? s_meitou.FindIgnoringCase(english) ?? english;
+    }
+
+    /// <summary>
+    /// The plural message <paramref name="singular"/> / <paramref name="plural"/> for <paramref name="n"/> in the active language, before the mods'
+    /// text sources: the catalog's form, else the English one.
+    /// </summary>
+    static string TranslatedPlural(string singular, string plural, long n)
+    {
+        string? translated = Translating ? s_catalog.FindPlural(singular, n) ?? s_meitou.FindPlural(singular, n) : null;
+        return translated ?? (n == 1 ? singular : plural);
+    }
+
+    /// <summary>
+    /// <paramref name="translated"/>, the text of message <paramref name="english"/> under <paramref name="context"/>, as the mods' text sources
+    /// show it (<see cref="ShownText.Of"/>); itself when none is added.
+    /// </summary>
+    static string Shown(string english, string context, string translated) =>
+        ShownText.Any ? ShownText.Of(ShownTextKind.Message, english, translated, context) : translated;
 
     /// <summary>
     /// <paramref name="english"/> under the message context <paramref name="context"/> (<c>msgctxt</c>, <c>pgettext</c>): a Meitou text whose msgid
@@ -70,7 +109,7 @@ public static class Loc
     /// <see cref="Tr(string)"/>.
     /// </summary>
     public static string TrIn(string context, string english) =>
-        !Translating ? english : s_catalog.Find(english, context) ?? s_meitou.Find(english, context) ?? Tr(english);
+        Shown(english, context, TranslatedIn(context, english));
 
     /// <summary>
     /// <see cref="Tr(string)"/> followed by <see cref="Format"/>: the boost-style placeholders <c>{1}</c>, <c>{1,num}</c> and <c>{1,num=fix,p=2}</c>
@@ -85,18 +124,17 @@ public static class Loc
     /// </summary>
     public static string TrCaption(string english)
     {
-        if (!Translating || english.Length == 0) return english;
-        return s_catalog.Find(english) ?? s_meitou.Find(english) ?? s_catalog.FindIgnoringCase(english) ?? s_meitou.FindIgnoringCase(english)
-                ?? english;
+        if (english.Length == 0) return english;
+        return Shown(english, "", TranslatedCaption(english));
     }
 
     /// <summary>
     /// The plural message <paramref name="singular"/> / <paramref name="plural"/> for <paramref name="n"/> (<c>ngettext</c>): the catalog's form for
     /// <paramref name="n"/> by its <c>Plural-Forms</c> rule, else the English one. <paramref name="args"/> fill the placeholders (usually
-    /// <paramref name="n"/> itself).
+    /// <paramref name="n"/> itself). The mods' text sources are asked under the English form for <paramref name="n"/>.
     /// </summary>
     public static string Plural(string singular, string plural, long n, params object?[] args) =>
-        Format((Translating ? s_catalog.FindPlural(singular, n) ?? s_meitou.FindPlural(singular, n) : null) ?? (n == 1 ? singular : plural), args);
+        Format(Shown(n == 1 ? singular : plural, "", TranslatedPlural(singular, plural, n)), args);
 
     /// <summary>
     /// Substitutes <c>{N}</c>, <c>{N,num}</c> and <c>{N,num=fix,p=K}</c> (N is 1-based) with <paramref name="args"/>: <c>num</c> writes a number in

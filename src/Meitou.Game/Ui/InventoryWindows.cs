@@ -868,7 +868,7 @@ sealed class InventoryWindows(PlayerInterface player)
                 h.Width * cell, h.Height * player.InventoryCellHeight);
             player.ItemCells.AddItemCell(controls, "held-item", bounds,
                 h.Record, h.Material, h.Name, h.Quantity, null, "HeldItem", 0, null, pickable: false, charge: h.Charge, colour: h.Colour,
-                rotated: h.Rotated);
+                rotated: h.Rotated, modTag: h.ModTag);
         }
 
         player.TradeWindows.AddFencePrompt(controls);

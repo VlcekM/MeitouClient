@@ -810,7 +810,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
         return ContextPressOn(p, CharacterMenu, quick);
 
         ContextMenu? CharacterMenu(Vector2 at) =>
-            player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } target ? Menu(target.Name, at, Verbs(target)) : null;
+            player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } target
+                ? Menu(player.ShownName(target), at, Verbs(target))
+                : null;
     }
 
     /// <summary>

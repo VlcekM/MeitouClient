@@ -555,7 +555,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             // The loot already says "was seen looting".
             if (c.IsPlayer && p.Code != CrimeCode.Looting)
             {
-                world.Post(Loc.Tr("{1} has been caught committing {2}!", c.Name, CrimeTable.Name(p.Code)));
+                world.Post(Loc.Tr("{1} has been caught committing {2}!", world.ShownName(c), CrimeTable.Name(p.Code)));
             }
         }
         // The original fires the event on every reacting run (docs/game/dialogue.md "Witnesses"). Meitou fires it once per witness at the

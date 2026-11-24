@@ -331,7 +331,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         /// The choices: a reply line, or <c>null</c> for <c>[...]</c> (continue <see cref="Line"/>) / <c>[Leave]</c> (when <see cref="Line"/> has no
         /// next).
         /// </summary>
-        public readonly List<(DialogueNode? Reply, string Text)> Choices = [];
+        public readonly List<(DialogueNode? Reply, string Text, string? Shown)> Choices = [];
         /// <summary>
         /// The lines said so far, "name: text", for the window's log.
         /// </summary>
@@ -421,7 +421,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         // The order check (FUN_1405d1940, order 12): a character whose record says dumb refuses to talk to people.
         if (_data.Db.Find(pc.RecordId)?.GetBool("dumb") == true)
         {
-            world.Post(Loc.Tr("{1} can't talk to people", pc.Name));
+            world.Post(Loc.Tr("{1} can't talk to people", world.ShownName(pc)));
             return;
         }
         if (!Talkable(table, n) || SleepsThrough(table, n, DialogueEvents.PlayerTalkToMe)) return;
@@ -557,7 +557,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (picked is not { } p)
         {
             world.DialogueLines.Line(world, "talk", $"{pair}: nothing to say (from {from})");
-            if (!quiet) world.Post($"{nc.Name} has nothing to say.");
+            if (!quiet) world.Post($"{world.ShownName(nc)} has nothing to say.");
             return;
         }
 
@@ -667,11 +667,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         c.Line = line;
         c.Speaker = speaker;
         MarkUsed(world, c, line);
-        string text = Said(Expand(world, c, line, PickText(world, speaker, line), speaker, c.Player));
-        text += MoneySuffix(line);
-        c.Text = text;
-        c.Log.Add($"{NameOf(world, speaker)}: {text}");
-        world.Said(NameOf(world, speaker), text, false);
+        var (said, shown) = Line(world, c, line, speaker, speaker, c.Player);
+        string cost = MoneySuffix(line);
+        string text = said + cost;
+        c.Text = shown + cost;
+        string name = world.ShownName(speaker);
+        c.Log.Add($"{name}: {c.Text}");
+        world.Said(name, c.Text, false);
         world.DialogueLines.Line(world, "say", $"{EventLog.Who(world, speaker)} to {EventLog.Who(world, c.Player)}: \"{text}\" "
             + $"(line {DialogueLog.Node(line)}{DialogueLog.Effects(line)})");
         RunEffects(world, c, line, speaker);
@@ -694,13 +696,15 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             if (IsNpcSide(child.Speaker))
             {
                 c.Choices.Clear();
-                c.Choices.Add((null, "[...]"));
+                c.Choices.Add((null, "[...]", null));
                 return;
             }
-            string label = Said(Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc)) + MoneySuffix(child);
-            if (label.Length > 0) c.Choices.Add((child, label));   // a choice with no text and no cost is never offered (FUN_140680130)
+            var (said, shown) = Line(world, c, child, c.Player, c.Player, c.Npc);
+            string cost = MoneySuffix(child);
+            // a choice with no text and no cost is never offered (FUN_140680130); the button shows the mods' text
+            if ((said + cost).Length > 0) c.Choices.Add((child, said + cost, shown + cost));
         }
-        if (c.Choices.Count == 0) c.Choices.Add((null, LeaveChoice));
+        if (c.Choices.Count == 0) c.Choices.Add((null, LeaveChoice, null));
     }
 
     /// <summary>
@@ -715,12 +719,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             ChooseBail(world, c, index);
             return;
         }
-        var (reply, text) = c.Choices[index];
+        var (reply, text, chosen) = c.Choices[index];
         DialogueNode? from = c.Line;
         if (reply is not null)
         {
-            c.Log.Add($"{NameOf(world, c.Player)}: {text}");
-            world.Said(NameOf(world, c.Player) is { Length: > 0 } name ? name : "Player", text, true);
+            string name = world.ShownName(c.Player);
+            c.Log.Add($"{name}: {chosen ?? text}");
+            world.Said(name.Length > 0 ? name : "Player", chosen ?? text, true);
             world.DialogueLines.Line(world, "reply", $"{EventLog.Who(world, c.Player)} to {EventLog.Who(world, c.Npc)}: \"{text}\" "
                 + $"(line {DialogueLog.Node(reply)}{DialogueLog.Effects(reply)})");
             MarkUsed(world, c, reply);
@@ -743,9 +748,10 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         else
         {
             c.Choices.Clear();
-            string label = Said(Expand(world, c, p.Line, PickText(world, c.Player, p.Line), c.Player, c.Npc)) + MoneySuffix(p.Line);
-            if (label.Length == 0) c.Ended = true;   // nothing to offer: the conversation ends
-            else c.Choices.Add((p.Line, label));
+            var (said, shown) = Line(world, c, p.Line, c.Player, c.Player, c.Npc);
+            string cost = MoneySuffix(p.Line);
+            if ((said + cost).Length == 0) c.Ended = true;   // nothing to offer: the conversation ends
+            else c.Choices.Add((p.Line, said + cost, shown + cost));
         }
     }
 
@@ -826,8 +832,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             _view = null;
             return;
         }
-        _view = new ConversationView(c.Npc, c.Player, c.Speaker, NameOf(world, c.Speaker.IsNone ? c.Npc : c.Speaker), NameOf(world, c.Player), c.Text,
-            [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
+        _view = new ConversationView(c.Npc, c.Player, c.Speaker, world.ShownName(c.Speaker.IsNone ? c.Npc : c.Speaker), world.ShownName(c.Player),
+            c.Text, [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
     }
 
     /// <summary>
@@ -838,8 +844,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// <summary>
     /// A choice as the window shows it: the engine's [Leave] in the player's language; a reply's text is the data's own and stays as it is.
     /// </summary>
-    static string Shown((DialogueNode? Reply, string Text) choice) =>
-        choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text;
+    static string Shown((DialogueNode? Reply, string Text, string? Shown) choice) =>
+        choice.Shown ?? (choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text);
 
     /// <inheritdoc/>
     public ConversationView? PublishConversation() => _view;

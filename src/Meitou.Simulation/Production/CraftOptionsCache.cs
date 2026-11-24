@@ -15,6 +15,12 @@ sealed class CraftOptionsCache(Func<World, Machine, IReadOnlyList<CraftOptionVie
     IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>>? _published;
 
     /// <summary>
+    /// The shown text revision (<see cref="ShownText.Revision"/>) the option lists were made at: their names are made again when a mod's text
+    /// changes.
+    /// </summary>
+    int _shownRevision;
+
+    /// <summary>
     /// The crafting machines <see cref="_published"/> was made from, in the registry's order. A machine's site, record and bench state are fixed when
     /// it is made, so a bench added, dropped or replaced (an upgrade to another record) shows as a different machine here.
     /// </summary>
@@ -56,13 +62,15 @@ sealed class CraftOptionsCache(Func<World, Machine, IReadOnlyList<CraftOptionVie
     }
 
     /// <summary>
-    /// Drops the option lists and the site map when the unlocks are not the ones they were made with.
+    /// Drops the option lists and the site map when the unlocks are not the ones they were made with, or the shown text changed (their names are
+    /// shown text).
     /// </summary>
     void Sync(World world)
     {
-        if (ReferenceEquals(_unlocked, world.Research.UnlockedCrafts)) return;
+        if (ReferenceEquals(_unlocked, world.Research.UnlockedCrafts) && _shownRevision == ShownText.Revision) return;
 
         _unlocked = world.Research.UnlockedCrafts;
+        _shownRevision = ShownText.Revision;
         _lists.Clear();
         _published = null;
     }

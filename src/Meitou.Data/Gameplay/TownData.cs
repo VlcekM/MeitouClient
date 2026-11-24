@@ -1,4 +1,5 @@
 using Meitou.Data.Fcs;
+using Meitou.Localisation;
 
 namespace Meitou.Data.Gameplay;
 
@@ -60,6 +61,13 @@ public enum TownType
 /// </summary>
 public sealed record TownData
 {
+    /// <summary>
+    /// The town's name as the mods' text sources show it (<see cref="ShownText.Record"/>), or with
+    /// <paramref name="unexplored"/> its <c>unexplored name</c>. Display only.
+    /// </summary>
+    public string ShownName(bool unexplored = false) =>
+        unexplored ? ShownText.Record(Id, UnexploredName, "unexplored name") : ShownText.Record(Id, Name);
+
     /// <summary>
     /// The TOWN's string id.
     /// </summary>

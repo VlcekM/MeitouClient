@@ -222,7 +222,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (!CanWalk(c)) return OrderCheck.Blocked();
         return BedFor(world, slot, order) is { Kind: FixtureKind.Bed }
             ? OrderCheck.Run
-            : OrderCheck.Blocked(c.IsPlayer ? $"{c.Name}: no free bed nearby" : null, posted: true);
+            : OrderCheck.Blocked(c.IsPlayer ? $"{world.ShownName(c)}: no free bed nearby" : null, posted: true);
     }
 
     /// <inheritdoc/>
@@ -424,7 +424,8 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         {
             if (t.Fixed || carrying || world.Fixtures.FindBed(world, s, data.Relations, f => Reserved(f, t.Character)) is not { } other)
             {
-                if (c.IsPlayer) world.Post(carrying ? $"{c.Name}: no free bed nearby" : $"{c.Name}: the bed is taken");
+                if (c.IsPlayer)
+                    world.Post(carrying ? $"{world.ShownName(c)}: no free bed nearby" : $"{world.ShownName(c)}: the bed is taken");
                 if (!carrying) TaskStart.Stand(table, s);
                 return false;
             }
@@ -454,7 +455,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             {
                 world.Fixtures.MarkUnreachable(world, bed, c.Faction);
                 FixtureRegistry.MarkBadNode(world, bed, n.Position);
-                if (c.IsPlayer) world.Post($"{c.Name} cannot get to the bed");
+                if (c.IsPlayer) world.Post($"{world.ShownName(c)} cannot get to the bed");
                 if (!carrying) TaskStart.Stand(table, s);
                 return false;
             }
@@ -526,7 +527,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (!table.TryResolveNext(body, out int b) || table.Cold(b) is not { } bc) return false;
         if (!FixtureRegistry.IsFree(table, bed))
         {
-            if (c.IsPlayer) world.Post($"{c.Name}: no free bed nearby");
+            if (c.IsPlayer) world.Post($"{world.ShownName(c)}: no free bed nearby");
             return false;
         }
 
@@ -537,7 +538,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (!Pay(world, s, bed, cost)) return Refused(world, c, bed);
         Carry!.LetGo(world, s);
         if (world.Fixtures.EnterBed(world, body, bed)) SettleNpcRent(world, s, bed, cost);
-        else if (c.IsPlayer) world.Post($"{c.Name} could not put {bc.Name} in the bed");
+        else if (c.IsPlayer) world.Post($"{world.ShownName(c)} could not put {world.ShownName(bc)} in the bed");
 
         return false;
     }
@@ -636,11 +637,11 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
                 || data.Db.Find(bed.RecordId) is not { } record)
             return null;
 
-        string? town = bed.Site >= 0 && bed.Site < data.Sites.Count ? data.Sites[bed.Site].Town.Name : null;
+        string? town = bed.Site >= 0 && bed.Site < data.Sites.Count ? data.Sites[bed.Site].Town.ShownName() : null;
         float healing = Data.Gameplay.Construction.MachineData.From(data.Db, record)?.OutputValue ?? 1;
         return new BuildingDetail(instance, [], bed.Owner == world.Player.Faction)
         {
-            Bed = new(record.Name, town, Cost(world, bed, world.Player.Faction), healing),
+            Bed = new(record.ShownName(), town, Cost(world, bed, world.Player.Faction), healing),
         };
     }
 

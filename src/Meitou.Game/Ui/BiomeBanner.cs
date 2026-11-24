@@ -93,7 +93,8 @@ sealed class BiomeBanner(PlayerInterface player)
         if (here.Id != _biomeGroup && _biomeCooldown <= 0 && !blocked
             && here.Name != "NONE" && here.Id != WeatherData.NoneRegionId)
         {
-            (_biomeName, BiomeShown, _biomeAlpha, _biomeHold, _biomeCooldown) = (here.Name, true, 0, BiomeHoldSeconds, BiomeCooldownSeconds);
+            (_biomeName, BiomeShown, _biomeAlpha, _biomeHold, _biomeCooldown) =
+                (ShownText.Record(here.Id, here.Name), true, 0, BiomeHoldSeconds, BiomeCooldownSeconds);
             player.InterfaceSounds.Sound("Notifications", "Notifications", "New_Biome");
         }
         else if (BiomeShown)

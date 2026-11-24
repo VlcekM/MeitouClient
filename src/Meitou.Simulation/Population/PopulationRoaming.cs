@@ -1224,7 +1224,7 @@ public sealed partial class PopulationSystem
                 continue;
 
             table.Next[slot].Position = place;
-            world.Post(Loc.Tr("Character {1} of {2} tried to spawn inside walls!", c.Name, squad.Name));
+            world.Post(Loc.Tr("Character {1} of {2} tried to spawn inside walls!", world.ShownName(c), world.ShownName(squad)));
         }
     }
 

@@ -144,7 +144,7 @@ sealed class NewGameLaunch(GameHost host)
                 var view = host.Session.Camera.Current;
                 host.Session.Camera.Place(new Vector2(lead.X, lead.Z), view.Yaw, view.Pitch, view.Distance, lead.Y);
                 host.SettleNewWorld();
-                host.Player.Notice(Loc.Tr("Started {1}", chosen.Name));
+                host.Player.Notice(Loc.Tr("Started {1}", ShownText.Record(chosen.Id, chosen.Name)));
                 ShowStartHints();
                 // The start's characters, of every start squad, are made in the editor first (docs/characters.md "Character editor").
                 host.CharacterEditor.PendingCreation = [.. SquadManagement.PlayerSquads(host.Session.World).SelectMany(s => s.Members)];

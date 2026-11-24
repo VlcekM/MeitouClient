@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Localisation;
 
 namespace Meitou.Data;
 
@@ -186,6 +187,18 @@ public sealed class GameRecord
     /// The string <paramref name="key"/>, or <paramref name="fallback"/> when the record has none.
     /// </summary>
     public string GetString(string key, string fallback = "") => StringTable.GetValueOrDefault(key, fallback);
+
+    /// <summary>
+    /// <see cref="Name"/> as the mods' text sources show it (<see cref="ShownText.Record"/>), for one item tagged
+    /// <paramref name="tag"/> ("" none). Display only: anything the game decides reads <see cref="Name"/> or <see cref="BaseName"/>.
+    /// </summary>
+    public string ShownName(string tag = "") => ShownText.Record(StringId, Name, ShownText.RecordName, tag);
+
+    /// <summary>
+    /// String field <paramref name="key"/> (<see cref="GetString"/>) as the mods' text sources show it
+    /// (<see cref="ShownText.Record"/>, the field named by <paramref name="key"/>). Display only.
+    /// </summary>
+    public string GetShownString(string key, string fallback = "") => ShownText.Record(StringId, GetString(key, fallback), key);
 
     /// <summary>
     /// The file path <paramref name="key"/>, or <paramref name="fallback"/> when the record has none.

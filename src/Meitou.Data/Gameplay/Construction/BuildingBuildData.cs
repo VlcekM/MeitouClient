@@ -34,6 +34,16 @@ public sealed record BuildingBuildData
     public string Category { get; init; } = "misc";
 
     /// <summary>
+    /// The record field <see cref="Category"/> comes from, for asking the mods' text sources about it.
+    /// </summary>
+    public const string CategoryField = "building category";
+
+    /// <summary>
+    /// The record field <see cref="Group"/> comes from when set, for asking the mods' text sources about it.
+    /// </summary>
+    public const string GroupField = "building group";
+
+    /// <summary>
     /// <c>building group</c>, default the building's own name.
     /// </summary>
     public string Group { get; init; } = "";
@@ -209,8 +219,8 @@ public sealed record BuildingBuildData
         {
             Id = r.StringId,
             Name = r.Name,
-            Category = r.GetString("building category") is { Length: > 0 } c ? c : "misc",
-            Group = r.GetString("building group") is { Length: > 0 } g ? g : r.Name,
+            Category = r.GetString(CategoryField) is { Length: > 0 } c ? c : "misc",
+            Group = r.GetString(GroupField) is { Length: > 0 } g ? g : r.Name,
             Materials = materials,
             BuildMaterials = bulk,
             BuildSpeedMult = RecordReading.Float(r, "build speed mult", 1),

@@ -568,9 +568,9 @@ public sealed class CharacterDraft
     }
 
     /// <summary>
-    /// The name of a picker's current choice ("None" for no hair or beard).
+    /// The name of a picker's current choice as the mods' text sources show it ("None" for no hair or beard). Display only.
     /// </summary>
-    public string OptionName(EditorControlKind kind) => Options(kind).ElementAtOrDefault(OptionIndex(kind))?.Name ?? "None";
+    public string ShownOptionName(EditorControlKind kind) => Options(kind).ElementAtOrDefault(OptionIndex(kind))?.ShownName() ?? "None";
 
     /// <summary>
     /// Picks choice <paramref name="index"/> (wrapped around the choices); nothing when there are none.

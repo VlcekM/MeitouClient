@@ -1242,7 +1242,13 @@ public interface IProjectileSource
 /// <summary>
 /// One of the player's squads as the squad tabs and the squads screen show it.
 /// </summary>
-public sealed record SquadView(int Id, string Name, IReadOnlyList<CharacterId> Members);
+public sealed record SquadView(int Id, string Name, IReadOnlyList<CharacterId> Members)
+{
+    /// <summary>
+    /// The SQUAD_TEMPLATE the squad was made from ("" none), for showing its name through the mods' text sources.
+    /// </summary>
+    public string TemplateId { get; init; } = "";
+}
 
 /// <summary>
 /// Which status line a character's bounty panel shows (<c>FUN_1405d4260</c>, <b>Observed</b>).
