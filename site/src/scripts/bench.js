@@ -849,7 +849,7 @@
     syncRows();
     wrap.appendChild(table);
     host.appendChild(wrap);
-    const note = "Values: run 2 (run 1 in brackets), at the machine's newest build for this scenario and tier.";
+    const note = "Values: run 2 (run 1 in brackets), at the machine's newest build for this scenario and tier. Launcher benchmarks always render at 1080p (1920×1080 windowed).";
     host.appendChild(el("p", { class: "muted small" }, note));
   }
 
@@ -857,7 +857,7 @@
     const newest = entries.slice().sort((a, b) => D.targets.findIndex((t) => t.id === b.target) - D.targets.findIndex((t) => t.id === a.target))[0];
     const m = newest.machine, hw = newest.info.hardware || {}, t = targetOf(newest.target);
     const ram = num(m.ramGb != null ? m.ramGb : hw.ramGb);
-    const res = str(m.resolution || newest.info.resolution);
+    const res = state.version !== 0 ? str(newest.info.resolution || "1920x1080") : str(m.resolution || newest.info.resolution);
     const resMatch = res.match(/^(\d+)\s*[x×]\s*(\d+)$/i);
     const resPixels = resMatch ? Number(resMatch[1]) * Number(resMatch[2]) : null;
     const shown = shownRun(newest, metric.key);
