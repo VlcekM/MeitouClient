@@ -633,6 +633,7 @@ public sealed partial class World
         var population = f.Population;
 
         s.InCombat = cold?.InCombat ?? false;
+        s.Attacking = combat?.Playing(id, Tick) is { IsAttack: true };
         s.CombatMode = cold is not null && combat is not null && CharacterFacts.InCombatMode(combat, table, id, cold, true, true);
         s.FightsPlayer = fightsPlayer;
         s.HostileToPlayer = cold is not null && CharacterFacts.HostileToPlayer(population?.Relations, Player.Faction, cold.Faction, fightsPlayer);

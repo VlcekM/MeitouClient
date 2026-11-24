@@ -704,6 +704,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool InCombat { get; internal set; }
     /// <summary>
+    /// A melee swing of its own is in progress (the combat system's attack technique playing, as the animation shows it), for a mod's weapon
+    /// effects (docs/modding.md "Trails"). Display only.
+    /// </summary>
+    public bool Attacking { get; internal set; }
+    /// <summary>
     /// In combat mode (<c>Character::isInCombatMode(1, 1)</c>, <see cref="Combat.CombatSystem.IsInCombatMode"/>): the portrait's <c>Combat</c>
     /// overlay.
     /// </summary>
