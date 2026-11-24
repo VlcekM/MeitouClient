@@ -1276,11 +1276,11 @@ public class ProductionTests
     }
 
     /// <summary>
-    /// Jobs farm then well, the farm dry and no water anywhere: the farmer pumps the well full, carries its water into the farm and then tends the
-    /// growing crop, counted as operating (docs/simulation.md "Production", Hauling and 87).
+    /// Jobs farm then well, the farm dry and no water anywhere: the farmer pumps the well full, carries its water into the farm and then leaves the
+    /// growing crop for the well again (docs/simulation.md "Production", Hauling and 87).
     /// </summary>
     [Fact]
-    public void A_farmer_fills_the_well_carries_its_water_to_the_farm_and_tends_the_growing_crop()
+    public void A_farmer_fills_the_well_carries_its_water_to_the_farm_and_leaves_the_growing_crop()
     {
         using var rig = new Rig(Database(), Constants, [Farm, Well]);
         var farmer = rig.Add(0, StatsEnumerated.Farming, Unit);
@@ -1298,9 +1298,13 @@ public class ProductionTests
 
         Assert.True(pumped && farm.Inputs[0].Count == 10, $"well {well.Count}, farm {farm.Inputs[0].Count}, carried {rig.Count(farmer, Water)}");
 
-        for (int t = 0; t < 600 && !cold.Operating; t++) rig.World.RunTick();
+        for (int t = 0; t < 600 && cold.OperateSite != rig.Sites[1]; t++)
+        {
+            rig.World.RunTick();
+            Assert.False(cold.Operating && cold.OperateSite == rig.Sites[0], $"hoeing growing crop at growth {farm.Farm!.Growth}");
+        }
 
-        Assert.True(cold.Operating && cold.OperateSite == rig.Sites[0] && farm.Farm!.Growth < 1,
+        Assert.True(cold.OperateSite == rig.Sites[1] && farm.Farm!.Growth < 1,
                 $"operating {cold.Operating} at {cold.OperateSite}, growth {farm.Farm!.Growth}");
     }
 

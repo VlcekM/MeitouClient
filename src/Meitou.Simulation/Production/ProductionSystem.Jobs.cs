@@ -752,7 +752,7 @@ public sealed partial class ProductionSystem
         if (m.Data.IsResearch) return world.Research.Queue.Count > 0;
         if (m.Farm is { } f)
         {
-            if (f.Death >= m.Data.Farm!.DeathThreshold) return true;
+            if (f.Death >= m.Data.Farm!.DeathThreshold) return f.Harvested < f.Plants.Length;
             if (f.Growth >= 1) return f.Harvested < f.Plants.Length && Room(world, site, m, cold);
 
             // A growing crop is no work while it holds water: the original's operate row needs a free operator place, false while the farm's

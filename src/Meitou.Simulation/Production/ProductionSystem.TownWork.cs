@@ -629,8 +629,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     void TownOperate(World world, int slot, CharacterCold cold, Machine m, float dt)
     {
-        // tryOperate (slot 0x4f8, FUN_1400f8030) refuses while the bench needs no work: the player's research bench with no current research.
-        if (m.Data.IsResearch && CanResearch(world, m) && world.Research.Queue.Count == 0) return;
+        // tryOperate (slot 0x4f8, FUN_1400f8030) refuses while the building needs no work (dontNeedWorkRightNow, slot 0x4e8): the player's research
+        // bench with no current research, or a growing watered farm.
+        if (m.Data.IsResearch && CanResearch(world, m) && world.Research.Queue.Count == 0 || FarmNeedsNoWork(m)) return;
 
         if (m.Data.IsTraining)
         {
@@ -642,7 +643,7 @@ public sealed partial class ProductionSystem
 
         m.Operators++;
         cold.Operating = WorkStep(world, slot, cold, m, dt, ref _townResearch);
-        OperatingXp(world, cold, m.Data.Stat, dt);
+        if (m.Farm is null || cold.Operating) OperatingXp(world, cold, m.Data.Stat, dt);
     }
 
     /// <summary>

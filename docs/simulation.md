@@ -2116,7 +2116,9 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     40 (146's `!158`). Urgent (step 3, before Self preservation) while the character senses an enemy.
   - 87 Operating machine: blocked while others hold every operator place or the machine has no work (no power; no queued research or craft; a
     farm growing with water, or with no water it holds or can get, or ripe with no plant left or no room; an empty input the operator cannot fill from its pack, a storage or a machine's output;
-    a full output (a bench's first craft at its store) no storage takes). A farmer goes to a growing farm only to fill an empty input; he plays the farm's clip after the fill until his next job check, then goes on to his next job ([farming](game/buildings-production.md#farming)).
+    a full output (a bench's first craft at its store) no storage takes). A growing watered farm needs no work (`FarmNeedsNoWork`, matching
+    `FarmBuilding::dontNeedWorkRightNow`): a manual operate order is blocked while the crop grows with water, and an active operate task (order or
+    job) ends as soon as harvesting, clearing or watering finishes, with no hoeing clip or Farming XP ([farming](game/buildings-production.md#farming)).
   - 124 Hauling to (`CharacterTask.Haul`): items the hauler already carries that the storage's `limit inventory` lists or some machine makes or crafts
     go first; else the nearest loose item of a listed record within 1200 of the hauler is picked up and carried there (`ProductionSystem.LooseFor`, the
     original's source order, [hauling](game/buildings-production.md#hauling)), never one another faction owns (engine choice: the ownership test alone

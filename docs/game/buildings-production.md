@@ -1358,7 +1358,7 @@ replan (the failed flag `+0x26d`, handler `FUN_14050d080`); a walk that ended sh
 inputs in list order as the finder does, takes storages before producers and skips the machine's own record. Power share: a town machine that draws power works at a share of 1 (its draw is the frame's pseudo consumer, `NpcDraws`); only a layout's battery bank is a member of the frame. A resident staying home at a workstation of its house (221) operates that layout object's machine as a worker of 190 does (`HomePretenders`, [town goals](ai-tasks.md#town-goals)).
   A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).
   Town farms (#625) and unattended producers (#763: `Well II` / `Well III`, raw `max operators` 0, which `UnattendedStep` runs with no operator) start as a farm with no saved keys
-  does ([farming](#farming)), so they grow and work whether a worker came; a worker of 87 at a farm harvests and tends it as a player's operator does (`HarvestStep`), its crop goes to the output, which row 92
+  does ([farming](#farming)), so they grow and work whether a worker came; a worker of 87 at a farm harvests and clears it as a player's operator does (`HarvestStep`), its crop goes to the output, which row 92
   empties. Whether the planner sends town farmers to a ripe farm is the planner's ([farming](#farming): status 3 has no provider of 87). The player's Use and Loot on a town machine:
   [ui-input](ui-input.md#building-picking-and-selection). Crop eaters (232) still look only in player towns (`CaptiveSystem.CropsToEat`).
 ### Hauling

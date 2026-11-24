@@ -549,9 +549,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// The orders of machines (operate 87, training 97, turret gunner 146, a haul trip to a storage 124) and prospecting (150), anyone's (the order
     /// giver and the tasks test no faction: a worked bench counts for the player's research only when the player owns it, the storages are the
     /// worker's faction's, <see cref="StoresFor"/>, and a prospect's result goes to the Prospecting window, <c>Task_Prospecting</c>): on a complete
-    /// site that has its machine (or a turret's post), else the order is gone (<see cref="OrderVerdict.Gone"/>); one already working that machine needs nothing more; the character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place
-    /// ("is already in use", posted) and, to operate or man it (rows 87 and 146), power (state 93, <see cref="Powered"/>; its text "It needs
-    /// electricity." said); a prospector must not swim.
+    /// site that has its machine (or a turret's post), else the order is gone (<see cref="OrderVerdict.Gone"/>); a growing watered farm needs no
+    /// work (<see cref="FarmNeedsNoWork"/>, state 73 blocked with no failure line); one already working that machine needs nothing more; the
+    /// character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place ("is already in
+    /// use", posted) and, to operate or man it (rows 87 and 146), power (state 93, <see cref="Powered"/>; its text "It needs electricity." said); a
+    /// prospector must not swim.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -560,6 +562,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (order.Site is not { } id || Site(world, id) is not { Complete: true } site || world.Machines.Find(id) is not { } m
             || order.Row == TaskType.UseTurret && TurretPostOf(site) is null) return OrderCheck.Gone;
         if (order.Row == TaskType.OperateStorage) return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
+        if (order.Row == TaskType.OperateMachinery && FarmNeedsNoWork(m)) return OrderCheck.Blocked();
         if (cold.OperateSite == id) return OrderCheck.Run;
         if (order.Row == TaskType.UseTurret ? !AbleToMan(cold) : !Able(cold)) return OrderCheck.Blocked();
         if ((IsSeat(m) && SeatOccupied(world, site)) || OperatorsOf(world, id) >= m.Data.MaxOperators)
@@ -1297,6 +1300,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (Hauling(world, cold) is { } haul)
         {
             cold.OperateToolHeld = false;
+            if (cold.HaulFetch is not null && FarmNeedsNoWork(m))
+            {
+                End(world, i);
+                return;
+            }
+
             if (!AtSite(world, n, haul.Site, haul.Machine)) return;
 
             // The walk stops at the storage, as a hauler's does (StopWalk), so the walk back starts after the beat.
@@ -1305,7 +1314,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             return;
         }
 
-        if (!AtSite(world, n, site, m)) return;
+        if (!AtSite(world, n, site, m))
+        {
+            if (FarmNeedsNoWork(m)) End(world, i);
+            return;
+        }
 
         // Task_OperateMachine's start (slot 1, FUN_14035b430) attaches the special tool, its end (slot 3, FUN_140347350) takes it off.
         cold.OperateToolHeld = true;
@@ -1320,6 +1333,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
         if (UseSpecial(world, i, ref n, cold, site, m, dt)) return;
         if (Settings.AutoHaul && StartHaul(world, cold, site, m)) return;
+        if (FarmNeedsNoWork(m))
+        {
+            End(world, i);
+            return;
+        }
 
         WorkMachine(world, i, ref n, cold, site, m, dt, ref contributions);
     }
@@ -1406,19 +1424,19 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// Works the machine at the operator's skill (<see cref="WorkStep"/>); then the operating XP.
+    /// Works the machine at the operator's skill (<see cref="WorkStep"/>); then the operating XP (at a farm, only while harvesting or clearing).
     /// </summary>
     void WorkMachine(World world, int i, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt, ref int contributions)
     {
         if (n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = FacingTo(n, site);
         m.Operators++;
         cold.Operating = WorkStep(world, i, cold, m, dt, ref contributions);
-        OperatingXp(world, cold, m.Data.Stat, dt);
+        if (m.Farm is null || cold.Operating) OperatingXp(world, cold, m.Data.Stat, dt);
     }
 
     /// <summary>
     /// The building's work step (<c>Task_OperateMachine</c>'s update calls the building's slot <c>0x4b0</c> once <c>tryOperate</c> passes,
-    /// <c>FUN_14035bc90</c>, <b>Verified</b>) at the operator's skill: research, crafting, a farm's harvest or tending, else production; true when
+    /// <c>FUN_14035bc90</c>, <b>Verified</b>) at the operator's skill: research, crafting, a farm's harvest or clearing, else production; true when
     /// it worked.
     /// </summary>
     bool WorkStep(World world, int i, CharacterCold cold, Machine m, float dt, ref int contributions)
@@ -1438,10 +1456,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (m.Farm is null) return ProduceStep(world, m, s, dt);
 
         m.FarmerSkillTotal += Effective(cold, StatsEnumerated.Farming) / 100;
-
-        // A growing crop the operator has just watered is tended: he plays the farm's clip until his next job check finds it no work
-        // (HasWork, docs/game/buildings-production.md "Farming").
-        return HarvestStep(world, i, m, skill, s, dt) || Tended(m);
+        return HarvestStep(world, i, m, skill, s, dt);
     }
 
     /// <summary>
@@ -1780,7 +1795,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             return true;
         }
 
-        if (f.Death >= fd.DeathThreshold)
+        if (f.Death >= fd.DeathThreshold && f.Harvested < f.Plants.Length)
         {
             f.ClearProgress += work * fd.ClearRate / MachineData.DaySeconds;
             if (f.ClearProgress >= 1)
@@ -1826,10 +1841,16 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// A farm whose crop is still growing and whose every input holds water.
+    /// <c>FarmBuilding::dontNeedWorkRightNow</c> (vfunc <c>0x4e8</c>, <c>FUN_1400f6e00</c>, <b>Verified</b>): a farm with no plants left to harvest
+    /// or clear and no empty water input (a growing watered crop, or one whose last plant was just finished before the next tick replants it).
     /// </summary>
-    static bool Tended(Machine m) =>
-        m.Farm is { Growth: < 1 } f && f.Death < m.Data.Farm!.DeathThreshold && m.Inputs.All(i => i.Rate <= 0 || i.Level + i.Count > 0);
+    static bool FarmNeedsNoWork(Machine m)
+    {
+        if (m.Farm is not { } f) return false;
+        if (f.Harvested < f.Plants.Length && (f.Death >= m.Data.Farm!.DeathThreshold || f.Growth >= 1)) return false;
+
+        return !m.HasEmptyInputs;
+    }
 
     /// <summary>
     /// <c>FarmBuilding::eat</c> (<c>FUN_1400e5e60</c>, docs/game/ai-tasks.md "Eating crops"): adds <paramref name="amount"/> (the eater's age, 1, x
