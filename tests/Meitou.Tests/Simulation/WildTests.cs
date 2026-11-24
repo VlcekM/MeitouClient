@@ -29,7 +29,8 @@ public class WildTests(ITestOutputHelper output)
     /// </summary>
     static PopulationData WildData(Action<FcsRecord>? changePatrol = null, Action<FcsRecord>? changeDen = null, params FcsRecord[] extra)
     {
-        var db = SyntheticTown.Database(residentSquads: 1, changePatrol: changePatrol);
+        // A town of radius 300 (0.12 x 2500), so the spots pushed out of it (2 x radius) stay in the four zones.
+        var db = SyntheticTown.Database(residentSquads: 1, changePatrol: changePatrol, changeTown: t => t.Floats["town radius mult"] = 0.12f);
         var dogs = Rec("52-t", FcsRecordType.SquadTemplate, "Dog pack");
         dogs.References["animals"] = [new FcsReference("4-t", 3, 0, 50)];
         dogs.References["faction"] = [new FcsReference("53-t", 0, 0, 0)];
@@ -120,14 +121,18 @@ public class WildTests(ITestOutputHelper output)
         Assert.Equal(4, sectors.Count);
         Assert.Single(nests);
         Assert.All(nests, n => Assert.Equal("Dog Den", n.Nest!.Name));
-        // The den stands in a sector of its own (FUN_1408f62e0), not the town's: that sector makes none of the group's squads, and the three others
-        // fill the island's 4 x 1.5.
+        // The den stands in a sector of its own (FUN_1408f62e0), not the town's: that sector makes none of the group's squads, nor does the town's
+        // (never drawn, Town::setup's flag); the two others fill at load and stay at their share.
         Assert.Contains(sectors, s => OwnTownIsNest(data, nests, s));
+        var townZones = PopulationSystem.TownZones(data);
+        Assert.Contains(sectors, s => townZones.Contains(s.Zone));
         foreach (var s in sectors)
         {
             Assert.Equal(SiteStatus.Loaded, pop.WildStatusOf(s.Index));
+            int count = pop.WildSquadsOf(s.Index).Count;
+
             // ceil(1.5) = 2 squads; the gated template never.
-            Assert.Equal(OwnTownIsNest(data, nests, s) ? 0 : 2, pop.WildSquadsOf(s.Index).Count);
+            Assert.Equal(OwnTownIsNest(data, nests, s) || townZones.Contains(s.Zone) ? 0 : 2, count);
             Assert.All(pop.WildSquadsOf(s.Index), id => Assert.NotEqual("11-t", world.Squads.Find(id)!.TemplateId));
         }
         foreach (var n in nests)

@@ -49,7 +49,8 @@ public sealed record WildSite(int Index, WildKind Kind, ZoneCoordinate Zone, int
 /// sector's own picks; world-state gated templates are skipped. The spot: a random point of the sector, pushed out of the nearest town to twice its
 /// radius and out of other towns of another faction to their radius, at least <see cref="PopulationSettings.HomelessPlayerDistance"/> from every
 /// player character, walkable, terrain no lower than <see cref="SpawnFloor"/>; 40 tries (the original's 4 rounds of 10), else that squad is not
-/// made. A sector whose nearest town is the player's makes none, and so does one whose own town is a nest with roaming squads.</item>
+/// made. A sector whose nearest town is the player's makes none, nor does one a town stands in, nor one whose own town is a nest with roaming
+/// squads.</item>
 /// <item><b>Nests</b> (6.3). The original adds one nest per area tick until a group has <c>num nests</c> x the nests multiplier; here the layout is
 /// made at once from the world seed (engine choice; the end state is the same count): each nest's TOWN is a weighted pick from the group's
 /// <c>nests</c> (v0, 0 as 100, the TOWN's <c>world state</c> gate), its place a seeded cell of the group's area no town stands in and without a
@@ -1125,6 +1126,11 @@ public sealed partial class PopulationSystem
         // A sector whose nearest town is the player's makes nothing (6.2).
         if (NearestTown(centre, out _) is { } nearest && _data.PlayerFaction >= 0 && _data.SiteFactions[nearest.Index] == _data.PlayerFaction)
             return new BuiltWild(site.Index, loadId, centre, squads, TopUp: topUp >= 0);
+
+        // A sector a town stands in is never drawn by the area tick (Town::setup's flag +0x30, FUN_1408f9240), so its load-time fill makes none
+        // either (#1311: Outlaw Farmers made in a United Cities town's own sector).
+        if (TownZones(_data).Contains(site.Zone)) return new BuiltWild(site.Index, loadId, centre, squads, TopUp: topUp >= 0);
+
         // A sector whose own town is a nest with roaming squads makes none of the biome's: the original's maker then draws from the nest's
         // pool within its free budget (docs/game/factions-squads-towns.md "Homeless squads"), which Meitou leaves to the nest's own site.
         if (OwnNest(site, centre) is { RoamingSquads.Count: > 0 })
@@ -1151,7 +1157,7 @@ public sealed partial class PopulationSystem
             counts[e]++;
             var template = SquadTemplate.From(_data.Db.Find(group.HomelessSpawns[e].Id)!);
             int faction = _data.SpawnFactionOf(template);
-            if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, regions, players) is not { } spot) continue;
+            if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, regions, players, spawn: true) is not { } spot) continue;
             var owner = faction >= 0 ? _data.Factions[faction] : null;
             if (BuildOne(template, faction, owner, key, seed, spot) is { } one) squads.Add(one with { Grounded = true });
         }
@@ -1206,16 +1212,18 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The spot of a homeless squad (6.2, <c>FUN_1408f50d0</c>): 40 seeded tries of a point of the sector, pushed out of towns and away from the
-    /// player, walkable and not <see cref="SpotRefused"/>.
+    /// player, walkable and not <see cref="SpotRefused"/>. <paramref name="spawn"/>: the maker's call (<c>FUN_1408f8060</c>: camera flag 1, out of
+    /// the nearest town's 2 x radius and another faction's 1 x), which also refuses a point inside its nearest town (<see cref="InsideNearestTown"/>);
+    /// else the patrol's (<c>FUN_1408fc730</c>: flag 0, factors 1 and 1, faction none, so every town with a faction pushes; <b>Verified</b>).
     /// </summary>
     Vector2? PlaceInSector(float minX, float minZ, float maxX, float maxZ, int faction, ulong seed, ulong key, IWalkability walk,
-        Locks.IGateRegions? regions, Vector2[] players)
+        Locks.IGateRegions? regions, Vector2[] players, bool spawn)
     {
         for (int t = 0; t < 40; t++)
         {
             ulong roll = Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.WildPlace + (ulong)t);
             var p = new Vector2(minX + Rng.Float(roll) * (maxX - minX), minZ + Rng.Float(Rng.Mix(roll)) * (maxZ - minZ));
-            if (NearestTown(p, out _) is { } nearest) p = PushOut(p, nearest, 2);
+            if (NearestTown(p, out _) is { } nearest) p = PushOut(p, nearest, spawn ? 2 : 1);
             foreach (var s in _data.Sites)
             {
                 if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null) continue;
@@ -1225,11 +1233,31 @@ public sealed partial class PopulationSystem
             bool tooClose = false;
             foreach (var at in players)
                 if (Vector2.DistanceSquared(at, p) < _settings.HomelessPlayerDistance * _settings.HomelessPlayerDistance) { tooClose = true; break; }
-            if (tooClose || SpotGround(p, walk, regions) is null) continue;
+            if (tooClose || (spawn && InsideNearestTown(p)) || SpotGround(p, walk, regions) is null) continue;
             return p;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether a point stands within the radius of the placed town nearest it, unless that town is Ruins (<c>FUN_1408f50d0</c>'s last test with
+    /// <c>FUN_140927f10</c> and <c>FUN_140926d50</c> x 1, <b>Verified</b>): a point the push left inside another town is refused. The finder skips nest
+    /// markers; a null town has radius 0 and holds nothing.
+    /// </summary>
+    bool InsideNearestTown(Vector2 p)
+    {
+        TownSite? nearest = null;
+        float best = float.MaxValue;
+        foreach (var s in _data.Sites)
+        {
+            if (s.Town.Type == TownType.NestMarker) continue;
+            float d = Vector2.DistanceSquared(p, new Vector2(s.Position.X, s.Position.Z));
+            if (d < best) (nearest, best) = (s, d);
+        }
+
+        if (nearest is null || nearest.Town.Type == TownType.Ruins) return false;
+        return best < nearest.Town.Radius * nearest.Town.Radius;
     }
 
     /// <summary>
@@ -1265,12 +1293,14 @@ public sealed partial class PopulationSystem
     static Locks.IGateRegions? RegionsOf(World world) => world.SystemOf<Locks.LockSystem>()?.Regions;
 
     /// <summary>
-    /// Pushes <paramref name="p"/> out of the town's radius times <paramref name="share"/> (a point at the centre goes +X).
+    /// Pushes <paramref name="p"/> out of the town's radius times <paramref name="share"/> (a point at the centre goes +X). The radius is the town's
+    /// <c>getRadius</c> (vfunc 0x2a0, <see cref="TownData.Radius"/>; <b>Verified</b>, <c>FUN_1408f50d0</c>), not its <c>size radius</c> (#1311: a
+    /// United Cities town's small one let Outlaw Farmers spawn in its streets).
     /// </summary>
     static Vector2 PushOut(Vector2 p, TownSite town, float share)
     {
         var c = new Vector2(town.Position.X, town.Position.Z);
-        float r = town.Town.SizeRadius * town.Town.TownRadiusMult * share;
+        float r = town.Town.Radius * share;
         var d = p - c;
         float len = d.Length();
         if (len >= r || r <= 0) return p;

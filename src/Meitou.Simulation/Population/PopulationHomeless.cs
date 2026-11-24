@@ -84,7 +84,7 @@ public sealed partial class PopulationSystem
                 if (world.Squads.Find(id) is not { } squad || !table.TryResolveNext(squad.Leader, out int slot) || !table.IsAlive(squad.Leader))
                     continue;
 
-                var zone = WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
+                var zone = StandingZone(world, slot);
                 _patrolStanding[zone] = _patrolStanding.GetValueOrDefault(zone) + (SquadIntact(world, squad) ? 1 : 0.5f);
             }
         }
@@ -100,7 +100,7 @@ public sealed partial class PopulationSystem
                     continue;
 
                 _sectorSeen.Add(id);
-                var zone = WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
+                var zone = StandingZone(world, slot);
                 if (zone != site.Zone && SectorAt(zone) is var to and >= 0 && MayRefile(world, id, to, zone, slot)) _refiles.Add((id, i, to));
                 PatrolStep(world, squad, slot, site.Group, site.Zone);
             }
@@ -328,7 +328,7 @@ public sealed partial class PopulationSystem
         }
 
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(tx, tz);
-        var spot = PlaceInSector(minX, minZ, maxX, maxZ, squad.Faction, world.Seed, key, world.Walkability, RegionsOf(world), []);
+        var spot = PlaceInSector(minX, minZ, maxX, maxZ, -1, world.Seed, key, world.Walkability, RegionsOf(world), [], spawn: false);
         return spot is { } placed ? (placed, false) : null;
     }
 
@@ -484,7 +484,7 @@ public sealed partial class PopulationSystem
                 {
                     if (table.TryResolveNext(m, out int slot))
                     {
-                        zone = WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
+                        zone = StandingZone(world, slot);
                         break;
                     }
                 }
@@ -525,6 +525,18 @@ public sealed partial class PopulationSystem
         if (tries.Count == 0) return;
 
         BuildTries(world, tries);
+    }
+
+    /// <summary>
+    /// The zone a character stands in for the sectors' counts: where it stood last tick, or for one made this tick, which has no last tick yet (its
+    /// previous state is unset, at the world's origin), where it was made. Without this, a sector's squads spawning were counted in the origin's zone
+    /// and the sector was refilled over its share.
+    /// </summary>
+    static ZoneCoordinate StandingZone(World world, int slot)
+    {
+        var table = world.Characters;
+        var at = table.Cold(slot)?.SpawnedTick == world.Tick ? table.Next[slot].Position : table.Previous[slot].Position;
+        return WorldLayout.ZoneOf(at.X, at.Z);
     }
 
     /// <summary>
