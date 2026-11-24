@@ -820,20 +820,17 @@ sealed class BuildingSelection(PlayerInterface player)
 
     /// <summary>
     /// The medical panel's rows of a selected building (its section 4, docs/game/ui-screens.md "Selected building"): the first door's <c>Door
-    /// Condition</c>, then <c>Building Condition</c> (<c>Condition</c> without doors), each the construction progress as the number and its fraction
-    /// of the target as the bar, then while unfinished a row per material, delivered over required. Meitou models no building damage, so a finished
-    /// building's progress is its target (the original's damaged state lowers it). A complete farm adds its crop bars after Condition.
+    /// Condition</c> (<see cref="DoorConditionRow"/>), then <c>Building Condition</c> (<c>Condition</c> without doors), the construction progress as
+    /// the number and its fraction of the target as the bar, then while unfinished a row per material, delivered over required. Meitou models no
+    /// building damage, so a finished building's progress is its target (the original's damaged state lowers it). A complete farm adds its crop bars
+    /// after Condition.
     /// </summary>
     internal List<PlayerInterface.MedicalRow> BuildingRows(SelectedBuilding focus)
     {
         var rows = new List<PlayerInterface.MedicalRow>();
         // A rock has no site in the registry: its Condition is its record's target, complete (an Iron Resource's build materials 2).
         var door = FirstDoor(focus);
-        if (door is { Record.Length: > 0 } && BuildTarget?.Invoke(door.Value.Record) is { } doorTarget)
-        {
-            var doorValue = ((int)doorTarget).ToString(CultureInfo.InvariantCulture);
-            rows.Add(Bar(Loc.Tr("Door Condition"), 1, doorValue, "The door is in good condition."));
-        }
+        if (door is { Record.Length: > 0 } d && BuildTarget?.Invoke(d.Record) is { } doorTarget) rows.Add(DoorConditionRow(d, doorTarget));
 
         var site = player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == focus.Instance);
         float? target = site?.Target ?? (focus.Record is { } record ? BuildTarget?.Invoke(record) : null);
@@ -892,6 +889,21 @@ sealed class BuildingSelection(PlayerInterface player)
         // house shows it.
         static PlayerInterface.MedicalRow Bar(string name, float fraction, string value, string tooltip) =>
             new(name, 0, fraction, 0, value, "", false, Loc.Tr(tooltip));
+    }
+
+    /// <summary>
+    /// The first door's <c>Door Condition</c> row (DoorStuff <c>FUN_140304120</c> section 4, <b>Verified</b>): its progress in material units as
+    /// the number and over its target as the bar (at most 1); at 0 or more "The door is in good condition.", below (the breaking blow's excess)
+    /// the number in Title and "The door is damaged.".
+    /// </summary>
+    static PlayerInterface.MedicalRow DoorConditionRow(Simulation.Locks.DoorDetail door, float target)
+    {
+        float progress = door.Progress * target;
+        var value = ((int)progress).ToString(CultureInfo.InvariantCulture);
+        float fraction = Math.Clamp(door.Progress, 0, 1);
+        return progress >= 0
+            ? new(Loc.Tr("Door Condition"), 0, fraction, 0, value, "", false, Loc.Tr("The door is in good condition."))
+            : new(Loc.Tr("Door Condition"), 0, fraction, 0, TooltipRuntime.TitleTag + value, "", false, Loc.Tr("The door is damaged."));
     }
 
     /// <summary>

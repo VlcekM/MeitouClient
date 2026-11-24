@@ -23,9 +23,10 @@ sealed class DamageFloaters(PlayerInterface player)
     const float FloaterHeight = 15, FloaterRiseSpeed = 4, FloaterFadeFrom = 8, FloaterGone = 12;
 
     /// <summary>
-    /// How far at random a building's damage number starts from the point hit, each axis.
+    /// How far at random a building's damage number starts from its door along x and z, either way, and how much higher than
+    /// <see cref="FloaterHeight"/> at most (<c>FUN_14029d2b0</c>, <b>Verified</b>: 15 up, then -20..20, 0..10 and -20..20).
     /// </summary>
-    const float BuildingFloaterJitter = 20;
+    const float BuildingFloaterSpread = 20, BuildingFloaterRise = 10;
 
     /// <summary>
     /// A floater on screen; <paramref name="Height"/> the units over its anchor it starts at (a machine label: 5, its point already over the
@@ -114,12 +115,15 @@ sealed class DamageFloaters(PlayerInterface player)
         : "Kenshi_FloaterFont_Medium";
 
     /// <summary>
-    /// A building's damage number starts at the point hit moved a little at random in x, y and z (<c>FUN_14029d2b0</c>; the original's amounts are
-    /// <b>Unknown</b>, display only).
+    /// A building's damage number starts at its door's origin moved at random (<c>FUN_14029d2b0</c>, <b>Verified</b>; display only, so not the
+    /// world's random).
     /// </summary>
-    static Vector3 Jittered(Vector3 at) =>
-        at + new Vector3(
-            Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f) * BuildingFloaterJitter;
+    static Vector3 Jittered(Vector3 at)
+    {
+        float x = (Random.Shared.NextSingle() * 2 - 1) * BuildingFloaterSpread;
+        float z = (Random.Shared.NextSingle() * 2 - 1) * BuildingFloaterSpread;
+        return at + new Vector3(x, Random.Shared.NextSingle() * BuildingFloaterRise, z);
+    }
 
     /// <summary>
     /// The floaters as the original draws them (<c>FUN_1406ea9f0</c>, <b>Verified</b>): a plain MyGUI text box (the <c>Kenshi_TextboxStandardText</c>

@@ -136,15 +136,24 @@ public sealed partial class CombatSystem
     /// from the animal's own skeleton over the technique's <c>anim speed mult</c>. 0 when there is none or the clip is unknown (the caller keeps the
     /// human cycle).
     /// </summary>
-    public float AnimalBashSeconds(CharacterCold cold)
+    public float AnimalBashSeconds(CharacterCold cold) => AnimalBashTechnique(cold) is { } t
+        ? _lengths.For(cold.Race?.StringId).Of(t.AnimName) / MathF.Max(t.AnimSpeedMult, 0.1f)
+        : 0;
+
+    /// <summary>
+    /// The attack technique an animal swings at a door (<c>FUN_140887420</c>, see <see cref="AnimalBashSeconds"/>); null for a human or when none
+    /// fits.
+    /// </summary>
+    public CombatTechnique? AnimalBashTechnique(CharacterCold cold)
     {
-        if (cold.Fighter is not { IsAnimal: true } f) return 0;
+        if (cold.Fighter is not { IsAnimal: true } f) return null;
         foreach (var t in _asWritten)
         {
             if (t.Disabled || t.IsBlock || t.IsDodge || !TechniqueChooser.Fits(t, MovesCategory(f, f.AnimalCategory))) continue;
-            return _lengths.For(cold.Race?.StringId).Of(t.AnimName) / MathF.Max(t.AnimSpeedMult, 0.1f);
+            return t;
         }
-        return 0;
+
+        return null;
     }
 
     /// <summary>
