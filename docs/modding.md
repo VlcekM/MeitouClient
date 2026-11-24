@@ -1666,6 +1666,16 @@ holds refuses the second mod.
   answers `NotASeat` (one still at its seat sits at once). Without a call nothing changes; a seat that had no machine gets the one the Use order
   makes (`World.Machines`, hashed; a town seat's is not saved, a built chair's is saved with its building, as the Use order's). Engine API, not
   in the original.
+- **Character observers** (`IKnockoutObserver`, `ILimbObserver`, `ICarryObserver`, `IHeldStateObserver`, `IFactionChangeObserver`,
+  `IRecruitObserver`, `IEquipObserver`, `ICharacterRemovedObserver`): any `ITickSystem` implementing one or more of these interfaces is notified
+  serially in slot order after the slow world (and when a character leaves the table, before `ICharacterRemovedObserver.Removed` fires while the
+  character is still readable). Each runs with zero overhead when unregistered; the first observation of a character captures its baseline
+  without emitting spurious events. Observers may read world state and update their own hashed state, and must not mutate characters or other
+  world state (use commands); a throwing observer is disabled for that world and its fault enters the state hash. Engine API, not in the original.
+- **Dialogue choices** (`IDialogueChoiceFilter`, `IDialogueChoiceObserver`): any `ITickSystem` implementing `IDialogueChoiceFilter` is asked
+  serially before `DialogueSystem.Choose` runs a player's reply; returning `true` claims the choice (ending the conversation without running
+  vanilla effects or advancing). `IDialogueChoiceObserver.ChoicePicked` runs serially for every non-bail choice. Faulting hooks are disabled for
+  that world and enter the state hash. Engine API, not in the original.
 
 ## Data mods
 

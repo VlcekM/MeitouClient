@@ -716,6 +716,12 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             return;
         }
         var (reply, text) = c.Choices[index];
+        bool leave = reply is null && text == LeaveChoice;
+        if (world.DialogueChoiceObservers.Picked(world, c.Player, c.Npc, reply?.Record.StringId ?? "", text, index, leave))
+        {
+            c.Ended = true;
+            return;
+        }
         DialogueNode? from = c.Line;
         if (reply is not null)
         {
