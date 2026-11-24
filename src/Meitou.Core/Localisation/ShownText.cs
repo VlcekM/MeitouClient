@@ -97,6 +97,17 @@ public static class ShownText
     [ThreadStatic] static bool s_inside;
 
     /// <summary>
+    /// Counts the times the answers were forgotten (<see cref="Revision"/>).
+    /// </summary>
+    static volatile int s_revision;
+
+    /// <summary>
+    /// Moves whenever shown text may have changed (a source added, removed or dropped, <see cref="Refresh"/>): a view that keeps shown text
+    /// compares it with the value it was built at and rebuilds when it differs.
+    /// </summary>
+    public static int Revision => s_revision;
+
+    /// <summary>
     /// Whether any mod adds a text source.
     /// </summary>
     public static bool Any => s_sources.Length > 0;
@@ -240,6 +251,7 @@ public static class ShownText
     {
         Answers.Clear();
         s_count = 0;
+        s_revision++;
     }
 
     /// <summary>
