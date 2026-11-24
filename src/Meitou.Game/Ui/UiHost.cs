@@ -1371,6 +1371,19 @@ public sealed class UiRegistration : IDisposable
     }
 
     /// <summary>
+    /// Adds font file <paramref name="path"/> (a TrueType or OpenType font with outlines) to the fonts every interface text draws a character
+    /// from when its own font lacks it, after those added before (docs/modding.md "Fallback fonts"). False when the file does not exist or was
+    /// added already. For the life of the process: disposing the scope does not remove it.
+    /// </summary>
+    public bool AddFallbackFont(string path)
+    {
+        Check();
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        return File.Exists(path) && Rendering.Ui.UiFontFallbacks.Add(path);
+    }
+
+    /// <summary>
     /// Registers a control factory; returns its key.
     /// </summary>
     public string RegisterControl(string name, Func<UiFrameContext, UiNode> factory)
