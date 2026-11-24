@@ -10,6 +10,40 @@ namespace Meitou.Game.Settings;
 readonly record struct ModsLine(int Row, SettingsMenu.Entry? Entry);
 
 /// <summary>
+/// Which subset of mods the MODS page shows.
+/// </summary>
+enum ModListFilter
+{
+    /// <summary>
+    /// Every loaded mod and code mod.
+    /// </summary>
+    All,
+    /// <summary>
+    /// Only mods that registered in-game settings.
+    /// </summary>
+    WithSettings,
+    /// <summary>
+    /// Only mods with reported data or load issues.
+    /// </summary>
+    WithIssues,
+}
+
+/// <summary>
+/// How the MODS page orders its rows.
+/// </summary>
+enum ModListSort
+{
+    /// <summary>
+    /// Load order from <c>mods.cfg</c>.
+    /// </summary>
+    LoadOrder,
+    /// <summary>
+    /// Alphabetical by mod name.
+    /// </summary>
+    Name,
+}
+
+/// <summary>
 /// The settings code mods registered with <c>ModContext.AddSettings</c> (docs/modding.md "Settings"), on the MODS page: a group under its mod's row,
 /// drawn with the page's own rows. A change sets the mod's property at once and is kept in UserConfig.ModSettings.
 /// </summary>
@@ -73,7 +107,7 @@ sealed class ModSettingsRows(SettingsMenu menu)
     /// <summary>
     /// A mod's settings group's id among the open groups.
     /// </summary>
-    static string GroupId(ModSettingsGroup group) => "mod:" + group.ModId;
+    internal static string GroupId(ModSettingsGroup group) => "mod:" + group.ModId;
 
     /// <summary>
     /// A sub-group's id among the open groups: the mod's group's id, a record separator and the sub-group's name.
@@ -81,27 +115,107 @@ sealed class ModSettingsRows(SettingsMenu menu)
     static string SubGroupId(ModSettingsGroup group, string subGroup) => $"{GroupId(group)}{SubGroupSeparator}{subGroup}";
 
     /// <summary>
-    /// Each mod's row with its settings group under it; a group whose mod has no row (not in the list file) comes last, under its name.
+    /// Each mod's row with its settings group under it, filtered by <paramref name="filterText"/> and <paramref name="filter"/> and ordered by
+    /// <paramref name="sort"/>; a group whose mod has no row (not in the list file) comes last, under its name.
     /// </summary>
-    internal List<ModsLine> ModsLines(IReadOnlyList<ModRow> rows)
+    internal List<ModsLine> ModsLines(IReadOnlyList<ModRow> rows, string filterText, ModListFilter filter, ModListSort sort,
+        out int matchedMods, out int totalMods)
     {
         var groups = menu.ModSettings();
         var placed = new HashSet<ModSettingsGroup>();
-        var lines = new List<ModsLine>();
+        string[] words = filterText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        bool hideSeparators = words.Length > 0 || filter != ModListFilter.All || sort != ModListSort.LoadOrder;
+
+        var items = new List<(int RowIndex, ModRow Row, List<ModSettingsGroup> Groups)>();
+        totalMods = 0;
+
         for (int i = 0; i < rows.Count; i++)
         {
-            lines.Add(new(i, null));
-            if (rows[i].Separator) continue;
-
-            foreach (var group in groups.Where(g => g.Name == rows[i].Name && placed.Add(g)))
+            if (rows[i].Separator)
             {
-                AddModGroup(lines, group, "Settings");
+                if (!hideSeparators) items.Add((i, rows[i], []));
+                continue;
             }
+
+            totalMods++;
+            var modGroups = groups.Where(g => g.Name == rows[i].Name && placed.Add(g)).ToList();
+            if (!MatchesFilter(rows[i], modGroups, words, filter)) continue;
+
+            items.Add((i, rows[i], modGroups));
         }
 
-        foreach (var group in groups.Where(placed.Add)) AddModGroup(lines, group, group.Name);
+        var standalone = new List<ModSettingsGroup>();
+        foreach (var group in groups.Where(placed.Add))
+        {
+            totalMods++;
+            if (filter == ModListFilter.WithIssues) continue;
+            if (!MatchesGroupWords(group, "", words)) continue;
+
+            standalone.Add(group);
+        }
+
+        if (sort == ModListSort.Name)
+        {
+            items.Sort((a, b) => StringComparer.CurrentCultureIgnoreCase.Compare(a.Row.Name, b.Row.Name));
+            standalone.Sort((a, b) => StringComparer.CurrentCultureIgnoreCase.Compare(a.Name, b.Name));
+        }
+
+        var lines = new List<ModsLine>();
+        matchedMods = standalone.Count;
+        foreach (var (rowIndex, row, modGroups) in items)
+        {
+            lines.Add(new(rowIndex, null));
+            if (row.Separator) continue;
+
+            matchedMods++;
+            foreach (var group in modGroups) AddModGroup(lines, group, "Settings");
+        }
+
+        foreach (var group in standalone) AddModGroup(lines, group, group.Name);
         return lines;
     }
+
+    /// <summary>
+    /// Whether a mod row passes the selected filter mode and every word of the filter text (matching name, author, mod id or its settings).
+    /// </summary>
+    static bool MatchesFilter(ModRow row, List<ModSettingsGroup> groups, string[] words, ModListFilter filter)
+    {
+        if (filter == ModListFilter.WithSettings && groups.Count == 0) return false;
+        if (filter == ModListFilter.WithIssues && row.Issues.Count == 0) return false;
+        if (words.Length == 0) return true;
+
+        string baseText = $"{row.Name}\n{row.Author}";
+        if (AllWordsIn(baseText, words)) return true;
+
+        return groups.Any(g => MatchesGroupWords(g, row.Author, words));
+    }
+
+    /// <summary>
+    /// Whether every word of <paramref name="words"/> appears in <paramref name="group"/>'s name, id, author or visible settings.
+    /// </summary>
+    static bool MatchesGroupWords(ModSettingsGroup group, string author, string[] words)
+    {
+        if (words.Length == 0) return true;
+
+        string header = $"{group.Name}\n{group.ModId}\n{author}";
+        if (AllWordsIn(header, words)) return true;
+
+        foreach (var setting in group.Settings)
+        {
+            if (!setting.Visible) continue;
+
+            string text = $"{header}\n{setting.SubGroup}\n{setting.Label}\n{setting.Hint}";
+            if (AllWordsIn(text, words)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether every word in <paramref name="words"/> appears in <paramref name="text"/> (ignoring case).
+    /// </summary>
+    static bool AllWordsIn(string text, string[] words) =>
+        words.All(word => text.Contains(word, StringComparison.CurrentCultureIgnoreCase));
 
     /// <summary>
     /// A mod's settings group header under <paramref name="label"/>, its settings under it while open (a group starts open the first time): a
@@ -149,9 +263,9 @@ sealed class ModSettingsRows(SettingsMenu menu)
     }
 
     /// <summary>
-    /// A setting's row: a switch, a slider or a choice by its kind, its reset back to the default.
+    /// A setting's row: a switch, a slider, a text box or a choice by its kind, its reset back to the default.
     /// </summary>
-    SettingsMenu.Entry ModSettingEntry(ModSetting setting, string group, int depth)
+    internal SettingsMenu.Entry ModSettingEntry(ModSetting setting, string group, int depth)
     {
         string raw = $"{group}{KeySeparator}{setting.Key}";
         var entry = new SettingsMenu.Entry(setting.Label, setting.Hint, Changed: !setting.IsDefault, Raw: raw, Depth: depth,

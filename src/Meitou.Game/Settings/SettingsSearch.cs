@@ -2,12 +2,13 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Game.Host.Input;
+using Meitou.Modding;
 
 namespace Meitou.Game.Settings;
 
 /// <summary>
-/// The search box in the settings header: while it holds a query, the page shows every row of the other pages whose name or hint matches it, under
-/// its page's name, each with its own control.
+/// The search box in the settings header: while it holds a query, the page shows every row of the pages (including loaded mods and their
+/// registered settings) whose name, author or hint matches it, under its page's name, each with its own control.
 /// </summary>
 sealed class SettingsSearch(SettingsMenu menu)
 {
@@ -40,6 +41,7 @@ sealed class SettingsSearch(SettingsMenu menu)
     {
         Focused = true;
         _field.SelectAll();
+        menu.ModsPage.FilterFocused = false;
         menu.ActiveChoice = null;
         menu.Focus = -1;
         return true;
@@ -100,8 +102,8 @@ sealed class SettingsSearch(SettingsMenu menu)
     #region Results
 
     /// <summary>
-    /// The rows of every page but Mods that match each word of the query, under their page's name (a Graphics tab's as Graphics &gt; tab); one line
-    /// saying so when none does.
+    /// The rows of every page (including loaded mods and their registered settings) that match each word of the query, under their page's name
+    /// (a Graphics tab's as Graphics &gt; tab, a mod's settings as Mods &gt; mod); one line saying so when none does.
     /// </summary>
     internal List<SettingsMenu.Entry> Results()
     {
@@ -117,9 +119,80 @@ sealed class SettingsSearch(SettingsMenu menu)
             results.AddRange(found.Select(Flat));
         }
 
+        AddModResults(results, words);
+
         if (results.Count == 0) results.Add(new("No setting matches the search."));
 
         return results;
+    }
+
+    /// <summary>
+    /// Appends matching code-mod settings (under <c>Mods &gt; mod</c>) and matching loaded mods without matching settings (under <c>Mods</c>, with
+    /// a button that opens them on the Mods page).
+    /// </summary>
+    void AddModResults(List<SettingsMenu.Entry> results, string[] words)
+    {
+        var modRows = menu.Player.TitleMenu.Mods?.Rows ?? [];
+        var authorByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in modRows)
+        {
+            if (!row.Separator) authorByName.TryAdd(row.Name, row.Author);
+        }
+
+        var shownMods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in menu.ModSettings())
+        {
+            string author = authorByName.GetValueOrDefault(group.Name, "");
+            string header = $"{group.Name}\n{group.ModId}\n{author}";
+            string groupId = ModSettingsRows.GroupId(group);
+            var matched = new List<SettingsMenu.Entry>();
+
+            foreach (var setting in group.Settings)
+            {
+                if (!setting.Visible) continue;
+
+                string text = $"{header}\n{setting.SubGroup}\n{setting.Label}\n{setting.Hint}";
+                if (!words.All(word => text.Contains(word, StringComparison.CurrentCultureIgnoreCase))) continue;
+
+                matched.Add(Flat(menu.ModsPage.Settings.ModSettingEntry(setting, groupId, depth: 0)));
+            }
+
+            if (matched.Count == 0) continue;
+
+            shownMods.Add(group.Name);
+            results.Add(new(Loc.Tr("Mods") + " > " + group.Name));
+            results.AddRange(matched);
+        }
+
+        var matchedMods = new List<ModRow>();
+        foreach (var row in modRows)
+        {
+            if (row.Separator || shownMods.Contains(row.Name)) continue;
+
+            string text = $"{row.Name}\n{row.Author}";
+            if (words.All(word => text.Contains(word, StringComparison.CurrentCultureIgnoreCase))) matchedMods.Add(row);
+        }
+
+        if (matchedMods.Count == 0) return;
+
+        results.Add(new("Mods"));
+        foreach (var row in matchedMods)
+        {
+            string modName = row.Name;
+            results.Add(new(modName, ModResultHint(row), Run: () => menu.ModsPage.OpenMod(modName), RunLabel: "Show"));
+        }
+    }
+
+    /// <summary>
+    /// A compact hint line for a loaded mod in search results: author, version and issue count when present.
+    /// </summary>
+    static string ModResultHint(ModRow row)
+    {
+        var parts = new List<string>();
+        if (row.Author.Length > 0) parts.Add($"{Loc.Tr("Author")}: {row.Author}");
+        if (row.Version is { } version) parts.Add($"{Loc.Tr("Version")}: {version.ToString(CultureInfo.InvariantCulture)}");
+        if (row.Issues.Count > 0) parts.Add(Loc.Plural("{1} issue", "{1} issues", row.Issues.Count, row.Issues.Count));
+        return string.Join(" · ", parts);
     }
 
     /// <summary>
@@ -181,18 +254,17 @@ sealed class SettingsSearch(SettingsMenu menu)
     #region Drawing
 
     /// <summary>
-    /// The box at the header's right, before the close button: the query with its caret while focused, else the query or a muted prompt; a click
-    /// focuses it.
+    /// The box at the header's right, between the opacity slider and the minimize button: the query with its caret while focused, else the query or
+    /// a muted prompt; a click focuses it.
     /// </summary>
     internal void DrawBox()
     {
         var canvas = menu.Canvas;
-        var box = canvas.R(812, 9, 248, 26);
+        var box = canvas.R(758, 9, 262, 26);
         bool lit = Focused || box.Contains(menu.Pointer.X, menu.Pointer.Y);
         canvas.Rect(box, new(0.06f, 0.05f, 0.04f, 0.95f));
         canvas.Rect(box with { Y = box.Y + box.Height - menu.Scale, Height = menu.Scale }, SettingsCanvas.Brass with { W = lit ? 0.9f : 0.45f });
         menu.Hits.Add(new(box, () => Begin(), Label: "Search"));
-
 
         var textAt = box with { X = box.X + 8 * menu.Scale, Width = box.Width - 16 * menu.Scale };
         if (Focused) DrawEdit(textAt);

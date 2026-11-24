@@ -1,16 +1,20 @@
 using System.Globalization;
+using System.Numerics;
 using Meitou.Data.Ui;
+using Meitou.Game.Host.Input;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Modding;
 
 namespace Meitou.Game.Settings;
 
 /// <summary>
-/// The MODS page: the loaded mods in load order, each with its code's settings under it (<see cref="ModSettingsRows"/>), and the selected mod's
-/// author, description and data problems.
+/// The MODS page: the loaded mods in load order (filterable by name, author or setting, and sortable), each with its code's settings under it
+/// (<see cref="ModSettingsRows"/>), and the selected mod's author, description and data problems.
 /// </summary>
 sealed class ModsPage(SettingsMenu menu)
 {
+    #region State
+
     /// <summary>
     /// A mod row's height, in the menu's units.
     /// </summary>
@@ -28,14 +32,39 @@ sealed class ModsPage(SettingsMenu menu)
     const float DetailHeight = 130, DetailTop = 666 - DetailHeight;
 
     /// <summary>
-    /// The Copy buttons' top, and the list's top and bottom, in the menu's units.
+    /// The toolbar's top, the Copy buttons' top, and the list's top and bottom, in the menu's units.
     /// </summary>
-    const float ButtonsTop = DetailTop - 38, ListTop = 98, ListBottom = ButtonsTop - 8;
+    const float ToolbarTop = 96, ButtonsTop = DetailTop - 38, ListTop = 130, ListBottom = ButtonsTop - 8;
+
+    /// <summary>
+    /// The filter text typed, at most 40 characters.
+    /// </summary>
+    readonly TextField _filter = new(40);
 
     /// <summary>
     /// The selected mod's row; -1 for none.
     /// </summary>
     int _modsSelected = -1;
+
+    /// <summary>
+    /// Which subset of mods the list shows.
+    /// </summary>
+    ModListFilter _filterMode = ModListFilter.All;
+
+    /// <summary>
+    /// How the mod list is ordered.
+    /// </summary>
+    ModListSort _sort = ModListSort.LoadOrder;
+
+    /// <summary>
+    /// When set, the next draw scrolls to show this mod row, then clears it.
+    /// </summary>
+    int? _pendingScrollRow;
+
+    /// <summary>
+    /// Whether the mod filter box has the keyboard focus.
+    /// </summary>
+    internal bool FilterFocused;
 
     /// <summary>
     /// How far the text area is scrolled, in the menu's units.
@@ -52,6 +81,90 @@ sealed class ModsPage(SettingsMenu menu)
     /// </summary>
     internal UiRect ModsDetail => menu.Canvas.R(212, DetailTop, 888, DetailHeight);
 
+    #endregion
+
+    #region Filter input
+
+    /// <summary>
+    /// Focuses the mod filter box with its text selected.
+    /// </summary>
+    internal void BeginFilter()
+    {
+        FilterFocused = true;
+        _filter.SelectAll();
+        menu.ActiveChoice = null;
+        menu.Focus = -1;
+    }
+
+    /// <summary>
+    /// A key while the mod filter box is focused: Esc clears or leaves it, Enter / Tab / Up / Down leave it, Page Up / Down scroll, the rest edit
+    /// the filter text.
+    /// </summary>
+    internal bool OnFilterKey(Key key, bool shift, bool ctrl)
+    {
+        string before = _filter.Text;
+
+        if (key == Key.Escape)
+        {
+            if (_filter.Text.Length == 0) FilterFocused = false;
+            else _filter.Set("");
+        }
+        else if (key is Key.Enter or Key.Tab or Key.Up or Key.Down) FilterFocused = false;
+        else if (key is Key.PageUp or Key.PageDown) menu.Scroll(key == Key.PageUp ? 5 : -5);
+        else _filter.OnKey(key, shift, ctrl, menu.Player.ClipboardRead, menu.Player.ClipboardWrite);
+
+        if (_filter.Text != before) ResetScroll();
+
+        return true;
+    }
+
+    /// <summary>
+    /// A character typed into the mod filter box.
+    /// </summary>
+    internal void OnFilterText(char value)
+    {
+        if (char.IsControl(value)) return;
+
+        if (_filter.Insert(value.ToString())) ResetScroll();
+    }
+
+    /// <summary>
+    /// Opens the Mods page with <paramref name="modName"/> selected and scrolled into view (used from global search results).
+    /// </summary>
+    internal void OpenMod(string modName)
+    {
+        _filter.Set("");
+        FilterFocused = false;
+        _filterMode = ModListFilter.All;
+        _sort = ModListSort.LoadOrder;
+        menu.Navigate(SettingsMenu.ModsPageIndex);
+
+        if (menu.Player.TitleMenu.Mods is not { } report) return;
+
+        for (int i = 0; i < report.Rows.Count; i++)
+        {
+            if (report.Rows[i].Separator || !report.Rows[i].Name.Equals(modName, StringComparison.OrdinalIgnoreCase)) continue;
+
+            _modsSelected = i;
+            ModsDetailScroll = 0;
+            _pendingScrollRow = i;
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Scrolls the mod list back to its top.
+    /// </summary>
+    void ResetScroll()
+    {
+        menu.ScrollOffset = menu.ScrollTarget = 0;
+        menu.Focus = -1;
+    }
+
+    #endregion
+
+    #region Drawing
+
     /// <summary>
     /// The summary line under the version text, left of the page buttons' divider; a click opens the MODS page.
     /// </summary>
@@ -67,28 +180,138 @@ sealed class ModsPage(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The page: the scrolled list of mods and their settings, the Copy buttons and the text area.
+    /// The page: the filter/sort toolbar, the scrolled list of mods and their settings, the Copy buttons and the text area.
     /// </summary>
     internal void DrawMods()
     {
         var report = menu.Player.TitleMenu.Mods;
         var rows = report?.Rows ?? [];
-        var lines = Settings.ModsLines(rows);
+        var lines = Settings.ModsLines(rows, _filter.Text, _filterMode, _sort, out int matched, out int total);
+        DrawToolbar(matched, total);
+
         menu.Viewport = menu.Canvas.R(212, ListTop, 888, ListBottom - ListTop);
         menu.MaxScroll = Math.Max(0, lines.Sum(LineHeight) * menu.Scale - menu.Viewport.Height);
+        ApplyPendingScroll(lines);
         menu.Motion.AdvanceScroll();
-        float y = ListTop - menu.ScrollOffset / menu.Scale;
-        foreach (var line in lines)
+
+        if (lines.Count == 0)
         {
-            float height = LineHeight(line);
-            if (y + height >= ListTop && y <= ListBottom) DrawModsLine(rows, line, y);
-            y += height;
+            menu.Canvas.Text("No mod matches the filter.", menu.Canvas.R(224, ListTop + 8, 864, 24), 13, SettingsCanvas.MutedInk);
+        }
+        else
+        {
+            float y = ListTop - menu.ScrollOffset / menu.Scale;
+            foreach (var line in lines)
+            {
+                float height = LineHeight(line);
+                if (y + height >= ListTop && y <= ListBottom) DrawModsLine(rows, line, y);
+                y += height;
+            }
         }
 
         menu.Canvas.Button("Copy", menu.Canvas.R(212, ButtonsTop, 120, 28), CopyMod);
         menu.Canvas.Button("Copy all problems", menu.Canvas.R(340, ButtonsTop, 200, 28), CopyProblems);
         DrawFoldButtons();
         DrawModsDetail(report);
+    }
+
+    /// <summary>
+    /// Scrolls the list once to bring <see cref="_pendingScrollRow"/> near the top of the viewport.
+    /// </summary>
+    void ApplyPendingScroll(List<ModsLine> lines)
+    {
+        if (_pendingScrollRow is not { } targetRow) return;
+
+        _pendingScrollRow = null;
+        float offset = 0;
+        foreach (var line in lines)
+        {
+            if (line.Entry is null && line.Row == targetRow)
+            {
+                menu.ScrollOffset = menu.ScrollTarget = Math.Clamp(offset * menu.Scale, 0, menu.MaxScroll);
+                return;
+            }
+
+            offset += LineHeight(line);
+        }
+    }
+
+    /// <summary>
+    /// The filter box, filter-mode buttons (All / Settings / Issues), sort toggle and mod count above the list.
+    /// </summary>
+    void DrawToolbar(int matched, int total)
+    {
+        DrawFilterBox();
+        menu.Canvas.Button("All", menu.Canvas.R(480, ToolbarTop, 56, 26), () => SetFilterMode(ModListFilter.All),
+            selected: _filterMode == ModListFilter.All);
+        menu.Canvas.Button("Settings", menu.Canvas.R(540, ToolbarTop, 88, 26), () => SetFilterMode(ModListFilter.WithSettings),
+            selected: _filterMode == ModListFilter.WithSettings);
+        menu.Canvas.Button("Issues", menu.Canvas.R(632, ToolbarTop, 74, 26), () => SetFilterMode(ModListFilter.WithIssues),
+            selected: _filterMode == ModListFilter.WithIssues);
+
+        string sortLabel = _sort == ModListSort.LoadOrder ? "Load order" : "Name A-Z";
+        menu.Canvas.Button(sortLabel, menu.Canvas.R(714, ToolbarTop, 114, 26), ToggleSort);
+
+        string count = matched == total
+            ? Loc.Plural("{1} mod", "{1} mods", total, total)
+            : Loc.Tr("{1} of {2}", matched, total);
+        menu.Canvas.Text(count, menu.Canvas.R(836, ToolbarTop, 264, 26), 12, SettingsCanvas.MutedInk, "Right VCenter", translate: false);
+    }
+
+    /// <summary>
+    /// The mod filter text box at the toolbar's left.
+    /// </summary>
+    void DrawFilterBox()
+    {
+        var canvas = menu.Canvas;
+        var box = canvas.R(212, ToolbarTop, 260, 26);
+        bool lit = FilterFocused || box.Contains(menu.Pointer.X, menu.Pointer.Y);
+        canvas.Rect(box, new(0.06f, 0.05f, 0.04f, 0.95f));
+        canvas.Rect(box with { Y = box.Y + box.Height - menu.Scale, Height = menu.Scale },
+            SettingsCanvas.Brass with { W = lit ? 0.9f : 0.45f });
+        menu.Hits.Add(new(box, BeginFilter, Label: "Filter mods"));
+
+        var textAt = box with { X = box.X + 8 * menu.Scale, Width = box.Width - 16 * menu.Scale };
+        if (FilterFocused) DrawFilterEdit(textAt);
+        else if (_filter.Text.Length > 0) canvas.Text(_filter.Text, textAt, 13, SettingsCanvas.LightInk, translate: false);
+        else canvas.Text("Filter mods", textAt, 13, SettingsCanvas.MutedInk);
+    }
+
+    /// <summary>
+    /// The focused mod filter box's text, caret and selection.
+    /// </summary>
+    void DrawFilterEdit(UiRect at)
+    {
+        menu.Controls.Add(new("mods-filter", "EditBox", at, _filter.Text, "", "", true,
+            new Dictionary<string, string>
+            {
+                ["Focused"] = "true",
+                ["TextAlign"] = "Left VCenter",
+                ["FontPixels"] = ((int)MathF.Round(13 * menu.Scale)).ToString(CultureInfo.InvariantCulture),
+                ["CaretIndex"] = _filter.Caret.ToString(CultureInfo.InvariantCulture),
+                ["SelectionStart"] = _filter.SelectionStart.ToString(CultureInfo.InvariantCulture),
+                ["SelectionLength"] = _filter.SelectionLength.ToString(CultureInfo.InvariantCulture),
+            }, Vector4.Zero, SettingsCanvas.LightInk, Pickable: false));
+    }
+
+    /// <summary>
+    /// Switches the mod list's filter mode and resets the scroll.
+    /// </summary>
+    void SetFilterMode(ModListFilter mode)
+    {
+        if (_filterMode == mode) return;
+
+        _filterMode = mode;
+        ResetScroll();
+    }
+
+    /// <summary>
+    /// Toggles the mod list's ordering between load order and alphabetical by name.
+    /// </summary>
+    void ToggleSort()
+    {
+        _sort = _sort == ModListSort.LoadOrder ? ModListSort.Name : ModListSort.LoadOrder;
+        ResetScroll();
     }
 
     /// <summary>
@@ -293,4 +516,6 @@ sealed class ModsPage(SettingsMenu menu)
         menu.Player.ClipboardWrite?.Invoke(string.Join('\n', lines));
         menu.Notice = "Copied to the clipboard.";
     }
+
+    #endregion
 }

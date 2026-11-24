@@ -5725,3 +5725,38 @@ msgstr "• Raytracing nur bei Ultra und Extrem"
 #. machine-translated
 msgid "• Your saved graphics settings and mods are ignored and never modified"
 msgstr "• Deine gespeicherten Grafikeinstellungen und Mods werden ignoriert und nie geändert"
+
+msgid "Settings window opacity"
+msgstr "Deckkraft des Einstellungsfensters"
+
+msgid "How opaque the in-game settings window is (lower to see the world behind it while adjusting settings)."
+msgstr "Wie deckend das Einstellungsfenster im Spiel ist (verringern, um die Welt dahinter beim Anpassen zu sehen)."
+
+msgid "No mod matches the filter."
+msgstr "Kein Mod entspricht dem Filter."
+
+msgid "Issues"
+msgstr "Probleme"
+
+msgid "Name A-Z"
+msgstr "Name A–Z"
+
+msgid "Filter mods"
+msgstr "Mods filtern"
+
+msgid "Show"
+msgstr "Anzeigen"
+
+msgid "Opacity"
+msgstr "Deckkraft"
+
+msgid "Restore"
+msgstr "Wiederherstellen"
+
+msgid "{1} of {2}"
+msgstr "{1} von {2}"
+
+msgid "{1} mod"
+msgid_plural "{1} mods"
+msgstr[0] "{1} Mod"
+msgstr[1] "{1} Mods"
