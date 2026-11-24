@@ -397,9 +397,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 else Remove(world, cancelled);
                 break;
             case UpgradeSite up:
-                if (reg.Find(up.Site) is { LevelPlacement: null } upgraded && CanUpgrade(world, upgraded) is { } higher)
-                    Swap(world, upgraded, higher, UpgradeProgressCap, upgrade: true);
-
+                if (reg.Find(up.Site) is { } picked) Upgrade(world, WallOf(reg, picked));
                 break;
             case DowngradeSite down:
                 if (reg.Find(down.Site) is { LevelPlacement: null } downgraded && CanDowngrade(world, downgraded) is { } lower)
@@ -557,30 +555,64 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// The BUILDING a site of the player's can be upgraded to (docs/game/buildings-production.md "Upgrades"): its record's upgrade, unlocked by
-    /// research. Engine scope: not walls (the original's WallBuilding upgrades the whole wall line; a gate is a GatewayBuilding and upgrades alone);
-    /// a building with a machine gets one for the new record that keeps its stock (<see cref="Production.ProductionSystem"/>).
+    /// research (<see cref="UpgradeTarget"/>). A building with a machine gets one for the new record that keeps its stock
+    /// (<see cref="Production.ProductionSystem"/>).
     /// </summary>
-    public string? CanUpgrade(World world, BuildSite site) =>
-        Swappable(world, site) && BuildingUpgrades.UpgradeOf(_db, site.Record) is { } target && world.Research.IsUnlocked(target)
-            && Data(target) is not null
-                ? target
+    public string? CanUpgrade(World world, BuildSite site) => Swappable(world, site) ? UpgradeTarget(world, site) : null;
+
+    /// <summary>
+    /// The BUILDING an unfinished site of the player's goes back to (the one that upgrades to it), shown while it is not complete. Not walls: the
+    /// WallBuilding panel offers no downgrade (slot 116 <c>FUN_1402ff760</c>).
+    /// </summary>
+    public string? CanDowngrade(World world, BuildSite site) =>
+        !site.Complete && Swappable(world, site) && !IsWallBuilding(site) && BuildingUpgrades.DowngradeOf(_db, site.Record) is { } lower
+            && Data(lower) is not null
+                ? lower
                 : null;
 
     /// <summary>
-    /// The BUILDING an unfinished site of the player's goes back to (the one that upgrades to it), shown while it is not complete; same scope as
-    /// <see cref="CanUpgrade"/>.
+    /// Whether a site may be upgraded or downgraded: the player's, standing, no attached piece (its button upgrades its wall, <see cref="WallOf"/>).
     /// </summary>
-    public string? CanDowngrade(World world, BuildSite site) =>
-        !site.Complete && Swappable(world, site) && BuildingUpgrades.DowngradeOf(_db, site.Record) is { } lower && Data(lower) is not null
-            ? lower
+    bool Swappable(World world, BuildSite site) => site.Owner == world.Player.Faction && !site.Destroyed && site.WallParent is null;
+
+    /// <summary>
+    /// A site's upgrade target with build data (Building slot 77, <see cref="BuildingUpgrades.UnlockedUpgradeOf"/>), whoever owns it.
+    /// </summary>
+    string? UpgradeTarget(World world, BuildSite site) =>
+        BuildingUpgrades.UnlockedUpgradeOf(_db, site.Record, IsWallBuilding(site), world.Research.IsUnlocked) is { } target && Data(target) is not null
+            ? target
             : null;
 
     /// <summary>
-    /// Whether a site may be upgraded or downgraded: the player's, standing, no attached piece, not a wall (a wall gate is).
+    /// Whether the site is a WallBuilding: its record links together and is no wall gate (a gate is a GatewayBuilding and upgrades alone).
     /// </summary>
-    bool Swappable(World world, BuildSite site) =>
-        site.Owner == world.Player.Faction && !site.Destroyed && site.WallParent is null
-            && Data(site.Record) is { LinksTogether: false } or { IsWallGate: true };
+    bool IsWallBuilding(BuildSite site) => Data(site.Record) is { LinksTogether: true, IsWallGate: false };
+
+    /// <summary>
+    /// The site an upgrade button acts on: an attached piece's wall (<b>Verified</b>, WallBuilding slot 116 <c>FUN_1402ff760</c> binds the button to
+    /// the building its parent handle names, else to itself), else the site.
+    /// </summary>
+    static BuildSite WallOf(BuildingRegistry reg, BuildSite site) =>
+        site.WallParent is { } parent && reg.Find(parent) is { } wall ? wall : site;
+
+    /// <summary>
+    /// Upgrades a site of the player's in place (Building slot 75). A wall first upgrades each attached piece that has an upgrade of its own to it,
+    /// then itself (<b>Verified</b>, WallBuilding slot 75 <c>FUN_1402a5e20</c>: only when the wall itself has a target; pieces without one stay).
+    /// </summary>
+    void Upgrade(World world, BuildSite site)
+    {
+        if (site.LevelPlacement is not null || CanUpgrade(world, site) is not { } higher) return;
+
+        if (IsWallBuilding(site))
+        {
+            foreach (var piece in world.Buildings.All.Where(c => c.WallParent == site.Id).ToList())
+            {
+                if (UpgradeTarget(world, piece) is { } pieceTarget) Swap(world, piece, pieceTarget, UpgradeProgressCap, upgrade: true);
+            }
+        }
+
+        Swap(world, site, higher, UpgradeProgressCap, upgrade: true);
+    }
 
     /// <summary>
     /// Makes a site the BUILDING <paramref name="record"/> in place (Building slots 75 / 76, docs/game/buildings-production.md "Upgrades"): no longer

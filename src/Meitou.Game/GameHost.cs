@@ -1223,7 +1223,8 @@ sealed partial class GameHost(
         selection.BuildTarget = record => BuildingDataOf(record)?.Materials.Sum(m => m.Required);
 
         // The upgrade chain of a BUILDING (the panel's [UPGRADE] / [DOWNGRADE]) and its build data (their tooltips' materials).
-        selection.UpgradeOf = record => PopData is { } d ? Simulation.Construction.BuildingUpgrades.UpgradeOf(d.Db, record) : null;
+        selection.UnlockedUpgradeOf = (record, wall, unlocked) =>
+            PopData is { } d ? Simulation.Construction.BuildingUpgrades.UnlockedUpgradeOf(d.Db, record, wall, unlocked.Contains) : null;
         selection.DowngradeOf = record => PopData is { } d ? Simulation.Construction.BuildingUpgrades.DowngradeOf(d.Db, record) : null;
         selection.BuildingData = BuildingDataOf;
         selection.PowerOutput = record => PopData?.Db.Find(record)?.GetInt("power output");

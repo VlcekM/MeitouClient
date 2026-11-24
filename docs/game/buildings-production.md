@@ -514,15 +514,23 @@ dispatch to slots 75 / 76 through `FUN_140313d50` / `FUN_140313d90`).
 - Data (**Verified**, game data with mods): chains on production buildings (Stone Mine I-VII, Iron Refinery I-IV, Research
   Bench II-VI ...), farms (S-XL), turrets, training dummies, walls (Makeshift Wall -> Defensive Wall II ...) and gates
   (Makeshift Gate -> Defensive Gate II, III -> IV -> V); the targets are mostly also `enable buildings` of a research, so a
-  higher tier can be placed directly too. Walls have their own slot 75/77 (`WallBuilding`, `wall master`: the whole line).
+  higher tier can be placed directly too.
+- **Walls** (`WallBuilding`, gates excluded: they are GatewayBuildings and take the generic slots; **Verified**, vtable `1416edfc8`):
+  slot 77 (`FUN_1402a5270`): a record with a `wall master` (a subsection, `Makeshift Wall Short` -> `Defensive Wall II Short`)
+  takes its own first `upgrades to` when the master's first `upgrades to` is unlocked, its own unchecked; otherwise the
+  generic rule. Slot 75 (`FUN_1402a5e20`): with a target, each attached piece (the wall's child handles at +0x388, appended
+  by `FUN_14029a890`, [walls](#walls)) runs its own slot 75 (reentry-guarded: one level), then the wall the generic body,
+  then its bounds are queued for navmesh regeneration (`FUN_1404d2c80`). A piece without a target keeps its record. Slots
+  76/78 are generic, but the panel offers no downgrade ([ui](ui-screens.md)).
 - Meitou (`UpgradeSite` / `DowngradeSite`, `ConstructionSystem.CanUpgrade` / `CanDowngrade`, chain lookup
   `BuildingUpgrades`): the site's record, name, rate, target and materials swapped, delivered amounts carried over per item
   (engine reading of the re-applied state), complete and paused cleared, progress capped at 50 / 80; a downgrade whose
   delivered materials cover the lower record finishes at once. An upgrade then pulls what is still owed from its own stock
   (`PullOwn`: the machine's storage, then input and output stock). A machine gets a new one for the new record that keeps the
   stock of the same items, storage items that fit, a farm's growth by plant index, a bench's queue and the power switches; the
-  rest drops at the building (engine; `ProductionSystem.Rebuild`). An unfinished site's machine is saved and read. Engine scope:
-  no walls or wall pieces (gates, `is wall gate`, do upgrade). The doors stay registered while it is built (`BuildSite.Upgrading`, not
+  rest drops at the building (engine; `ProductionSystem.Rebuild`). An unfinished site's machine is saved and read. A wall
+  (`ConstructionSystem.Upgrade`, `BuildingUpgrades.UnlockedUpgradeOf`) swaps its attached pieces first, then itself; an
+  `UpgradeSite` naming a piece acts on its wall (the panel's binding). The doors stay registered while it is built (`BuildSite.Upgrading`, not
   saved: a reloaded unfinished upgrade gets its doors when finished) and keep their state by door index; the building
   leaves the navmesh until it is complete again (engine).
 

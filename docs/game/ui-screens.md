@@ -648,7 +648,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     material still owed (the target's required less the current state's delivered, > 0: six spaces + item name, `+` amount) and, for a building
     with power, `Power` with the `power output` change (Good, Bad when negative); without a target the line is removed (`FUN_1406fd460`). With a
     downgrade target while the construction state is not complete, `[DOWNGRADE]` (Main) with the tooltip `Downgrade To:` name. WallBuilding's
-    slot 116 (`FUN_1402ff760`) has only the upgrade, keyed `Upgradeable to:`. Then the construction buttons (slot 117 `FUN_1402fea10`, shown when slot 79 `FUN_14029c380` is
+    slot 116 (`FUN_1402ff760`) has only the upgrade, keyed `Upgradeable to:`, its tooltip without Power; the materials owed are against slot 69's
+    state (an attached piece's is its wall's) and the button acts on the piece's wall (its parent handle), else on itself. Then the construction buttons (slot 117 `FUN_1402fea10`, shown when slot 79 `FUN_14029c380` is
     true, **Observed**: the owner is the player's faction and `isFoliage` (+0xc0, KenshiLib 1ce4a16) is clear; then true when the building it is furniture of (slot `0x438`) is
     the player's; else false only for a building with no such parent (slot `0x1d8` handle of type 11) whose town (slot 15) exists, is not the player's and whose record has
     `creates player town`): a full-row button `Dismantle` (caption BadBright) and, while the construction state is not complete, `PAUSE CONSTRUCTION` (Main), captioned
@@ -713,8 +714,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   the mounted refusal comes from the simulation; no inventory warning, as its items drop) and PAUSE CONSTRUCTION (`PauseSite`); the first door's lines come before the house's (Meitou does not focus the
   door object). Open to public on another faction's building is its residents' template `public day`, else the state's `is public day`, at any hour (slot 82; `public night` is
   [never read](locks.md)); a private one shows the line only when its record has an `interior` list (engine choice: the original shows it on every building not the player's). A building of the player's (its site, or a town building whose fixtures the player's faction owns, `BuildingDetail.Owned`) gets the
-  buttons: the door lines as full-row buttons, `[UPGRADE]` / `[DOWNGRADE]` on a site (`UpgradeSite` / `DowngradeSite`, same scope as the
-  simulation's), and in a town, for a record with an `interior` list, the Open to public toggle (`SetBuildingPublic`: a site's `BuildSite.Public`, a town building's flag in the fixtures,
+  buttons: the door lines as full-row buttons, `[UPGRADE]` / `[DOWNGRADE]` on a site (`UpgradeSite` / `DowngradeSite`; a wall's
+  `Upgradeable to:` line, `AddWallUpgradeLine`), and in a town, for a record with an `interior` list, the Open to public toggle (`SetBuildingPublic`: a site's `BuildSite.Public`, a town building's flag in the fixtures,
   both saved as `is public day`; a town building set Private drops out of the town AI's wander and bar places). **Observed** (owner's original-game Longhouse screenshot): clicking its price opens a confirmation titled with the building name, asking `Do you want to buy this building for c.{1,num}?`, with Yes / No buttons. For sale and its confirmation use the [house purchase contract](../simulation.md#town-house-purchases). A bought town house gets no Dismantle (**Verified**: 82 of the 85 base-data BUILDING records with an interior or a house/shack name have `creates player town`, so the slot 79 rule
   above hides it in another faction's town); only furniture inside it (its parent the player's) and the rare record without the flag (Outhouse, Ash Dome) get it, not built in Meitou.
   Not built: the original's other consumers of +0xc8.

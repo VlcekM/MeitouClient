@@ -640,9 +640,11 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
-    /// The upgrade chain of a BUILDING record and its build data (the panel's [UPGRADE] / [DOWNGRADE] and their tooltips); the host sets them.
+    /// The upgrade chain of a BUILDING record and its build data (the panel's [UPGRADE] / [DOWNGRADE] and their tooltips); the host sets them. This
+    /// one is the record's upgrade given the unlocked buildings, a wall piece's by its wall master's research
+    /// (<see cref="Simulation.Construction.BuildingUpgrades.UnlockedUpgradeOf"/>; record, whether it is a WallBuilding, the unlocked set).
     /// </summary>
-    public Func<string, string?>? UpgradeOf { get; set; }
+    public Func<string, bool, IReadOnlySet<string>, string?>? UnlockedUpgradeOf { get; set; }
     /// <summary>
     /// The BUILDING record that upgrades to this one; null when none does (the host sets it).
     /// </summary>
@@ -662,34 +664,25 @@ sealed class BuildingSelection(PlayerInterface player)
     /// The upgrade lines of a site of the player's (Building slot 116, docs/game/ui-screens.md "Selected building"): <c>[UPGRADE]</c> in Good when
     /// its record upgrades to a BUILDING research has unlocked, <c>[DOWNGRADE]</c> in Main while it is unfinished and some BUILDING upgrades to it.
     /// Each button's tooltip names the record it becomes; the upgrade's also lists the materials still owed (the new record's, less what is delivered
-    /// of each item) and the power output's change. Engine scope as the simulation's: no walls.
+    /// of each item) and the power output's change. A wall has its own line (<see cref="AddWallUpgradeLine"/>).
     /// </summary>
     void AddUpgradeLines(Simulation.Construction.BuildingSnapshot site, List<PlayerInterface.HudLine> state)
     {
-        var snapshot = player.Session.CurrentSnapshot;
-        if (site.WallParent is not null || DataOf(site.Record) is not ({ LinksTogether: false } or { IsWallGate: true })) return;
-        if (UpgradeOf?.Invoke(site.Record) is { } up && snapshot.UnlockedBuildings.Contains(up) && DataOf(up) is { } higher)
+        if (DataOf(site.Record) is { LinksTogether: true, IsWallGate: false })
         {
-            var had = new Dictionary<string, float>(StringComparer.Ordinal);
-            foreach (var m in site.Materials) had[m.Item] = had.GetValueOrDefault(m.Item) + m.Delivered;
-            var tip = new StringBuilder($"{Loc.Tr("Upgrades To:")} {higher.Name}");
-            foreach (var cost in higher.Materials)
-            {
-                float delivered = Math.Min(had.GetValueOrDefault(cost.Item), cost.Required);
-                had[cost.Item] = had.GetValueOrDefault(cost.Item) - delivered;
-                if (cost.Required - delivered > 0)
-                {
-                    var itemName = player.Build.Services?.ItemName(cost.Item) ?? cost.Item;
-                    var owed = (cost.Required - delivered).ToString("0.##", CultureInfo.InvariantCulture);
-                    tip.Append(CultureInfo.InvariantCulture, $"\n      {itemName} +{owed}");
-                }
-            }
+            AddWallUpgradeLine(site, state);
+            return;
+        }
 
+        var snapshot = player.Session.CurrentSnapshot;
+        if (UnlockedUpgradeOf?.Invoke(site.Record, false, snapshot.UnlockedBuildings) is { } up && DataOf(up) is { } higher)
+        {
+            var tip = new StringBuilder($"{Loc.Tr("Upgrades To:")} {higher.Name}");
+            AppendOwed(tip, higher, site.Materials);
             if (PowerOutput?.Invoke(up) - PowerOutput?.Invoke(site.Record) is { } power and not 0)
                 tip.Append(CultureInfo.InvariantCulture, $"\n{Loc.Tr("Power")} {power}");
 
-            var upgradeCaption = $"[{Loc.Tr("Upgrade").ToUpper(CultureInfo.CurrentCulture)}]";
-            state.Add(new("", upgradeCaption, ValueColour: PlayerInterface.GoodColour, Tooltip: tip.ToString(), Action: "meitou:building-upgrade"));
+            state.Add(new("", UpgradeCaption(), ValueColour: PlayerInterface.GoodColour, Tooltip: tip.ToString(), Action: "meitou:building-upgrade"));
         }
 
         if (!site.Complete && DowngradeOf?.Invoke(site.Record) is { } down && DataOf(down) is { } lower)
@@ -697,6 +690,49 @@ sealed class BuildingSelection(PlayerInterface player)
             var downgradeCaption = $"[{Loc.Tr("Downgrade").ToUpper(CultureInfo.CurrentCulture)}]";
             state.Add(new("", downgradeCaption, ValueColour: PlayerInterface.MainColour, Tooltip: $"{Loc.Tr("Downgrade To:")} {lower.Name}",
                 Action: "meitou:building-downgrade"));
+        }
+    }
+
+    /// <summary>
+    /// A wall's upgrade line (<b>Verified</b>, WallBuilding slot 116 <c>FUN_1402ff760</c>): with an upgrade target, <c>Upgradeable to:</c> and the
+    /// Good <c>[UPGRADE]</c> button, whose tooltip names the target and the materials still owed against the construction state, which an attached
+    /// piece shares with its wall; no power row and no downgrade. The click upgrades the piece's wall, the wall's pieces with it (the simulation's
+    /// <c>UpgradeSite</c>).
+    /// </summary>
+    void AddWallUpgradeLine(Simulation.Construction.BuildingSnapshot site, List<PlayerInterface.HudLine> state)
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        if (UnlockedUpgradeOf?.Invoke(site.Record, true, snapshot.UnlockedBuildings) is not { } up || DataOf(up) is not { } higher) return;
+
+        var wall = site.WallParent is { } parent ? snapshot.Buildings.FirstOrDefault(s => s.Id == parent) ?? site : site;
+        var tip = new StringBuilder($"{Loc.Tr("Upgrades To:")} {higher.Name}");
+        AppendOwed(tip, higher, wall.Materials);
+        state.Add(new("Upgradeable to:", UpgradeCaption(), ValueColour: PlayerInterface.GoodColour, Tooltip: tip.ToString(),
+            Action: "meitou:building-upgrade"));
+    }
+
+    /// <summary>
+    /// The upgrade button's caption: "[" + the uppercased translation of "Upgrade" + "]".
+    /// </summary>
+    static string UpgradeCaption() => $"[{Loc.Tr("Upgrade").ToUpper(CultureInfo.CurrentCulture)}]";
+
+    /// <summary>
+    /// Appends a row per material of <paramref name="higher"/> still owed (its required less what <paramref name="materials"/> delivered of the item,
+    /// > 0): six spaces, the item's name, <c>+</c> the amount.
+    /// </summary>
+    void AppendOwed(StringBuilder tip, Data.Gameplay.Construction.BuildingBuildData higher, IEnumerable<Simulation.Construction.MaterialView> materials)
+    {
+        var had = new Dictionary<string, float>(StringComparer.Ordinal);
+        foreach (var m in materials) had[m.Item] = had.GetValueOrDefault(m.Item) + m.Delivered;
+        foreach (var cost in higher.Materials)
+        {
+            float delivered = Math.Min(had.GetValueOrDefault(cost.Item), cost.Required);
+            had[cost.Item] = had.GetValueOrDefault(cost.Item) - delivered;
+            if (cost.Required - delivered <= 0) continue;
+
+            var itemName = player.Build.Services?.ItemName(cost.Item) ?? cost.Item;
+            var owed = (cost.Required - delivered).ToString("0.##", CultureInfo.InvariantCulture);
+            tip.Append(CultureInfo.InvariantCulture, $"\n      {itemName} +{owed}");
         }
     }
 
