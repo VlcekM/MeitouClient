@@ -5,7 +5,7 @@ author: VlcekM
 image: banner-wide.png
 ---
 
-Hey hey everybody, @sahkaa here,
+Hey hey everybody, @sashkaa here,
 
 Been a week or two since we made a release news post like this 😎
 
