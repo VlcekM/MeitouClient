@@ -627,8 +627,9 @@ public sealed partial class PopulationSystem
                 var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(cx, cz);
                 for (int t = 0; t < 16 && spots.Count < 8; t++)
                 {
-                    var p = new Vector2(minX + Rng.Float(Place()) * (maxX - minX), minZ + Rng.Float(Place()) * (maxZ - minZ));
-                    if (!NearTown(_data, p, 2) && !Refused(p)) spots.Add(p);
+                    var raw = new Vector2(minX + Rng.Float(Place()) * (maxX - minX), minZ + Rng.Float(Place()) * (maxZ - minZ));
+                    var p = PushFromTowns(_data, raw, NestNearShare, NestOtherShare, -1);
+                    if (!InsideNearestTown(_data, p) && !Refused(p)) spots.Add(p);
                 }
 
                 if (spots.Count == 0) return false;
@@ -705,21 +706,6 @@ public sealed partial class PopulationSystem
         /// </summary>
         bool Gated(string townId) => _data.Db.Find(townId) is not { } r
             || r.GetReferences("world state").Any(w => !IWorldStates.Passes(_states, _data.Db, w.TargetStringId, w.Values.Value0));
-    }
-
-    /// <summary>
-    /// Whether a point is within <paramref name="share"/> x the radius of a placed town (markers and points of interest do not count).
-    /// </summary>
-    static bool NearTown(PopulationData data, Vector2 p, float share)
-    {
-        foreach (var s in data.Sites)
-        {
-            if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null) continue;
-            float r = Math.Max(s.Town.SizeRadius * s.Town.TownRadiusMult, 100) * share;
-            if (Vector2.DistanceSquared(p, new Vector2(s.Position.X, s.Position.Z)) < r * r) return true;
-        }
-
-        return false;
     }
 
     #endregion
@@ -1223,17 +1209,12 @@ public sealed partial class PopulationSystem
         {
             ulong roll = Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.WildPlace + (ulong)t);
             var p = new Vector2(minX + Rng.Float(roll) * (maxX - minX), minZ + Rng.Float(Rng.Mix(roll)) * (maxZ - minZ));
-            if (NearestTown(p, out _) is { } nearest) p = PushOut(p, nearest, spawn ? 2 : 1);
-            foreach (var s in _data.Sites)
-            {
-                if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null) continue;
-                if (_data.SiteFactions[s.Index] != faction) p = PushOut(p, s, 1);
-            }
+            p = PushFromTowns(_data, p, spawn ? 2 : 1, 1, faction);
 
             bool tooClose = false;
             foreach (var at in players)
                 if (Vector2.DistanceSquared(at, p) < _settings.HomelessPlayerDistance * _settings.HomelessPlayerDistance) { tooClose = true; break; }
-            if (tooClose || (spawn && InsideNearestTown(p)) || SpotGround(p, walk, regions) is null) continue;
+            if (tooClose || (spawn && InsideNearestTown(_data, p)) || SpotGround(p, walk, regions) is null) continue;
             return p;
         }
 
@@ -1245,11 +1226,11 @@ public sealed partial class PopulationSystem
     /// <c>FUN_140927f10</c> and <c>FUN_140926d50</c> x 1, <b>Verified</b>): a point the push left inside another town is refused. The finder skips nest
     /// markers; a null town has radius 0 and holds nothing.
     /// </summary>
-    bool InsideNearestTown(Vector2 p)
+    static bool InsideNearestTown(PopulationData data, Vector2 p)
     {
         TownSite? nearest = null;
         float best = float.MaxValue;
-        foreach (var s in _data.Sites)
+        foreach (var s in data.Sites)
         {
             if (s.Town.Type == TownType.NestMarker) continue;
             float d = Vector2.DistanceSquared(p, new Vector2(s.Position.X, s.Position.Z));
@@ -1291,6 +1272,33 @@ public sealed partial class PopulationSystem
     /// The world's gate codes, when the lock system has them.
     /// </summary>
     static Locks.IGateRegions? RegionsOf(World world) => world.SystemOf<Locks.LockSystem>()?.Regions;
+
+    /// <summary>
+    /// The nest spot finder's factors (<c>FUN_1408f6350</c> to <c>FUN_1408f50d0</c>, <b>Verified</b>, read from the exe): out of the nearest town's
+    /// 1.4 x radius (<c>DAT_14169bb48</c>) and every town with a faction's 3 x (<c>DAT_14168a254</c>; the call passes no faction).
+    /// </summary>
+    const float NestNearShare = 1.4f;
+
+    /// <summary>
+    /// See <see cref="NestNearShare"/>.
+    /// </summary>
+    const float NestOtherShare = 3;
+
+    /// <summary>
+    /// The spot finder's push (<c>FUN_1408f50d0</c>): out of the nearest town's radius x <paramref name="nearShare"/>, then out of each town of a
+    /// faction other than <paramref name="faction"/> (-1: none, so every town with a faction) to its radius x <paramref name="otherShare"/>.
+    /// </summary>
+    static Vector2 PushFromTowns(PopulationData data, Vector2 p, float nearShare, float otherShare, int faction)
+    {
+        if (NearestTown(data, p, out _) is { } nearest) p = PushOut(p, nearest, nearShare);
+        foreach (var s in data.Sites)
+        {
+            if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null) continue;
+            if (data.SiteFactions[s.Index] != faction) p = PushOut(p, s, otherShare);
+        }
+
+        return p;
+    }
 
     /// <summary>
     /// Pushes <paramref name="p"/> out of the town's radius times <paramref name="share"/> (a point at the centre goes +X). The radius is the town's

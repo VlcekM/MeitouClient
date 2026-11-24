@@ -751,7 +751,7 @@ turret finder uses it so far (the others read the squad's home, which a player s
   (`NavMesh::getGateCode` `FUN_1403a30f0`, [gate codes](pathfinding.md#gate-codes)) is above 0: inside town walls. So no spot is deeper than 5 in
   the water (surface 100). **Data** (vanilla `areasmap.tga`, 256 × 256): 33 % black; black cells are the base `NONE` group, which has no nests or
   homeless spawns; 917 black pixels (2 %) lie inside other groups' cells, at region edges. Meitou (`PopulationWild.cs` `SpotRefused`): the same three
-  tests for a homeless spot; a nest's candidate spots take the height and pixel tests at layout and the gate code (where the navmesh is loaded)
+  tests for a homeless spot; a nest's candidate spots are pushed as the original's (1.4 x the nearest town's radius, 3 x every town with a faction's: `PushFromTowns`), refused inside their nearest town (`InsideNearestTown`), take the height and pixel tests at layout and the gate code (where the navmesh is loaded)
   when it picks its centre; a nest roll whose cell a town stands in (`TownZones`) or has its own town (a placed one or a nest rolled before, `CellTakesNest`), or has no passing spot, passes to the next
   roll key (up to 10 a nest). A group still short of its count then rolls in any of its cells, the fallback, its spots tested all the same (engine choice).
   **Observed** (`probe nests`, #1041's save under Rebirth): 331 nests with the fallback, 326 without, none rolled in a town's zone; that save's `River Nest` stands inside Blister Hill's walls (zone 23,22 of the town's list, gate code 1, 915 from a centre of radius 350), which
