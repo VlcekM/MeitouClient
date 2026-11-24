@@ -60,9 +60,21 @@ public static class Loc
 
     /// <summary>
     /// <paramref name="english"/> in the active language: the game's translation, else Meitou's own, else unchanged (so a text that was never a
-    /// <c>msgid</c> passes through).
+    /// <c>msgid</c> passes through); then the mods' text sources (<see cref="ShownText"/>, a <see cref="ShownTextKind.Message"/>).
     /// </summary>
-    public static string Tr(string english) => !Translating ? english : s_catalog.Find(english) ?? s_meitou.Find(english) ?? english;
+    public static string Tr(string english) => Shown(english, "", Translated(english));
+
+    /// <summary>
+    /// <paramref name="english"/> in the active language, before the mods' text sources.
+    /// </summary>
+    static string Translated(string english) => !Translating ? english : s_catalog.Find(english) ?? s_meitou.Find(english) ?? english;
+
+    /// <summary>
+    /// <paramref name="translated"/>, the text of message <paramref name="english"/> under <paramref name="context"/>, as the mods' text sources
+    /// show it (<see cref="ShownText.Of"/>); itself when none is added.
+    /// </summary>
+    static string Shown(string english, string context, string translated) =>
+        ShownText.Any ? ShownText.Of(ShownTextKind.Message, english, translated, context) : translated;
 
     /// <summary>
     /// <paramref name="english"/> under the message context <paramref name="context"/> (<c>msgctxt</c>, <c>pgettext</c>): a Meitou text whose msgid
@@ -70,7 +82,7 @@ public static class Loc
     /// <see cref="Tr(string)"/>.
     /// </summary>
     public static string TrIn(string context, string english) =>
-        !Translating ? english : s_catalog.Find(english, context) ?? s_meitou.Find(english, context) ?? Tr(english);
+        Shown(english, context, !Translating ? english : s_catalog.Find(english, context) ?? s_meitou.Find(english, context) ?? Translated(english));
 
     /// <summary>
     /// <see cref="Tr(string)"/> followed by <see cref="Format"/>: the boost-style placeholders <c>{1}</c>, <c>{1,num}</c> and <c>{1,num=fix,p=2}</c>
@@ -85,9 +97,10 @@ public static class Loc
     /// </summary>
     public static string TrCaption(string english)
     {
-        if (!Translating || english.Length == 0) return english;
-        return s_catalog.Find(english) ?? s_meitou.Find(english) ?? s_catalog.FindIgnoringCase(english) ?? s_meitou.FindIgnoringCase(english)
-                ?? english;
+        if (english.Length == 0) return english;
+        if (!Translating) return Shown(english, "", english);
+        return Shown(english, "", s_catalog.Find(english) ?? s_meitou.Find(english) ?? s_catalog.FindIgnoringCase(english)
+                ?? s_meitou.FindIgnoringCase(english) ?? english);
     }
 
     /// <summary>
@@ -96,7 +109,8 @@ public static class Loc
     /// <paramref name="n"/> itself).
     /// </summary>
     public static string Plural(string singular, string plural, long n, params object?[] args) =>
-        Format((Translating ? s_catalog.FindPlural(singular, n) ?? s_meitou.FindPlural(singular, n) : null) ?? (n == 1 ? singular : plural), args);
+        Format(Shown(singular, "",
+            (Translating ? s_catalog.FindPlural(singular, n) ?? s_meitou.FindPlural(singular, n) : null) ?? (n == 1 ? singular : plural)), args);
 
     /// <summary>
     /// Substitutes <c>{N}</c>, <c>{N,num}</c> and <c>{N,num=fix,p=K}</c> (N is 1-based) with <paramref name="args"/>: <c>num</c> writes a number in

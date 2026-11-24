@@ -1137,16 +1137,32 @@ holds refuses the second mod.
   and still qualifies before acting. A source that throws, or returns a
   button without a caption or press, is logged once and dropped for the session; a press that throws is logged. Without a source the panel
   is as before. Engine API, not in the original.
-- **Item names:** in `Register`, `registration.AddItemNames(context => name)` renames items where the interface shows them: inventory, trade
-  and machine cells (and their caption while the icon loads), the held item, item tooltips' titles, backpack windows' titles, and the labels and
-  right-click menu title of items on the ground. `UiItemNameContext` gives the item's `Record`, the `Name` so far (the game's, or an earlier mod's) and its `ModTag`, so a
-  mod can name one tagged item alone; return the name to show, or null or blank to keep it. Several mods chain in load order, each getting the
-  last one's name, so a translation and a mod that tweaks a few names stack. Display only: the item, its record, the simulation, messages and
-  saves keep the game's name, and the tooltip lines' context keeps it too. Crafting lists keep theirs (they name recipes). The answer for a
-  record, name and tag is kept until `registration.RefreshItemNames()`, which a mod calls when its answers change (a word learned, an item
-  identified, a save loaded whose state its answers read); so the source runs on the host's thread once per name shown, not per frame, and must read only its context and the mod's own
-  state. Names are put on one line and cut to 80 characters. A source that throws is reported once and dropped. With none, names show as
-  before at the cost of one count check. Engine API, not in the original.
+- **Shown text:** in `Register`, `registration.AddText(context => text)` changes text the game shows, without changing the game's data:
+  `ShownTextContext` (namespace `Meitou.Localisation`) gives its `Kind`, its `Key`, the `Text` so far (the game's, or an earlier mod's) and a
+  `Tag`; return the text to show, or null or blank to keep it. Several mods chain in load order, each getting the last one's text, so a
+  translation and a mod that tweaks a few words stack. The kinds:
+  - `Message`: a text the code asks the translation catalog for ([localisation](formats/localisation.md) "UI strings": captions, HUD lines,
+    menu verbs, notices, tooltips' rows, the simulation's messages). `Key` is the English source text (`msgid`; a plural message's singular, a
+    layout caption as the layout writes it), placeholders such as `{1}` still in it, and `Text` that text in the player's language; `Tag` is the
+    message context (`msgctxt`, "" none). Keep the placeholders: the values are put in after the mods' text. Text the game shows without
+    asking the catalog is not asked.
+  - `ItemName`: an item's name where the interface shows it: inventory, trade and machine cells (and their caption while the icon loads), the
+    held item, item tooltips' titles, backpack windows' titles, and the labels and right-click menu title of items on the ground. `Key` is the
+    item's record string id, `Tag` its code-mod tag (`ItemInstance.ModTag`), so a mod can name one tagged item alone. Put on one line and cut to
+    80 characters. Crafting lists keep their names (they name recipes); the tooltip lines' context keeps the game's name.
+  - `DialogueLine`: a dialogue line's text, in speech bubbles, the conversation window (the line, the choice buttons and the log) and the
+    message log. `Key` is the line's record string id and `Text` the text it was given (one of its texts, picked as the game picks it), before its
+    tokens: return a text with the tokens you want (`/YOURNAME/`, a word swap's `/NAME/`), and each takes the value the game's own text got for
+    the token of that name (in order; a token the game's text did not have is empty). A word swap's line is asked too, under its own id. The
+    game's text still decides everything: whether a choice is offered, how long a bubble stays, the dialogue log. A character's name built from
+    tokens is not asked.
+  Display only: records, saves, the state hash and every decision keep the game's text. The answer for a kind, key, text and tag is kept until
+  `registration.RefreshText()`, which a mod calls when its answers change (a word learned, an item identified, a save loaded whose state its
+  answers read); text already handed out (a line said, a notice posted) keeps what it got. So a source runs once per text shown, not per frame,
+  but it may be asked on any thread (messages and dialogue are made on the simulation's threads), one call at a time: read only the context and
+  the mod's own state, safely across threads. Texts other than item names are cut to 4,000 characters. A source that throws is reported once
+  and dropped. With no source, text shows as before at the cost of one check per lookup; with one, a shown text costs one dictionary lookup
+  after its first time. Engine API, not in the original.
 - **Item tooltip lines:** in `Register`, `registration.AddItemTooltipLines(context => lines)` adds `UiItemTooltipLine`s (a label and an
   optional value) to an item's tooltip, after the game's own rows and before the record's description. The source gets `UiItemTooltipContext`:
   the item's record string id, name, code-mod tag (`ItemInstance.ModTag`, so a mod shows what it keeps on the item: a condition, rolled

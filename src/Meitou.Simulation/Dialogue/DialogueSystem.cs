@@ -667,11 +667,11 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         c.Line = line;
         c.Speaker = speaker;
         MarkUsed(world, c, line);
-        string text = Said(Expand(world, c, line, PickText(world, speaker, line), speaker, c.Player));
-        text += MoneySuffix(line);
-        c.Text = text;
-        c.Log.Add($"{NameOf(world, speaker)}: {text}");
-        world.Said(NameOf(world, speaker), text, false);
+        var (said, shown) = Line(world, c, line, speaker, speaker, c.Player);
+        string text = said + MoneySuffix(line);
+        c.Text = shown + MoneySuffix(line);
+        c.Log.Add($"{NameOf(world, speaker)}: {c.Text}");
+        world.Said(NameOf(world, speaker), c.Text, false);
         world.DialogueLines.Line(world, "say", $"{EventLog.Who(world, speaker)} to {EventLog.Who(world, c.Player)}: \"{text}\" "
             + $"(line {DialogueLog.Node(line)}{DialogueLog.Effects(line)})");
         RunEffects(world, c, line, speaker);
@@ -697,8 +697,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                 c.Choices.Add((null, "[...]"));
                 return;
             }
-            string label = Said(Expand(world, c, child, PickText(world, c.Player, child), c.Player, c.Npc)) + MoneySuffix(child);
-            if (label.Length > 0) c.Choices.Add((child, label));   // a choice with no text and no cost is never offered (FUN_140680130)
+            var (said, shown) = Line(world, c, child, c.Player, c.Player, c.Npc);
+            // a choice with no text and no cost is never offered (FUN_140680130); the button shows the mods' text
+            if ((said + MoneySuffix(child)).Length > 0) c.Choices.Add((child, shown + MoneySuffix(child)));
         }
         if (c.Choices.Count == 0) c.Choices.Add((null, LeaveChoice));
     }
@@ -743,9 +744,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         else
         {
             c.Choices.Clear();
-            string label = Said(Expand(world, c, p.Line, PickText(world, c.Player, p.Line), c.Player, c.Npc)) + MoneySuffix(p.Line);
-            if (label.Length == 0) c.Ended = true;   // nothing to offer: the conversation ends
-            else c.Choices.Add((p.Line, label));
+            var (said, shown) = Line(world, c, p.Line, c.Player, c.Player, c.Npc);
+            if ((said + MoneySuffix(p.Line)).Length == 0) c.Ended = true;   // nothing to offer: the conversation ends
+            else c.Choices.Add((p.Line, shown + MoneySuffix(p.Line)));
         }
     }
 

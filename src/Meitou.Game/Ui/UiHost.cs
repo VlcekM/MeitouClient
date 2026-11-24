@@ -1,4 +1,5 @@
 using Meitou.Data.Ui;
+using Meitou.Localisation;
 
 namespace Meitou.Game.Ui;
 
@@ -397,11 +398,6 @@ public sealed partial class UiHost
     internal ItemTooltipLines ItemTips { get; } = new();
 
     /// <summary>
-    /// The extensions' item name sources (<see cref="UiRegistration.AddItemNames"/>).
-    /// </summary>
-    internal ItemNames ItemNameSources { get; } = new();
-
-    /// <summary>
     /// The town panel line sources, with their owners, in registration order.
     /// </summary>
     readonly List<(string Owner, Func<UiTownContext, IEnumerable<UiTownLine>> Lines)> _townLines = [];
@@ -609,7 +605,7 @@ public sealed partial class UiHost
         _buildingActions.RemoveAll(a => a.Owner == owner);
         _townLines.RemoveAll(l => l.Owner == owner);
         ItemTips.Remove(owner);
-        ItemNameSources.Remove(owner);
+        ShownText.Remove(this, owner);
         CharacterPanel.Remove(owner);
         Screens.Remove(owner);
         ScreenOverrides.Remove(owner);
@@ -881,10 +877,17 @@ public sealed partial class UiHost
     public IReadOnlyList<UiItemTooltipLine> ItemTooltipLines(UiItemTooltipContext item) => ItemTips.For(item, Diagnostic);
 
     /// <summary>
-    /// The name the interface shows for an item of <paramref name="record"/> named <paramref name="name"/> with tag <paramref name="modTag"/>
-    /// (<see cref="ItemNames.Shown"/>); a failing source is reported as a <see cref="Diagnostic"/> and dropped.
+    /// The name the interface shows for an item of <paramref name="record"/> named <paramref name="name"/> with tag <paramref name="modTag"/>: the
+    /// extensions' text sources' (<see cref="ShownText.Of"/>, a <see cref="ShownTextKind.ItemName"/>), else <paramref name="name"/>.
     /// </summary>
-    public string ItemName(string record, string name, string modTag = "") => ItemNameSources.Shown(record, name, modTag, Diagnostic);
+    public string ItemName(string record, string name, string modTag = "") =>
+        ShownText.Any ? ShownText.Of(ShownTextKind.ItemName, record, name, modTag) : name;
+
+    /// <summary>
+    /// Reports a text source that threw (<see cref="ShownText.Dropped"/>) as its interface's <see cref="Diagnostic"/>.
+    /// </summary>
+    static UiHost() => ShownText.Dropped += (host, owner, context, error) =>
+        (host as UiHost)?.Diagnostic?.Invoke(new UiDiagnostic(owner, $"shown text ({context.Kind} {context.Key}, dropped)", error));
 
     /// <summary>
     /// Whether any extension adds character panel lines (<see cref="CharacterPanelLines"/>).
@@ -1504,27 +1507,28 @@ public sealed class UiRegistration : IDisposable
     }
 
     /// <summary>
-    /// Renames items where the interface shows their names: inventory, trade and machine cells, the held item, item tooltips and the labels of
-    /// items on the ground (docs/modding.md "Item names"). <paramref name="names"/> gets the item's record, the name so far (the game's, or an
-    /// earlier extension's) and its code-mod tag, and returns the name to show (null or blank: keep it). Display only: the item and its record keep
-    /// their names. It runs on the host's thread the first time a record, name and tag is shown, the answer kept until
-    /// <see cref="RefreshItemNames"/>, so it may be slow-ish but must read only its context and the mod's own state.
+    /// Changes the text the game shows (docs/modding.md "Shown text"): the interface's and the notices' messages, items' names and dialogue lines.
+    /// <paramref name="source"/> gets the kind of text, its key (a message's English source text, an item's record, a dialogue line's record), the
+    /// text so far (the game's, or an earlier extension's) and a tag, and returns the text to show (null or blank: keep it). Display only: records,
+    /// saves and the game's decisions keep the game's text. It runs the first time a text is shown, the answer kept until
+    /// <see cref="RefreshText"/>; it may be asked on any thread (the simulation's messages and dialogue), one call at a time, so it must read only
+    /// its context and the mod's own state, safely across threads.
     /// </summary>
-    public void AddItemNames(Func<UiItemNameContext, string?> names)
+    public void AddText(Func<ShownTextContext, string?> source)
     {
         Check();
-        ArgumentNullException.ThrowIfNull(names);
-        _host.ItemNameSources.Add(Id, names);
+        ArgumentNullException.ThrowIfNull(source);
+        ShownText.Add(_host, Id, source);
     }
 
     /// <summary>
-    /// Asks every item name source again (<see cref="AddItemNames"/>): call it when the mod's answers change, e.g. a word it teaches was learned.
-    /// Host's thread.
+    /// Asks every text source again (<see cref="AddText"/>): call it when the mod's answers change, e.g. a word it teaches was learned. Text
+    /// already handed out (a dialogue line said, a notice posted) keeps what it was given.
     /// </summary>
-    public void RefreshItemNames()
+    public void RefreshText()
     {
         Check();
-        _host.ItemNameSources.Refresh();
+        ShownText.Refresh();
     }
 
     /// <summary>
