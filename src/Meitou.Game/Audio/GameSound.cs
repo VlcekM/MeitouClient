@@ -108,6 +108,7 @@ sealed class GameSound(GameHost host)
             : $"audio     off: {error}");
         if (Audio is not null && host.Player is not null && host.Player.TitleOpen) Audio.Music.StartMainTheme();
         Ui.Attach(Audio);
+        host.Modding.Mods?.AudioModulations.Attach(Audio?.Player);
     }
 
     /// <summary>

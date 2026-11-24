@@ -1676,6 +1676,10 @@ holds refuses the second mod.
   serially before `DialogueSystem.Choose` runs a player's reply; returning `true` claims the choice (ending the conversation without running
   vanilla effects or advancing). `IDialogueChoiceObserver.ChoicePicked` runs serially for every non-bail choice. Faulting hooks are disabled for
   that world and enter the state hash. Engine API, not in the original.
+- **Audio modulation** (`ModContext.SetAudioModulation`, `ModContext.ClearAudioModulation`, `AudioModulation`): modulates active sound playback
+  rate/pitch (`0.1` to `4`), low-pass muffle coefficient (`0.01` to `1`), and volume gain (`0` to `2`). Applies to world and ambience sounds by
+  default, with optional flags for music (`AffectMusic`) and UI (`AffectUi`). Thread-safe; multiple mods compose multiplicatively for rate/gain
+  and by minimum for low-pass, published lock-free to the audio thread. Engine API, not in the original.
 
 ## Data mods
 

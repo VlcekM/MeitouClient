@@ -298,6 +298,10 @@ sealed class ModRegistry
     /// </summary>
     public List<ModFactionList> FactionLists { get; } = [];
     /// <summary>
+    /// Every mod's active playback audio modulations, composed lock-free for the audio thread.
+    /// </summary>
+    internal ModAudioModulations AudioModulations { get; } = new();
+    /// <summary>
     /// Every mod's save-written listeners, in load order.
     /// </summary>
     public List<ModSaveWritten> SavesWritten { get; } = [];

@@ -181,6 +181,18 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Sets this mod's playback modulation for active sounds (docs/modding.md "Audio modulation"): pitch/speed rate, low-pass muffle and volume
+    /// gain. Safe to call from any thread; multiple mods compose automatically. Pass <see cref="AudioModulation.Identity"/> or call
+    /// <see cref="ClearAudioModulation"/> to remove it.
+    /// </summary>
+    public void SetAudioModulation(AudioModulation modulation) => _registry.AudioModulations.Set(Id, modulation);
+
+    /// <summary>
+    /// Clears this mod's playback audio modulation (<see cref="SetAudioModulation"/>).
+    /// </summary>
+    public void ClearAudioModulation() => _registry.AudioModulations.Drop(Id);
+
+    /// <summary>
     /// Posts <paramref name="sound"/> as a loose file when it names a <c>.wav</c> (true: handled, whether it was found or not); false for a bank
     /// event.
     /// </summary>
