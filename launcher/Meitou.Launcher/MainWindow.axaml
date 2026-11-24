@@ -487,6 +487,16 @@
                 <CheckBox Grid.Column="1" x:Name="SteamBox" Click="Steam_Click" VerticalAlignment="Center" />
               </Grid>
             </Border>
+            <!-- Linux AppImage: the launcher's app menu entry (AppMenuEntry.cs) -->
+            <Border x:Name="AppMenuRow" Classes="row" IsVisible="False">
+              <Grid ColumnDefinitions="*,150">
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Classes="name" Text="App menu" />
+                  <TextBlock x:Name="AppMenuStatus" Classes="desc" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" x:Name="AppMenuButton" HorizontalAlignment="Stretch" Click="AppMenu_Click" />
+              </Grid>
+            </Border>
             <!-- macOS: Auto prefers Vulkan when MoltenVK exists, else native Metal. No Homebrew is needed for Metal. -->
             <Border x:Name="RendererRow" Classes="row" IsVisible="False">
               <Grid ColumnDefinitions="*,460">

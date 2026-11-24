@@ -73,6 +73,19 @@ items); the launcher never downloads or hosts mods.
   the same buttons open the newest `launcher-v*` release page.
 - **Unknown**: the update path end to end (1.0.1 → 1.0.2 is the first real one).
 
+## App menu (Linux)
+
+- Run from the AppImage (`APPIMAGE` is set, by the AppImage runtime), the first-start dialog offers "Add to the app menu" (ticked) and
+  Settings has an Add/Remove button. `AppMenuEntry` writes `wiki.kenshi.meitou.launcher.desktop` and a 128 px `.png` to
+  `$XDG_DATA_HOME/applications` (`~/.local/share/applications`), with `Exec` and `TryExec` set to the AppImage, so the menu hides the entry
+  once the AppImage is deleted. While the entry exists, each start rewrites it for the AppImage's current path.
+- The window's X11 class is `MeitouLauncher` (`X11PlatformOptions.WmClass`; Avalonia's default is the executable name), Velopack's packId
+  and the `StartupWMClass` of both this entry and the AppImage's embedded one. **Verified** with `xprop` in a headless gamescope:
+  `WM_CLASS = "meitou-launcher", "MeitouLauncher"`.
+- The AppImage's file icon is its 64 px `.DirIcon`; Dolphin shows it only through KDE's AppImage thumbnailer, which needs `libappimage`
+  (an optional dependency of `kio-extras`). **Observed** on CachyOS: without it `ldd` reports `libappimage.so.1.0` not found for
+  `appimagethumbnail.so`, and Dolphin shows the generic icon.
+
 ## Unsigned macOS packages
 
 The macOS launcher and game are **not notarized**: there is no paid Apple Developer ID in this project. The app and the

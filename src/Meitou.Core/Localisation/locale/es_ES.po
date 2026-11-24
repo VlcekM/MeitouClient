@@ -5453,3 +5453,43 @@ msgstr "Cuántos miembros puede tener uno de tus escuadrones (el juego: 20). Los
 #. machine-translated
 msgid "How many squads your faction may create (the game: 10)."
 msgstr "Cuántos escuadrones puede crear tu facción (el juego: 10)."
+
+#. machine-translated
+msgid "App menu"
+msgstr "Menú de aplicaciones"
+
+#. machine-translated
+msgid "Could not change the app menu entry: {1}"
+msgstr "No se pudo cambiar la entrada del menú de aplicaciones: {1}"
+
+#. machine-translated
+msgid "Meitou Launcher was added to the app menu."
+msgstr "Meitou Launcher se ha añadido al menú de aplicaciones."
+
+#. machine-translated
+msgid "Meitou Launcher was removed from the app menu."
+msgstr "Meitou Launcher se ha quitado del menú de aplicaciones."
+
+#. machine-translated
+msgid "Remove"
+msgstr "Quitar"
+
+#. machine-translated
+msgid "Add"
+msgstr "Añadir"
+
+#. machine-translated
+msgid "Meitou Launcher is in your desktop's app launcher."
+msgstr "Meitou Launcher está en el lanzador de aplicaciones de tu escritorio."
+
+#. machine-translated
+msgid "Add Meitou Launcher, with its icon, to your desktop's app launcher."
+msgstr "Añade Meitou Launcher, con su icono, al lanzador de aplicaciones de tu escritorio."
+
+#. machine-translated
+msgid "Add to the app menu"
+msgstr "Añadir al menú de aplicaciones"
+
+#. machine-translated
+msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
+msgstr "Meitou Launcher, con su icono, en el lanzador de aplicaciones de tu escritorio."

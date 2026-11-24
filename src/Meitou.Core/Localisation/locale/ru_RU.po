@@ -5455,3 +5455,43 @@ msgstr "Сколько участников может быть в одном о
 #. machine-translated
 msgid "How many squads your faction may create (the game: 10)."
 msgstr "Сколько отрядов может создать ваша фракция (в игре: 10)."
+
+#. machine-translated
+msgid "App menu"
+msgstr "Меню приложений"
+
+#. machine-translated
+msgid "Could not change the app menu entry: {1}"
+msgstr "Не удалось изменить пункт меню приложений: {1}"
+
+#. machine-translated
+msgid "Meitou Launcher was added to the app menu."
+msgstr "Meitou Launcher добавлен в меню приложений."
+
+#. machine-translated
+msgid "Meitou Launcher was removed from the app menu."
+msgstr "Meitou Launcher удалён из меню приложений."
+
+#. machine-translated
+msgid "Remove"
+msgstr "Удалить"
+
+#. machine-translated
+msgid "Add"
+msgstr "Добавить"
+
+#. machine-translated
+msgid "Meitou Launcher is in your desktop's app launcher."
+msgstr "Meitou Launcher есть в меню приложений вашего рабочего стола."
+
+#. machine-translated
+msgid "Add Meitou Launcher, with its icon, to your desktop's app launcher."
+msgstr "Добавить Meitou Launcher со значком в меню приложений вашего рабочего стола."
+
+#. machine-translated
+msgid "Add to the app menu"
+msgstr "Добавить в меню приложений"
+
+#. machine-translated
+msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
+msgstr "Meitou Launcher со значком в меню приложений вашего рабочего стола."

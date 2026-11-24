@@ -209,6 +209,8 @@ public sealed partial class MainWindow : Window
         ArgumentsBox.Text = config.LaunchArguments;
         SteamRow.IsVisible = OperatingSystem.IsWindows();
         SteamBox.IsChecked = config.LaunchAsSteamKenshi;
+        AppMenuRow.IsVisible = AppMenuEntry.IsAvailable;
+        ShowAppMenu();
         RendererRow.IsVisible = OperatingSystem.IsMacOS();
         RendererMetalItem.IsVisible = MacSupport.MetalAvailable;
         if (!MacSupport.MetalAvailable && config.Renderer == "metal") config.Renderer = "auto";
@@ -702,6 +704,38 @@ public sealed partial class MainWindow : Window
     #region Settings
 
     /// <summary>
+    /// Adds the launcher to the app menu, or removes it when it is there.
+    /// </summary>
+    void AppMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        bool adding = !AppMenuEntry.IsAdded;
+        try
+        {
+            if (adding) AppMenuEntry.Add();
+            else AppMenuEntry.Remove();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status(Tr("Could not change the app menu entry: {1}", ex.Message));
+            return;
+        }
+
+        Status(Tr(adding ? "Meitou Launcher was added to the app menu." : "Meitou Launcher was removed from the app menu."));
+        ShowAppMenu();
+    }
+
+    /// <summary>
+    /// The app menu row's text and button for whether the entry exists.
+    /// </summary>
+    void ShowAppMenu()
+    {
+        bool added = AppMenuEntry.IsAdded;
+        SetText(AppMenuStatus, added ? "Meitou Launcher is in your desktop's app launcher."
+            : "Add Meitou Launcher, with its icon, to your desktop's app launcher.");
+        AppMenuButton.Content = Tr(added ? "Remove" : "Add");
+    }
+
+    /// <summary>
     /// Saves the typed launch arguments.
     /// </summary>
     void Arguments_LostFocus(object? sender, RoutedEventArgs e)
@@ -923,6 +957,7 @@ public sealed partial class MainWindow : Window
             SetupHost.Child = null;
             InstallPathBox.Text = LauncherConfig.InstallDirectory;
             SteamBox.IsChecked = _config.LaunchAsSteamKenshi;
+            ShowAppMenu();
             RefreshInstalled();
             ShowReleases();
             UseKenshi(chosen);

@@ -357,6 +357,14 @@ msgstr ""
 msgid "Adaptive exposure strength (max x)"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Add"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Add Meitou Launcher, with its icon, to your desktop's app launcher."
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Add airglow to the night haze."
 msgstr ""
@@ -371,6 +379,10 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/FurnitureUse.cs
 msgid "Add to jobs"
+msgstr ""
+
+#: launcher/Meitou.Launcher/SetupOverlay.axaml
+msgid "Add to the app menu"
 msgstr ""
 
 #: src/Meitou.Game/Settings/LauncherSchema.cs
@@ -511,6 +523,10 @@ msgstr ""
 
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Aperture"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "App menu"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml launcher/Meitou.Launcher/MainWindow.axaml.cs launcher/Meitou.Launcher/ModsFromSave.cs
@@ -1191,6 +1207,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Corpse flies range"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Could not change the app menu entry: {1}"
 msgstr ""
 
 #: launcher/Meitou.Launcher/GraphicsPage.cs
@@ -3078,6 +3098,22 @@ msgstr ""
 msgid "Meitou Launcher"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Meitou Launcher is in your desktop's app launcher."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Meitou Launcher was added to the app menu."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Meitou Launcher was removed from the app menu."
+msgstr ""
+
+#: launcher/Meitou.Launcher/SetupOverlay.axaml
+msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
+msgstr ""
+
 #: src/Meitou.Game/Settings/LauncherSchema.cs
 msgid "Meitou cascades"
 msgstr ""
@@ -4151,6 +4187,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "Release page"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Remove"
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs

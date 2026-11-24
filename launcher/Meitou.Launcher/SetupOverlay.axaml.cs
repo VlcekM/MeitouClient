@@ -8,7 +8,7 @@ namespace Meitou.Launcher;
 
 /// <summary>
 /// The first-start dialog over the main window: the install folder and the Kenshi folder, prefilled with the current (or detected)
-/// ones, and on Windows whether to launch as Kenshi on Steam.
+/// ones, on Windows whether to launch as Kenshi on Steam, and from a Linux AppImage whether to add the launcher to the app menu.
 /// </summary>
 public sealed partial class SetupOverlay : UserControl
 {
@@ -33,7 +33,8 @@ public sealed partial class SetupOverlay : UserControl
     public SetupOverlay() => InitializeComponent();
 
     /// <summary>
-    /// The dialog prefilled from <paramref name="config"/> and the detected install; the Steam row on Windows, the renderer row on macOS.
+    /// The dialog prefilled from <paramref name="config"/> and the detected install; the Steam row on Windows, the app menu row from a Linux
+    /// AppImage, the renderer row on macOS.
     /// </summary>
     public SetupOverlay(LauncherConfig config, GameInstall? found)
     {
@@ -43,6 +44,7 @@ public sealed partial class SetupOverlay : UserControl
         ShowKenshi(found, found?.Root ?? config.KenshiPath);
         SteamRow.IsVisible = OperatingSystem.IsWindows();
         SteamBox.IsChecked = config.LaunchAsSteamKenshi;
+        AppMenuRow.IsVisible = AppMenuEntry.IsAvailable;
         RendererRow.IsVisible = OperatingSystem.IsMacOS();
         RendererMetalItem.IsVisible = MacSupport.MetalAvailable;
         if (!MacSupport.MetalAvailable && config.Renderer == "metal") config.Renderer = "auto";
@@ -186,6 +188,22 @@ public sealed partial class SetupOverlay : UserControl
         if (OperatingSystem.IsWindows()) _config.LaunchAsSteamKenshi = SteamBox.IsChecked == true;
         _config.FoldersConfirmed = true;
         _config.Save();
+        if (AppMenuRow.IsVisible && AppMenuBox.IsChecked == true) AddToAppMenu();
         Confirmed?.Invoke(_install);
+    }
+
+    /// <summary>
+    /// Adds the launcher to the app menu; a failure only costs the entry, which Settings can add again.
+    /// </summary>
+    static void AddToAppMenu()
+    {
+        try
+        {
+            AppMenuEntry.Add();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine($"app menu entry  {e.Message}");
+        }
     }
 }

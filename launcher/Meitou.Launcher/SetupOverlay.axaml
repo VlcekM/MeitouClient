@@ -41,6 +41,16 @@
           <CheckBox Grid.Column="1" x:Name="SteamBox" VerticalAlignment="Center" />
         </Grid>
       </Border>
+      <!-- Linux AppImage: add the launcher to the desktop's app menu (AppMenuEntry.cs) -->
+      <Border x:Name="AppMenuRow" Classes="row" IsVisible="False">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Classes="name" Text="Add to the app menu" />
+            <TextBlock Classes="desc" Text="Meitou Launcher, with its icon, in your desktop's app launcher." TextWrapping="Wrap" />
+          </StackPanel>
+          <CheckBox Grid.Column="1" x:Name="AppMenuBox" IsChecked="True" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
       <Border x:Name="RendererRow" Classes="row" IsVisible="False">
         <StackPanel Spacing="6">
           <TextBlock Classes="name" Text="Renderer" />

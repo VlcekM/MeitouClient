@@ -29,6 +29,8 @@ static class Program
         // First: Velopack runs its install, update and uninstall hooks here and may exit (docs/launcher.md, "Self-update").
         Velopack.VelopackApp.Build().Run();
         NativeLibraries.Load();
-        AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace().StartWithClassicDesktopLifetime(args);
+        AppMenuEntry.Refresh();
+        var x11 = new X11PlatformOptions { WmClass = AppMenuEntry.WindowClass };
+        AppBuilder.Configure<App>().UsePlatformDetect().With(x11).LogToTrace().StartWithClassicDesktopLifetime(args);
     }
 }

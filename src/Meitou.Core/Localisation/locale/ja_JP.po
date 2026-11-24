@@ -5451,3 +5451,43 @@ msgstr "1つの部隊に所属できる最大メンバー数（ゲーム：20）
 #. machine-translated
 msgid "How many squads your faction may create (the game: 10)."
 msgstr "派閥が作成できる部隊の最大数（ゲーム：10）。"
+
+#. machine-translated
+msgid "App menu"
+msgstr "アプリメニュー"
+
+#. machine-translated
+msgid "Could not change the app menu entry: {1}"
+msgstr "アプリメニューの項目を変更できませんでした: {1}"
+
+#. machine-translated
+msgid "Meitou Launcher was added to the app menu."
+msgstr "Meitou Launcher をアプリメニューに追加しました。"
+
+#. machine-translated
+msgid "Meitou Launcher was removed from the app menu."
+msgstr "Meitou Launcher をアプリメニューから削除しました。"
+
+#. machine-translated
+msgid "Remove"
+msgstr "削除"
+
+#. machine-translated
+msgid "Add"
+msgstr "追加"
+
+#. machine-translated
+msgid "Meitou Launcher is in your desktop's app launcher."
+msgstr "Meitou Launcher はデスクトップのアプリランチャーにあります。"
+
+#. machine-translated
+msgid "Add Meitou Launcher, with its icon, to your desktop's app launcher."
+msgstr "Meitou Launcher をアイコン付きでデスクトップのアプリランチャーに追加します。"
+
+#. machine-translated
+msgid "Add to the app menu"
+msgstr "アプリメニューに追加"
+
+#. machine-translated
+msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
+msgstr "Meitou Launcher をアイコン付きでデスクトップのアプリランチャーに表示します。"

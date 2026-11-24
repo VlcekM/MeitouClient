@@ -5451,3 +5451,43 @@ msgstr "하나의 분대에 소속될 수 있는 최대 인원수(게임: 20). �
 #. machine-translated
 msgid "How many squads your faction may create (the game: 10)."
 msgstr "세력이 생성할 수 있는 최대 분대 수(게임: 10)."
+
+#. machine-translated
+msgid "App menu"
+msgstr "앱 메뉴"
+
+#. machine-translated
+msgid "Could not change the app menu entry: {1}"
+msgstr "앱 메뉴 항목을 변경할 수 없습니다: {1}"
+
+#. machine-translated
+msgid "Meitou Launcher was added to the app menu."
+msgstr "Meitou Launcher를 앱 메뉴에 추가했습니다."
+
+#. machine-translated
+msgid "Meitou Launcher was removed from the app menu."
+msgstr "Meitou Launcher를 앱 메뉴에서 제거했습니다."
+
+#. machine-translated
+msgid "Remove"
+msgstr "제거"
+
+#. machine-translated
+msgid "Add"
+msgstr "추가"
+
+#. machine-translated
+msgid "Meitou Launcher is in your desktop's app launcher."
+msgstr "Meitou Launcher가 데스크톱의 앱 실행기에 있습니다."
+
+#. machine-translated
+msgid "Add Meitou Launcher, with its icon, to your desktop's app launcher."
+msgstr "Meitou Launcher를 아이콘과 함께 데스크톱의 앱 실행기에 추가합니다."
+
+#. machine-translated
+msgid "Add to the app menu"
+msgstr "앱 메뉴에 추가"
+
+#. machine-translated
+msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
+msgstr "Meitou Launcher를 아이콘과 함께 데스크톱의 앱 실행기에 표시합니다."

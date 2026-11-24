@@ -6284,3 +6284,43 @@ msgstr "单个小队最多可容纳的成员数量（游戏：20）。小队满�
 #. machine-translated
 msgid "How many squads your faction may create (the game: 10)."
 msgstr "你的派系最多可创建的小队数量（游戏：10）。"
+
+#. machine-translated
+msgid "App menu"
+msgstr "应用菜单"
+
+#. machine-translated
+msgid "Could not change the app menu entry: {1}"
+msgstr "无法更改应用菜单项：{1}"
+
+#. machine-translated
+msgid "Meitou Launcher was added to the app menu."
+msgstr "已将 Meitou Launcher 添加到应用菜单。"
+
+#. machine-translated
+msgid "Meitou Launcher was removed from the app menu."
+msgstr "已将 Meitou Launcher 从应用菜单中移除。"
+
+#. machine-translated
+msgid "Remove"
+msgstr "移除"
+
+#. machine-translated
+msgid "Add"
+msgstr "添加"
+
+#. machine-translated
+msgid "Meitou Launcher is in your desktop's app launcher."
+msgstr "Meitou Launcher 已在桌面的应用启动器中。"
+
+#. machine-translated
+msgid "Add Meitou Launcher, with its icon, to your desktop's app launcher."
+msgstr "将 Meitou Launcher 及其图标添加到桌面的应用启动器。"
+
+#. machine-translated
+msgid "Add to the app menu"
+msgstr "添加到应用菜单"
+
+#. machine-translated
+msgid "Meitou Launcher, with its icon, in your desktop's app launcher."
+msgstr "在桌面的应用启动器中显示 Meitou Launcher 及其图标。"

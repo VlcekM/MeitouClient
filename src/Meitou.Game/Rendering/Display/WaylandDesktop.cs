@@ -1,5 +1,5 @@
 using System.Reflection;
-using Meitou.Content;
+using Meitou.Desktop;
 using Silk.NET.GLFW;
 using Silk.NET.Windowing;
 
@@ -56,59 +56,27 @@ static class WaylandDesktop
         string? executable = Environment.ProcessPath;
         if (executable is null) return;
 
-        string dataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME") ?? "";
-        if (!Path.IsPathFullyQualified(dataHome))
-            dataHome = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
-        if (!Path.IsPathFullyQualified(dataHome)) return;
+        string? applications = XdgDesktopEntry.ApplicationsDirectory();
+        if (applications is null) return;
 
         try
         {
-            string applications = Path.Combine(dataHome, "applications");
-            Directory.CreateDirectory(applications);
+            // The icon sits in a stable location shared by installed game versions.
             string icon = Path.Combine(applications, AppId + ".png");
-            string entry = Path.Combine(applications, AppId + ".desktop");
-            InstallIcon(icon);
+            using (var resource = typeof(WaylandDesktop).Assembly.GetManifestResourceStream("meitou-128.png"))
+                XdgDesktopEntry.WriteIcon(icon, resource);
 
-            string command = QuoteArgument(executable);
+            string command = XdgDesktopEntry.QuoteArgument(executable);
             if (Path.GetFileName(executable) == "dotnet")
-                command += " " + QuoteArgument(typeof(WaylandDesktop).Assembly.Location);
+                command += " " + XdgDesktopEntry.QuoteArgument(typeof(WaylandDesktop).Assembly.Location);
 
-            string desktop = $"[Desktop Entry]\nType=Application\nName=Meitou\nNoDisplay=true\nExec={command}\nIcon={EscapeValue(icon)}\n";
-            if (!File.Exists(entry) || File.ReadAllText(entry) != desktop) AtomicFile.WriteAllText(entry, desktop);
+            string iconValue = XdgDesktopEntry.EscapeValue(icon);
+            string desktop = $"[Desktop Entry]\nType=Application\nName=Meitou\nNoDisplay=true\nExec={command}\nIcon={iconValue}\n";
+            XdgDesktopEntry.WriteEntry(Path.Combine(applications, AppId + ".desktop"), desktop);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Console.WriteLine($"desktop icon  {e.Message}");
         }
     }
-
-    /// <summary>
-    /// Copies the embedded icon into a stable location shared by installed game versions.
-    /// </summary>
-    static void InstallIcon(string path)
-    {
-        using var icon = typeof(WaylandDesktop).Assembly.GetManifestResourceStream("meitou-128.png");
-        if (icon is null) return;
-
-        using var buffer = new MemoryStream();
-        icon.CopyTo(buffer);
-        byte[] bytes = buffer.ToArray();
-
-        if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes)) AtomicFile.WriteAllBytes(path, bytes);
-    }
-
-    /// <summary>
-    /// Quotes a literal argument for the desktop entry's Exec key, including escaping its field-code marker.
-    /// </summary>
-    static string QuoteArgument(string argument)
-    {
-        string quoted = argument.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("`", "\\`").Replace("$", "\\$").Replace("%", "%%");
-
-        return "\"" + EscapeValue(quoted) + "\"";
-    }
-
-    /// <summary>
-    /// Escapes the characters handled by the desktop entry value parser.
-    /// </summary>
-    static string EscapeValue(string value) => value.Replace("\\", "\\\\").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
 }
