@@ -58,6 +58,15 @@ public sealed class GameDatabase
     public GameRecord? Find(string stringId) => _records.GetValueOrDefault(stringId);
 
     /// <summary>
+    /// The name of a <paramref name="what"/> (<c>character</c>, <c>squad</c>, <c>outpost</c>, <c>faction</c>, <c>place</c>) made from record
+    /// <paramref name="record"/> ("" none) and called <paramref name="name"/>, as the mods' text sources show it
+    /// (<see cref="Meitou.Localisation.ShownText.Name"/>: still its record's name, asked as the record's; else as a name of its own). Display only.
+    /// </summary>
+    public string ShownName(string what, string record, string name) =>
+        !Meitou.Localisation.ShownText.Any ? name
+            : Meitou.Localisation.ShownText.Name(what, record ?? "", record is { Length: > 0 } && Find(record) is { } r ? r.Name : "", name);
+
+    /// <summary>
     /// Every record of <paramref name="type"/>, in no defined order (a scan of all records each call).
     /// </summary>
     public IEnumerable<GameRecord> OfType(FcsRecordType type) => _records.Values.Where(r => r.Type == type);

@@ -15,27 +15,39 @@ public enum ShownTextKind : byte
     Message,
 
     /// <summary>
-    /// An item's name: <see cref="ShownTextContext.Key"/> is the item's record string id, <see cref="ShownTextContext.Text"/> its name,
-    /// <see cref="ShownTextContext.Tag"/> the item's code-mod tag ("" none).
+    /// Text a game record gives: <see cref="ShownTextContext.Key"/> is the record's string id, <see cref="ShownTextContext.Field"/> which of its
+    /// texts (<c>name</c> for its name, else the record's own field: <c>description</c>, <c>unexplored name</c>, <c>display name</c>...),
+    /// <see cref="ShownTextContext.Text"/> that text (in the player's language when a translation renamed it), <see cref="ShownTextContext.Tag"/>
+    /// the item's code-mod tag for one item ("" none). Items, buildings, research, races, factions, towns, body parts, starts, biomes and the rest,
+    /// wherever the game shows them, including names put into messages. A character, squad or place still called by its record's name is asked
+    /// here too, as that record's <c>name</c>.
     /// </summary>
-    ItemName,
+    Record,
+
+    /// <summary>
+    /// A name of its own, not its record's: a character's (rolled from a name list, or given by the player), a squad's, an outpost's, the player's
+    /// faction's. <see cref="ShownTextContext.Field"/> says what it names (<c>character</c>, <c>squad</c>, <c>outpost</c>, <c>faction</c>,
+    /// <c>place</c>), <see cref="ShownTextContext.Key"/> the record it was made from ("" none), <see cref="ShownTextContext.Text"/> the name,
+    /// <see cref="ShownTextContext.Tag"/> "".
+    /// </summary>
+    Name,
 
     /// <summary>
     /// A dialogue line's text, before its tokens are filled: <see cref="ShownTextContext.Key"/> is the line's record string id,
     /// <see cref="ShownTextContext.Text"/> the text the line was given (one of its texts, tokens such as <c>/YOURNAME/</c> still in it),
-    /// <see cref="ShownTextContext.Tag"/> "".
+    /// <see cref="ShownTextContext.Tag"/> "". The names its tokens fill in are asked on their own, as <see cref="Record"/> or <see cref="Name"/>.
     /// </summary>
     DialogueLine,
 }
 
 /// <summary>
-/// What a mod's text source gets: the kind of text, its key, the text it would show (the game's, or an earlier source's) and a tag, whose meaning
-/// each <see cref="ShownTextKind"/> gives.
+/// What a mod's text source gets: the kind of text, its key, the text it would show (the game's, or an earlier source's), a tag and a field, whose
+/// meanings each <see cref="ShownTextKind"/> gives.
 /// </summary>
-public sealed record ShownTextContext(ShownTextKind Kind, string Key, string Text, string Tag);
+public sealed record ShownTextContext(ShownTextKind Kind, string Key, string Text, string Tag, string Field);
 
 /// <summary>
-/// The mods' text sources (docs/modding.md "Shown text"): asked when the game shows a message, an item's name or a dialogue line, each in
+/// The mods' text sources (docs/modding.md "Shown text"): asked when the game shows a message, a record's text, a name or a dialogue line, each in
 /// registration order getting the text so far and able to replace it. Display only: records, saves, the state hash and every decision the game makes
 /// keep the game's own text. Free when no mod adds one (one check). Answers are kept until <see cref="Refresh"/>, so a source runs once per text,
 /// not every frame. It may be asked from any thread (the simulation's messages and dialogue are made on its threads), one at a time.
@@ -43,7 +55,7 @@ public sealed record ShownTextContext(ShownTextKind Kind, string Key, string Tex
 public static class ShownText
 {
     /// <summary>
-    /// The most characters a shown item name keeps (one line).
+    /// The most characters a shown name keeps (one line).
     /// </summary>
     public const int MaxName = 80;
 
@@ -67,7 +79,7 @@ public static class ShownText
     /// <summary>
     /// The texts shown so far.
     /// </summary>
-    static readonly ConcurrentDictionary<(ShownTextKind Kind, string Key, string Text, string Tag), string> Answers = new();
+    static readonly ConcurrentDictionary<(ShownTextKind Kind, string Key, string Text, string Tag, string Field), string> Answers = new();
 
     /// <summary>
     /// How many answers <see cref="Answers"/> holds (its own count locks every bucket).
@@ -150,16 +162,41 @@ public static class ShownText
     }
 
     /// <summary>
-    /// The text shown for <paramref name="text"/> of <paramref name="kind"/> under <paramref name="key"/> and <paramref name="tag"/>: each source
-    /// in registration order gets the text so far and may replace it (null or blank: keep it); the result is cut (an item name to
-    /// <see cref="MaxName"/> characters on one line, anything else to <see cref="MaxText"/>) and kept until <see cref="Refresh"/>. A source that
+    /// The field of a <see cref="ShownTextKind.Record"/> that is the record's name.
+    /// </summary>
+    public const string RecordName = "name";
+
+    /// <summary>
+    /// Record <paramref name="record"/>'s <paramref name="field"/> (<see cref="RecordName"/> for its name), <paramref name="text"/>, as shown, for
+    /// one item tagged <paramref name="tag"/> ("" none); see <see cref="ShownTextKind.Record"/>.
+    /// </summary>
+    public static string Record(string record, string text, string field = RecordName, string tag = "") =>
+        s_sources.Length == 0 ? text : Of(ShownTextKind.Record, record, text, tag, field);
+
+    /// <summary>
+    /// The name of a <paramref name="what"/> (<c>character</c>, <c>squad</c>, <c>outpost</c>, <c>faction</c>, <c>place</c>) made from
+    /// <paramref name="record"/> ("" none) whose record is called <paramref name="recordName"/>, as shown: a name that is still its record's is
+    /// asked as that record's name (<see cref="ShownTextKind.Record"/>), any other as a <see cref="ShownTextKind.Name"/>.
+    /// </summary>
+    public static string Name(string what, string record, string recordName, string name)
+    {
+        if (s_sources.Length == 0) return name;
+        return record.Length > 0 && string.Equals(name, recordName, StringComparison.Ordinal)
+            ? Of(ShownTextKind.Record, record, name, "", RecordName)
+            : Of(ShownTextKind.Name, record, name, "", what);
+    }
+
+    /// <summary>
+    /// The text shown for <paramref name="text"/> of <paramref name="kind"/> under <paramref name="key"/>, <paramref name="tag"/> and
+    /// <paramref name="field"/>: each source in registration order gets the text so far and may replace it (null or blank: keep it); the result is
+    /// cut (a name to <see cref="MaxName"/> characters on one line, anything else to <see cref="MaxText"/>) and kept until <see cref="Refresh"/>. A source that
     /// throws is dropped and reported through <see cref="Dropped"/>. With no source, or a blank <paramref name="text"/>, the text as it is.
     /// </summary>
-    public static string Of(ShownTextKind kind, string key, string text, string tag = "")
+    public static string Of(ShownTextKind kind, string key, string text, string tag = "", string field = "")
     {
         if (s_sources.Length == 0 || s_inside || string.IsNullOrWhiteSpace(text)) return text;
 
-        var asked = (kind, key ?? "", text, tag ?? "");
+        var asked = (kind, key ?? "", text, tag ?? "", field ?? "");
         if (Answers.TryGetValue(asked, out var known)) return known;
 
         lock (Asking)
@@ -172,10 +209,10 @@ public static class ShownText
             {
                 foreach (var (host, owner, source) in s_sources)
                 {
-                    var context = new ShownTextContext(kind, asked.Item2, shown, asked.Item4);
+                    var context = new ShownTextContext(kind, asked.Item2, shown, asked.Item4, asked.Item5);
                     try
                     {
-                        if (source(context) is { } given && Clean(kind, given) is { Length: > 0 } clean && !string.IsNullOrWhiteSpace(clean)) shown = clean;
+                        if (source(context) is { } given && Clean(OneLine(kind, asked.Item5), given) is { Length: > 0 } clean && !string.IsNullOrWhiteSpace(clean)) shown = clean;
                     }
                     catch (Exception e)
                     {
@@ -206,13 +243,20 @@ public static class ShownText
     }
 
     /// <summary>
-    /// A source's answer as shown: an item name on one line (line breaks, the interface's written <c>\n</c> and tabs made spaces) and cut to
+    /// Whether text of <paramref name="kind"/> and <paramref name="field"/> is a name, kept to one line: a <see cref="ShownTextKind.Name"/>, or a
+    /// record's <c>name</c>.
+    /// </summary>
+    static bool OneLine(ShownTextKind kind, string field) =>
+        kind == ShownTextKind.Name || (kind == ShownTextKind.Record && field == RecordName);
+
+    /// <summary>
+    /// A source's answer as shown: a name on one line (line breaks, the interface's written <c>\n</c> and tabs made spaces) and cut to
     /// <see cref="MaxName"/>; any other text cut to <see cref="MaxText"/>. Never cut between the two halves of a character outside the basic plane.
     /// A blank result keeps the text so far.
     /// </summary>
-    static string Clean(ShownTextKind kind, string given)
+    static string Clean(bool oneLine, string given)
     {
-        if (kind != ShownTextKind.ItemName) return Cut(given, MaxText);
+        if (!oneLine) return Cut(given, MaxText);
         return Cut(given, MaxName).ReplaceLineEndings(" ").Replace(@"\n", " ", StringComparison.Ordinal).Replace('\t', ' ').Trim();
     }
 

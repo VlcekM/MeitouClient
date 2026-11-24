@@ -878,10 +878,10 @@ public sealed partial class UiHost
 
     /// <summary>
     /// The name the interface shows for an item of <paramref name="record"/> named <paramref name="name"/> with tag <paramref name="modTag"/>: the
-    /// extensions' text sources' (<see cref="ShownText.Of"/>, a <see cref="ShownTextKind.ItemName"/>), else <paramref name="name"/>.
+    /// extensions' text sources' (<see cref="ShownText.Record"/>, the item record's name), else <paramref name="name"/>.
     /// </summary>
     public string ItemName(string record, string name, string modTag = "") =>
-        ShownText.Any ? ShownText.Of(ShownTextKind.ItemName, record, name, modTag) : name;
+        ShownText.Record(record, name, ShownText.RecordName, modTag);
 
     /// <summary>
     /// Reports a text source that threw (<see cref="ShownText.Dropped"/>) as its interface's <see cref="Diagnostic"/>.

@@ -188,6 +188,18 @@ public sealed class GameRecord
     public string GetString(string key, string fallback = "") => StringTable.GetValueOrDefault(key, fallback);
 
     /// <summary>
+    /// <see cref="Name"/> as the mods' text sources show it (<see cref="Meitou.Localisation.ShownText.Record"/>), for one item tagged
+    /// <paramref name="tag"/> ("" none). Display only: anything the game decides reads <see cref="Name"/> or <see cref="BaseName"/>.
+    /// </summary>
+    public string ShownName(string tag = "") => Meitou.Localisation.ShownText.Record(StringId, Name, Meitou.Localisation.ShownText.RecordName, tag);
+
+    /// <summary>
+    /// String field <paramref name="key"/> (<see cref="GetString"/>) as the mods' text sources show it (<see cref="Meitou.Localisation.ShownText.Record"/>,
+    /// the field named by <paramref name="key"/>). Display only.
+    /// </summary>
+    public string ShownString(string key, string fallback = "") => Meitou.Localisation.ShownText.Record(StringId, GetString(key, fallback), key);
+
+    /// <summary>
     /// The file path <paramref name="key"/>, or <paramref name="fallback"/> when the record has none.
     /// </summary>
     public string GetPath(string key, string fallback = "") => FilenameTable.GetValueOrDefault(key, fallback);
