@@ -328,7 +328,7 @@ public sealed class ImpostorAtlas : IDisposable
                 {
                     if (l < firstLevel)
                     {
-                        scratch ??= System.Buffers.ArrayPool<byte>.Shared.Rent(specs.Max(s => s.Sizes[0]));
+                        scratch ??= BoundedBytePool.Streaming.Rent(specs.Max(s => s.Sizes[0]));
                         z.ReadExactly(scratch.AsSpan(0, specs[i].Sizes[l]));
                         hash = Fnv.Hash(hash, scratch.AsSpan(0, specs[i].Sizes[l]));
                         data[l] = ReadOnlyMemory<byte>.Empty;
@@ -363,7 +363,7 @@ public sealed class ImpostorAtlas : IDisposable
         }
         finally
         {
-            if (scratch is not null) System.Buffers.ArrayPool<byte>.Shared.Return(scratch);
+            if (scratch is not null) BoundedBytePool.Streaming.Return(scratch);
             if (!ok) ((IDisposable)block).Dispose();
         }
     }

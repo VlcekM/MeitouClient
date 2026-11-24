@@ -87,12 +87,16 @@ within the runs' spread; `ConserveMemory` 5 changed nothing (2.9 s of pauses, no
 Process memory beyond the GC heap is mostly untouched write-combined commit (~6 GB at 6.7 GB of VRAM in use), not resident RAM.
 **Pooled buffers** (allocation is the GC lever): streaming garbage is mostly LOH arrays from worker jobs. **Observed** in flights: gen0/gen1 pauses under
 ~40 ms; single blocking gen2s (`NonConcurrentGC`, reason `AllocSmall`) of 0.3-1.7 s in some runs despite SustainedLowLatency, with or without pooling. Pooled now:
-DDS file bytes of `WorldTextureCache.Load` (`DdsReader.ReadKept(..., pool)`, `ArrayPool<byte>.Shared`; returned in `Load` after an RGBA8 decode or
+DDS file bytes of `WorldTextureCache.Load` (`DdsReader.ReadKept(..., pool)`, `BoundedBytePool.Streaming`; returned in `Load` after an RGBA8 decode or
 by the last upload step of a stored BC upload), the GI terrain grid's samples (one array per `TerrainGrid`), the card trimmer's clip/hull scratch
 (`FoliageCardTrimmer.Hull`) and the grass generator (`[ThreadStatic]` `FoliageRandom`, reseeded). Contract: a rented array may be longer than asked,
 so its length is never the logical size (pass counts; `DdsFile.TrailingBytes` is meaningless on a pooled file); return it in a `finally` or at the
 one point after its last reader, never while anything keeps it; a buffer that is dropped instead (a texture never pumped) just goes to the GC.
-`ArrayPool<byte>.Shared` rounds up to a power of two (a 4.2 MB file rents 8 MB) and trims idle arrays on gen2; textures in flight bound what it holds.
+These, the terrain levels (`TerrainTextures.Mips`, `Cut`, `CutBlocks`) and the impostor reader's scratch rent from `BoundedBytePool.Streaming`:
+power-of-two arrays (a 4.2 MB file rents 8 MB), at most 256 MB idle; a return over that goes to the GC. `ArrayPool<byte>.Shared` held them per core
+and kept them: **Observed** (#1352, heap dumps, quicksave, vanilla, RTX 4070) 581 MB idle in it after warm-up and 673 MB after 30 min of play.
+**Observed** A/B (same save, headless, then five `tp` hops to towns 40 s apart at speed 5): RSS after warm-up 5.7-5.8 to 4.7 GB, after the hops
+7.4 to 5.5 GB; warm-up GC counts and pauses about the same (70-71/31-32/11-12, 1.0 s vs 73/35/13, 1.4 s).
 **Observed** (swamp, 1920x1080, 3000-frame flight, 4 alternating pairs, 2026-10-21): allocated 6.2 GB to 4.8 GB (2.1 to 1.6 MB a frame), gen0+gen1
 45 to 35 in total, gen2 count unchanged; frame percentiles unchanged within noise.
 Not pooled, kept by their owners: `HeightWindow` arrays (read through `HeightSnapshot` on workers), grass blade arrays (kept as `PendingBlades`),

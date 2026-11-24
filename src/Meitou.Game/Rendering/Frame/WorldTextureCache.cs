@@ -1,4 +1,3 @@
-using System.Buffers;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Game.Rendering.Gpu;
@@ -1024,7 +1023,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             // stored upload after its last step.
             var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, Math.Max(Math.Max(dropMips, MipStreaming.Drop(w.Width, w.Height,
                 need, streaming, perDistance, bias, extra)),
-                LevelsAbove(w.Width, w.Height, leanSize))), out var whole, ArrayPool<byte>.Shared);
+                LevelsAbove(w.Width, w.Height, leanSize))), out var whole, Data.BoundedBytePool.Streaming);
             bool handedOver = false;
             try
             {
@@ -1044,7 +1043,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             }
             finally
             {
-                if (!handedOver) ArrayPool<byte>.Shared.Return(dds.Data);
+                if (!handedOver) Data.BoundedBytePool.Streaming.Return(dds.Data);
             }
         }
         return new TextureData(new LoadedTexture([TextureLoader.LoadImage(File.ReadAllBytes(Content.GameFiles.Resolve(path)))], null), null);
@@ -1161,7 +1160,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             // BC4 is one channel; the decoder (and so the RGBA8 path) shows it as grey with alpha 1.
             Publish(t, texture!, data, Math.Min(dds.MipCount, texture!.Desc.Levels), dds.Format == DdsFormat.Bc4 ? GpuSwizzle.RrrOne : default,
                 dds.Surfaces.Sum(s => (long)s.Length));
-            ArrayPool<byte>.Shared.Return(dds.Data);   // rented by Load; every slab above has been copied to staging
+            Data.BoundedBytePool.Streaming.Return(dds.Data);   // rented by Load; every slab above has been copied to staging
         });
     }
 
