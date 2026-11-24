@@ -1045,7 +1045,8 @@ sealed class TooltipRuntime(PlayerInterface player)
         // A blueprint is titled with its research (BlueprintItem's first tooltip function, FUN_1407ab430): the name, "Research Blueprint", its state
         // and Tech Level (BlueprintRows); the requirement and unlock rows follow the prices.
         var research = ItemRecordOf?.Invoke(t.Company) is { Type: Data.Fcs.FcsRecordType.Research } r ? r : null;
-        string name = research?.Name ?? (t.Brief && model is not null ? model + " " + t.Name : t.Name);
+        string itemName = player.ShownItemName(t.Record, t.Name, t.ModTag);
+        string name = research?.Name ?? (t.Brief && model is not null ? model + " " + itemName : itemName);
 
         // An empty bag: " (" + "empty" + ")" after its name (FUN_1407aa090).
         if (!t.Brief && t.BagItems == 0) name += " (" + Loc.Tr("empty") + ")";

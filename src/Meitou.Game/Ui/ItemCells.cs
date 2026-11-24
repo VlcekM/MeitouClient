@@ -71,7 +71,7 @@ sealed class ItemCells(PlayerInterface player)
         if (charge is { } fill)
             AddCharge(controls, name, area, fill, clip);
 
-        string caption = shown ? count : itemName + (count.Length > 0 ? " x" + count : "");
+        string caption = shown ? count : player.ShownItemName(record, itemName, tip?.ModTag ?? "") + (count.Length > 0 ? " x" + count : "");
         var properties = new Dictionary<string, string>
         {
             ["WordWrap"] = "true",
