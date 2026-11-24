@@ -94,6 +94,11 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
     float? Charge, ItemOwner From, int BagItems)
 {
     /// <summary>
+    /// The item's code-mod tag ("" none; the mods' item names, docs/modding.md "Item names").
+    /// </summary>
+    public string ModTag { get; init; } = "";
+
+    /// <summary>
     /// The view of <paramref name="held"/>.
     /// </summary>
     public static HeldItemView Of(HeldItem held)
@@ -101,7 +106,7 @@ public sealed record HeldItemView(string Record, string Name, string Material, D
         held.Item.Width, held.Item.Height, held.Item.ChargeFraction, held.From, held.Item.Contents?.Items.Count ?? -1)
     {
         WornOnlyBy = held.Item.WornOnlyBy, WornNeverBy = held.Item.WornNeverBy, Colour = held.Item.ColourId, Rotated = held.Item.Rotated,
-        AttachSlot = held.Item.AttachSlot,
+        AttachSlot = held.Item.AttachSlot, ModTag = held.Item.ModTag,
     };
 
     /// <summary>

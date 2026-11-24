@@ -257,6 +257,7 @@ sealed class GroundItemPicks(PlayerInterface player)
     internal void AddItemLabels(List<UiControl> controls)
     {
         _itemLabels.Clear();
+        _labelNames.Clear();
         if (HighlightFocus is not { } focus || player.UiPainter is not { } painter || player.CharacterEditor.EditorOpen) return;
 
         float scale = player.UiScale;
@@ -267,7 +268,9 @@ sealed class GroundItemPicks(PlayerInterface player)
         var placed = new List<(int Id, UiRect Rect)>();
         foreach (var (g, _, at) in near)
         {
-            float width = MathF.Ceiling(LabelTextWidth(painter, LabelName(g))) + em;
+            string label = LabelName(g);
+            _labelNames.Add(label);
+            float width = MathF.Ceiling(LabelTextWidth(painter, label)) + em;
             var rect = new UiRect(at.X - width / 2, at.Y - 6 * scale - height, width, height);
             for (bool moved = true; moved;)
             {
@@ -288,6 +291,11 @@ sealed class GroundItemPicks(PlayerInterface player)
         _itemLabels.AddRange(placed);
         AddLabelControls(controls, near, placed);
     }
+
+    /// <summary>
+    /// The names the labels show, in the order of the items labelled this frame (<see cref="AddItemLabels"/>), kept so each is resolved once.
+    /// </summary>
+    readonly List<string> _labelNames = [];
 
     /// <summary>
     /// The name a ground item's label shows: the mods' item names (<see cref="PlayerInterface.ShownItemName"/>), else the item's.
@@ -361,7 +369,7 @@ sealed class GroundItemPicks(PlayerInterface player)
                 ["TextAlign"] = "Center",
                 ["TextColour"] = text,
             };
-            controls.Add(new($"itemlabel-text-{i}", "TextBox", rect, LabelName(near[i].Item), "", "", true, font, Vector4.Zero, Pickable: false,
+            controls.Add(new($"itemlabel-text-{i}", "TextBox", rect, _labelNames[i], "", "", true, font, Vector4.Zero, Pickable: false,
                 TextScale: ItemLabelTextScale));
         }
     }

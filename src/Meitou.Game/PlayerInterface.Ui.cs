@@ -285,8 +285,7 @@ sealed partial class PlayerInterface
     /// The name shown for an item of <paramref name="record"/> named <paramref name="name"/> (<see cref="UiHost.ItemName"/>): the extensions'
     /// item names, else <paramref name="name"/>.
     /// </summary>
-    internal string ShownItemName(string record, string name, string modTag) =>
-        _uiHost.ItemNameSources.Any ? _uiHost.ItemName(record, name, modTag) : name;
+    internal string ShownItemName(string record, string name, string modTag) => _uiHost.ItemName(record, name, modTag);
 
     /// <summary>
     /// The lines the interface extensions add to an item's tooltip (<see cref="UiHost.ItemTooltipLines"/>); none without an extension that adds any.
