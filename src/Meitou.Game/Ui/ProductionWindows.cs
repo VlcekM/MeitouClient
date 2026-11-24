@@ -21,7 +21,7 @@ namespace Meitou.Game.Ui;
 /// (<see cref="PutInMachine"/>, <see cref="TakeFromMachine"/>).</item>
 /// <item>The site menu has Operate for a machine characters work; a quick right click on one gives it.</item>
 /// <item>The overview's research tab: TYPES lists the categories, BLUEPRINTS the research of the selected category that can be queued (a click queues
-/// it), QUEUE the queue (a click takes one off), DESCRIPTION the hovered or last clicked research. The original's row widgets and colours are
+/// it), QUEUE the queue (click to remove, drag to reorder), DESCRIPTION the hovered or last clicked research. The original's row widgets and colours are
 /// <b>Unknown</b>; Meitou draws plain text rows.</item>
 /// </list>
 /// </summary>
@@ -73,11 +73,6 @@ sealed class ProductionWindows(PlayerInterface player)
     /// A standalone position to restore after the character inventory closes, including a position dragged by the player.
     /// </summary>
     Vector2? _standaloneMachineOffset;
-
-    /// <summary>
-    /// The research tab's selected category, and the blueprint whose description shows.
-    /// </summary>
-    internal string? ResearchCategory, ResearchFocus;
 
     /// <summary>
     /// The machine at site <paramref name="site"/> in the snapshot; null for none.
@@ -1329,7 +1324,107 @@ sealed class ProductionWindows(PlayerInterface player)
         return pw.Kind == PowerKind.Generator && !pw.Fueled ? ("Out of fuel", true) : null;
     }
 
-    // ---- the overview's research tab (docs/game/ui-screens.md "Research tab") ----
+    #region Research tab
+
+    /// <summary>
+    /// The queue row action followed by the research id.
+    /// </summary>
+    const string ResearchCancelAction = "research-cancel:";
+
+    /// <summary>
+    /// A pressed queue entry, its starting point and whether it has crossed the drag threshold.
+    /// </summary>
+    (string Id, Vector2 Start, bool Dragging)? _researchPress;
+
+    /// <summary>
+    /// The research tab's selected category, and the blueprint whose description shows.
+    /// </summary>
+    internal string? ResearchCategory, ResearchFocus;
+
+    /// <summary>
+    /// The description's caption for each <see cref="Meitou.Data.Gameplay.Construction.ResearchData.UnlockFields"/> field (<c>FUN_140495e00</c>).
+    /// </summary>
+    static readonly Dictionary<string, string> UnlockCaptions = new(StringComparer.Ordinal)
+    {
+        ["enable buildings"] = "New Building:",
+        ["enable weapon type"] = "New Weapon Class:",
+        ["enable weapon model"] = "New Weapons Grade:",
+        ["enable armour"] = "New Armour Type:",
+        ["enable item"] = "New Items:",
+        ["enable crossbow"] = "New Crossbows:",
+        ["enable backpack"] = "New Backpacks:",
+        ["enable robotics"] = "New Robot Limbs:",
+    };
+
+    /// <summary>
+    /// How far the blueprint rows are scrolled, their pitch and the panel they scroll in (the DatapanelGUI's own ScrollView in the original).
+    /// </summary>
+    float _researchScroll, _researchStep;
+
+    /// <summary>
+    /// The panel the blueprint rows scroll in.
+    /// </summary>
+    UiRect _researchArea;
+
+    /// <summary>
+    /// Whether a queue row owns the pointer until release.
+    /// </summary>
+    internal bool ResearchCapturesPointer => _researchPress is not null;
+
+    /// <summary>
+    /// Takes a left press on a queued project so cancellation can wait until release.
+    /// </summary>
+    internal bool ResearchPointerDown(string screen, UiControl row, Vector2 p)
+    {
+        if (screen != OverviewScreen || QueuedResearchId(row) is not { } id) return false;
+
+        _researchPress = (id, p, false);
+        return true;
+    }
+
+    /// <summary>
+    /// Remembers that the pointer crossed the drag threshold, even if it returns to the pressed row.
+    /// </summary>
+    internal void ResearchPointerMove(Vector2 p)
+    {
+        if (_researchPress is { Dragging: false } press && Vector2.Distance(press.Start, p) >= PlayerInterface.DragThreshold)
+            _researchPress = (press.Id, press.Start, true);
+    }
+
+    /// <summary>
+    /// A click on the pressed project cancels it. A drag onto another project changes the queue order.
+    /// </summary>
+    internal void ResearchPointerUp(Vector2 p, bool cancelled)
+    {
+        ResearchPointerMove(p);
+        var pressed = _researchPress;
+        _researchPress = null;
+        if (cancelled || pressed is not { } press || !player.UiVisible) return;
+
+        player.ArrangeUi();
+        if (QueuedResearchAt(p) is not { } target) return;
+
+        long tick = player.Session.World.Tick;
+        if (press.Dragging && target != press.Id) player.Say(new MoveResearch(press.Id, target) { Tick = tick });
+        if (!press.Dragging && target == press.Id) player.Say(new CancelResearch(press.Id) { Tick = tick });
+    }
+
+    /// <summary>
+    /// The research id of the visible queue row under the pointer.
+    /// </summary>
+    string? QueuedResearchAt(Vector2 p)
+    {
+        var screens = player.FaithfulScreens;
+        if (!screens.IsOpen(OverviewScreen) || screens.GetTab(OverviewScreen, "TabsMain") != TutorialPanel.ResearchTab) return null;
+
+        return screens.HitTest(p) is { Screen: OverviewScreen, Control: { Enabled: true } row } ? QueuedResearchId(row) : null;
+    }
+
+    /// <summary>
+    /// The id carried by a queue row's cancel action.
+    /// </summary>
+    static string? QueuedResearchId(UiControl row) =>
+        row.Action.StartsWith(ResearchCancelAction, StringComparison.Ordinal) ? row.Action[ResearchCancelAction.Length..] : null;
 
     /// <summary>
     /// The overview's research tab bindings: the categories, the no-bench message and the title with the bench level and rate.
@@ -1371,8 +1466,8 @@ sealed class ProductionWindows(PlayerInterface player)
             ResearchFocus = e.Action[15..];
             player.Say(new QueueResearch(ResearchFocus) { Tick = player.Session.World.Tick });
         }
-        else if (e.Action.StartsWith("research-cancel:", StringComparison.Ordinal))
-            player.Say(new CancelResearch(e.Action[16..]) { Tick = player.Session.World.Tick });
+        else if (e.Action.StartsWith(ResearchCancelAction, StringComparison.Ordinal))
+            player.Say(new CancelResearch(e.Action[ResearchCancelAction.Length..]) { Tick = player.Session.World.Tick });
     }
 
     /// <summary>
@@ -1387,21 +1482,6 @@ sealed class ProductionWindows(PlayerInterface player)
         string text = (left < 1 ? "<" : "") + Loc.Tr(whole == 1 ? "{1,num} hr" : "{1,num} hrs", whole);
         return rateNote && rate == 0 ? text + " " + Loc.Tr("(at 1x rate)") : text;
     }
-
-    /// <summary>
-    /// The description's caption for each <see cref="Meitou.Data.Gameplay.Construction.ResearchData.UnlockFields"/> field (<c>FUN_140495e00</c>).
-    /// </summary>
-    static readonly Dictionary<string, string> UnlockCaptions = new(StringComparer.Ordinal)
-    {
-        ["enable buildings"] = "New Building:",
-        ["enable weapon type"] = "New Weapon Class:",
-        ["enable weapon model"] = "New Weapons Grade:",
-        ["enable armour"] = "New Armour Type:",
-        ["enable item"] = "New Items:",
-        ["enable crossbow"] = "New Crossbows:",
-        ["enable backpack"] = "New Backpacks:",
-        ["enable robotics"] = "New Robot Limbs:",
-    };
 
     /// <summary>
     /// The blueprint rows (<c>DataPanelLine_Research</c>, <c>FUN_1406f9220</c>): a <c>Kenshi_Button1</c> frame across 98 % of the panel, the name
@@ -1462,7 +1542,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 if (top + line <= view.Y || top >= view.Y + view.Height) continue;   // out of the box: not drawn
                 var (qid, name, progress) = research.Queue[i];
                 controls.Add(new($"research-queue-{i}", "Button", new(view.X + 6, top, view.Width - 12, line),
-                    $"{name}  {(int)(progress * 100)}%", "research-cancel:" + qid, "", true, face, Vector4.Zero,
+                    $"{name}  {(int)(progress * 100)}%", ResearchCancelAction + qid, "", true, face, Vector4.Zero,
                     TextColour: i == 0 ? new(0.66f, 0.72f, 0.45f, 1) : ink, HoverColour: new(1, 0.4f, 0.3f, 1), Pickable: true, Clip: view));
             }
         }
@@ -1495,16 +1575,6 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     bool IsHoveredResearchRow(UiControl c) => c.Name.StartsWith("research-row-", StringComparison.Ordinal) && c.Action.Length > 0
         && c.Bounds.Contains(player.Mouse.X, player.Mouse.Y) && c.Clip?.Contains(player.Mouse.X, player.Mouse.Y) != false;
-
-    /// <summary>
-    /// How far the blueprint rows are scrolled, their pitch and the panel they scroll in (the DatapanelGUI's own ScrollView in the original).
-    /// </summary>
-    float _researchScroll, _researchStep;
-
-    /// <summary>
-    /// The panel the blueprint rows scroll in.
-    /// </summary>
-    UiRect _researchArea;
 
     /// <summary>
     /// The wheel over the blueprint rows scrolls them a row per notch; clamped when the rows are laid out.
@@ -1574,6 +1644,8 @@ sealed class ProductionWindows(PlayerInterface player)
 
         return lines;
     }
+
+    #endregion
 
     // The overview's Craft tab (docs/game/ui-screens.md "Selected building", docs/game/buildings-production.md "Crafting"): STATIONS lists the
     // player's crafting benches, ITEMS what the selected one can craft (a click queues one; locked or too advanced rows are red and do nothing),

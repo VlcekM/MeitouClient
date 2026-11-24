@@ -501,10 +501,15 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     #region Pointer and keys
 
     /// <summary>
-    /// A press at <paramref name="p"/>: raises the window and presses its widget, chrome, edit box (placing the caret) or button, else starts a drag;
-    /// false outside every screen.
+    /// Presses the screen at <paramref name="p"/>. False outside every screen.
     /// </summary>
-    public bool PointerDown(Vector2 p)
+    public bool PointerDown(Vector2 p) => PointerDown(p, null);
+
+    /// <summary>
+    /// A press at <paramref name="p"/>: raises the window and presses its widget, chrome, edit box (placing the caret) or button, else starts a drag;
+    /// false outside every screen. <paramref name="beginButtonDrag"/> can take a button press and handle its release.
+    /// </summary>
+    internal bool PointerDown(Vector2 p, Func<string, UiControl, Vector2, bool>? beginButtonDrag)
     {
         _keyButton = null;
         if (Pick(p) is not { } picked)
@@ -538,7 +543,7 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         _edit = null;
         if (c.Type == "Button")
         {
-            Activated?.Invoke(new(id, c.Name, c.Action));
+            if (beginButtonDrag?.Invoke(id, c, p) != true) Activated?.Invoke(new(id, c.Name, c.Action));
             return true;
         }
 

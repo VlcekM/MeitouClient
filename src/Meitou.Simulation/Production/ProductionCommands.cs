@@ -87,6 +87,11 @@ public sealed record QueueResearch(string Research) : SimCommand;
 public sealed record CancelResearch(string Research) : SimCommand;
 
 /// <summary>
+/// Moves a queued research to the position of another queued research.
+/// </summary>
+public sealed record MoveResearch(string Research, string Target) : SimCommand;
+
+/// <summary>
 /// Queues a craft at a crafting bench: an option's key (<see cref="Meitou.Data.Gameplay.Construction.CraftOption.Key"/>), <paramref name="Count"/>
 /// times.
 /// </summary>
