@@ -329,8 +329,7 @@ public sealed class ModSetting
         if (type == typeof(int) || type == typeof(float) || type == typeof(double)) return ModSettingKind.Slider;
         if (type.IsEnum || type == typeof(string) && about.Options.Length > 0) return ModSettingKind.List;
         if (type == typeof(string)) return ModSettingKind.Text;
-        throw new ArgumentException(
-            $"Setting '{property.Name}': a {type.Name} can't be a setting (bool, int, float, double, an enum, a string or an Action).");
+        throw new ArgumentException($"Setting '{property.Name}': a {type.Name} can't be a setting (bool, int, float, double, an enum, a string or an Action).");
     }
 
     /// <summary>
