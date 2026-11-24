@@ -1649,20 +1649,22 @@ sealed class BuildMode(PlayerInterface player)
 
     /// <summary>
     /// The rows of the code mods' job offers for a site (docs/modding.md "Mod jobs"), shown after its verbs (<see cref="ContextMenuWindow.Menu"/>):
-    /// on a finished building of the player's faction, each offer that names the building's record and is for one of the selected characters;
+    /// on a finished building, each offer that names the building's record, is for its owner (the player's faction unless the offer takes any,
+    /// <see cref="Simulation.Production.ModJobOffer.Owners"/>) and is for one of the selected characters;
     /// choosing it gives the selection that job there, Shift or not. The simulation tests the building and each character again as it applies
     /// the command (<see cref="Simulation.Production.AddJob"/>).
     /// </summary>
     internal List<(string Caption, Action Give)> OfferedJobs(BuildingSnapshot site)
     {
         var rows = new List<(string, Action)>();
-        if (!site.Complete || site.Owner != player.Session.World.Player.Faction) return rows;
+        if (!site.Complete) return rows;
 
+        int faction = player.Session.World.Player.Faction;
         var selected = player.Selected();
         var selection = player.SelectedIds();
         foreach (var offer in JobOffers())
         {
-            if (!offer.On(site.Record) || !selected.Any(c => offer.Takes(c.Animal))) continue;
+            if (!offer.On(site.Record) || !offer.OwnedBy(site.Owner, faction) || !selected.Any(c => offer.Takes(c.Animal))) continue;
 
             rows.Add((offer.Caption, () => GiveOffered(selection, offer, site)));
         }

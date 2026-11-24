@@ -942,7 +942,8 @@ holds refuses the second mod.
   under Meitou keys (`meitou mjob<k>`, [save](formats/save.md)), out of the original's `pjob` list, with its building id but not a character
   target; a load puts it back while the type is registered and drops it otherwise.
   `AddJobOffer(new ModJobOffer(type, buildings, caption, takers))` (engine API, not in the original; after the type's `AddJobType`, one offer per
-  type) lets the player give such a job: the menu of a finished building of the player's faction whose record is in `buildings` (the one with
+  type) lets the player give such a job: the menu of a finished building of the player's faction (any faction's with
+  `Owners = ModJobOwners.Any`; the mod decides what using another's costs) whose record is in `buildings` (the one with
   its Dismantle, [ui-input](game/ui-input.md#context-menu-verbs); a built bed's too, a cage's own rows not) ends with `caption`, translated as
   the game's rows, for a selection holding a character `takers` allows (`ModJobTakers.People`, `Animals` or both), an animals-only selection
   included. Choosing it, Shift or not, queues the game's `AddJob`, which tests the building again and gives each selected living player
@@ -950,9 +951,10 @@ holds refuses the second mod.
   mod checks the job's building as it checks that the job is listed; the same building changes nothing); the jobs switch turns on and the
   character plans again. Refused: a type the mod has not claimed, a second offer for a type, no building, a blank one or one that is no
   BUILDING of the loaded data, a caption that is blank, over 32 characters, holds a control character or is the label of one of the game's
-  verbs, takers that are none or other than people and animals. **Observed** (2026-11-22, scratch world with a headless interface): an
-  animals-only selection is shown the row and takes the job, a person selected with it does not for an animals offer, a second building moves
-  the job in its place between two game jobs, and another record's, another faction's or an unfinished building gives nothing.
+  verbs, takers that are none or other than people and animals, an `Owners` that is neither. **Observed** (2026-11-22, scratch world with a
+  headless interface): an animals-only selection is shown the row and takes the job, a person selected with it does not for an animals offer, a second building moves
+  the job in its place between two game jobs, and another record's, another faction's (for the default `Owners`) or an unfinished building
+  gives nothing.
 - **Item use:** `AddItemUse(record, handler)`, one mod per item record string id. A right click on such an item in a player character's own
   inventory window (or its bag), with no other character's window open and no trade, runs `handler(ItemUse)` (world, user, item, that
   character's inventory) in the player system's serial step, before the click would equip or move it (`ItemUses`, `src/Meitou.Simulation/Player`),

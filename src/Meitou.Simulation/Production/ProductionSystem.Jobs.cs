@@ -54,13 +54,13 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A code mod's offered job (docs/modding.md "Mod jobs"): when the site is a finished building of the player's faction and of one of the offer's
-    /// records, each living player character named that the offer is for takes the job there (<see cref="PermaJobs.GiveOffered"/>).
+    /// A code mod's offered job (docs/modding.md "Mod jobs"): when the site is a finished building of an owner the offer is for
+    /// (<see cref="ModJobOffer.OwnedBy"/>) and of one of the offer's records, each living player character named that the offer is for takes the job there (<see cref="PermaJobs.GiveOffered"/>).
     /// </summary>
     void GiveOffered(World world, AddJob add, ModJobOffer offer)
     {
         if (world.Buildings.Find(add.Site) is not { Complete: true } site) return;
-        if (site.Owner != world.Player.Faction || !offer.On(site.Record)) return;
+        if (!offer.OwnedBy(site.Owner, world.Player.Faction) || !offer.On(site.Record)) return;
 
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
