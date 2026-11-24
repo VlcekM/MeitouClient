@@ -374,7 +374,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
         if (prison.Locked)
         {
-            if (!down && !ownCage)
+            // Another faction's locked cage has Pick Lock whatever the state of its occupant (FUN_1407a6bc0's cage rows test only its lock and
+            // owner; a knocked-out prisoner's cage too, #1357).
+            if (!ownCage)
             {
                 verbs.Add((prison.LockLevel < 0 ? "Pick Lock" : PickLockCaption(target.Position, prison.LockLevel, false),
                     () => player.Say(new PickLockOrder(selection, id) { Tick = player.Session.World.Tick })));
