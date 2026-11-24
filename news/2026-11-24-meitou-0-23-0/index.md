@@ -34,7 +34,7 @@ We have fixed over 160 bugs since 0.22.1 and the last couple of days, a large am
 I believe that this is a huge indicator that we are going the right way. We have also added many optional fixes for vanilla bugs in Meitou.
 Huge thanks to @Jame for the incredible bug triage and fixing work.
 
-# Performance improvements 
+# Performance improvements
 
 I took a peek at some stuff we were doing inefficiently, and I managed to remove a very large amount of the stutters while travelling and when playing, including around halving the CPU frame time.
 I also added a few small options that should reduce the render quality just a bit, but improve performance by a lot on integrated graphics and laptops. My office laptop now reaches almost 60FPS in the hub.
