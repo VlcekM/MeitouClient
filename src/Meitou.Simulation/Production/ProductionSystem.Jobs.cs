@@ -877,10 +877,11 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// A carried item a "Hauling to" job takes to its storage: a loose stack (not the character's own kit), that the storage takes and has room for,
-    /// of a record its <c>limit inventory</c> lists (what <see cref="LooseFor"/> picks up) or that a player machine makes or crafts.
+    /// of a record its <c>limit inventory</c> lists (what <see cref="LooseFor"/> picks up), of the type of a storage that takes any of it
+    /// (<see cref="MachineData.HaulsAnyOfType"/>), or that a player machine makes or crafts.
     /// </summary>
     static bool Takes(World world, Machine store, Items.ItemInstance item) =>
-        Stores(store, item) && (store.Data.StorageLimit.Contains(item.Record)
+        Stores(store, item) && (store.Data.StorageLimit.Contains(item.Record) || store.Data.HaulsAnyOfType
             || world.Machines.All.Any(s => !s.Data.IsStorage && !IsTownWork(s.Site) && Makes(s, item.Record)));
 
     /// <summary>
@@ -890,12 +891,16 @@ public sealed partial class ProductionSystem
     /// loose one; docs/game/buildings-production.md "Hauling"): for each record of the storage's <c>limit inventory</c> it has room for, the
     /// nearest loose item of it (<see cref="LooseSource.Nearest"/> from <paramref name="at"/>), while a unit fits the hauler's main grid (row 92
     /// Collecting resource needs state 82, room for it). Engine choices: an item another faction owns is never picked up, so a hauler steals
-    /// nothing (the ownership test alone lets one in a player town take such an item, which marks it stolen); a storage with no
-    /// <c>limit inventory</c> wants nothing from the ground.
+    /// nothing (the ownership test alone lets one in a player town take such an item, which marks it stolen); a storage for one kind of gear
+    /// (<see cref="MachineData.HaulsAnyOfType"/>) takes the nearest loose item of its type; any other storage with no <c>limit inventory</c>
+    /// wants nothing from the ground.
     /// </summary>
     GroundItem? LooseFor(World world, CharacterCold cold, Vector3 at, Machine store)
     {
         if (store.Storage is not { } grid || cold.Inventory is not { } inv) return null;
+        if (store.Data.HaulsAnyOfType)
+            return LooseSource.Nearest(world, _towns, cold, at, g => Stores(store, g.Item) && Fits(inv, g.Item), ownOnly: true);
+
         foreach (string record in store.Data.StorageLimit)
         {
             if (_items.Create(record, 1) is not { } one || !store.Data.Accepts(record, one.Type) || !Fits(grid, one) || !Fits(inv, one)) continue;

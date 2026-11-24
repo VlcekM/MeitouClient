@@ -1404,8 +1404,9 @@ inputs in list order as the finder does, takes storages before producers and ski
   `StorageBuilding` slot `0x560` (`FUN_140299c30`) for the records it wants: its item entry (`+0x448`) while that has room, the entry's item list
   when it has one; with none, slot `0x568` (`FUN_14029bab0`). Per record it calls `FUN_14059d000`, whose first pass is the loose items within
   1200 of the character ([NPC town machines](#npc-town-machines)), then the buildings. Row 92 at a loose item is `Task_Pickup`. Meitou
-  (`ProductionSystem.LooseFor`): the records of the storage's `limit inventory` it and the hauler's main grid have room for; never an item another
-  faction owns (engine choice); then the player machines' outputs ([job lists](../simulation.md#job-lists)). The item taken is kept for the trip
+  (`ProductionSystem.LooseFor`): the records of the storage's `limit inventory` it and the hauler's main grid have room for; a storage for one kind of
+  gear (ARMOUR, WEAPON or CROSSBOW `itemtype limit`, no list: Armour Storage, weapon racks) takes the nearest loose item of its type, and carried
+  ones (`MachineData.HaulsAnyOfType`, engine choice); never an item another faction owns (engine choice); then the player machines' outputs ([job lists](../simulation.md#job-lists)). The item taken is kept for the trip
   (`CharacterCold.HaulItem`): while it still lies there the job is not blocked, wherever the walk to it leads (`FetchesLoose`, engine choice).
 - Meitou's operator hauling (Auto haul, an engine option): [simulation](../simulation.md) "Hauling".
 

@@ -23,18 +23,23 @@ internal static class LooseSource
     /// item another faction owns is skipped even where the ownership test would let the character take it (a player hauler's pick, so it steals
     /// nothing: <see cref="Production.ProductionSystem"/> "Hauling to").
     /// </summary>
-    public static GroundItem? Nearest(World world, PopulationData? data, CharacterCold cold, Vector3 at, string record, bool ownOnly = false)
-    {
-        var ground = world.GroundItems;
-        if (!ground.Holds(record)) return null;
+    public static GroundItem? Nearest(World world, PopulationData? data, CharacterCold cold, Vector3 at, string record, bool ownOnly = false) =>
+        world.GroundItems.Holds(record) ? Nearest(world, data, cold, at, g => g.Item.Record == record, ownOnly) : null;
 
-        var all = ground.All;
+    /// <summary>
+    /// <see cref="Nearest(World, PopulationData?, CharacterCold, Vector3, string, bool)"/> for the items <paramref name="wanted"/> answers yes
+    /// for (a pure test, asked before the distance) in place of one record.
+    /// </summary>
+    public static GroundItem? Nearest(World world, PopulationData? data, CharacterCold cold, Vector3 at, Func<GroundItem, bool> wanted,
+        bool ownOnly = false)
+    {
+        var all = world.GroundItems.All;
         GroundItem? loose = null;
         float best = Radius * Radius;
         for (int k = 0; k < all.Count; k++)
         {
             var g = all[k];
-            if (g.Item.Record != record || g.Item.Quantity <= 0 || g.Item.Contents is not null) continue;
+            if (g.Item.Quantity <= 0 || g.Item.Contents is not null || !wanted(g)) continue;
             if (ownOnly && g.OwnedBy >= 0 && g.OwnedBy != cold.Faction) continue;
 
             float d = Vector3.DistanceSquared(g.Position, at);

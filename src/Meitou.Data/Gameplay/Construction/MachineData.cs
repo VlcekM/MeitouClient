@@ -181,6 +181,13 @@ public sealed record MachineData
     public bool Accepts(string item, FcsRecordType type) => type == ItemTypeLimit && (StorageLimit.Count == 0 || StorageLimit.Contains(item));
 
     /// <summary>
+    /// Whether a "Hauling to" job fills the storage with any item of its <see cref="ItemTypeLimit"/>: a storage for one kind of gear (ARMOUR,
+    /// WEAPON, CROSSBOW) with no <see cref="StorageLimit"/>, such as the Armour Storage. Engine choice (Meitou): a hauler brings it the loose and
+    /// carried gear of that type, where a storage with no list otherwise wants nothing from the ground.
+    /// </summary>
+    public bool HaulsAnyOfType => StorageLimit.Count == 0 && ItemTypeLimit != FcsRecordType.Item;
+
+    /// <summary>
     /// Whether the player may put an item of this record and type into the storage by hand (docs/game/buildings-production.md "Storage"): a listed
     /// item when there is a <see cref="StorageLimit"/>, else a weapon in a WEAPON-limited storage and anything in any other.
     /// </summary>
