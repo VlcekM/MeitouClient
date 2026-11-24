@@ -246,6 +246,11 @@ public sealed class ModHost
     internal ModTrails Trails => _registry.Trails;
 
     /// <summary>
+    /// The mods' active playback audio modulations (docs/modding.md "Audio modulation"), attached to <see cref="Game.Audio.WwisePlayer"/>.
+    /// </summary>
+    internal ModAudioModulations AudioModulations => _registry.AudioModulations;
+
+    /// <summary>
     /// A mod registered a projectile feed: the host then compares the shown snapshots' bolts every frame.
     /// </summary>
     public bool WantsProjectiles => _registry.ProjectileFeeds.Count > 0;
@@ -810,6 +815,7 @@ public sealed class ModHost
             _registry.Effects.Drop(context.Id);
             _registry.Glows.Drop(context.Id);
             _registry.Trails.Drop(context.Id);
+            _registry.AudioModulations.Drop(context.Id);
             TellDependenciesItFailed(mod);
             throw;
         }

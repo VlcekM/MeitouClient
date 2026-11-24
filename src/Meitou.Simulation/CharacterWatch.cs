@@ -30,6 +30,7 @@ sealed class CharacterWatch(World world)
     {
         Bodies.DeathObservers.Report(world, slot, CharacterId.None, Bodies.DeathSite.Other);
         Bodies.HealthObservers.Leaving(world, slot, cold);
+        CharacterStateObservers.Leaving(world, slot, cold);
         cold.Stats?.UnbindExperience();
     }
 }

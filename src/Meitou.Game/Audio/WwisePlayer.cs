@@ -292,6 +292,10 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     readonly List<SoundInstance> _sounds = [];
     /// <summary>
+    /// Active code-mod playback modulation snapshot, swapped atomically from host threads and read lock-free on the audio thread.
+    /// </summary>
+    volatile Modding.AudioModulationSnapshot? _modAudio;
+    /// <summary>
     /// The length of <see cref="_pending"/> from which a new wait first drops the expired ones.
     /// </summary>
     const int PendingPruneAt = 64;
@@ -368,6 +372,11 @@ public sealed partial class WwisePlayer : IDisposable
     /// The sounds the cap left silent in the last block.
     /// </summary>
     public int Silenced { get; private set; }
+
+    /// <summary>
+    /// Publishes <paramref name="snapshot"/> for lock-free reads during <see cref="SoundInstance.Prepare"/>.
+    /// </summary>
+    internal void SetModAudio(Modding.AudioModulationSnapshot? snapshot) => _modAudio = snapshot;
 
     /// <summary>
     /// Called by the output: runs the queued commands, advances every instance and adds the voices to <paramref name="mix"/>.
@@ -1261,6 +1270,17 @@ public sealed partial class WwisePlayer : IDisposable
             (this._dry, this._send) = (dry, send);
             _lowPassCoefficient = LowPassCoefficient(lowPass);
             _rate = (double)_voice.Clip.SampleRate / _player._outputRate * Math.Pow(2, cents / 1200.0);
+            if (_player._modAudio is { } modAudio)
+            {
+                var mod = IsMusic
+                    ? modAudio.Music
+                    : GameObject == AudioSystem.GuiObject
+                        ? modAudio.Ui
+                        : modAudio.World;
+                _rate *= mod.Rate;
+                _lowPassCoefficient = MathF.Min(_lowPassCoefficient, mod.LowPass);
+                _level *= mod.Gain;
+            }
             return _level * Math.Max(dry, _sends.Length > 0 ? send : 0);
         }
 
