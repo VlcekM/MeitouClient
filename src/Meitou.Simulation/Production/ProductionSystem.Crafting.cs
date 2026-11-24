@@ -332,7 +332,45 @@ public sealed partial class ProductionSystem
         var recipe = RecipeOf(m, option);
         var inputs = recipe.Inputs.Select(i => (ShownItemName(i.Item), i.PerItem)).ToArray();
         bool can = CanCraft(world, bench, option);
-        return new CraftOptionView(option.Key, recipe.ShownName(_db), option.Kind, option.Level, recipe.Hours, inputs, can);
+        var view = new CraftOptionView(option.Key, recipe.ShownName(_db), option.Kind, option.Level, recipe.Hours, inputs, can)
+        {
+            Product = Product(option) is { } made ? InventoryItemView.Of(0, made) : null,
+        };
+
+        return option.Kind switch
+        {
+            CraftKind.Armour => ArmourCosts(view, option),
+            CraftKind.Weapon => view with { MaterialCost = _items.Db.Find(option.Item)?.GetInt("material cost", 4) ?? 4 },
+            _ => view,
+        };
+    }
+
+    /// <summary>
+    /// The item a hovered ITEMS row describes (<b>Verified</b>, <c>FUN_1402b79b0</c>): the item factory's item of the option's record, armour at the
+    /// quality <c>FUN_14082e6b0</c> gives level 40 with no critical, the other kinds at 0, a weapon of the option's model from the player's
+    /// manufacturer.
+    /// </summary>
+    ItemInstance? Product(CraftOption option)
+    {
+        float quality = option.Kind == CraftKind.Armour ? CraftBench.ArmourQuality(40, false) : 0;
+        var made = _items.Create(option.Item, 1, quality);
+        if (made is null || option.Kind != CraftKind.Weapon) return made;
+
+        made.Level = option.Level;
+        made.MaterialId = option.Model ?? "";
+        made.CompanyId = CraftBench.PlayerWeapons;
+        return made;
+    }
+
+    /// <summary>
+    /// An armour row's costs (<b>Verified</b>, <c>FUN_1402b79b0</c> and <c>FUN_1402b7800</c>): <c>total coverage</c> x 0.01, and that x the
+    /// record's <c>fabrics amount</c>.
+    /// </summary>
+    CraftOptionView ArmourCosts(CraftOptionView view, CraftOption option)
+    {
+        var record = _items.Db.Find(option.Item);
+        float materials = CraftBench.TotalCoverage(record) * 0.01f;
+        return view with { MaterialCost = materials, FabricsCost = materials * (record?.GetFloat("fabrics amount", 0.2f) ?? 0.2f) };
     }
 
     /// <summary>

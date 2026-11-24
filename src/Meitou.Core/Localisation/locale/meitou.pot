@@ -5821,10 +5821,6 @@ msgstr ""
 msgid "Time speed"
 msgstr ""
 
-#: src/Meitou.Game/Ui/ProductionWindows.cs
-msgid "Time:"
-msgstr ""
-
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Tint"
 msgstr ""
