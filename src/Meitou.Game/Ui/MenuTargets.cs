@@ -38,6 +38,12 @@ public enum UiMenuTargetKind
     /// The ground: a point with nothing else under the cursor, which a quick click orders a move to.
     /// </summary>
     WorldPoint,
+
+    /// <summary>
+    /// A piece of furniture that is no player-built site: a town's or camp's cage (<see cref="UiMenuTarget.Id"/> is its fixture id,
+    /// <see cref="UiMenuTarget.Record"/> its BUILDING). More furniture menus may follow.
+    /// </summary>
+    Furniture,
 }
 
 /// <summary>
@@ -57,12 +63,12 @@ public sealed record UiMenuTarget(UiMenuTargetKind Kind, string Name, Vector3 Po
     public GroundItemSnapshot? GroundItem { get; init; }
 
     /// <summary>
-    /// The container's, door's or building's id, as commands name it; null for the other kinds.
+    /// The container's, door's, building's or furniture's id, as commands name it; null for the other kinds.
     /// </summary>
     public string? Id { get; init; }
 
     /// <summary>
-    /// The container's or building's record string id; null when unknown or for the other kinds.
+    /// The container's, building's or furniture's record string id; null when unknown or for the other kinds.
     /// </summary>
     public string? Record { get; init; }
 
