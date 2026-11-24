@@ -19,6 +19,12 @@ public sealed record LoadoutItem(GameRecord Record)
     /// The COLOR_DATA the instance carries (its <c>color sid</c>, <see cref="Gameplay.ItemColours"/>); null: none yet, the wearer's scheme applies.
     /// </summary>
     public GameRecord? Colour { get; init; }
+
+    /// <summary>
+    /// The inventory section it is worn in; null: the one its <c>slot</c> maps to (a code mod's clothing roll names its slot's,
+    /// <see cref="ClothingRolls"/>).
+    /// </summary>
+    public string? Section { get; init; }
 }
 
 /// <summary>

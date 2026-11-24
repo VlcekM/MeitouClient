@@ -423,7 +423,13 @@ public static class SavedKit
             GameRecord? Find(string id) => id.Length > 0 ? db.Find(id) : null;
 
             if (record.Type == FcsRecordType.Armour && (Worn.Contains(s.Section) || ModSlots.Of(s.Section) is not null))
-                loadout.Clothing.Add(new LoadoutItem(record) { Quality = (int)s.Quality, Material = Find(s.MaterialId), Colour = Find(s.ColourId) });
+            {
+                loadout.Clothing.Add(new LoadoutItem(record)
+                {
+                    Quality = (int)s.Quality, Material = Find(s.MaterialId), Colour = Find(s.ColourId),
+                    Section = ModSlots.Of(s.Section) is not null ? s.Section : null,
+                });
+            }
             else if (s.Section == "backpack_attach")
                 loadout.Backpack = new LoadoutItem(record) { Quality = (int)s.Quality, Colour = Find(s.ColourId) };
             else if ((s.Section == "belt" || ModSlots.Of(s.Section) is not null) && record.Type == FcsRecordType.Item)
