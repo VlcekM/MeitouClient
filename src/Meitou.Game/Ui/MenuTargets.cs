@@ -137,9 +137,11 @@ sealed class MenuTargetVerbs
 
     /// <summary>
     /// The rows for <paramref name="context"/>, in registration order (a copy of the sources is walked), each row's action guarded by
-    /// <paramref name="guard"/>. A source that throws, or gives a row without a caption or action, is reported once and dropped.
+    /// <paramref name="guard"/>, its caption shown through <paramref name="text"/> (the owner's translation; null: as written). A source that throws,
+    /// or gives a row without a caption or action, is reported once and dropped.
     /// </summary>
-    public IReadOnlyList<UiMenuVerb> For(UiMenuTargetContext context, Func<string, UiMenuVerb, Action> guard, Action<UiDiagnostic>? report)
+    public IReadOnlyList<UiMenuVerb> For(UiMenuTargetContext context, Func<string, UiMenuVerb, Action> guard, Action<UiDiagnostic>? report,
+        Func<string, string, string>? text = null)
     {
         var rows = new List<UiMenuVerb>();
         foreach (var entry in _sources.ToArray())
@@ -150,7 +152,8 @@ sealed class MenuTargetVerbs
                 if (added.Any(v => v is null || string.IsNullOrWhiteSpace(v.Caption) || v.Choose is null))
                     throw new InvalidOperationException("A menu row needs a caption and an action.");
 
-                rows.AddRange(added.Select(v => v with { Choose = guard(entry.Owner, v) }));
+                string Shown(string caption) => text?.Invoke(entry.Owner, caption) ?? caption;
+                rows.AddRange(added.Select(v => v with { Caption = Shown(v.Caption), Choose = guard(entry.Owner, v) }));
             }
             catch (Exception e)
             {

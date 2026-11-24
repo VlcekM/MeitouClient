@@ -89,3 +89,13 @@ Addresses are `kenshi_x64.exe` (1.0.68).
 - **Fonts, tips, names**: through the overlay folder (`OgreScriptResources.ForInstall`) and `Loc.FindTextFile`.
 - **New-game option help**: `NewGameHelpCatalog` reads the installed English `main.pot` source references and passes the exact msgid through `Loc.Tr`; no paraphrases or translated paragraphs are embedded. Missing translations fall back to the original English; a missing template leaves help empty. Font resources use the active locale overlay.
 - All text files are read and written as UTF-8, except `settings.cfg`: without a byte order mark it is edited as Latin-1, so its bytes are kept.
+
+## Code mods' catalogues
+
+- **Observed** (installed KenshiLib plugin mods BetterLooting, BuildingSearchBar, JobManagement, MapMarkers, SquadAutonomy, read with a
+  scratch `.mo` dump): each ships its own gettext domain as `<mod>/locale/<code>/LC_MESSAGES/<domain>.mo` (some with the `.po` beside it),
+  e.g. `better_looting`, `search_bar`, `kenshi_job_management`, `map_markers`, `SquadAutonomy`. Msgids are the English texts; an `en_GB`
+  catalogue may reword them (MapMarkers), folder case varies (SquadAutonomy's `de_De`), and a `.mo` may hold less than its `.po`
+  (BuildingSearchBar de_DE: the `.mo` has only "SEARCH", the `.po` also "Search").
+- **Unknown**: how those plugins choose the catalogue's language (the plugin library's lookup was not read). Meitou's reader
+  (`ModTranslations`, [modding](../modding.md) "Translations") takes the game's code ignoring case, else the same language part.

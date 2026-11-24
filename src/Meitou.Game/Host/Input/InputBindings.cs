@@ -563,6 +563,7 @@ public sealed class InputBindings
     {
         if (actions.Count == 0) return [];
 
+        foreach (var action in actions) action.Bindings = this;
         _mod = new ModKeyBindings(actions);
         return _mod.Start(this, saved);
     }
@@ -622,6 +623,30 @@ public sealed class InputBindings
     /// Whether <paramref name="action"/> is one of the build map's (the game's <c>build_</c> actions, checked first in build mode).
     /// </summary>
     public static bool IsBuildMap(InputAction action) => action is >= InputAction.BuildRotateLeft and <= InputAction.BuildApply;
+
+    /// <summary>
+    /// The other actions of <paramref name="action"/>'s key map that have <paramref name="binding"/>: what binding it there takes the key from. Rotate
+    /// item shares its control with whatever acts elsewhere, so it neither takes nor loses one.
+    /// </summary>
+    public InputAction[] Holders(InputAction action, Binding binding)
+    {
+        if (action == InputAction.RotateItem) return [];
+
+        return [.. Actions
+            .Where(a => IsBuildMap(a) == IsBuildMap(action))
+            .Where(a => a != action && a != InputAction.RotateItem && Get(a).Contains(binding))];
+    }
+
+    /// <summary>
+    /// Takes <paramref name="binding"/> from the <see cref="Holders"/> of it for <paramref name="action"/>: the original's binding map holds one action
+    /// per key (docs/game/ui-input.md, Action table). Returns the actions it was taken from.
+    /// </summary>
+    public InputAction[] TakeFrom(InputAction action, Binding binding)
+    {
+        var holders = Holders(action, binding);
+        foreach (var other in holders) Set(other, [.. Get(other).Where(b => b != binding)]);
+        return holders;
+    }
 
     /// <summary>
     /// The engine's defaults (the game's keys where it has them, docs/game/ui-input.md, Meitou's otherwise).

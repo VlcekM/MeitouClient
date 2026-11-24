@@ -438,6 +438,16 @@ public sealed partial class UiHost
     internal MapInputs Map { get; } = new();
 
     /// <summary>
+    /// The extensions' interface key handlers (<see cref="UiRegistration.AddKeyInput"/>).
+    /// </summary>
+    internal KeyInputs KeyInput { get; } = new();
+
+    /// <summary>
+    /// The translations of each extension's code mod (<see cref="Register(IUiExtension, string?, Localisation.ModTranslations?)"/>), by extension id.
+    /// </summary>
+    readonly Dictionary<string, Localisation.ModTranslations> _texts = [];
+
+    /// <summary>
     /// The contributions: owner, slot, mode (null: every mode), order and factory.
     /// </summary>
     readonly List<(string Owner, string Slot, UiMode? Mode, int Order, Func<UiFrameContext, UiNode> Factory)> _contributions = [];
@@ -488,7 +498,13 @@ public sealed partial class UiHost
     /// Registers <paramref name="extension"/> as <see cref="Register(IUiExtension)"/> does, with the folder of the code mod it belongs to (null:
     /// none), under which its map marker images lie.
     /// </summary>
-    public IDisposable Register(IUiExtension extension, string? folder)
+    public IDisposable Register(IUiExtension extension, string? folder) => Register(extension, folder, null);
+
+    /// <summary>
+    /// Registers <paramref name="extension"/> as <see cref="Register(IUiExtension, string?)"/> does, with its code mod's translations (null: none),
+    /// through which its node texts, menu rows, squad AI options and building panel buttons are shown (docs/modding.md "Translations").
+    /// </summary>
+    public IDisposable Register(IUiExtension extension, string? folder, Localisation.ModTranslations? texts)
     {
         ArgumentNullException.ThrowIfNull(extension);
 
@@ -498,6 +514,7 @@ public sealed partial class UiHost
             throw new NotSupportedException($"UI extension {id} requires API {extension.ApiVersion}; host provides {ApiVersion}.");
         if (!_extensions.Add(id)) throw new InvalidOperationException($"UI extension already registered: {id}");
         if (folder is not null) _markerImages.SetFolder(id, folder);
+        if (texts is not null) _texts[id] = texts;
 
         var scope = new UiRegistration(this, id, folder);
         try
@@ -610,6 +627,8 @@ public sealed partial class UiHost
         Replies.Remove(owner);
         TargetVerbs.Remove(owner);
         Map.Remove(owner);
+        KeyInput.Remove(owner);
+        _texts.Remove(owner);
         foreach (string id in _styles.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _styles.Remove(id);
         foreach (string id in _controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _controls.Remove(id);
         foreach (string id in _actions.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _actions.Remove(id);
@@ -648,7 +667,7 @@ public sealed partial class UiHost
                 if (added.Any(v => v is null || string.IsNullOrWhiteSpace(v.Caption) || v.Choose is null))
                     throw new InvalidOperationException("A menu row needs a caption and an action.");
 
-                rows.AddRange(added.Select(v => v with { Choose = Guarded(entry.Owner, v) }));
+                rows.AddRange(added.Select(v => v with { Caption = ModText(entry.Owner, v.Caption), Choose = Guarded(entry.Owner, v) }));
             }
             catch (Exception e)
             {
@@ -669,7 +688,7 @@ public sealed partial class UiHost
     /// The rows the extensions add to the right-click menu of <paramref name="context"/>'s target (<see cref="MenuTargetVerbs.For"/>), with the
     /// character rows' rules: a failing source reported once and dropped, a row's action that throws reported each time.
     /// </summary>
-    public IReadOnlyList<UiMenuVerb> MenuVerbs(UiMenuTargetContext context) => TargetVerbs.For(context, Guarded, Diagnostic);
+    public IReadOnlyList<UiMenuVerb> MenuVerbs(UiMenuTargetContext context) => TargetVerbs.For(context, Guarded, Diagnostic, ModText);
 
     /// <summary>
     /// Whether any extension handles world map input (<see cref="MapInput"/>).
@@ -680,6 +699,26 @@ public sealed partial class UiHost
     /// Hands a world map input to the extensions (<see cref="MapInputs.Handle"/>); true when one took it.
     /// </summary>
     public bool MapInput(UiMapInput input) => Map.Handle(input, Diagnostic);
+
+    /// <summary>
+    /// Whether any extension handles interface keys (<see cref="KeyInputTaken"/>).
+    /// </summary>
+    public bool HasKeyInput => KeyInput.Any;
+
+    /// <summary>
+    /// Hands a key going down to the extensions (<see cref="KeyInputs.Handle"/>); true when one took it.
+    /// </summary>
+    public bool KeyInputTaken(UiKeyInput input) => KeyInput.Handle(input, Diagnostic);
+
+    /// <summary>
+    /// A text extension <paramref name="owner"/> shows (a node's, a menu row's, an option's): in its code mod's translation, else as written.
+    /// </summary>
+    internal string ModText(string owner, string text) => _texts.TryGetValue(owner, out var texts) ? texts.Text(text) : text;
+
+    /// <summary>
+    /// <see cref="ModText"/> of a text that may be null.
+    /// </summary>
+    string? ModTextOrNull(string owner, string? text) => text is null ? null : ModText(owner, text);
 
     /// <summary>
     /// A menu row's action that reports a throw as a <see cref="Diagnostic"/> instead of passing it on to the input, and does nothing once its
@@ -821,7 +860,8 @@ public sealed partial class UiHost
 
                 options.AddRange(added.Select(o => o with
                 {
-                    Tooltip = o.Tooltip ?? "",
+                    Caption = ModText(entry.Owner, o.Caption),
+                    Tooltip = ModText(entry.Owner, o.Tooltip ?? ""),
                     Press = GuardedPress(entry.Owner, $"squad AI option {o.Caption}", o.Press),
                 }));
             }
@@ -856,7 +896,12 @@ public sealed partial class UiHost
                 if (added.Any(a => a is null || string.IsNullOrWhiteSpace(a.Caption) || a.Press is null))
                     throw new InvalidOperationException("A building panel button needs a caption and a press.");
 
-                actions.AddRange(added.Select(a => a with { Press = GuardedPress(entry.Owner, $"building panel button {a.Caption}", a.Press) }));
+                actions.AddRange(added.Select(a => a with
+                {
+                    Caption = ModText(entry.Owner, a.Caption),
+                    Tooltip = ModTextOrNull(entry.Owner, a.Tooltip),
+                    Press = GuardedPress(entry.Owner, $"building panel button {a.Caption}", a.Press),
+                }));
             }
             catch (Exception e)
             {
@@ -1159,7 +1204,7 @@ public sealed partial class UiHost
         ValidateLooks(node);
         bool enabled = scope.Enabled && node.Enabled;
         float opacity = scope.Opacity * Math.Clamp(node.Opacity, 0, 1);
-        var control = Control(node, b, visible, enabled, opacity);
+        var control = Control(node, b, visible, enabled, opacity, into.Owner);
         result.Add(control);
         int index = into.Add(node, control, scope.Parent);
 
@@ -1207,9 +1252,10 @@ public sealed partial class UiHost
 
     /// <summary>
     /// <paramref name="node"/>'s control: its <paramref name="visible"/> part, or for an image the whole of <paramref name="bounds"/> clipped to
-    /// it (a picture is cut off, not squeezed); the node's own looks (<see cref="AddLooks"/>) over the style's.
+    /// it (a picture is cut off, not squeezed); the node's own looks (<see cref="AddLooks"/>) over the style's; its text (not a text box's) in the
+    /// translation of <paramref name="owner"/>'s mod.
     /// </summary>
-    UiControl Control(UiNode node, UiRect bounds, UiRect visible, bool enabled, float opacity)
+    UiControl Control(UiNode node, UiRect bounds, UiRect visible, bool enabled, float opacity, string owner)
     {
         var style = Style(node.Style);
         bool image = node.Kind == UiNodeKind.Image;
@@ -1227,7 +1273,8 @@ public sealed partial class UiHost
         AddLooks(node, opacity, properties);
 
         string skin = textBox && style.Skin.Length == 0 ? TextBoxSkin : style.Skin;
-        return new(node.Id, ControlType(node.Kind), image ? bounds : visible, node.Text, node.Action, skin, enabled, properties,
+        string text = textBox ? node.Text : ModText(owner, node.Text);
+        return new(node.Id, ControlType(node.Kind), image ? bounds : visible, text, node.Action, skin, enabled, properties,
             style.Background, node.TextColour ?? style.Text, style.Hover, style.Active, style.Disabled, node.Pickable, node.Argument,
             node.TextScale ?? style.TextScale, image ? visible : null);
     }
@@ -1604,6 +1651,18 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(input);
         _host.Map.Add(Id, input);
+    }
+
+    /// <summary>
+    /// Handles interface keys (docs/modding.md "Interface keys"): <paramref name="input"/> gets each key going down to the game's interface, Esc
+    /// included, before the interface and the game's bindings use it, on the host's thread; true takes it from them (no window closes, no hotkey,
+    /// no binding). It must not touch the world; it queues commands.
+    /// </summary>
+    public void AddKeyInput(Func<UiKeyInput, bool> input)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(input);
+        _host.KeyInput.Add(Id, input);
     }
 
     /// <summary>
