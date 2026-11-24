@@ -240,6 +240,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal StackSplitDialog StackSplitDialog => field ??= new(this);
 
+    /// <summary>
+    /// Meitou's rename dialog for a building the player built.
+    /// </summary>
+    internal Building.RenameBuildingDialog RenameBuildingDialog => field ??= new(this);
+
     #endregion
 
     #region View

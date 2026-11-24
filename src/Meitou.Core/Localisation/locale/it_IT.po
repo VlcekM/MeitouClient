@@ -5802,3 +5802,15 @@ msgstr "Preferito"
 #. machine-translated
 msgid "Important"
 msgstr "Importante"
+
+#. machine-translated
+msgid "Rename"
+msgstr "Rinomina"
+
+#. machine-translated
+msgid "Give the building a name of your own, shown on its panel, its inventory and the jobs that use it."
+msgstr "Dai all'edificio un nome tuo, mostrato nel suo pannello, nel suo inventario e nei lavori che lo usano."
+
+#. machine-translated
+msgid "Leave it empty for the building's own name."
+msgstr "Lascia vuoto per il nome originale dell'edificio."

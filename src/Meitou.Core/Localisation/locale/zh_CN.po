@@ -6632,3 +6632,15 @@ msgstr "优先"
 #. machine-translated
 msgid "Important"
 msgstr "重要"
+
+#. machine-translated
+msgid "Rename"
+msgstr "重命名"
+
+#. machine-translated
+msgid "Give the building a name of your own, shown on its panel, its inventory and the jobs that use it."
+msgstr "给建筑起一个自己的名字，显示在它的面板、库存以及使用它的工作中。"
+
+#. machine-translated
+msgid "Leave it empty for the building's own name."
+msgstr "留空则使用建筑原本的名字。"

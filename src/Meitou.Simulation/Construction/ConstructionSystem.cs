@@ -44,7 +44,7 @@ public sealed class ConstructionSettings
 /// <item><b>Sites</b> (<see cref="World.Buildings"/>): <see cref="PlaceBuildings"/> creates one per plan that passes the data half of the placement
 /// rules (a BUILDING, unlocked by research, not
 /// too close to another faction's town); the geometric half is the host's. <see cref="CancelSite"/> removes a site with nothing delivered,
-/// <see cref="PauseSite"/> sets its <c>pause</c> flag.</item>
+/// <see cref="PauseSite"/> sets its <c>pause</c> flag; <see cref="RenameSite"/> its custom name.</item>
 /// <item><b>Builders</b>: <see cref="BuildOrder"/> (orders 2 and 95) and <see cref="DismantleOrder"/> (96) set <see cref="CharacterTask.Build"/> /
 /// <see cref="CharacterTask.Dismantle"/> and
 /// <see cref="CharacterCold.BuildSite"/> (an unfinished site, or a damaged complete building to repair: <see cref="BuildSite.NeedsWork"/>);
@@ -519,6 +519,15 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 if (Root(reg, reg.Find(pause.Site)) is { } paused && paused.Paused != pause.Paused)
                 {
                     paused.Paused = pause.Paused;
+                    reg.Touch();
+                }
+
+                break;
+            case RenameSite rename:
+                if (reg.Find(rename.Site) is { LevelPlacement: null } named && named.Owner == world.Player.Faction
+                    && RenameSite.Clean(rename.Name) is var name && named.CustomName != name)
+                {
+                    named.CustomName = name;
                     reg.Touch();
                 }
 

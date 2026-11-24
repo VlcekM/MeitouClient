@@ -1398,6 +1398,45 @@ public class ProductionTests
         }
     }
 
+    /// <summary>
+    /// A custom name survives a save round-trip as <c>meitou custom name</c>; a building without one writes no key. Catches a name lost on reload,
+    /// or the key written into every saved building.
+    /// </summary>
+    [Fact]
+    public void A_buildings_custom_name_saves_and_reads_back()
+    {
+        const string playerFactionId = "204-gamedata.base";
+        var db = Database();
+        using var rig = new Rig(db, Constants, [Tank, Tank]);
+        rig.Add(0, StatsEnumerated.Labouring, Unit);
+        rig.World.RunTick();
+        rig.World.Buildings.Find(rig.Sites[0])!.CustomName = "Overstock";
+
+        var builder = new Meitou.Data.Save.SaveBuilder(1);
+        builder.AddFaction(playerFactionId, "Nameless", true, 1000, []);
+        builder.AddEmptyWorldState();
+        Meitou.Simulation.Saving.BuildingSave.Write(builder.Game, rig.World, playerFactionId, 5);
+        string dir = Path.Combine(Path.GetTempPath(), "meitou-name-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            builder.Game.Write(dir);
+            var save = Data.Save.SaveGame.Load(dir);
+            var states = Meitou.Simulation.Saving.HeldSave.BuildingStates(save);
+            bool Keyed(int site) => states.Values.Any(r => r.StringId.StartsWith(rig.Sites[site], StringComparison.Ordinal)
+                && r.Strings.ContainsKey(Meitou.Simulation.Saving.BuildingSave.CustomNameKey));
+            using var back = new Rig(db, Constants, []);
+            Meitou.Simulation.Saving.BuildingSave.Read(save, back.World, db, playerFactionId, PlayerFaction);
+
+            Assert.Equal("Overstock", back.World.Buildings.Find(rig.Sites[0])!.CustomName);
+            Assert.Null(back.World.Buildings.Find(rig.Sites[1])!.CustomName);
+            Assert.True(Keyed(0) && !Keyed(1));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
     // ------------------------------------------------------------------ job lists
 
     /// <summary>

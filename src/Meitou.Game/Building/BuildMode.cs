@@ -1533,17 +1533,25 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The name of a site's building, the game's text (the code mods' menu target and the test channel get it).
+    /// The name of a site's building, the game's text (the code mods' menu target and the test channel get it): the player's own name for it
+    /// when they gave one (RenameSite), else the record's.
     /// </summary>
     internal string SiteName(BuildingSnapshot site) =>
-        site.LevelPlacement is not null ? site.Name : Services?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
+        site.CustomName ?? (site.LevelPlacement is not null ? site.Name : RecordName(site));
+
+    /// <summary>
+    /// The build menu's name of the site's record; the record id without one.
+    /// </summary>
+    string RecordName(BuildingSnapshot site) => Services?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
 
     /// <summary>
     /// <see cref="SiteName"/> as shown, for the menu's title and the panels: a building's record name as the mods' text sources show it; a town
-    /// building's name as its record's when it is that, else as a name of its own (a place).
+    /// building's name as its record's when it is that, else as a name of its own (a place); the player's own name as typed.
     /// </summary>
     internal string ShownSiteName(BuildingSnapshot site) =>
-        site.LevelPlacement is not null ? player.ShownName("place", site.Record, site.Name) : ShownText.Record(site.Record, SiteName(site));
+        site.CustomName ?? (site.LevelPlacement is not null
+            ? player.ShownName("place", site.Record, site.Name)
+            : ShownText.Record(site.Record, SiteName(site)));
 
     /// <summary>
     /// Build category <paramref name="category"/> as the list shows it: the <c>building category</c> text of the first building of the catalog

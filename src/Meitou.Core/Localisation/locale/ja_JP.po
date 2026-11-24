@@ -5799,3 +5799,15 @@ msgstr "優先"
 #. machine-translated
 msgid "Important"
 msgstr "重要"
+
+#. machine-translated
+msgid "Rename"
+msgstr "名前を変更"
+
+#. machine-translated
+msgid "Give the building a name of your own, shown on its panel, its inventory and the jobs that use it."
+msgstr "建物に独自の名前を付けます。パネル、インベントリ、それを使う作業に表示されます。"
+
+#. machine-translated
+msgid "Leave it empty for the building's own name."
+msgstr "空にすると建物本来の名前に戻ります。"

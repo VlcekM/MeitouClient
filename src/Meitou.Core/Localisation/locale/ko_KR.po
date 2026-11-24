@@ -5799,3 +5799,15 @@ msgstr "선호"
 #. machine-translated
 msgid "Important"
 msgstr "중요"
+
+#. machine-translated
+msgid "Rename"
+msgstr "이름 바꾸기"
+
+#. machine-translated
+msgid "Give the building a name of your own, shown on its panel, its inventory and the jobs that use it."
+msgstr "건물에 직접 이름을 붙입니다. 패널, 인벤토리, 그 건물을 쓰는 작업에 표시됩니다."
+
+#. machine-translated
+msgid "Leave it empty for the building's own name."
+msgstr "비워 두면 건물의 원래 이름을 씁니다."

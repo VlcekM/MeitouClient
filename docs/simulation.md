@@ -1811,7 +1811,8 @@ Damage: melee blows on walls and doors (`CombatSystem.ApplyZoneBuildings`, the o
   (96), `ConfirmDismantle(Site)` (the selection panel's Dismantle: the player's site at once, its furniture destroyed, refused while a non-furniture building stands in it;
   [selected building](game/ui-screens.md#selected-building)), `CancelSite(Site)` (engine: only a site with nothing delivered), `PauseSite(Site, Paused)`, `UpgradeSite(Site)` / `DowngradeSite(Site)`
   ([upgrades](game/buildings-production.md#upgrades)), `SetBuildingPublic(Building, Public)` (a site's `Public`, else an owned town building's
-  flag in `World.Fixtures`). Sites are named by instance id.
+  flag in `World.Fixtures`), `RenameSite(Site, Name)` (engine: the player's own player-built site's `CustomName`, trimmed, control characters
+  dropped, at most 40 characters, blank clears it; hashed, on `BuildingSnapshot.CustomName`). Sites are named by instance id.
 - `.../ConstructionSnapshot.cs` + `WorldSnapshot`: `Buildings` (`BuildingSnapshot`: `Id`, `Record`, `Position` absolute,
   `Rotation`, `Floor`, `Parent`, `Owner` faction index, `Progress`/`Target` in material units, `Materials` (item,
   required, delivered), `Complete`, `Paused`, `Dismantling`, `Public`, `TownName`), `BuildingsRevision`, `UnlockedBuildings`.

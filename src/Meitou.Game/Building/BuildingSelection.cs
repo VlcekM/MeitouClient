@@ -444,7 +444,7 @@ sealed class BuildingSelection(PlayerInterface player)
 
         AddPublicLines(focus, site, detail, mine, playerSite, stats);
         if (playerSite && site is { Complete: true }) AddPriorityLines(focus, stats);
-        var header = HeaderLine(focus, detail, rock, mine, inspected);
+        var header = HeaderLine(focus, site, detail, rock, mine, inspected);
         return (header, [.. state], [.. stats], status, bad, [.. extended]);
     }
 
@@ -665,8 +665,8 @@ sealed class BuildingSelection(PlayerInterface player)
     /// The name bar: the building's (or bed's) name and its owner, the player's faction for the player's own building; a town machine's, its level
     /// building's (<see cref="WorldBuildingInfo.Owner"/>).
     /// </summary>
-    PlayerInterface.HudLine HeaderLine(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail, bool rock, bool mine,
-        Simulation.Production.RichnessView? inspected)
+    PlayerInterface.HudLine HeaderLine(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site, Simulation.Locks.BuildingDetail? detail,
+        bool rock, bool mine, Simulation.Production.RichnessView? inspected)
     {
         // A rock (slot 113): the player's faction once a player character has worked it, else its owner nofac's name ("No Faction"; its town
         // NO_TOWN is explored, not secret).
@@ -677,18 +677,25 @@ sealed class BuildingSelection(PlayerInterface player)
                 : player.RecordName?.Invoke(Simulation.Factions.SquadManagement.DismissFallbackFaction);
         }
 
-        var name = detail?.Bed?.Name ?? focus.Name;
+        // A site's name is read each frame, so a rename shows at once.
+        var name = detail?.Bed?.Name ?? (site is not null ? player.Build.ShownSiteName(site) : focus.Name);
         var value = mine ? player.ShownFactionName(player.Session.World.Player.Faction) ?? "" : owner ?? "";
         return new PlayerInterface.HudLine(name, value, PlayerInterface.TitleColour, PlayerInterface.TitleColour);
     }
 
     /// <summary>
-    /// The construction buttons of a player's site without a level placement: Dismantle, and while unfinished PAUSE CONSTRUCTION
+    /// The Rename button's tooltip.
+    /// </summary>
+    static string RenameTip => Loc.Tr("Give the building a name of your own, shown on its panel, its inventory and the jobs that use it.");
+
+    /// <summary>
+    /// The construction buttons of a player's site without a level placement: Dismantle, Rename (Meitou), and while unfinished PAUSE CONSTRUCTION
     /// (or its [PAUSED] caption).
     /// </summary>
     static void AddConstructionButtons(Simulation.Construction.BuildingSnapshot site, List<PlayerInterface.HudLine> state)
     {
         state.Add(new("", Loc.Tr("Dismantle"), ValueColour: PlayerInterface.BadBrightColour, Action: "meitou:building-dismantle"));
+        state.Add(new("", Loc.Tr("Rename"), ValueColour: PlayerInterface.MainColour, Tooltip: RenameTip, Action: "meitou:building-rename"));
         if (site.Complete) return;
 
         state.Add(site.Paused
@@ -1066,7 +1073,12 @@ sealed class BuildingSelection(PlayerInterface player)
             player.Say(new Simulation.Construction.SetBuildingPublic(id, !site.Public) { Tick = player.Session.World.Tick });
         }
 
-        if (action == "building-dismantle" && site?.LevelPlacement is null)
+        if (action == "building-rename" && site is { LevelPlacement: null })
+        {
+            player.InterfaceSounds.Sound("General_Click");
+            player.RenameBuildingDialog.Ask(id, site.CustomName ?? player.Build.ShownSiteName(site));
+        }
+        else if (action == "building-dismantle" && site?.LevelPlacement is null)
         {
             // Slot 84 (FUN_14054db30): with furniture in it the furniture warning, else "Are you sure?"; Yes dismantles it at once
             // (Building::confirmDismantle).

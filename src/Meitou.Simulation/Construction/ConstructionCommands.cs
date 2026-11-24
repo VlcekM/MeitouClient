@@ -43,6 +43,32 @@ public sealed record CancelSite(string Site) : SimCommand;
 public sealed record PauseSite(string Site, bool Paused) : SimCommand;
 
 /// <summary>
+/// The panel's Rename on a building the player built: its <see cref="BuildSite.CustomName"/> becomes <see cref="Name"/> (trimmed, at most
+/// <see cref="MaxLength"/> characters, control characters dropped); a blank or null name gives back the record's name. Engine setting, not in the
+/// original.
+/// </summary>
+public sealed record RenameSite(string Site, string? Name) : SimCommand
+{
+    /// <summary>
+    /// The most characters a custom name keeps.
+    /// </summary>
+    public const int MaxLength = 40;
+
+    /// <summary>
+    /// <paramref name="name"/> as a building keeps it: control characters dropped, trimmed, cut to <see cref="MaxLength"/>; null when blank.
+    /// </summary>
+    public static string? Clean(string? name)
+    {
+        if (name is null) return null;
+
+        string kept = new string([.. name.Where(c => !char.IsControl(c))]).Trim();
+        if (kept.Length > MaxLength) kept = kept[..MaxLength].TrimEnd();
+
+        return kept.Length > 0 ? kept : null;
+    }
+}
+
+/// <summary>
 /// The panel's [UPGRADE]: the site becomes its record's <c>upgrades to</c> BUILDING in place and is built up to it (<see cref="BuildingUpgrades"/>).
 /// </summary>
 public sealed record UpgradeSite(string Site) : SimCommand;

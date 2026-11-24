@@ -103,6 +103,11 @@ public sealed partial class MyGuiScreenHost
     }
 
     /// <summary>
+    /// Puts the typing focus on <paramref name="c"/>, a text box a screen's decoration added, with the screen's text for it.
+    /// </summary>
+    public void FocusDecoratedEdit(string id, UiControl c) => FocusEdit(id, c);
+
+    /// <summary>
     /// The system clipboard's text, else the boxes' own.
     /// </summary>
     string? ReadClipboard()

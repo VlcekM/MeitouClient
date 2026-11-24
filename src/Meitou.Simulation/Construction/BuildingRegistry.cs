@@ -137,6 +137,11 @@ public sealed class BuildSite
     /// </summary>
     public bool Paused { get; set; }
     /// <summary>
+    /// The name the player gave a building of its own (<see cref="RenameSite"/>; save key <c>meitou custom name</c>), shown in place of its
+    /// record's name wherever the interface names it; null for none. Engine setting, not in the original.
+    /// </summary>
+    public string? CustomName { get; set; }
+    /// <summary>
     /// Open to the public (the original's Building+0xc8, saved as <c>is public day</c>; the stats panel's toggle).
     /// </summary>
     public bool Public { get; set; } = true;
@@ -220,6 +225,7 @@ public sealed class BuildSite
         if (ForeignTown is not null) { h.Add(0x466F7265); h.Add(InNoTown); }
         if (!Public) h.Add(0x50726976);
         if (Upgrading) h.Add(0x55706772);
+        if (CustomName is not null) { h.Add(0x4e616d65); h.Add(Rng.StableHash(CustomName)); }
         h.Add(Materials.Length);
         foreach (var m in Materials)
         {
@@ -566,7 +572,7 @@ public sealed partial class BuildingRegistry
             list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials,
                 s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public, Outside = s.Outside,
                 TownName = s.LevelTown?.Name ?? FindTown(s.Town)?.Name, TownRecord = s.LevelTown?.Id, LevelPlacement = s.LevelPlacement,
-                Destroyed = s.Destroyed, Name = s.Name });
+                Destroyed = s.Destroyed, Name = s.Name, CustomName = s.CustomName });
         }
 
         _publishedVersion = Version;

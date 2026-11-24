@@ -697,6 +697,10 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   - Meitou's addition, not in the original: a complete storage of the player's gets `Put priority:` and `Take priority:` buttons (width 0.4)
     naming its [storage priority](../modding.md) level (Forbidden in BadBright, above Normal in Good); a click raises the level, a right-click
     or Shift+click lowers it, each wrapping (`General_Click`; `SetStoragePriority`).
+  - Meitou's addition, not in the original: a building the player built gets a `Rename` button (Main) after Dismantle. It opens the message box
+    titled RENAME with a text box (at most 40 characters) holding the building's name; RENAME sends `RenameSite`, Cancel or Esc changes nothing.
+    The name, trimmed and without control characters, replaces the record's name in the panel title, the context menu and inventory titles and
+    the job list (`Hauling to: <name>`); an empty one gives back the record's name. Saved as [`meitou custom name`](../formats/save.md).
   - 4 is the medical panel's section (**Observed**: `MedicalDatapanel`'s constructor `FUN_140726a70` passes 4 to `FUN_1406fd7d0`; it finds the
     `LifeBarN` widgets and their `Value`, `Yellow`, `Green`, `White`, `Datapanel`, `Tooltip`, `Robot` and `Crushed` children (and one more whose name string was not read), and `HealthText`). The
     header word is slot 114 (`FUN_1402fe040`: Normal / Broken / Under construction with a tooltip); the rows slot 115 (`FUN_140302380`): `Condition`, or
