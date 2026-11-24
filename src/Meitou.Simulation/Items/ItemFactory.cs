@@ -190,6 +190,29 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
             && Db.Find(item.CompanyId) is { Type: FcsRecordType.Research } r ? r : null;
 
     /// <summary>
+    /// The material a new ITEM of each record carries, by record id (<see cref="RecordMaterial"/>).
+    /// </summary>
+    readonly ConcurrentDictionary<string, string> _materials = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The material a new ITEM of record <paramref name="recordId"/> carries: the material spec its <c>material</c> list names, the one its icon
+    /// is drawn with when it lists several (<see cref="ItemIcons.MaterialOf"/>; no base game record does), "" when it lists none. Worked out once
+    /// per record.
+    /// </summary>
+    string RecordMaterial(string recordId) => _materials.GetOrAdd(recordId, _recordMaterial ??= MaterialOfRecord);
+
+    /// <summary>
+    /// <see cref="RecordMaterial"/>'s lookup, kept so asking allocates no delegate.
+    /// </summary>
+    Func<string, string>? _recordMaterial;
+
+    /// <summary>
+    /// <see cref="RecordMaterial"/> worked out from the data.
+    /// </summary>
+    string MaterialOfRecord(string recordId) =>
+        Db.Find(recordId) is { } record && ItemIcons.MaterialOf(Db, record, "") is { } material ? material.StringId : "";
+
+    /// <summary>
     /// A new instance of <paramref name="info"/>'s record as an item of <paramref name="type"/>: its colour, section, race limits, lock, weight
     /// and charges.
     /// </summary>
@@ -203,6 +226,9 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
             Name = info.Name,
             // A new item takes its record's colour (Item::Item, docs/characters.md "Clothing colours").
             ColourId = ItemColours.Of(Db, Db.Find(info.Id))?.StringId ?? "",
+            // An ITEM carries its record's material, as the original's saves hold it (docs/formats/save.md "Item material"); items of one record
+            // then share stacks whoever made them (Inventory.SameStack compares the material).
+            MaterialId = type == FcsRecordType.Item ? RecordMaterial(info.Id) : "",
             Type = type,
             EquipmentSection = info.Type is FcsRecordType.Armour or FcsRecordType.Item && Db.Find(info.Id) is { } worn ? SectionOf(worn) : "",
             // Item::Item (FUN_14075faf0) stores the record's slot, a missing one read as 0; the Crossbow constructor (FUN_140898c90) then sets 0,
