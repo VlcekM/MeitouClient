@@ -21,6 +21,12 @@ public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
     public IReadOnlyList<Vector2[]> Shapes { get; init; } = [];
 
     /// <summary>
+    /// The collision shapes' triangles (three corners each, same space as <see cref="Hull"/> with height): what a placement inside a building tests
+    /// in 3D against the ghost (<c>PlacementCheck</c>).
+    /// </summary>
+    public Vector3[] Triangles { get; init; } = [];
+
+    /// <summary>
     /// The smallest box (X, Z) round <see cref="Hull"/>.
     /// </summary>
     public (Vector2 Min, Vector2 Max) Bounds
@@ -437,6 +443,7 @@ public sealed class BuildingFootprints
         if (scale <= 0) scale = 1;
         var points = new List<Vector3>();
         var shapes = new List<Vector2[]>();
+        var triangles = new List<Vector3>();
         foreach (var mesh in WorldObjectLayout.Building(_db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
         {
             string path = mesh.Source.GetPath("xml collision");
@@ -444,6 +451,7 @@ public sealed class BuildingFootprints
             foreach (var shape in prepared.Shapes)
             {
                 foreach (var v in shape.Vertices) points.Add(v * scale);
+                foreach (int i in shape.Indices) triangles.Add(shape.Vertices[i] * scale);
                 if (shape.Vertices.Length >= 3
                         && NavGeometry.Footprint([.. shape.Vertices.Select(v => v * scale)], 0, 0, 0).Polygon is { Length: >= 3 } own)
                     shapes.Add(own);
@@ -451,7 +459,11 @@ public sealed class BuildingFootprints
         }
         if (points.Count < 3) return null;
         var hull = NavGeometry.Footprint(points, 0, 0, 0).Polygon;
-        return hull.Length < 3 ? null : new BuildingFootprint(hull, points.Min(p => p.Y), points.Max(p => p.Y)) { Shapes = shapes };
+        return hull.Length < 3 ? null : new BuildingFootprint(hull, points.Min(p => p.Y), points.Max(p => p.Y))
+        {
+            Shapes = shapes,
+            Triangles = [.. triangles],
+        };
     }
 
     /// <summary>
