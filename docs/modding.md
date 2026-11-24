@@ -1639,7 +1639,7 @@ holds refuses the second mod.
   prisoner's waits queued in its cage, a sleeper gets up, a follow order ends, an animal a building keeps out goes past its first door); any
   other row is given as a saved order of that row is loaded, with its owner's detail (an attack is the player's pick, a lock order a walk to its
   row's work) and readying (`IOrderOwner.LoadDetail`, `Restored`). Without `queued` it replaces the queue. Serial phases only (it throws in a
-  parallel one). It answers the check of the order's start when it is the only order queued and the character takes orders now: `Run`,
+  parallel one); between ticks the start is written into the state the next tick computes from, as the paused step's commands are. It answers the check of the order's start when it is the only order queued and the character takes orders now: `Run`,
   `Blocked` (with the text the player's order would show) or `Gone` (it left the queue); else `Run` (queued). `Gone` too for an actor not in the
   world or a row no system owns (nothing queued). An NPC's front starts only while its chooser runs (it has a squad and is not carried, out
   cold or dead), else it waits queued; its start ends a goal holding the character (`ModGoalEnd.Order`), and the chooser takes the character

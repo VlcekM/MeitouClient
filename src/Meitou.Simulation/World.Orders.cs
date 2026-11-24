@@ -51,6 +51,27 @@ public sealed partial class World
         bool queued = false)
     {
         if (Characters.Phase == TablePhase.Parallel) throw new InvalidOperationException("Orders are given in the serial phases only.");
+        if (Characters.Phase != TablePhase.Outside) return Give(actor, row, target, site, point, queued);
+
+        // Between ticks the order's start writes the state the next tick computes from, as the paused step's commands do.
+        Characters.BeginTick();
+        Characters.Phase = TablePhase.Inputs;
+        try
+        {
+            return Give(actor, row, target, site, point, queued);
+        }
+        finally
+        {
+            Characters.Phase = TablePhase.Outside;
+            Characters.EndTick();
+        }
+    }
+
+    /// <summary>
+    /// <see cref="GiveOrder"/> in a serial phase.
+    /// </summary>
+    OrderCheck Give(CharacterId actor, TaskType row, CharacterId? target, string? site, Vector3 point, bool queued)
+    {
         if (!Characters.TryResolveNext(actor, out int slot) || Characters.Cold(slot) is null) return OrderCheck.Gone;
         if (row == TaskType.MoveCusOrdered && SystemOf<MovementSystem>() is { } movement) return movement.GiveMove(this, slot, point, queued);
         if (EntryOf(row, actor, target ?? CharacterId.None, site, point) is not { } entry) return OrderCheck.Gone;
