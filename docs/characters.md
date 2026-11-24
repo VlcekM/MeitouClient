@@ -275,6 +275,9 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
 - **Modes**: 0 new game (`FUN_140872e00`: every player character after the start's `squad` spawns, with the start's `force race`), 1 in play
   (dialogue `DA_CHARACTER_EDITOR` on the talking player character; `DA_JOIN_SQUAD_WITH_EDIT` and slave purchases on the recruits). Mode 1
   hides the race, subrace and gender arrows; they are also hidden when there is no choice. Everything else works in both modes.
+- **Race missing from the data** (Meitou, engine choice; #1344): a saved look whose `race` names a record no loaded mod has (a race mod removed
+  since the save) is drawn with the race the world falls back to (`CharacterAppearance.Race`: its CHARACTER's race), and the editor's draft
+  takes that race too (`CharacterDraft`'s `shown` race, written into the draft's `race`), not the data's first RACE (Garru, `3998-gamedata.base`).
 - **Animals** (**Verified**, decompile): the window lists every character it is given, animals too (`FUN_1405f4dd0` copies the list unfiltered), so
   rebirth's "Guy with a dog" start (`47924-rebirth.mod`, squad `47925-rebirth.mod`; its man and Bonedog **Observed** in a player save) shows both. An
   animal's page (`FUN_1405efd60`, no humanoid appearance): body view, IMPORT and EXPORT hidden; `FUN_1405ee0c0` then hides the tab buttons, the

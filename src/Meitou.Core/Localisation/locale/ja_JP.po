@@ -5700,6 +5700,30 @@ msgstr "ハードウェア検出時に生成されます。"
 msgid "Generated for this computer so the site keeps your results together."
 msgstr "サイトで結果をまとめて管理するため、このコンピューター用に生成されます。"
 
+#. machine-translated
+msgid "Benchmark settings"
+msgstr "ベンチマーク設定"
+
+#. machine-translated
+msgid "Benchmarks always use fixed settings so results stay comparable:"
+msgstr "結果を比較できるよう、ベンチマークは常に固定設定で実行されます:"
+
+#. machine-translated
+msgid "• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"
+msgstr "• ウィンドウ 1920×1080、Vulkan、垂直同期・FPS上限オフ、HDRオフ"
+
+#. machine-translated
+msgid "• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"
+msgstr "• 選択した品質ティア（Meitou ルック）、TAA 100% スケール（低: AA なし 83%）、アップスケーラーなし"
+
+#. machine-translated
+msgid "• Ray tracing only on Ultra and Extreme"
+msgstr "• レイトレーシングはウルトラとエクストリームのみ"
+
+#. machine-translated
+msgid "• Your saved graphics settings and mods are ignored and never modified"
+msgstr "• 保存済みのグラフィック設定と Mod は使用されず、変更もされません"
+
 msgid "Settings window opacity"
 msgstr "設定ウィンドウの不透明度"
 
