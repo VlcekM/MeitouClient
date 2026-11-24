@@ -702,15 +702,15 @@ public sealed class CharacterSounds
     /// A one-shot job sound on the character (<paramref name="limit"/> is the squared distance of the exe's call, 0 for none), after the switch it
     /// sets first: <c>Character_Loot</c> (start of a loot), <c>Character_Unlock_Success</c> (a lock opened; it holds the stop of the unlock loop),
     /// <c>Character_Lock</c>, <c>Character_Bed</c> with <c>Bed</c> = <c>Get_In</c> / <c>Get_Out</c>, <c>Character_Consume</c> with <c>Consume</c> =
-    /// <c>Eat</c> (200 units).
+    /// <c>Eat</c> (200 units). Its sounds belong to <paramref name="playing"/> (<see cref="WwisePlayer.NewPlaying"/>, 0 none).
     /// </summary>
-    public void Job(ulong key, string eventName, float limit = EventLimit, string? group = null, string? value = null)
+    public void Job(ulong key, string eventName, float limit = EventLimit, string? group = null, string? value = null, uint playing = 0)
     {
         if (!_entries.TryGetValue(key, out var e)) return;
         if (group is not null && value is not null) _player.SetSwitch(group, value, e.Object);
         if (limit != 0 && _player.HeardDistanceSquared(e.Position, _camera) >= limit) return;
         if (eventName == "Character_Unlock_Success" && e.Loop == CharacterLoop.Unlock) e.Loop = CharacterLoop.None;
-        _player.Post(eventName, e.Object);
+        _player.Post(eventName, e.Object, playing);
         Jobs++;
     }
 
