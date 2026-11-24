@@ -51,7 +51,7 @@ internal static class EffectFrames
         {
             EffectAnchorKind.Point => new EffectFrame(anchor.Offset, turn, 1),
             EffectAnchorKind.Bone => source.Bone(anchor.Character, anchor.Name!, anchor.Offset, turn),
-            EffectAnchorKind.Weapon => source.Weapon(anchor.Character),
+            EffectAnchorKind.Weapon => OnBlade(source.Weapon(anchor.Character), anchor),
             EffectAnchorKind.Building => Within(source.Building(anchor.Name!), anchor.Offset, turn),
             EffectAnchorKind.Projectile => Within(source.Projectile(anchor.ProjectileId), anchor.Offset, turn),
             _ => null,
@@ -72,6 +72,18 @@ internal static class EffectFrames
 
         var axis = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, direction));
         return Quaternion.CreateFromAxisAngle(axis, MathF.Acos(d));
+    }
+
+    /// <summary>
+    /// A weapon's <paramref name="frame"/> moved by the anchor's offset, scaled by the blade's stretch (so 8.5 along +Y stays the tip), and
+    /// turned by its turn; the frame unchanged for an anchor with neither.
+    /// </summary>
+    static EffectFrame? OnBlade(EffectFrame? frame, in EffectAnchor anchor)
+    {
+        if (frame is not { } f || anchor.Offset == Vector3.Zero && anchor.Turn is null) return frame;
+
+        var turn = anchor.Turn is { } t ? Quaternion.Normalize(t) : Quaternion.Identity;
+        return Within(f, anchor.Offset * f.Stretch, turn);
     }
 
     /// <summary>

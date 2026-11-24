@@ -231,6 +231,8 @@ holds refuses the second mod.
     bone's frame, the offset scaled with the character.
   - `Weapon(characterId)`: the melee weapon the character holds drawn (the gear blood's blade, docs/game/blood-decals.md "On weapons and
     gear"): origin at the weapon mesh's hilt end, +Y along the blade, X across its width, stretch = weapon length / 8.5.
+    `Weapon(characterId, offset, turn = null)` moves and turns that frame, the offset in its units times the stretch (`(0, 6, 0)` is 6/8.5
+    of the way to the tip on any weapon; `Scaled` / `Sized` leave the place alone; not yet checked in the game).
   - `Building(id, offset = default, turn = null)`: a player-built or nest building of the snapshot (`WorldSnapshot.Buildings`,
     `NestBuildings`, by `BuildingSnapshot.Id`), its origin and turn. Town buildings of the level data and furniture are not covered (no
     host-side lookup by id); worn items are skinned to the skeleton and have no frame of their own: use a `Bone` (e.g. `Bip01 Spine2`).
@@ -278,7 +280,9 @@ holds refuses the second mod.
   mod and reason (anchor problems as `PlayEffect`'s, a style out of range, lifetime, more than 64, off the host's thread); the simulation
   never reads it; a new world drops all trails, a mod that fails its `Initialize` loses its own; nothing runs without code mods. Engine API,
   not in the original. **Observed** by a scratch program against a stand-in frame source (pieces per sample, band span, fade, gaps, stop,
-  caps, rejection logging; the drawn quad's size and facing), not in the game.
+  caps, rejection logging; the drawn quad's size and facing), not in the game. `CharacterSnapshot.Attacking` (a melee swing of its own in
+  progress, the combat system's attack technique playing, from the published tick) lets a mod keep a blade trail only while swinging, e.g.
+  `KeepTrail(EffectAnchor.Weapon(id, new(0, 7, 0)), style, 0.2f)` renewed each frame it is set (not yet checked in the game).
 - **Projectile feed:** `AddProjectileFeed(view)` on `ModContext`: once a frame on the host's thread, `view` gets the bolts' changes
   between the shown snapshots (`ProjectileEvent`: id, `ProjectileChange` `Fired` / `Landed` / `Gone`, shooter, position, direction, speed,
   `live ammo` mesh), in the snapshot's order, then the gone ones by id; a bolt first seen stuck is `Fired` then `Landed`; `Gone` covers a
@@ -657,6 +661,11 @@ holds refuses the second mod.
   and never call `ModMove` itself. A throw, a move without a technique or animation, or a progress that is not finite is a fault: logged
   once with the mod id; the source still answers for the rest of that tick and answers nothing in that world from the next tick on, and the
   fault enters the state hash. The clip path is **Observed** by a scratch program (answer, clamp, fault, hash), not seen in the game.
+  `CombatSystem.ModMoveBlockOf(world, id)` says whether the game keeps a move off the character now (`ModMoveBlock`: `None` (a move plays),
+  `Gone`, `Attacking`, `Reacting` (block, dodge, hit), `RangedPose`, `Carried`, `GettingUp`, `Down`, `Stumbling`, `Stunned`), by the
+  animation's own tests on the last finished tick; read only, any phase. A mod whose clip stands for work (a repair) polls it from its
+  system and cancels the work when it is not `None`: the game replaced the clip or cut it short. Another mod's earlier answer is not told.
+  Engine API, not yet checked in a running world.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
@@ -1347,17 +1356,24 @@ holds refuses the second mod.
   goes on one of those placed at the point; an interface event on an unplaced object of the mods' own. A character event plays only while the
   character is near enough to have a sound object (`CharacterSounds.TrackRadius`) and within 1000 units of the camera, a point event within
   the same 1000 units. The pooled objects are shared by every mod and reused round robin, and a switch stays on an object until changed, so
-  set the switch on every post that needs one. Post one-shot events: a looping one is never stopped, and on a pooled object it can be moved
-  by a later post. An unknown name plays nothing (the player gives up on it after ten seconds). Several mods post freely. An empty name or a
-  point that is not finite throws, also before the first world; an empty character id plays nothing. Engine API, not in the original.
+  set the switch on every post that needs one. Each call has an overload with `out SoundHandle handle` after its required arguments
+  (`PostSound(eventName, characterId, out handle, switchGroup, switchValue)`, `PostSound(sound, anchor, out handle, volume)`, ...; on
+  `World` and `ModContext`): `handle.Stop(fadeSeconds = 0)` (0 to 10; any thread) ends that playback alone, a loop too, its sounds tagged
+  as Wwise's playing ids are (`WwisePlayer.NewPlaying` / `StopPlaying`), fading over the seconds; stopped before the host plays it, it never
+  starts; again, or once it ended, it does nothing. `Queued` is false when nothing was queued (no world, no audio, a rejected request:
+  `SoundHandle.None`), `Stopped` once stopped. A loop on a pooled object can still be moved by a later post; one on the character's own
+  object follows it. An unknown name plays nothing (the player gives up on it after ten seconds). Several mods post freely. An empty name or
+  a point that is not finite throws, also before the first world; an empty character id plays nothing. Engine API, not in the original.
   On `ModContext` a name ending in `.wav` is a loose file under the mod's folder (a relative path; one outside it or missing plays nothing,
   logged once), a 16-bit PCM WAV of at most 20 s, read once by the host: it plays as one Wwise sound made for it, on the mods' interface
   object or on a pooled object at the point or the character's place (it does not follow), through the SFX bus `59927CD0` when placed (the
   SFX slider and the pause ducking take it) with Meitou's attenuation (linear from full at the object to silence at 1000 units), on the
   master bus on the interface (no slider). `PostSound(sound, EffectAnchor at, volume = 1)` plays an event or loose file on an anchor: a
   point there, a bone or weapon on its character, a building or bolt where it is drawn now (host thread only); `volume` (0 to 4) scales a
-  loose file, a bank event keeps its level; false when nothing was queued. **Observed** by a scratch program mixing a synthetic WAV offline
-  (heard at the listener, distance attenuation, volume), not heard in the game.
+  loose file, a bank event keeps its level; false when nothing was queued (true with no world or audio). **Observed** by a scratch program mixing
+  a synthetic WAV offline (heard at the listener, distance attenuation, volume), not heard in the game; the handle's stop (one playback ended
+  among others on the object, a stop before the host plays it, the fade) **Observed** by a scratch program against `WwisePlayer` with a loose
+  WAV.
 - **Status effects:** `AddStatusEffect(new StatusEffect(id, name) { Description, Tone, Stacking, MaxStacks, Modifiers })` (`StatusEffects`,
   `src/Meitou.Simulation/Bodies`) adds a named effect (a poison, a drug, a blessing) the mod's systems put on a character with `effect.Apply(world,
   character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(world, character)` or `On(stats)`

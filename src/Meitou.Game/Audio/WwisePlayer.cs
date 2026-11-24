@@ -298,11 +298,11 @@ public sealed partial class WwisePlayer : IDisposable
     /// <summary>
     /// Events whose bank is still loading: when they were posted, on which object, and until when they are retried.
     /// </summary>
-    readonly List<(double At, uint EventId, ulong Object, double Expires)> _pending = [];
+    readonly List<(double At, uint EventId, ulong Object, double Expires, uint Playing)> _pending = [];
     /// <summary>
-    /// Actions waiting for their delay: when they run, and on which object.
+    /// Actions waiting for their delay: when they run, on which object, and their playback (<see cref="NewPlaying"/>, 0 none).
     /// </summary>
-    readonly List<(double At, WwiseAction Action, ulong Object)> _delayed = [];
+    readonly List<(double At, WwiseAction Action, ulong Object, uint Playing)> _delayed = [];
     /// <summary>
     /// Each loaded bank's objects and media ids, so that unloading drops only its own.
     /// </summary>
@@ -385,10 +385,10 @@ public sealed partial class WwisePlayer : IDisposable
         for (int i = _delayed.Count - 1; i >= 0; i--)
             if (_delayed[i].At <= _time)
             {
-                var (_, action, gameObject) = _delayed[i];
+                var (_, action, gameObject, playing) = _delayed[i];
                 _runTime = Math.Max(_delayed[i].At, _blockStart);
                 _delayed.RemoveAt(i);
-                Run(action, gameObject);
+                Run(action, gameObject, playing);
             }
         _runTime = _blockStart;
         for (int i = _roots.Count - 1; i >= 0; i--)
@@ -465,14 +465,14 @@ public sealed partial class WwisePlayer : IDisposable
     {
         var waiting = _pending.ToList();
         _pending.Clear();
-        foreach (var p in waiting) PostNow(p.EventId, p.Object, p.Expires);
+        foreach (var p in waiting) PostNow(p.EventId, p.Object, p.Expires, p.Playing);
     }
 
     /// <summary>
     /// Runs an event's actions on <paramref name="gameObject"/> (a delayed one later); an event not loaded yet waits in <see cref="_pending"/> until
-    /// <paramref name="expires"/>.
+    /// <paramref name="expires"/>; its sounds belong to <paramref name="playing"/> (0 none).
     /// </summary>
-    void PostNow(uint eventId, ulong gameObject, double expires)
+    void PostNow(uint eventId, ulong gameObject, double expires, uint playing = 0)
     {
         if (!_objects.TryGetValue(eventId, out var o) || o is not WwiseEvent e)
         {
@@ -480,15 +480,15 @@ public sealed partial class WwisePlayer : IDisposable
             // bank has (a code mod's misspelt event, posted every tick) cannot grow it past what ten seconds of posting adds.
             if (_time >= expires) return;
             if (_pending.Count >= PendingPruneAt) _pending.RemoveAll(p => _time >= p.Expires);
-            _pending.Add((_time, eventId, gameObject, expires));
+            _pending.Add((_time, eventId, gameObject, expires, playing));
             return;
         }
         foreach (var actionId in e.Actions)
         {
             if (!_objects.TryGetValue(actionId, out var a) || a is not WwiseAction action) continue;
             int delay = action.Properties.Int(WwisePropertyId.Delay);
-            if (delay > 0) _delayed.Add((_time + delay / 1000.0, action, gameObject));
-            else Run(action, gameObject);
+            if (delay > 0) _delayed.Add((_time + delay / 1000.0, action, gameObject, playing));
+            else Run(action, gameObject, playing);
         }
     }
 
@@ -504,7 +504,7 @@ public sealed partial class WwisePlayer : IDisposable
     /// Runs one action on <paramref name="gameObject"/>: plays a node, stops instances, sets a state, sets or resets a volume, pitch, low-pass or bus
     /// volume offset, or bypasses a bus's effects.
     /// </summary>
-    void Run(WwiseAction action, ulong gameObject)
+    void Run(WwiseAction action, ulong gameObject, uint playing = 0)
     {
         float fade = action.Properties.Int(WwisePropertyId.FadeTime) / 1000f;
         ulong scopeObject = ObjectScoped(action) ? gameObject : 0;
@@ -512,6 +512,7 @@ public sealed partial class WwisePlayer : IDisposable
         {
             case WwiseActionKind.Play:
                 _postingObject = gameObject;
+                _postingPlay = playing;
                 try
                 {
                     if (_objects.TryGetValue(action.Target, out var node) && Create(node, null) is { } instance)
@@ -524,6 +525,7 @@ public sealed partial class WwisePlayer : IDisposable
                 finally
                 {
                     _postingObject = 0;
+                    _postingPlay = 0;
                 }
                 break;
             case WwiseActionKind.Stop:
@@ -649,6 +651,10 @@ public sealed partial class WwisePlayer : IDisposable
         /// The game object this plays on: the one the event was posted on (inherited from the parent).
         /// </summary>
         public readonly ulong GameObject = parent?.GameObject ?? player._postingObject;
+        /// <summary>
+        /// The playback this belongs to (<see cref="NewPlaying"/>, inherited from the parent; 0 none).
+        /// </summary>
+        public readonly uint Playing = parent?.Playing ?? player._postingPlay;
         /// <summary>
         /// The instances this one played and that still run.
         /// </summary>

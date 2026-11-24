@@ -148,47 +148,70 @@ public sealed class ModContext
     /// string?, string?)"/> on the running world; nothing before the first world or without audio. A name ending in <c>.wav</c> is a loose file
     /// under the mod's folder (<see cref="PostSound(string, EffectAnchor, float)"/>), here and in the other two calls.
     /// </summary>
-    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null)
+    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null) =>
+        PostSound(eventName, on, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostSound(string, CharacterId, string?, string?)"/>, giving the <paramref name="handle"/> that stops it
+    /// (<see cref="Simulation.SoundHandle.Stop"/>; <see cref="Simulation.SoundHandle.None"/> when nothing was queued).
+    /// </summary>
+    public void PostSound(string eventName, CharacterId on, out Simulation.SoundHandle handle, string? switchGroup = null, string? switchValue = null)
     {
         CheckSound(eventName, default);
-        if (PostLoose(eventName, on, default, false)) return;
+        handle = Simulation.SoundHandle.None;
+        if (PostLoose(eventName, on, default, false, ref handle)) return;
 
-        _world()?.PostSound(eventName, on, switchGroup, switchValue);
+        _world()?.PostSound(eventName, on, out handle, switchGroup, switchValue);
     }
 
     /// <summary>
     /// Plays a named sound event at a world point, from any thread: <see cref="World.PostSound(string, System.Numerics.Vector3, string?,
     /// string?)"/> on the running world; nothing before the first world or without audio.
     /// </summary>
-    public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null)
+    public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null) =>
+        PostSound(eventName, at, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostSound(string, System.Numerics.Vector3, string?, string?)"/>, giving the <paramref name="handle"/> that stops it.
+    /// </summary>
+    public void PostSound(string eventName, System.Numerics.Vector3 at, out Simulation.SoundHandle handle, string? switchGroup = null,
+        string? switchValue = null)
     {
         CheckSound(eventName, at);
-        if (PostLoose(eventName, CharacterId.None, at, false)) return;
+        handle = Simulation.SoundHandle.None;
+        if (PostLoose(eventName, CharacterId.None, at, false, ref handle)) return;
 
-        _world()?.PostSound(eventName, at, switchGroup, switchValue);
+        _world()?.PostSound(eventName, at, out handle, switchGroup, switchValue);
     }
 
     /// <summary>
-    /// Plays a named sound event on the interface, from any thread: <see cref="World.PostInterfaceSound"/> on the running world; nothing before the
-    /// first world or without audio.
+    /// Plays a named sound event on the interface, from any thread: <see cref="World.PostInterfaceSound(string, string?, string?)"/> on the
+    /// running world; nothing before the first world or without audio.
     /// </summary>
-    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null)
+    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null) =>
+        PostInterfaceSound(eventName, out _, switchGroup, switchValue);
+
+    /// <summary>
+    /// <see cref="PostInterfaceSound(string, string?, string?)"/>, giving the <paramref name="handle"/> that stops it.
+    /// </summary>
+    public void PostInterfaceSound(string eventName, out Simulation.SoundHandle handle, string? switchGroup = null, string? switchValue = null)
     {
         CheckSound(eventName, default);
-        if (PostLoose(eventName, CharacterId.None, default, true)) return;
+        handle = Simulation.SoundHandle.None;
+        if (PostLoose(eventName, CharacterId.None, default, true, ref handle)) return;
 
-        _world()?.PostInterfaceSound(eventName, switchGroup, switchValue);
+        _world()?.PostInterfaceSound(eventName, out handle, switchGroup, switchValue);
     }
 
     /// <summary>
-    /// Posts <paramref name="sound"/> as a loose file when it names a <c>.wav</c> (true: handled, whether it was found or not); false for a bank
-    /// event.
+    /// Posts <paramref name="sound"/> as a loose file when it names a <c>.wav</c> (true: handled, whether it was found or not, its handle in
+    /// <paramref name="handle"/>); false for a bank event.
     /// </summary>
-    bool PostLoose(string sound, CharacterId on, System.Numerics.Vector3 at, bool onInterface)
+    bool PostLoose(string sound, CharacterId on, System.Numerics.Vector3 at, bool onInterface, ref Simulation.SoundHandle handle)
     {
         if (!sound.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)) return false;
 
-        if (ResolveSound(sound) is { } path) _world()?.PostSound(new Simulation.PostedSound(path), on, at, onInterface);
+        if (ResolveSound(sound) is { } path) _world()?.PostSound(new Simulation.PostedSound(path), on, at, out handle, onInterface);
         return true;
     }
 
@@ -198,13 +221,20 @@ public sealed class ModContext
     /// plays there, a bone or weapon on its character; a building or bolt where it is drawn now, which needs the host's thread. False when nothing
     /// was queued: no such file (logged once), a volume out of range, an anchor not there or one that needs the host's thread off it.
     /// </summary>
-    public bool PostSound(string sound, EffectAnchor at, float volume = 1)
+    public bool PostSound(string sound, EffectAnchor at, float volume = 1) => PostSound(sound, at, out _, volume);
+
+    /// <summary>
+    /// <see cref="PostSound(string, EffectAnchor, float)"/>, giving the <paramref name="handle"/> that stops it
+    /// (<see cref="Simulation.SoundHandle.None"/> when nothing was queued, also with no world or no audio, where the answer is still true).
+    /// </summary>
+    public bool PostSound(string sound, EffectAnchor at, out Simulation.SoundHandle handle, float volume = 1)
     {
         ArgumentException.ThrowIfNullOrEmpty(sound);
+        handle = Simulation.SoundHandle.None;
         if (!float.IsFinite(volume) || volume < 0 || volume > 4 || ResolveSound(sound) is not { } name) return false;
         if (SoundPlace(at) is not var (on, point)) return false;
 
-        _world()?.PostSound(new Simulation.PostedSound(name) { Volume = volume }, on, point);
+        _world()?.PostSound(new Simulation.PostedSound(name) { Volume = volume }, on, point, out handle);
         return true;
     }
 

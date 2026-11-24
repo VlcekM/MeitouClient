@@ -143,6 +143,54 @@ public readonly record struct CombatMove(Data.Gameplay.Combat.CombatTechnique? T
 }
 
 /// <summary>
+/// What keeps a mod's combat move off a character (<see cref="Combat.CombatSystem.ModMoveBlockOf"/>, docs/modding.md "Combat moves"): the game
+/// plays something of its own, so a move a mod answers is not played (replaced, or cut short).
+/// </summary>
+public enum ModMoveBlock : byte
+{
+    /// <summary>
+    /// Nothing: a mod's move plays (the first source's answer).
+    /// </summary>
+    None,
+    /// <summary>
+    /// The character is not in the world, or not alive.
+    /// </summary>
+    Gone,
+    /// <summary>
+    /// A swing of its own is under way (or about to start).
+    /// </summary>
+    Attacking,
+    /// <summary>
+    /// A block, dodge or hit reaction plays.
+    /// </summary>
+    Reacting,
+    /// <summary>
+    /// A crossbow pose plays (aim, shot, reload).
+    /// </summary>
+    RangedPose,
+    /// <summary>
+    /// Someone carries it.
+    /// </summary>
+    Carried,
+    /// <summary>
+    /// It is getting up.
+    /// </summary>
+    GettingUp,
+    /// <summary>
+    /// It is down in the fight (knocked out, dead).
+    /// </summary>
+    Down,
+    /// <summary>
+    /// A stumble plays.
+    /// </summary>
+    Stumbling,
+    /// <summary>
+    /// It is stunned by a blow.
+    /// </summary>
+    Stunned,
+}
+
+/// <summary>
 /// A mod's combat move for a character the game plays nothing for (docs/modding.md "Combat moves"); null for none. Asked in the animation's
 /// parallel step, whose state is hashed and whose root motion moves the character, so it must be deterministic, thread-safe and read-only.
 /// </summary>
