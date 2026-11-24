@@ -122,9 +122,9 @@ Sources: the configured Kenshi install's `data/gui/`, the existing
     text uses the `Kenshi_StandardFont_Medium` resource's file, so a locale's font.
   Pre-built glyphs: the `Codes` ranges up to 1024 code points (Faithful), else ASCII and
   Latin-1; the rest on demand. Lines wrap at spaces and between CJK characters.
-  Fallback fonts (`UiFontFallbacks`, added by mods, [modding](../modding.md)): a character the font cannot draw (in Faithful mode,
-  one outside its `Codes` too) comes from the first added file that has it, before the substitute, at the font's size and load flags. None by
-  default. Meitou's, not in the original.
+  Fallback fonts (`UiFontFallbacks`, added by mods, [modding](../modding.md)): a character the font cannot draw comes from the
+  face itself when only its `Codes` leave it out (Faithful), else from the first added file that has it, before the substitute, at the font's
+  size and hinting mode. None by default. Meitou's, not in the original.
 - Main in-game UI applies a user-requested minimum of 16 em pixels at 1080 lines,
   scaled with viewport height, including resource fonts and explicit pixel sizes.
   Larger headings retain their sizes. Short captions centre the line box and clip

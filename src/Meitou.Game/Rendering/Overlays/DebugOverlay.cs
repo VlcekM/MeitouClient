@@ -570,7 +570,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         var key = (s, x, top, scale, colour);
         if (_uiFont is { } ui)
         {
-            // A new atlas texture or a restart moves glyph rectangles: geometry made before it samples the wrong texels.
+            // A new atlas texture or a restart moves glyph rectangles: geometry made before it samples the wrong texels. A fallback font added
+            // since may draw characters that were substitutes.
+            ui.CheckFallbacks();
             if (ui.Generation != _cacheGeneration) DropCachedGeometry(ui.Generation);
             if (_textGeometry.TryGetValue(key, out var hit))
             {

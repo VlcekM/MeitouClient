@@ -25,9 +25,10 @@ public sealed partial class UiPainter
     readonly Dictionary<PaintKey, PaintRecord> _painted = new(PaintKeyComparer.Instance);
 
     /// <summary>
-    /// What the records were painted against: the viewport size, the smallest text size, the mode, the texture version and the font atlases' changes.
+    /// What the records were painted against: the viewport size, the smallest text size, the mode, the texture version, the font atlases' changes
+    /// and the fallback fonts added.
     /// </summary>
-    (int Width, int Height, float MinimumPixels, UiMode Mode, int Textures, int Fonts) _paintedFor;
+    (int Width, int Height, float MinimumPixels, UiMode Mode, int Textures, int Fonts, int Fallbacks) _paintedFor;
 
     /// <summary>
     /// The frames <see cref="BeginPaintFrame"/> began, by which <see cref="PaintRecord.Seen"/> is told.
@@ -102,7 +103,7 @@ public sealed partial class UiPainter
     void BeginPaintFrame(int width, int height, float minimumTextPixels)
     {
         _paintFrame++;
-        var now = (width, height, minimumTextPixels, Mode, textureVersion: _textureVersion, UiFont.Changes);
+        var now = (width, height, minimumTextPixels, Mode, textureVersion: _textureVersion, UiFont.Changes, fallbacks: UiFontFallbacks.Version);
         if (now != _paintedFor)
         {
             _painted.Clear();

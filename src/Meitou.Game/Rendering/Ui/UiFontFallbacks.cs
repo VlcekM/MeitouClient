@@ -19,14 +19,9 @@ internal static class UiFontFallbacks
     static string[] s_paths = [];
 
     /// <summary>
-    /// Raised on each change of <see cref="Paths"/>.
+    /// The paths that could not be used (reported once); no font tries them again.
     /// </summary>
-    static int s_version;
-
-    /// <summary>
-    /// The paths whose failure to open was reported.
-    /// </summary>
-    static readonly HashSet<string> Reported = new(StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Unusable = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The full paths of the files added, in order.
@@ -34,9 +29,10 @@ internal static class UiFontFallbacks
     public static string[] Paths => Volatile.Read(ref s_paths);
 
     /// <summary>
-    /// Changes whenever a file is added: a font that was asked for characters before forgets those it could not draw.
+    /// Changes whenever a file is added (the list only grows, so its length): a font that was asked for characters before forgets those it could
+    /// not draw, and text painted before is painted again.
     /// </summary>
-    public static int Version => Volatile.Read(ref s_version);
+    public static int Version => Paths.Length;
 
     /// <summary>
     /// Adds font file <paramref name="path"/> after those added already; false when it was added already.
@@ -52,19 +48,26 @@ internal static class UiFontFallbacks
             }
 
             Volatile.Write(ref s_paths, [.. s_paths, full]);
-            Volatile.Write(ref s_version, s_version + 1);
             return true;
         }
     }
 
     /// <summary>
-    /// Logs once per file that <paramref name="path"/> cannot be drawn from, and why.
+    /// Whether <paramref name="path"/> was found unusable (<see cref="ReportUnusable"/>).
+    /// </summary>
+    public static bool IsUnusable(string path)
+    {
+        lock (Lock) return Unusable.Contains(path);
+    }
+
+    /// <summary>
+    /// Marks <paramref name="path"/> unusable for every font and logs once that it cannot be drawn from, and why.
     /// </summary>
     public static void ReportUnusable(string path, string why)
     {
         lock (Lock)
         {
-            if (!Reported.Add(path)) return;
+            if (!Unusable.Add(path)) return;
         }
 
         Console.Error.WriteLine($"ui        fallback font {path} is not used: {why}.");

@@ -101,11 +101,33 @@ internal sealed unsafe class UiFont : IDisposable
     /// <summary>
     /// A fallback font at this font's size, and its glyphs rasterised so far by glyph index; no face when it could not be used.
     /// </summary>
-    sealed class FallbackFace(FreeTypeFace? face, FT_SizeRec_* size)
+    sealed class FallbackFace(FreeTypeFace? face, FT_SizeRec_* size, FT_LOAD loadFlags)
     {
+        /// <summary>
+        /// The fallback font's face; null when it could not be used.
+        /// </summary>
         public FreeTypeFace? Face { get; } = face;
+
+        /// <summary>
+        /// The face's size for this font.
+        /// </summary>
         public FT_SizeRec_* Size { get; } = size;
+
+        /// <summary>
+        /// Its glyphs rasterised so far, by glyph index; <see cref="Glyph"/>'s default for one that failed to load.
+        /// </summary>
         public Dictionary<uint, Glyph> ByIndex { get; } = [];
+
+        /// <summary>
+        /// Its load flags, weakened after its own hinting failures (<see cref="LoadGlyph"/>), so a fallback's broken hinting never changes how
+        /// the font's own glyphs are hinted.
+        /// </summary>
+        public FT_LOAD LoadFlags = loadFlags;
+
+        /// <summary>
+        /// How many of its glyph loads failed with the hinting asked for.
+        /// </summary>
+        public int HintingFailures;
     }
 
     /// <summary>
@@ -242,7 +264,7 @@ internal sealed unsafe class UiFont : IDisposable
             _size = created;
             Check(FT_Activate_Size(_size), "FT_Activate_Size");
             if (_face.Scalable)
-                Check(FT_Set_Char_Size(_face.Face, (nint)(options.Size64 * _oversample), 0, options.Dpi, options.Dpi), "FT_Set_Char_Size");
+                Check(FT_Set_Char_Size(_face.Face, (nint)_charSize64, 0, _dpi, _dpi), "FT_Set_Char_Size");
             else SelectStrike(ppem * _oversample);
             var metrics = _face.Face->size->metrics;
             if (_faithful)
@@ -338,7 +360,7 @@ internal sealed unsafe class UiFont : IDisposable
     /// </summary>
     public Glyph Lookup(int codePoint)
     {
-        if (_fallbackVersion != UiFontFallbacks.Version) ForgetForFallbacks();
+        CheckFallbacks();
         if (_glyphs.TryGetValue(codePoint, out var known)) return known;
         var made = Make(codePoint);
         _glyphs[codePoint] = made;
@@ -377,7 +399,19 @@ internal sealed unsafe class UiFont : IDisposable
         uint index;
         lock (FreeTypeFace.Gate) index = Index(codePoint);
         if (index != 0) return ForIndex(index);
-        if (UiFontFallbacks.Paths.Length > 0 && FromFallback(codePoint) is { } fallback) return fallback;
+        if (UiFontFallbacks.Paths.Length > 0)
+        {
+            // With fallback fonts the face's own glyph comes first, also outside the resource's Codes (Faithful), so the font's letters keep
+            // its style.
+            if (_ranges is not null && codePoint >= 0)
+            {
+                lock (FreeTypeFace.Gate) index = FT_Get_Char_Index(_face.Face, (nuint)codePoint);
+                if (index != 0) return ForIndex(index);
+            }
+
+            if (FromFallback(codePoint) is { } fallback) return fallback;
+        }
+
         return ForIndex(Substitute());
     }
 
@@ -422,10 +456,14 @@ internal sealed unsafe class UiFont : IDisposable
             lock (FreeTypeFace.Gate) index = FT_Get_Char_Index(fallback.Face.Face, (nuint)codePoint);
             if (index == 0) continue;
 
-            if (fallback.ByIndex.TryGetValue(index, out var known)) return known;
-            var made = Rasterise(fallback.Face, fallback.Size, index);
-            fallback.ByIndex[index] = made;
-            return made;
+            if (!fallback.ByIndex.TryGetValue(index, out var made))
+            {
+                made = Rasterise(fallback.Face, fallback.Size, index, ref fallback.LoadFlags, ref fallback.HintingFailures);
+                fallback.ByIndex[index] = made;
+            }
+
+            // A glyph that failed to load (no advance, no bitmap) leaves the character to the next fallback or the substitute.
+            if (made != default) return made;
         }
 
         return null;
@@ -437,6 +475,8 @@ internal sealed unsafe class UiFont : IDisposable
     /// </summary>
     FallbackFace OpenFallback(string path)
     {
+        if (UiFontFallbacks.IsUnusable(path)) return new FallbackFace(null, null, _loadFlags);
+
         FreeTypeFace face;
         try
         {
@@ -445,13 +485,13 @@ internal sealed unsafe class UiFont : IDisposable
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
         {
             UiFontFallbacks.ReportUnusable(path, e.Message);
-            return new FallbackFace(null, null);
+            return new FallbackFace(null, null, _loadFlags);
         }
 
         if (!face.Scalable)
         {
             UiFontFallbacks.ReportUnusable(path, "it has no outlines");
-            return new FallbackFace(null, null);
+            return new FallbackFace(null, null, _loadFlags);
         }
 
         lock (FreeTypeFace.Gate)
@@ -460,18 +500,27 @@ internal sealed unsafe class UiFont : IDisposable
             if (FT_New_Size(face.Face, &created) != FT_Error.FT_Err_Ok)
             {
                 UiFontFallbacks.ReportUnusable(path, "FreeType could not size it");
-                return new FallbackFace(null, null);
+                return new FallbackFace(null, null, _loadFlags);
             }
 
             if (FT_Activate_Size(created) != FT_Error.FT_Err_Ok || FT_Set_Char_Size(face.Face, (nint)_charSize64, 0, _dpi, _dpi) != FT_Error.FT_Err_Ok)
             {
                 FT_Done_Size(created);
                 UiFontFallbacks.ReportUnusable(path, "FreeType could not size it");
-                return new FallbackFace(null, null);
+                return new FallbackFace(null, null, _loadFlags);
             }
 
-            return new FallbackFace(face, created);
+            return new FallbackFace(face, created, _loadFlags);
         }
+    }
+
+    /// <summary>
+    /// Notices a fallback font added since the glyphs were chosen (<see cref="ForgetForFallbacks"/>); called before a glyph or cached text is
+    /// used. One comparison when nothing changed.
+    /// </summary>
+    public void CheckFallbacks()
+    {
+        if (_fallbackVersion != UiFontFallbacks.Version) ForgetForFallbacks();
     }
 
     /// <summary>
@@ -493,7 +542,7 @@ internal sealed unsafe class UiFont : IDisposable
     Glyph ForIndex(uint index)
     {
         if (_byIndex.TryGetValue(index, out var known)) return known;
-        var made = Rasterise(_face, _size, index);
+        var made = Rasterise(_face, _size, index, ref _loadFlags, ref _hintingFailures);
         _byIndex[index] = made;
         return made;
     }
@@ -502,14 +551,14 @@ internal sealed unsafe class UiFont : IDisposable
     /// Loads and renders glyph <paramref name="index"/> of <paramref name="face"/> (this font's, or a fallback's) at <paramref name="size"/>, packs
     /// its bitmap into the atlas and returns its layout; an empty glyph with only its advance when it has no bitmap or does not fit.
     /// </summary>
-    Glyph Rasterise(FreeTypeFace face, FT_SizeRec_* size, uint index)
+    Glyph Rasterise(FreeTypeFace face, FT_SizeRec_* size, uint index, ref FT_LOAD loadFlags, ref int hintingFailures)
     {
         float advance, offsetX, offsetY;
         int width, height;
         lock (FreeTypeFace.Gate)
         {
             Check(FT_Activate_Size(size), "FT_Activate_Size");
-            if (LoadGlyph(face, index) != FT_Error.FT_Err_Ok) return default;
+            if (LoadGlyph(face, index, ref loadFlags, ref hintingFailures) != FT_Error.FT_Err_Ok) return default;
             var slot = face.Face->glyph;
 
             // Snapped glyphs (MyGUI, and Meitou's snapped fonts) advance by the hinted whole-pixel advance, so every gap rounds alike; free
@@ -543,18 +592,18 @@ internal sealed unsafe class UiFont : IDisposable
     /// tried with the auto-hinter, then with no hinting, for the glyph; and for the font from the third failure on (a font whose hinting fails once
     /// is not tried at every glyph). Called with the FreeType lock held.
     /// </summary>
-    FT_Error LoadGlyph(FreeTypeFace face, uint index)
+    FT_Error LoadGlyph(FreeTypeFace face, uint index, ref FT_LOAD loadFlags, ref int hintingFailures)
     {
-        var error = FT_Load_Glyph(face.Face, index, _loadFlags | FT_LOAD.FT_LOAD_RENDER);
-        if (error != FT_Error.FT_Err_Ok && (_loadFlags & (FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_FORCE_AUTOHINT)) == 0)
+        var error = FT_Load_Glyph(face.Face, index, loadFlags | FT_LOAD.FT_LOAD_RENDER);
+        if (error != FT_Error.FT_Err_Ok && (loadFlags & (FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_FORCE_AUTOHINT)) == 0)
         {
-            if (++_hintingFailures >= 3) _loadFlags = FT_LOAD.FT_LOAD_FORCE_AUTOHINT;
+            if (++hintingFailures >= 3) loadFlags = FT_LOAD.FT_LOAD_FORCE_AUTOHINT;
             error = FT_Load_Glyph(face.Face, index, FT_LOAD.FT_LOAD_FORCE_AUTOHINT | FT_LOAD.FT_LOAD_RENDER);
         }
 
-        if (error != FT_Error.FT_Err_Ok && (_loadFlags & FT_LOAD.FT_LOAD_NO_HINTING) == 0)
+        if (error != FT_Error.FT_Err_Ok && (loadFlags & FT_LOAD.FT_LOAD_NO_HINTING) == 0)
         {
-            if (++_hintingFailures >= 3) _loadFlags = FT_LOAD.FT_LOAD_NO_HINTING;
+            if (++hintingFailures >= 3) loadFlags = FT_LOAD.FT_LOAD_NO_HINTING;
             error = FT_Load_Glyph(face.Face, index, FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_RENDER);
         }
 

@@ -950,10 +950,12 @@ holds refuses the second mod.
   `ScrollTo`/`ScrollOffset` with clamping, `Focus` once per request and `Submit`; no test, not seen in a running game.
 - **Fallback fonts:** `registration.AddFallbackFont(path)` (`UiRegistration`, in `IUiExtension.Register`) adds a TrueType or OpenType font
   file that every interface text draws a character from when its own font lacks it (Chinese, Japanese or other scripts, symbols, letters with
-  marks the game's fonts do not have), after the files added before, ahead of the font's substitute glyph. The file may be the mod's own or one
-  in the Kenshi folder (`locale/zh_CN/gui/fonts/TTDaHeiJ.ttf`). The glyph is drawn at the text's size and hinting; the line height and
-  baseline stay the font's own. False when the file does not exist or was added already; a file FreeType cannot open, or one with no outlines,
-  is skipped and logged once. Kept for the process. Cost: once per character and font size the first time it is drawn, nothing for characters
+  marks the game's fonts do not have), after the files added before, ahead of the font's substitute glyph; the font's own glyph still comes
+  first, also outside its `Codes` in Faithful mode. A relative path is in the mod's folder; a full path may name a file elsewhere, such as one
+  of the Kenshi folder's language fonts (`locale/zh_CN/gui/fonts/TTDaHeiJ.ttf` under it). The glyph is drawn at the text's size and hinting
+  (its own hinting failures do not change the font's); the line height and baseline stay the font's own, and no kerning applies between
+  fallback glyphs. False when the file does not exist or was added already; a file FreeType cannot open, or one with no outlines, is skipped
+  for every font and logged once. Text drawn before is drawn again with it. Kept for the process. Cost: once per character and font size the first time it is drawn, nothing for characters
   the game's font has. With none added nothing changes. Engine API, not in the original.
 - **Interface actions:** `context.Interface` (`ModInterface`) acts on the game's screens from the host's thread (a UI action, key action, menu
   row, hit feed): `OpenScreen(ModScreen kind, ScreenTarget target)` opens `CharacterEditor` (a recruit's edit, free with race and gender kept,
