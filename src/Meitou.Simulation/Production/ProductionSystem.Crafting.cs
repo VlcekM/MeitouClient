@@ -30,7 +30,7 @@ public sealed partial class ProductionSystem
     readonly SmithViewCache _smiths;
 
     /// <summary>
-    /// Crafts some research unlocks; anything no research lists is craftable from the start (engine reading).
+    /// The crafts some research can unlock; a record no research enables is never offered (<see cref="EverOffered"/>).
     /// </summary>
     HashSet<(CraftKind, string)> EverEnabled()
     {
@@ -40,9 +40,11 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Whether a craft is unlocked: a research unlocked it, or no research lists it.
+    /// Whether a finished research has enabled the craft: the original's bench keeps of each of its lists only the records the research has
+    /// unlocked (<c>FUN_1402bbd20</c> -> <c>FUN_1402ca390</c> over <c>FUN_14082f1b0</c>, <b>Verified</b> by disassembly), so a record no research enables
+    /// (the Thief Arm and the Stable Arm, #1338) is never made.
     /// </summary>
-    bool Unlocked(World world, CraftKind kind, string id) => world.Research.UnlockedCrafts.Contains((kind, id)) || !EverEnabled().Contains((kind, id));
+    static bool Unlocked(World world, CraftKind kind, string id) => world.Research.UnlockedCrafts.Contains((kind, id));
 
     /// <summary>
     /// Whether the player can queue an option now: its record (and a weapon's model) unlocked, and its level within the bench's tech level. A
@@ -61,13 +63,12 @@ public sealed partial class ProductionSystem
     static bool Researched(World world, string id) => world.Research.UnlockedCrafts.Contains((CraftKind.Weapon, id));
 
     /// <summary>
-    /// Whether some research could enable the weapon option: its type and model are each in a research's enable lists. The original's bench never
-    /// lists one that cannot be (<see cref="CanCraft"/>), so the Craft tab leaves it out.
+    /// Whether some research could enable the option: its record (a weapon's type and model each) is in a research's enable lists. The original's
+    /// bench never lists one that cannot be (<see cref="CanCraft"/>), so the Craft tab leaves it out.
     /// </summary>
     bool EverOffered(CraftOption option) =>
-        option.Kind != CraftKind.Weapon
-            || (EverEnabled().Contains((CraftKind.Weapon, option.Item))
-                && (option.Model is null || EverEnabled().Contains((CraftKind.Weapon, option.Model))));
+        EverEnabled().Contains((option.Kind, option.Item))
+            && (option.Model is null || EverEnabled().Contains((CraftKind.Weapon, option.Model)));
 
     /// <summary>
     /// The recipe of a bench option on the machine.

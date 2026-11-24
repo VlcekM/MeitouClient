@@ -873,7 +873,11 @@ Function 10, `CraftingBuilding` (**Observed** unless noted).
   (`FUN_1402b82a0`) and those whose `craft list fixed` is set (Refitted Blade, Catun No.3,
   Mk III and Edge Type 3 in the base data) (**Observed**, decompile). Meitou: `ProductionSystem.CanCraft` needs the type and model both enabled
   by a finished research, and `CraftOptions` leaves out a weapon option no research could enable (#1227); it lists every unlocked model, not the
-  original's narrower set (not modelled). Other kinds keep the engine reading that a record no research lists is craftable from the start.
+  original's narrower set (not modelled). The other lists are filtered the same way (**Verified**, disassembly of `FUN_1402ca390`, called from
+  `FUN_1402bbd20` for `item crafts` type 4, `armour crafts` 3, `crossbow crafts` 0x6b, `backpack crafts` 0x2e, `robotics crafts` 0x6f): the research
+  manager's unlocked records of that type (`FUN_14082f1b0`), each kept when its string id is one of the list's. So a record no research enables is never
+  made, such as the base data's Thief Arm and Stable Arm (#1338). Meitou: `CanCraft` needs every kind enabled by a finished research, `CraftOptions`
+  leaves out what no research could enable.
 - **Save** (GAMESTATE_BUILDING, `vfunc_17`/`18` `FUN_1402b8440` / `FUN_1402b8ab0`): float `num crafts`, bool `repeat`,
   per queued k strings `current<k>` (item) and `currentExtraData<k>` (weapon model), float `current prog<k>`, int
   `crit<k>`; partly drawn items as strings `craft partial item sid <k>` (item id), floats `craft partial item val <k>` and int `craft partial item size`
