@@ -166,11 +166,12 @@ the goal conditions (the call is virtual). Meitou applies the height limit above
 every update, and `FUN_140596800`, which gives the arrival test above its point): for a building that is not foliage and has no object at
 slot 0x2c8 (a constant null for `UseableStuff` and `ProductionBuilding`, `FUN_1400f6b20`) both are `getPositionMarker(the character's
 position)` (`FUN_14054b850`): with two or more use nodes the one nearest the character (squared 3D distance, the bad nodes skipped), else
-the marker. For a foliage building (a rock, `+0xc0`) with no point given (the planner `FUN_14026b530` makes its Task_Move steps with the
-point ZERO, which `FUN_140354600` hands on): 65 (`DAT_1416f0010`) from the rock's position toward the character (the 3D direction), put
-on the navmesh by the closest-point query `FUN_1403a3ac0` with cube 150 (`_DAT_1416cf06c`) and extent 10 (`DAT_14167fad4`), the door and
-water filter ([refit snap](pathfinding.md#refit-snap)); with a point given, that point with cube 50 (`DAT_141683170`); when the query finds
-nothing, the rock's position (**Verified**, decompile; constants read from the 1.0.68 exe). Data (**Verified**, merged base game): Quarry Mine A and B hold eight `Node Use` instances 120 to 140 units round the mine
+the marker. For a foliage building (a rock, `+0xc0`) with no point given: 65 (`DAT_1416f0010`) from the rock's position toward the
+character (the 3D direction), put on the navmesh by the closest-point query `FUN_1403a3ac0` with cube 150 (`_DAT_1416cf06c`) and extent 10
+(`DAT_14167fad4`), the door and water filter ([refit snap](pathfinding.md#refit-snap)); with a point given, that point with cube 50
+(`DAT_141683170`); when the query finds nothing, the rock's position (**Verified**, decompile; constants read from the 1.0.68 exe). That a
+miner's walk gives no point is **Observed**: the planner `FUN_14026b530` makes its Task_Move steps with the point ZERO, which
+`FUN_140354600` hands on, but the plan of row 87 was not traced to it. Data (**Verified**, merged base game): Quarry Mine A and B hold eight `Node Use` instances 120 to 140 units round the mine
 (local radius 133 to 155, `scale` 0.9), a Well eight at 21 to 33; the Stone mine's `use range` is 40, the Well's 18.
 
 Meitou's NPC town workers (189, 190, and a player slave's work, `AiSystem.AtWorkplace`, `WorkFunctionality.MarkerOf`): they walk to the
