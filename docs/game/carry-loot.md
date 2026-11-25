@@ -100,6 +100,10 @@ put-down tasks, the FIND_BED desire and the Watching-slaves desire. **Verified**
 ditch entry, to skip the implicit sleep and sit jobs ([implicit jobs](ai-tasks.md)); 87 Operating machine's list B has no `!47`, its desire stub
 `LAB_1400215ee` jumps to `FUN_140318320`, AI vtable `+0x98` (slot 19, constant 1), and `Task_OperateMachine` (`FUN_14035b430`, `FUN_14035bc90`) reads
 neither `+0x348` nor the state-47 evaluator. No production or construction row but 146 Turret gunner has `!47` (234 Turret guard plans through 146).
+A carrier also sits: 43 Staying home and 255 Reigning (desire AI slot 48, a random constant) and their provider 221 Pretend operating have no `!47`
+in list B, and neither 43's finder (`FUN_1408cbc00`, `FUN_1408cbad0`) nor `Task_OperateMachine`'s chair seating reads `+0x348` or the state-47
+evaluator, so a carrier staying home is seated on its chair with the body on its shoulder; 275 Sitting around and the sleep rows 98, 258, 175 do list
+`!47` (**Verified**, the [TaskData registry](ai-tasks.md#taskdata-registry) and decompile). Meitou plans these rows as listed.
 Meitou: `ProductionSystem.Able` (#915), `ConstructionSystem.Able` (#361); a carrier takes no job while its lift or put-down clip plays on past the
 order, or while it delivers on an errand (engine choice).
 
