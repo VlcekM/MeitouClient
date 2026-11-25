@@ -960,7 +960,7 @@ public sealed unsafe class TerrainTextures : IDisposable
             || _normalArray is null)
             return;
 
-        if (Guard is { } guard && !guard.Allows((ulong)Bytes(_layerSize, _levelCount, want, 32)))
+        if (Guard is { } guard && !guard.AllowsGrowth((ulong)Bytes(_layerSize, _levelCount, want, 32)))
         {
             _nearRefused = want;
             Console.WriteLine($"terrain   near layer slots not grown to {want}: memory budget (VramGuard)");

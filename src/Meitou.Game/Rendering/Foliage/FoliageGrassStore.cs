@@ -142,7 +142,7 @@ sealed class FoliageGrassStore
             _grassStoreRefused = wanted;
             return;
         }
-        if (guard is { } vram && !vram.Allows(GrassArenaBytes * (ulong)scale))
+        if (guard is { } vram && !vram.AllowsGrowth(GrassArenaBytes * (ulong)scale))
         {
             _grassStoreRefused = wanted;
             Console.WriteLine($"foliage   grass store not grown to {GrassArenaBytes * (ulong)scale >> 20} MB: memory budget (VramGuard)");

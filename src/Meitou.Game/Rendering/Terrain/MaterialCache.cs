@@ -292,7 +292,7 @@ sealed class MaterialCache : IDisposable
     /// </summary>
     bool CreateCache(TerrainTextures t)
     {
-        if (t.Guard is { } guard && !guard.Allows((ulong)CacheBytes))
+        if (t.Guard is { } guard && !guard.AllowsGrowth((ulong)CacheBytes))
         {
             _cacheRefused = true;
             Console.WriteLine($"terrain   material cache not made: memory budget (VramGuard, {CacheBytes >> 20} MB)");

@@ -16,8 +16,8 @@ namespace Meitou.Game.Rendering.Frame;
 /// under <see cref="Recover"/> (74%) for four seconds: the band between is where the system rests, so it does not swing.</item>
 /// <item>Allocations that can be large call <see cref="Allows"/> first (a texture's image, a bigger scratch buffer or instance arena): it asks
 /// for a fresh sample and refuses what would take the use past <see cref="Ceiling"/> (92%), counting what was reserved since the sample, and a
-/// refusal puts the guard into pressure at once. Streaming moves a gigabyte in a quarter of a second at its fastest, so the sampling alone
-/// would be too slow.</item>
+/// refusal puts the guard into pressure at once (not that of an enlargement the caller can do without, <see cref="AllowsGrowth"/>). Streaming
+/// moves a gigabyte in a quarter of a second at its fastest, so the sampling alone would be too slow.</item>
 /// <item>At the default settings the use is a third of an 11 GB card's budget: the guard never leaves its idle state there
 /// (<see cref="RangeScale"/> 1 multiplies exactly, so pictures are unchanged).</item>
 /// </list>
@@ -270,19 +270,35 @@ public sealed class VramGuard
     /// <see cref="Allows(ulong)"/> with <paramref name="pending"/> bytes the caller knows are on their way but are not in the memory in use yet (they
     /// count against the room without being reserved again).
     /// </summary>
-    public bool Allows(ulong bytes, ulong pending)
+    public bool Allows(ulong bytes, ulong pending) => Grants(bytes, pending, true);
+
+    /// <summary>
+    /// <see cref="Allows(ulong)"/> for an enlargement the caller does without when refused (a larger grass store, more terrain layer slots, the
+    /// material cache): what is drawn already fits, so a refusal declines the enlargement only and does not enter pressure. Observed (#1390,
+    /// 4K, Maximum textures, a 6.3 GB budget): the terrain layer slots' growth refused at 87.5% put the guard into pressure, and the ranges,
+    /// x0.53 within 4 s, never came back (the caches refilled to 81%, over <see cref="Recover"/>); without it they stayed at x1 at 87 to 90%.
+    /// </summary>
+    public bool AllowsGrowth(ulong bytes) => Grants(bytes, 0, false);
+
+    /// <summary>
+    /// Whether <paramref name="bytes"/> more (and <paramref name="pending"/> on their way) stay under <see cref="Ceiling"/>, reserving them if so;
+    /// a refusal is counted and, when <paramref name="pressing"/>, enters pressure.
+    /// </summary>
+    bool Grants(ulong bytes, ulong pending, bool pressing)
     {
         double now = _clock();
         if (now - _lastSample >= FreshSeconds) Sample(now);
         if (_budget <= 0) return true;
+
         long wanted = _used + _reserved + (long)pending + (long)bytes;
         if (wanted <= Ceiling * _budget)
         {
             _reserved += (long)bytes;
             return true;
         }
+
         Refusals++;
-        if (!_pressure) Enter(now, (double)wanted / _budget);
+        if (pressing && !_pressure) Enter(now, (double)wanted / _budget);
         return false;
     }
 
