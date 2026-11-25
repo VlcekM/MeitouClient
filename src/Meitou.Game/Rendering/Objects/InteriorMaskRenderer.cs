@@ -283,7 +283,10 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
                 float interiorDepth = 1.0 / gl_FragCoord.w;
                 // Under the mask's floor too (its farthest face here is one, kept in g by the mask's pass): the ground between the floor's boards and
                 // the mask's bottom, a hump of terrain with its grass coming through a floor (Meitou; the game's rule ends 1 unit behind the face).
-                float interiorBack = -interiorRange.g >= interiorRange.a - 0.3 ? interiorRange.a + {{UnderFloor}} : interiorRange.a;
+                // Only where a floor face is (g < 0): a pixel no mask face covers (g = a = 0) would otherwise cut everything nearer than the
+                // reach (#1411).
+                bool interiorFloor = interiorRange.g < 0.0 && -interiorRange.g >= interiorRange.a - 0.3;
+                float interiorBack = interiorFloor ? interiorRange.a + {{UnderFloor}} : interiorRange.a;
                 if (interiorDepth < interiorBack && interiorDepth > interiorFront(interiorRange)) discard;
             }
         """;
