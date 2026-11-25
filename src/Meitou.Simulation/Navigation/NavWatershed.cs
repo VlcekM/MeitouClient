@@ -42,6 +42,11 @@ internal sealed class NavWatershed
     readonly List<RcDirtyEntry> _updates = new();
 
     /// <summary>
+    /// The bucket position and span of each entry of <see cref="_updates"/>, to put back one the round cannot assign.
+    /// </summary>
+    readonly List<(int Position, RcLevelStackEntry Span)> _updated = new();
+
+    /// <summary>
     /// Fills the interior of a tile with watershed regions and returns the next unused region ID.
     /// </summary>
     public static int Partition(RcCompactHeightfield field, Span<int> regions, ReadOnlySpan<int> distance,
@@ -170,6 +175,7 @@ internal sealed class NavWatershed
         for (int round = 0; round < rounds; round++)
         {
             _updates.Clear();
+            _updated.Clear();
             for (int j = 0; j < spans.Count; j++)
             {
                 var span = spans[j];
@@ -180,16 +186,36 @@ internal sealed class NavWatershed
 
                 spans[j] = new RcLevelStackEntry(span.x, span.y, -1);
                 _updates.Add(entry);
+                _updated.Add((j, span));
             }
 
-            if (_updates.Count == 0) return;
-
-            foreach (var entry in _updates)
-            {
-                regions[entry.index] = entry.region;
-                regionDistance[entry.index] = entry.distance2;
-            }
+            if (ApplyUpdates(field, regions, regionDistance, spans) == 0) return;
         }
+    }
+
+    /// <summary>
+    /// Assigns the round's expansions in order, and returns how many it made. One that would now lie beside its region at a step
+    /// (<see cref="BesideOwn"/>: a span beside it took the region earlier in the round) is put back in <paramref name="spans"/> for a later round.
+    /// </summary>
+    int ApplyUpdates(RcCompactHeightfield field, Span<int> regions, Span<int> regionDistance, List<RcLevelStackEntry> spans)
+    {
+        int applied = 0;
+        for (int k = 0; k < _updates.Count; k++)
+        {
+            var entry = _updates[k];
+            var (j, span) = _updated[k];
+            if (BesideOwn(field, regions, span, entry.region))
+            {
+                spans[j] = span;
+                continue;
+            }
+
+            regions[entry.index] = entry.region;
+            regionDistance[entry.index] = entry.distance2;
+            applied++;
+        }
+
+        return applied;
     }
 
     /// <summary>
@@ -208,6 +234,7 @@ internal sealed class NavWatershed
 
             int candidate = regions[next];
             if (candidate <= 0 || (candidate & RC_BORDER_REG) != 0 || regionDistance[next] + 2 >= best) continue;
+            if (BesideOwn(field, regions, span, candidate)) continue;
 
             region = candidate;
             best = regionDistance[next] + 2;
@@ -231,7 +258,7 @@ internal sealed class NavWatershed
         {
             var span = _stack[^1];
             _stack.RemoveAt(_stack.Count - 1);
-            if (TouchesOtherRegion(field, regions, span, area, id))
+            if (TouchesOtherRegion(field, regions, span, area, id) || BesideOwn(field, regions, span, id))
             {
                 regions[span.index] = 0;
                 continue;
@@ -283,6 +310,29 @@ internal sealed class NavWatershed
 
             int diagonalRegion = regions[diagonal];
             if (diagonalRegion != 0 && diagonalRegion != id) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a span lies beside a span of <paramref name="region"/> across one of its unconnected edges: a step, such as the side of a stair ramp
+    /// over the ground along it. Grown into the region, the region would hold both and meet itself at the step; its contour then has a slit there,
+    /// which its polygons span (docs/game/pathfinding.md, "Own builder", steps inside a region).
+    /// </summary>
+    internal static bool BesideOwn(RcCompactHeightfield field, ReadOnlySpan<int> regions, RcLevelStackEntry span, int region)
+    {
+        for (int dir = 0; dir < 4; dir++)
+        {
+            if (GetCon(field.spans[span.index], dir) != RC_NOT_CONNECTED) continue;
+
+            int x = span.x + GetDirOffsetX(dir);
+            int y = span.y + GetDirOffsetY(dir);
+            if (x < 0 || y < 0 || x >= field.width || y >= field.height) continue;
+
+            var cell = field.cells[x + y * field.width];
+            for (int i = cell.index, end = cell.index + cell.count; i < end; i++)
+                if (regions[i] == region) return true;
         }
 
         return false;

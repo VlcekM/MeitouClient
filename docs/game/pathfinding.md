@@ -378,6 +378,14 @@ has no faces there (its stair faces end at x 49395). Over 10 zones (`--compare`,
 0.1 % and kept polygons grow 0..0.4 %; with a 26° limit Ancient Lab `28.60`'s spiral stair top (28°) was cut from its floor. The same alignment test cuts links with no step, where two surfaces cross at one height (a ramp rising past a ledge's side). **Observed** (zone 23.22,
 Stephouse `560-Newwworld-INGAME`, `--survey-interiors 23,22 --border`): its outer steps (`Steps02`, 781..836) rose along the south wall past the wall top
 (792..797) and joined it, so the walls' tops were walkable; ours-only area there 7724 → 728, 15 zones' `--compare` unchanged within 0.1 %.
+<a id="steps-inside-a-region"></a>**Steps inside a region** (engine choice, `NavWatershed.BesideOwn`, `NavRegionMerge`): a watershed region does not grow onto a span
+that lies beside one of its own spans across an unconnected edge (a step), and two regions beside each other at a step are not merged; a span no
+region may take stays without one, as Recast leaves spans no expansion reaches. Recast's flood went round a stair's foot, so the ramp and the ground
+along its side made one region whose contour had a slit at the step, and one polygon spanned the ramp and the ground 15 below it. **Observed** (#1387
+save, zone 43.11, Y-House `16-Newwworld-INGAME`'s `Steps`, `--probe 53497.6,-94770.3` and `probe --nav`): the original's tile has polygons 2207 (ramp, y
+1022.6) and 766 (ground, y 1009) there, ours had one; a guard on the ramp got a path pulled off its side (a 13-unit drop, refused), then the next start's
+path doubled back to its feet and it circled that point for good. Now its path goes down the ramp to the foot. `--compare` over 8 zones (43.11, 42.22,
+20.32, 18.39, 23.22, 28.60, 18.35, 39.16): area against the original unchanged within 0.03 %, kept polygons up 0.3..2.2 %.
 **Cell height 0.5** (engine choice): a span's top is its surface rounded up to a cell, so at height 1 a 5.9 step could come out as the 5-cell climb.
 **Observed** (zone 23.22, Y-House `554-Newwworld-INGAME`): its walkable wall top, 5.9 above the upper floor, joined it; ours-only area 22840 → 1540. A
 climb of 4 cells instead cut Squin's rock top (18.35, RockOut_Rock at 1709) from the hillside it meets (orig-only 1115 → 7369); build time unchanged (zones 18.35, 42.22).

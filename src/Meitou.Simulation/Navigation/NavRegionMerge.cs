@@ -77,9 +77,9 @@ internal sealed class NavRegionMerge
         public readonly List<int> Connections = new();
 
         /// <summary>
-        /// The unique region IDs of spans in the same columns.
+        /// The unique region IDs it may not merge with: of spans in the same columns, and of spans beside it across an unconnected edge (a step).
         /// </summary>
-        public readonly List<int> Floors = new();
+        public readonly List<int> Apart = new();
 
         /// <summary>
         /// Clears the record for a tile while retaining the lists' storage.
@@ -93,7 +93,7 @@ internal sealed class NavRegionMerge
             Overlap = false;
             Remap = false;
             Connections.Clear();
-            Floors.Clear();
+            Apart.Clear();
         }
     }
 
@@ -127,7 +127,7 @@ internal sealed class NavRegionMerge
     }
 
     /// <summary>
-    /// Collects each region's span count, coincident floors and ordered contour neighbours.
+    /// Collects each region's span count, the regions it may not merge with and its ordered contour neighbours.
     /// </summary>
     void BuildGraph(RcCompactHeightfield field, ReadOnlySpan<int> ids, int count)
     {
@@ -145,6 +145,7 @@ internal sealed class NavRegionMerge
                     var region = _regions[id];
                     region.SpanCount++;
                     CollectFloors(ids, cell.index, end, i, count, region);
+                    CollectBeside(field, ids, x, y, i, count, region);
                     if (region.Connections.Count > 0) continue;
 
                     region.Area = field.areas[i];
@@ -166,7 +167,30 @@ internal sealed class NavRegionMerge
 
             if (floor == region.Id) region.Overlap = true;
 
-            AddFloor(region, floor);
+            AddApart(region, floor);
+        }
+    }
+
+    /// <summary>
+    /// Records the other regions of the spans beside a span across its unconnected edges: merged, the two would meet at the step between them
+    /// (<see cref="NavWatershed.BesideOwn"/>).
+    /// </summary>
+    static void CollectBeside(RcCompactHeightfield field, ReadOnlySpan<int> ids, int x, int y, int index, int count, Region region)
+    {
+        for (int dir = 0; dir < 4; dir++)
+        {
+            if (GetCon(field.spans[index], dir) != RC_NOT_CONNECTED) continue;
+
+            int nextX = x + GetDirOffsetX(dir);
+            int nextY = y + GetDirOffsetY(dir);
+            if (nextX < 0 || nextY < 0 || nextX >= field.width || nextY >= field.height) continue;
+
+            var cell = field.cells[nextX + nextY * field.width];
+            for (int j = cell.index, end = cell.index + cell.count; j < end; j++)
+            {
+                int beside = ids[j];
+                if (beside != 0 && beside < count && beside != region.Id) AddApart(region, beside);
+            }
         }
     }
 
@@ -345,7 +369,7 @@ internal sealed class NavRegionMerge
     }
 
     /// <summary>
-    /// Allows a merge across one shared boundary when the area types agree and the regions have no coincident floors.
+    /// Allows a merge across one shared boundary when the area types agree and neither region is kept apart from the other.
     /// </summary>
     static bool CanMerge(Region region, Region other)
     {
@@ -355,7 +379,7 @@ internal sealed class NavRegionMerge
         foreach (int id in region.Connections)
             if (id == other.Id && ++contacts > 1) return false;
 
-        return !region.Floors.Contains(other.Id);
+        return !region.Apart.Contains(other.Id);
     }
 
     /// <summary>
@@ -374,8 +398,8 @@ internal sealed class NavRegionMerge
         AppendContour(target.Connections, source.Connections, sourceEdge);
         RemoveAdjacentDuplicates(target.Connections);
 
-        foreach (int id in source.Floors)
-            AddFloor(target, id);
+        foreach (int id in source.Apart)
+            AddApart(target, id);
 
         target.SpanCount += source.SpanCount;
         source.SpanCount = 0;
@@ -405,7 +429,7 @@ internal sealed class NavRegionMerge
             if (region.Id == oldId) region.Id = newId;
 
             bool changed = ReplaceId(region.Connections, oldId, newId);
-            ReplaceId(region.Floors, oldId, newId);
+            ReplaceId(region.Apart, oldId, newId);
             if (changed) RemoveAdjacentDuplicates(region.Connections);
         }
     }
@@ -441,11 +465,11 @@ internal sealed class NavRegionMerge
     }
 
     /// <summary>
-    /// Records a floor once while preserving the order in which floors were found.
+    /// Records a region kept apart once, preserving the order in which they were found.
     /// </summary>
-    static void AddFloor(Region region, int id)
+    static void AddApart(Region region, int id)
     {
-        if (!region.Floors.Contains(id)) region.Floors.Add(id);
+        if (!region.Apart.Contains(id)) region.Apart.Add(id);
     }
 
     /// <summary>
