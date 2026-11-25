@@ -354,14 +354,17 @@ public class AiTests(ITestOutputHelper output)
         {
             var beds = squad.Ai!.Home!.Of(HomeSpotKind.Bed).Select(b => b.Position).ToList();
             var sleepers = squad.Members.Where(m => m != squad.Leader).ToList();
-            foreach (var m in sleepers)
+            var lying = sleepers.Where(m => world.Characters.Cold(m.Slot)!.InSomething == HeldState.Bed).ToList();
+            foreach (var m in lying)
             {
-                Assert.Contains((CharacterTask)world.Characters.Previous[m.Slot].Task, new[] { CharacterTask.Sleep, CharacterTask.Rest });
+                Assert.Equal(CharacterTask.Sleep, (CharacterTask)world.Characters.Previous[m.Slot].Task);
                 Assert.InRange(beds.Min(b => Off(world, m, b)), 0, 13);
             }
 
-            // Every bed is taken (lain in, task Sleep); the sleepers left over rest beside them.
-            Assert.Equal(Math.Min(beds.Count, sleepers.Count), sleepers.Count(m => world.Characters.Cold(m.Slot)!.InSomething == HeldState.Bed));
+            // Every bed is taken (lain in, task Sleep); a sleeper left over finds no bed (the home's beds are the bed search's only candidates),
+            // so it does not go to bed (docs/game/locks.md "Bed search, other characters").
+            Assert.Equal(Math.Min(beds.Count, sleepers.Count), lying.Count);
+            Assert.All(sleepers.Except(lying), m => Assert.NotEqual(TaskType.GoHomeAndGoToBed, world.Characters.Cold(m.Slot)!.Ai!.Goal?.Task.Type));
         }
     }
 
@@ -879,7 +882,8 @@ public class AiTests(ITestOutputHelper output)
         Assert.True(TaskPlanner.Local.Plan(node, 1, default, new PlanStub(inBed: false, atNode: true), [], plan) > 0);
         Assert.Equal([TaskType.StandAtNode, TaskType.StandAtGeneralNode], plan.Select(s => s.Type));
 
-        // Sleeping on the floor is urgent but needs to be away from the home town, which nothing provides: at home going to bed wins.
+        // Sleeping on the floor is urgent but needs to be away from the home town, which nothing provides: at home going to bed wins, for every
+        // member a bed of its home is left for.
         var floor = Task("130-t", TaskType.SleepOnFloor, TaskPriority.Urgent);
         var package = Rec("131-t", FcsRecordType.AiPackage, "Floor or bed");
         package.References["Leader AI Goals"] = package.References["Squad AI Goals"] = [Ref("130-t", 0, 100), Ref("102-t", 0, 100)];
@@ -889,8 +893,11 @@ public class AiTests(ITestOutputHelper output)
         var minds = world.Squads.All.Where(s => s.TemplateId == "10-t").SelectMany(s => s.Members).Select(m => world.Characters.Cold(m.Slot)!.Ai!)
                 .ToList();
 
+        int beds = world.Squads.All.Where(s => s.TemplateId == "10-t").Select(s => s.Ai!.Home).Distinct().Sum(h => h!.Of(HomeSpotKind.Bed).Count());
+
         Assert.NotEmpty(minds);
-        Assert.All(minds, m => Assert.Equal(TaskType.GoHomeAndGoToBed, m.Goal!.Task.Type));
+        Assert.Equal(Math.Min(beds, minds.Count), minds.Count(m => m.Goal?.Task.Type == TaskType.GoHomeAndGoToBed));
+        Assert.DoesNotContain(minds, m => m.Goal?.Task.Type == TaskType.SleepOnFloor);
     }
 
     /// <summary>
@@ -966,9 +973,11 @@ public class AiTests(ITestOutputHelper output)
                     List<Vector3> Beds) x) => (CharacterTask)world.Characters.Previous[x.M.Slot].Task is CharacterTask.Sleep or CharacterTask.Rest
                     && x.Beds.Min(b => Off(world, x.M, b)) <= 13;
 
-            // With the switch they are in bed within a second of the town coming back; without it some are still on their way from where the town
-            // unloaded.
-            if (schedule) Assert.All(sleepers, x => Assert.True(InBed(x)));
+            // With the switch the sleepers a bed is left for are in bed within a second of the town coming back; without it some are still on their
+            // way from where the town unloaded.
+            var bedded = sleepers.Where(x => world.Characters.Cold(x.m.Slot)!.Ai!.Goal?.Task.Type == TaskType.GoHomeAndGoToBed).ToList();
+            if (schedule) Assert.NotEmpty(bedded);
+            if (schedule) Assert.All(bedded, x => Assert.True(InBed(x)));
             else Assert.Contains(sleepers, x => !InBed(x));
         }
     }

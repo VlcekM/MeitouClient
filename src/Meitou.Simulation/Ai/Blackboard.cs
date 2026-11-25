@@ -373,6 +373,12 @@ public sealed class Blackboard
     public Dictionary<int, HomeSpot> SeatClaims { get; } = [];
 
     /// <summary>
+    /// The bed of the home (a fixture id) each member going to bed or lying in one claimed, as the last serial step found it
+    /// (<see cref="HomeBedClaims"/>; derived, not hashed).
+    /// </summary>
+    public Dictionary<int, string> BedClaims { get; } = [];
+
+    /// <summary>
     /// The slots of <see cref="SeatClaims"/> whose seat is a workstation without power (state 93 false for row 221 there, so staying home has no
     /// plan; derived with the claims, not hashed).
     /// </summary>

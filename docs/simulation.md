@@ -1276,9 +1276,10 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   Saves: `HeldSave` (a player-built bed also writes the original's `in what` = its building's handle; read back through `Bind`); a loaded sleeper's task is Sleep,
   and `Bind` puts it at its lie spot still sleeping (a standing task would get it up).
 
-- **AI sleepers** (going to bed, 153/239, which plan into 98 Sleeping, `Task_UseBed`): arrived at their home's bed spot, the serial step (`AiSystem.LieDown`) lies
-  them in that bed, else in the nearest free bed of the building within 30 (engine choice); with none free they rest on the floor there. Without a bed spot at
-  home they go to the bed `AiSystem.SpareBed` finds ([locks](game/locks.md)); with none the goal is not wanted (desire 0).
+- **AI sleepers** (going to bed, 153/239, which plan into 98 Sleeping, `Task_UseBed`): each walks to the free bed of its home no squad mate
+  claimed (`HomeBedClaims`, [locks](game/locks.md#beds)); arrived, the serial step (`AiSystem.LieDown`) lies them in that bed, else in the nearest
+  free bed of the building within 30 (engine choice); with none free they rest on the floor there. A home whose beds are all taken gives none;
+  without beds at home they go to the bed `AiSystem.SpareBed` finds; with none the goal is not wanted (desire 0).
   One already in a bed keeps it: the goal's target is where it lies, so its plan is 98 alone and it stays in; the goal takes its
   sleep as its own (provenance 153/239, so the plan step 98 is its order, as the original's `Task_UseBed`), also for one loaded
   in bed or laid in by the walk's end. A goal of any other behaviour gets them out (`LeaveBed`, in the think). A character a carrier laid in a bed (a

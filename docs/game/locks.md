@@ -542,9 +542,15 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   that of a set of pointers (steps 1 to 3), so it is not reproducible. Meitou: `FixtureRegistry.FindBedNpc` takes the first free bed of the squad's home building, else the nearest free bed of its
   town that passes the finders' allies test below (engine choices for steps 2 to 4 and the order), so a town's homeless vagrants sleep in a bar's
   beds, not in a private house where the residents call them trespassers. The search is the target finder of 153 / 239 Go home go to bed: its factor is 0 when it finds no bed
-  (**Verified**), so a character without a bed does not want the goal and the next one is chosen. Meitou: a sleeper whose home has bed spots takes one of them;
-  without (homeless, or a home with no bed) `AiSystem.SpareBed` runs the search (a squad without a town: own or allied beds within the bed search range,
-  engine choice); with no bed found the goal's desire is 0. Only 175 Sleep on floor rests without a bed.
+  (**Verified**), so a character without a bed does not want the goal and the next one is chosen. Steps 2 to 4 run only while the list is empty (the
+  list count gates them), so a home with BF_BED beds that are all taken or targeted gives no bed at all; the lister matches the function exactly, so
+  skeleton beds (25) are not in step 1's list (**Verified** by decompile, `FUN_1408cfe00`, `FUN_14054d4f0`). Meitou: `HomeBedClaims` (serial, on the
+  package cadence, member order) gives each member lying in bed, going to bed or with going to bed open at this hour a BF_BED bed of its home: the
+  one it lies in, else the one it claimed while still free, else the first free one no one claimed (Meitou's thinks run in parallel, so the claims
+  are made serially; which members get the beds is an engine choice). A think takes its claim, else the free unclaimed bed the next
+  pass would give it, and with none the goal's desire is 0. Without such beds (homeless, or a home with none) `AiSystem.SpareBed` runs the search
+  (a squad without a town: own or allied beds within the bed search range, engine choice); with no bed found the goal's desire is 0.
+  Only 175 Sleep on floor rests without a bed.
   The finders' allies test (`FUN_1408ca5d0`, **Verified** by decompile) passes a building of the finder's faction or one `canIUseThisBuilding` accepts, which
   includes the town the squad occupies ([economy](economy.md)), so a homeless occupier sleeps in the occupied town's beds. Meitou: `AiSystem.OccupiedBed`, the
   member index's (round robin) complete BF_BED of the occupied town not held outside the squad (engine choice for the order).
