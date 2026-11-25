@@ -80,7 +80,7 @@ Debris (severed limbs, bolts) takes its textures from the character cache rather
 
 The sharing caches also have one high-water mark together (`TextureShare.ResidentBytes` against `MarkMb`, 2 GB at full quality), not one each.
 Above it, textures unused for 8 s are unloaded, least recently used first, until the total is under three quarters of the mark. Below it,
-a texture is unloaded after 20 s unused.
+a texture is unloaded after 20 s unused. The mark is three quarters while `VramGuard` is under pressure or clamps the ranges ([engine](engine.md)).
 
 Under `VramGuard` pressure no texture is refined, but one that something draws still loads *lean*: top side at most 256
 (`WorldTextureCache.LeanSize`), while the use stays under 94.5% of the budget (`AllowsLean`). It is refined once the pressure ends. Before this, a

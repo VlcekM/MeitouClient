@@ -25,7 +25,7 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   cap whatever the distance (`FarSlots`, code reading), so the distance sets what is loaded and shaded, not the video memory. The quality tiers set it
   (15000 Low, 20000 Medium, 30000 High, 45000 Ultra and Extreme; [native-ui](native-ui.md) "Settings").
 - **Near arrays** have 32 slots at the full size (about 270 MB at 2048²), 32 per kept place (`Areas`, render-objects.md "Kept points") up to 128 when
-  the guard allows: growing reallocates both arrays (no image copy), so every pair drops to far and loads near again; they never shrink, and a refused size is not asked again. A slot goes to a pair within its near range of the eye, then of a kept point while slots are left
+  the guard allows: growing reallocates both arrays (no image copy), so every pair drops to far and loads near again; they never shrink, do not grow while the guard clamps the ranges, and a refused size is not asked again. A slot goes to a pair within its near range of the eye, then of a kept point while slots are left
   ([render-objects.md](render-objects.md#kept-points)), least recently needed first: the range is the pair's tile × pixels per radian ÷ layer size × 11.3, with an upscaler's negative bias widening it.
   When no slot is left, a pair stays far.
 - Per sample the shader works out the near arrays' level (8x anisotropic: the long axis over up to 8 taps, never under the short axis). Below
@@ -238,7 +238,7 @@ Meitou, not in the game (`MaterialCache`, A/B `terrain-material-cache`, B: every
 material is baked into world-space levels round the eye, and a patch pixel within them reads the cache instead of shading up to five biomes of up
 to 14 layer samples each.
 - **Levels**: 4 of 2048² texels, level k's texel 0.25 × 2^k units (51, 102, 205, 410 m squares), RGBA8 albedo + gloss and RGBA8 tangent-space
-  normal x, y (z follows), rain absorbance, relief height: 128 MB, not made when `VramGuard` refuses it. Each is addressed toroidally (repeat
+  normal x, y (z follows), rain absorbance, relief height: 128 MB, not made when `VramGuard` refuses it, nor while it clamps the ranges (then made once they are back). Each is addressed toroidally (repeat
   sampler, texel = world mod side), its origin snapped to 64 texels round the eye moved towards the camera's focus (`Camera.Target`) by at most a quarter of the level's side (`MaterialCache.Centre`: the
   game's camera orbits a point some way off, so most of the picture lies beyond it; centred on the eye, the focus sat at the finest square's edge and the pixels beyond fell to the next level in a hard step: **Observed**, Metal);
   `bakeEdge` blends a level towards the next coarser over its last 512 texels (a quarter of the side), so the step at its edge is not a line; the layers are mixed in over the half level past one level

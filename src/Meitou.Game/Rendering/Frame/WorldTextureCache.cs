@@ -449,8 +449,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     /// <summary>
     /// The mark (MB) for <paramref name="highWaterMb"/> and <paramref name="share"/> of the guard's budget, scaled by <paramref name="areas"/> (the
-    /// share to at most <paramref name="maxShare"/>): the smaller of the two, and three quarters of it under pressure. Infinite marks stay infinite;
-    /// without a known budget only the scaled mark counts.
+    /// share to at most <paramref name="maxShare"/>): the smaller of the two, and three quarters of it while the guard is active (under pressure, or
+    /// the ranges not back at 1: a full mark refilled the room the clamp freed, and the ranges never came back, #1390). Infinite marks stay
+    /// infinite; without a known budget only the scaled mark counts.
     /// </summary>
     internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard, int areas = 1, double maxShare = MaxAreaShare)
     {
@@ -459,7 +460,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         highWaterMb *= areas;
         share = Math.Max(share, Math.Min(share * areas, maxShare));
         if (guard is not { BudgetBytes: > 0 } g) return highWaterMb;
-        return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Pressure ? 0.75 : 1);
+        return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Active ? 0.75 : 1);
     }
 
     /// <summary>

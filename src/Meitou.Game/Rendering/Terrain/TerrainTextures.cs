@@ -951,13 +951,14 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>
     /// Grows the near arrays to <see cref="NearLayers"/> slots per kept place (<see cref="Areas"/>, at most <see cref="MaxNearSlots"/>) when no layer
     /// is in flight and the guard allows it: there is no image copy, so every pair loses its slot (its biomes read the far arrays) and loads near
-    /// again, nearest first. The arrays never shrink while running.
+    /// again, nearest first. The arrays never shrink while running, and do not grow while the guard clamps the ranges (<see cref="VramGuard.Active"/>:
+    /// the growth took the room the clamp freed, #1390).
     /// </summary>
     void GrowNear()
     {
         int want = Math.Min(Math.Min(_pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
         if (GpuContext.DiagNoGrow || want <= Capacity || want >= _nearRefused || _inFlight > 0 || _nearLoading > 0 || _diffuseArray is null
-            || _normalArray is null)
+            || _normalArray is null || Guard is { Active: true })
             return;
 
         if (Guard is { } guard && !guard.AllowsGrowth((ulong)Bytes(_layerSize, _levelCount, want, 32)))
