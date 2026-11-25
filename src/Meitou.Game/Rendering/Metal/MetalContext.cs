@@ -141,6 +141,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     readonly int _maxSampleCount;
     /// <summary>
+    /// The GPU traces rays in hardware (<see cref="TracesInHardware"/>).
+    /// </summary>
+    readonly bool _hardwareRayTracing;
+    /// <summary>
     /// The frame-slot wait mode from <c>MEITOU_METAL_SLOT_WAIT</c>: wait for the reused slot's command buffer (the default, as Vulkan's fence), and
     /// with "serial" for the previous frame instead; "0"/"false" turns the wait off for A/B diagnostics.
     /// </summary>
@@ -265,6 +269,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             if (device.SupportsTextureSampleCount((ulong)count)) supportedSamples = count;
 
         _maxSampleCount = supportedSamples;
+        _hardwareRayTracing = TracesInHardware(device);
         string slotWait = Environment.GetEnvironmentVariable("MEITOU_METAL_SLOT_WAIT") ?? "";
 
         // Vulkan waits for the slot's fence before reusing it. That rule is now the Metal default; "0"/"false" restores
@@ -1716,7 +1721,13 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     #region Capabilities and the frame ring
 
     /// <inheritdoc/>
-    public bool HasRayQuery => false;
+    public bool HasRayQuery => _hardwareRayTracing;
+
+    /// <summary>
+    /// Whether <paramref name="device"/> traces rays in hardware: Metal's Apple9 family (M3 and later). Older Apple GPUs report ray tracing too, but
+    /// in software, too slow for the traced effects (a save load with the probe GI froze an M1 Pro), so they count as having none.
+    /// </summary>
+    internal static bool TracesInHardware(MTLDevice device) => device.SupportsRaytracing && device.SupportsFamily(MTLGPUFamily.Apple9);
     /// <summary>
     /// No tessellation stages on Metal.
     /// </summary>

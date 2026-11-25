@@ -561,7 +561,7 @@ context is Vulkan; the reflection pass and Meitou water are seam-neutral. Metal 
 shadows, the scene host, the post-chain scene effects (fog volumes, shafts, SSAO), particles, the post chain,
 and the finished-picture overlays. Metal's local scene/post loop is gone; its host keeps the title staging, the
 interface and the present. Both backends draw the scene over one depth (Vulkan reversed, Metal conventional:
-[renderer-native](renderer-native.md) "Depth"); Metal's chain has no GI. The shared draw runs the reflection pass and low-resolution particles on both backends.
+[renderer-native](renderer-native.md) "Depth"); Metal's GI is its own probe path ([render-gi](render-gi.md#metal)). The shared draw runs the reflection pass and low-resolution particles on both backends.
 
 **Combat feedback and deterministic stills (2026-10-22).** `SetUpBlood` takes `IGpuContext`; Metal checks the blood
 setting and makes the decal store and debris renderer before a loaded save's decals are read. `UpdateBlood` runs
@@ -612,9 +612,8 @@ Vulkan at default settings, the remaining scope is:
    `--ticks`/`--move-to` stills).
 3. **Rendering parity.** The Meitou volumetric fog; post (`FogRate`, full TAA with character/grass motion, MetalFX
    reactive mask); and the character motion/stage/hover passes.
-4. **GI decision.** On this Mac Vulkan also reports `gi off: the device has no ray queries (VK_KHR_ray_query)`,
-   so the local parity shots are no-GI; on a machine where Vulkan traces GI the target includes it. Either port
-   `GiScene`/`GiProbes` to Metal ray tracing or make no-GI the documented macOS baseline.
+4. **GI.** The probes run on Metal ray tracing from the M3 ([render-gi](render-gi.md#metal), which lists what Vulkan's GI has that
+   Metal's lacks); the other traced effects are not ported.
 5. **Performance and robustness.** GPU culls and grass kernels, VRAM/texture budgets, Metal timestamps, the
    intermittent `encoding in progress` validation assertion at the inland water view, and the known arm64
    `GoldenHashTests` failure.
@@ -624,9 +623,8 @@ Vulkan at default settings, the remaining scope is:
 **Practical order:** the frontend shell (title, New Game, save/load, audio) and the shared trade/dialogue/build/editor
 interaction layer are in; next is its runtime acceptance pass and the remaining effects, then the
 [performance and memory plan](metal-performance-memory.md) (same-window benchmark, present pacing, GPU culls/indirect,
-cache/native lifetime, memory soak), water refraction, post/GI, parity and default. If no-GI is accepted as the
-macOS look, the GI item leaves the target; the upscaler and timestamps are quality/performance work, not
-correctness blockers.
+cache/native lifetime, memory soak), water refraction, post/GI, parity and default. The upscaler and timestamps are
+quality/performance work, not correctness blockers.
 
 **The next steps, in order.** Each ends with the gates below (build 0/0 and a Metal shot under
 `MTL_DEBUG_LAYER=1`; tests and a Vulkan comparison only when the step changed shared code).
@@ -771,15 +769,9 @@ default.
 
 ### Decisions still open
 
-- **GI**: the probe GI needs ray queries; Metal's ray tracing is a different model. Vulkan on this Mac reports GI
-  off (MoltenVK exposes no `VK_KHR_ray_query`), so local parity is no-GI; on a machine where Vulkan has ray
-  queries the target includes GI. Either port `GiScene`/`GiProbes` to Metal ray queries (a project of its own) or
-  accept the no-GI look as the macOS baseline. **Observed** (the Metal spike's `--rt-bench`, since removed; M1 Pro): one
-  524k-triangle terrain acceleration structure took about 75–100 ms to build (88 MB plus 97 MB scratch), while
-  the 131k-ray probe batch took about 0.25–0.31 ms. That is traversal only; real scene builds, object/foliage
-  structures, refit and resolve are still unmeasured. The trace cost looks promising; memory and scene-build
-  cadence are the constraints to check in a port. The in-game Metal path is **experimental and opt-in**
-  (`MEITOU_METAL_GI=1`): a save load with it enabled froze the test M1 Pro, so normal launches leave it off.
+- **GI**: Metal's probe GI ([render-gi](render-gi.md#metal)), from the M3 only. **Observed** (the Metal spike's `--rt-bench`, since
+  removed; M1 Pro): one 524k-triangle terrain acceleration structure took about 75–100 ms to build (88 MB plus 97 MB scratch), the
+  131k-ray probe batch about 0.25–0.31 ms.
 - **Volumetric clouds and fog**: parity shots use `--faithful clouds,cloudshadows`; the Meitou cloud/fog path is
   step 6.
 - **Upscaler**: the **Use Metal upscaling** switch (`metalUseUpscaling`) splits the Display settings into two trees: on, the
@@ -994,10 +986,8 @@ plumbing, profiling, docs) need no Vulkan run.
 
 ## Constraints
 
-- **GI**: the probe GI needs ray queries (`VK_KHR_ray_query`), which have no Metal
-  translation; Metal's ray tracing is a different programming model. The engine already runs
-  without GI where the device has no ray queries (macOS today), so a Metal path starts with GI
-  off, like the Vulkan path on macOS.
+- **GI**: `VK_KHR_ray_query` has no Metal translation; Metal's probe GI is its own path on Metal ray tracing
+  ([render-gi](render-gi.md#metal)).
 - **Upscaler**: MetalFX is the Metal default (balanced, 0.50) and is implemented behind `IUpscaler`:
   `MetalFxUpscaler` is the temporal scaler at the 0.77/0.67/0.59/0.50/0.40 presets; `MetalFxSpatialUpscaler` covers
   the explicit 0.50/0.40 alternatives. 0.40 is the floor; 0.33 crashed before the first frame on this device and is

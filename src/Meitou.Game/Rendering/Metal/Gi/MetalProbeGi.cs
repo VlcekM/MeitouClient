@@ -38,9 +38,17 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     const int Probes = Columns * Columns * Layers * Cascades;
 
     /// <summary>
-    /// Each cascade's probe spacing, horizontal and vertical (world units).
+    /// Each cascade's probe spacing, horizontal and vertical, and its rays' length (world units; GiProbes' grid).
     /// </summary>
-    static readonly (float Spacing, float SpacingY)[] Layout = [(128, 96), (512, 384)];
+    static readonly (float Spacing, float SpacingY, float RayLength)[] Layout = [(128, 96, 4000), (512, 384, 16000)];
+    /// <summary>
+    /// The per-frame hysteresis of 64 rays (GiProbes.Hysteresis); <see cref="UpdateHysteresis"/> turns it into one update's of <see cref="Rays"/>.
+    /// </summary>
+    const float Hysteresis = 0.97f;
+    /// <summary>
+    /// The objects' albedo at a hit (GiProbes.ObjectAlbedo: their textures are not read).
+    /// </summary>
+    static readonly Vector3 ObjectAlbedo = new(0.35f, 0.32f, 0.28f);
 
     /// <summary>
     /// The Metal backend everything is made on and recorded into.
@@ -83,6 +91,10 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// Each cascade's grid origin and spacing, two vectors a cascade (<c>uGiGrid</c>).
     /// </summary>
     readonly Vector4[] _grid = new Vector4[4];
+    /// <summary>
+    /// The source of each update's random rotation of the ray directions.
+    /// </summary>
+    readonly Random _random = new(1);
 
     /// <summary>
     /// Each cascade's per-column probe base height: the lowest terrain height at the column and four points 0.4 spacing around it.
@@ -205,7 +217,7 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// <summary>
     /// A one-line status for the debug overlay: probes, instances, meshes and the terrain grid.
     /// </summary>
-    public string Describe() => $"metal probes {Probes}, {InstanceCount} instances ({MeshCount} meshes), {_terrain?.Description ?? "no terrain"}";
+    public string Describe() => $"metal probes {Probes}, {InstanceCount} instances ({MeshCount} meshes), {_terrain?.Description ?? "no terrain"}, coarse {_coarse?.Description ?? "none"}";
 
     /// <summary>
     /// One frame's GI: re-centres the terrain, builds at most one new object bottom level, rebuilds the top level when anything changed or 30 updates
@@ -257,6 +269,7 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         _blasCache.Clear();
         _tlas?.Dispose();
         _terrain?.Dispose();
+        _coarse?.Dispose();
         _irradiance.Dispose();
         _distance.Dispose();
         _bases.Dispose();
@@ -287,8 +300,8 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// Moves each cascade's grid when the eye is 8 or more cells from where it was placed; a move re-samples the base heights, clears the atlases and
-    /// asks for a full update.
+    /// Moves each cascade's grid when the eye is 8 or more cells from where it was placed; a move re-samples the base heights and asks for a full
+    /// update.
     /// </summary>
     void UpdateGrid(Vector3 eye, HeightSnapshot heights)
     {
@@ -296,7 +309,7 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
 
         for (int c = 0; c < Cascades; c++)
         {
-            var (s, _) = Layout[c];
+            var (s, _, _) = Layout[c];
             int ox = (int)MathF.Floor(eye.X / s) - Columns / 2;
             int oz = (int)MathF.Floor(eye.Z / s) - Columns / 2;
 
@@ -313,7 +326,7 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
 
         for (int c = 0; c < Cascades; c++)
         {
-            var (s, sy) = Layout[c];
+            var (s, sy, _) = Layout[c];
             var (ox, oz) = _placed[c];
             _grid[c * 2] = new Vector4(ox * s, oz * s, s, sy);
             _grid[c * 2 + 1] = new Vector4(0, 0, 2 * s, 0);
@@ -329,15 +342,9 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
             }
         }
 
-        int iw = Columns * (IrradianceTexels + 2), ih = Cascades * Columns * Layers * (IrradianceTexels + 2);
-        int dw = Columns * (DistanceTexels + 2), dh = Cascades * Columns * Layers * (DistanceTexels + 2);
-        var zeroI = new byte[iw * ih * 8];
-        var zeroD = new byte[dw * dh * 4];
-
+        // The full update that follows writes every texel without the old values (hysteresis 0); only the base heights are uploaded.
         using (var batch = _ctx.Uploads.Begin())
         {
-            batch.Write(_irradiance, 0, 0, new PixelRect(0, 0, (uint)iw, (uint)ih), zeroI);
-            batch.Write(_distance, 0, 0, new PixelRect(0, 0, (uint)dw, (uint)dh), zeroD);
             batch.Write(_bases, 0, 0, new PixelRect(0, 0, Columns, (uint)(Cascades * Columns)), MemoryMarshal.AsBytes(_baseHeights.AsSpan()));
         }
 
@@ -346,28 +353,47 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// Writes this frame's probe constants (grid, sun and sky light, albedo, sky fallback, update phase) into the slot's buffer.
+    /// Writes this frame's probe constants (the rays' rotation, grid, sun and sky light, albedo, atmosphere maps, update phase and hysteresis, ray
+    /// lengths) into the slot's buffer.
     /// </summary>
     void WriteConstants()
     {
         var g = _ctx.Globals;
-        var sun = Read<Vector3>(g, "uAtmoSunLight");
-        var light = Read<Vector4>(g, "uAtmoLight");
-        bool hasSky = Environment.GetEnvironmentVariable("MEITOU_METAL_GI_FALLBACK") != "1" &&
-            g.Texture("uAtmoIrradiance")?.Invoke() is { IsNull: false };
-        var maps = Read<Vector4>(g, "uAtmoMaps");
+        bool ground = g.Texture("uWeatherGround")?.Invoke() is { IsNull: false };
+        int phases = _fullUpdate ? 1 : Phases;
         var c = new ProbeConstants
         {
-            Rotation = Matrix4x4.Identity,
+            Rotation = RandomRotation(),
             Grid0 = _grid[0], Grid1 = _grid[1], Grid2 = _grid[2], Grid3 = _grid[3],
-            SunLight = new Vector4(sun, 0),
-            LightDir = light,
-            Albedo = new Vector4(0.50f, 0.48f, 0.42f, 0),
-            SkyFallback = new Vector4(0.35f, 0.48f, 0.70f, hasSky ? 1 : 0),
-            Maps = maps,
-            Timing = new Vector4(_fullUpdate ? 0 : _frame % Phases, _fullUpdate ? 1 : Phases, 0, 0),
+            SunLight = new Vector4(Read<Vector3>(g, "uAtmoSunLight"), 0),
+            LightDir = Read<Vector4>(g, "uAtmoLight"),
+            Albedo = new Vector4(ObjectAlbedo, ground ? 1 : 0),
+            Maps = Read<Vector4>(g, "uAtmoMaps"),
+            Timing = new Vector4(_frame % phases, phases, _fullUpdate ? 0 : UpdateHysteresis(phases), 0),
+            RayLength = new Vector4(Layout[0].RayLength, Layout[1].RayLength, 0, 0),
         };
         Marshal.StructureToPtr(c, _constantsBuffers[_ctx.Frame.Slot].Contents, false);
+    }
+
+    /// <summary>
+    /// The hysteresis of one update of <see cref="Rays"/> rays over <paramref name="phases"/> frames, as GiProbes' (docs/render-gi.md "Probes"): an
+    /// exponential average's variance is (1 - h) / (1 + h) of one sample's, scaled by the rays against 64.
+    /// </summary>
+    static float UpdateHysteresis(int phases)
+    {
+        float h = MathF.Pow(Hysteresis, phases);
+        float k = (1 - h) / (1 + h) * Rays / 64;
+        return (1 - k) / (1 + k);
+    }
+
+    /// <summary>
+    /// A uniformly random rotation (a random axis and angle), so successive updates sample new directions.
+    /// </summary>
+    Matrix4x4 RandomRotation()
+    {
+        var axis = Vector3.Normalize(new Vector3(_random.NextSingle() * 2 - 1, _random.NextSingle() * 2 - 1, _random.NextSingle() * 2 - 1)
+            + new Vector3(1e-4f));
+        return Matrix4x4.CreateFromAxisAngle(axis, _random.NextSingle() * MathF.Tau);
     }
 
     /// <summary>
@@ -379,28 +405,40 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         var encoder = cmd.ComputeEncoder();
         encoder.SetComputePipelineState(_pipeline);
         encoder.SetBuffer(_constantsBuffers[_ctx.Frame.Slot], 0, 0);
-        encoder.SetBuffer(_tlas!.Info, 0, 1);
+        encoder.SetBuffer(_tlas!.FirstRecords, 0, 1);
         encoder.SetAccelerationStructure(_tlas.Acceleration, 2);
+
+        // The top level reaches its bottom levels, and the records their vertices and indices, by address only: Metal does not make them resident
+        // unless the encoder is told, and a trace or fetch into one that is not faults the GPU.
+        cmd.UseResources(_tlas.Resident, _tlas.Resident.Length);
+        encoder.SetBuffer(_tlas.Records, 0, 3);
         encoder.SetTexture(_irradianceImage, 0);
-        encoder.SetTexture(_distanceImage, 1);
-        encoder.SetTexture(_baseImage, 2);
-        var sky = _ctx.Globals.Texture("uAtmoIrradiance")?.Invoke() ?? default;
-        if (sky.IsNull) sky = _ctx.Dummy(FrameGlobals.Sampler2D("gi sky", cube: true));
-
-        var (skyTexture, skyState) = _ctx.Sampled(sky);
-        encoder.SetTexture(skyTexture, 3);
-        encoder.SetSamplerState(skyState, 0);
-        var ground = _ctx.Globals.Texture("uWeatherGround")?.Invoke() ?? default;
-        if (ground.IsNull) ground = _ctx.Dummy(FrameGlobals.Sampler2D("gi ground"));
-
-        var (groundTexture, groundState) = _ctx.Sampled(ground);
-        encoder.SetTexture(groundTexture, 4);
-        encoder.SetSamplerState(groundState, 1);
+        encoder.SetTexture(_irradianceImage, 1);
+        encoder.SetTexture(_distanceImage, 2);
+        encoder.SetTexture(_distanceImage, 3);
+        encoder.SetTexture(_baseImage, 4);
+        encoder.SetTexture(GlobalTexture("uAtmoIrradiance", cube: true), 5);
+        encoder.SetTexture(GlobalTexture("uWeatherGround", cube: false), 6);
+        encoder.SetTexture(GlobalTexture("uAtmoAmbientMap", cube: false), 7);
+        encoder.SetSamplerState(_skySampler, 0);
+        encoder.SetSamplerState(_skySampler, 1);
         int phases = _fullUpdate ? 1 : Phases;
+
         encoder.DispatchThreadgroups(new MTLSize { width = (ulong)(Probes / phases), height = 1, depth = 1 },
             new MTLSize { width = Rays, height = 1, depth = 1 });
         cmd.EndCompute();
         _ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The Metal texture of a published global texture, a stand-in when none is published.
+    /// </summary>
+    MTLTexture GlobalTexture(string name, bool cube)
+    {
+        var texture = _ctx.Globals.Texture(name)?.Invoke() ?? default;
+        if (texture.IsNull) texture = _ctx.Dummy(FrameGlobals.Sampler2D(name, cube));
+
+        return _ctx.Sampled(texture).Item1;
     }
 
     /// <summary>
@@ -430,10 +468,10 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         /// </summary>
         public Vector4 Grid0, Grid1, Grid2, Grid3;
         /// <summary>
-        /// The sun light, light direction, constant albedo, sky fallback colour (w 1 when the sky irradiance is used), atmosphere maps and the update
-        /// phase (x the phase, y the phase count).
+        /// The sun light, the lighting direction (w the environment light's factor), the objects' albedo (w 1 with the ground colour map), the
+        /// atmosphere maps, the update (x the phase, y the phase count, z the hysteresis) and the cascades' ray lengths.
         /// </summary>
-        public Vector4 SunLight, LightDir, Albedo, SkyFallback, Maps, Timing;
+        public Vector4 SunLight, LightDir, Albedo, Maps, Timing, RayLength;
     }
 
     #endregion
@@ -453,33 +491,43 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// </summary>
     const float ObjectRange = 2500;
     /// <summary>
-    /// The terrain bottom level's cells on a side.
+    /// The terrain bottom levels' cells on a side.
     /// </summary>
     const int TerrainCells = 256;
     /// <summary>
-    /// The terrain bottom level's cell size (world units).
+    /// The fine terrain's cell size and the step it re-centres by; the coarse terrain's (40960 wide, GiScene's coarse grid), which the far cascade's
+    /// rays reach (world units).
     /// </summary>
-    const float TerrainSpacing = 32;
+    const float FineSpacing = 32, FineStep = 512, CoarseSpacing = 160, CoarseStep = 2560;
+    /// <summary>
+    /// The instance options: the terrain's triangles are counter-clockwise from above and culled from below (opaque); an object's are not culled, so
+    /// a ray inside one finds its back (<c>MTLAccelerationStructureInstanceOptions</c>: 1 no culling, 2 counter-clockwise front faces, 4 opaque).
+    /// </summary>
+    const uint TerrainOptions = 2 | 4, ObjectOptions = 1 | 2 | 4;
+    /// <summary>
+    /// <see cref="GeometryRecord.Kind"/>: the terrain (the ground colour map's albedo) or an object.
+    /// </summary>
+    const uint TerrainKind = 0, ObjectKind = 1;
 
     /// <summary>
     /// The object bottom levels built so far (at most <see cref="MaxCachedMeshes"/>).
     /// </summary>
     readonly List<BlasEntry> _blasCache = [];
     /// <summary>
-    /// The top level's instance descriptors, 64 bytes each (<c>MTLAccelerationStructureInstanceDescriptor</c>), terrain first.
+    /// The top level's instance descriptors, 64 bytes each (<c>MTLAccelerationStructureInstanceDescriptor</c>), the terrains first.
     /// </summary>
-    readonly byte[] _instanceBytes = new byte[64 * (MaxObjects + 1)];
-    /// <summary>
-    /// Four floats of surface info per instance.
-    /// </summary>
-    readonly float[] _instanceInfo = new float[4 * (MaxObjects + 1)];
+    readonly byte[] _instanceBytes = new byte[64 * (MaxObjects + 2)];
 
     /// <summary>
-    /// The terrain bottom level around the eye; null before the first update.
+    /// The fine terrain bottom level around the eye; null before the first update.
     /// </summary>
     TerrainBlas? _terrain;
     /// <summary>
-    /// The top level over the terrain and the nearest objects; null before the first build.
+    /// The coarse terrain bottom level around the eye; null before the first update.
+    /// </summary>
+    TerrainBlas? _coarse;
+    /// <summary>
+    /// The top level over the terrains and the nearest objects; null before the first build.
     /// </summary>
     Tlas? _tlas;
 
@@ -502,58 +550,43 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// Re-centres the terrain bottom level on the eye's 512-unit cell when it moved; true when it was rebuilt.
+    /// Re-centres the fine and the coarse terrain bottom levels on the eye's cell of their step where it moved; true when one was rebuilt.
     /// </summary>
     bool UpdateTerrain(Vector3 eye, HeightSnapshot heights)
     {
-        var centre = new Vector3(MathF.Round(eye.X / 512) * 512, 0, MathF.Round(eye.Z / 512) * 512);
-        if (_terrain is not null && Vector3.DistanceSquared(_terrain.Centre, centre) < 1) return false;
+        bool fine = Recentre(ref _terrain, eye, heights, FineSpacing, FineStep, "metal gi terrain");
+        bool coarse = Recentre(ref _coarse, eye, heights, CoarseSpacing, CoarseStep, "metal gi coarse terrain");
+        return fine || coarse;
+    }
 
-        var old = _terrain;
-        _terrain = BuildTerrain(centre, heights);
+    /// <summary>
+    /// Rebuilds <paramref name="terrain"/> around the eye's <paramref name="step"/> cell when it is not there yet (the old one released after the
+    /// frames in flight); true when it was rebuilt.
+    /// </summary>
+    bool Recentre(ref TerrainBlas? terrain, Vector3 eye, HeightSnapshot heights, float spacing, float step, string name)
+    {
+        var centre = new Vector3(MathF.Round(eye.X / step) * step, 0, MathF.Round(eye.Z / step) * step);
+        if (terrain is not null && Vector3.DistanceSquared(terrain.Centre, centre) < 1) return false;
+
+        var old = terrain;
+        terrain = BuildTerrain(centre, heights, spacing, name);
         if (old is not null) _ctx.DeferDelete(old.Dispose);
 
         return true;
     }
 
     /// <summary>
-    /// A <see cref="TerrainCells"/>² triangle grid of the heights around <paramref name="centre"/>, built into a bottom level.
+    /// A <see cref="TerrainCells"/>² triangle grid of the heights around <paramref name="centre"/>, <paramref name="spacing"/> apart, built into a
+    /// bottom level.
     /// </summary>
-    TerrainBlas BuildTerrain(Vector3 centre, HeightSnapshot heights)
+    TerrainBlas BuildTerrain(Vector3 centre, HeightSnapshot heights, float spacing, string name)
     {
-        int side = TerrainCells + 1;
-        var vertices = new float[side * side * 3];
-
-        for (int z = 0; z < side; z++)
-        for (int x = 0; x < side; x++)
-        {
-            int i = (z * side + x) * 3;
-            float wx = centre.X + (x - TerrainCells * 0.5f) * TerrainSpacing;
-            float wz = centre.Z + (z - TerrainCells * 0.5f) * TerrainSpacing;
-            vertices[i] = wx;
-            vertices[i + 1] = heights.HeightAt(wx, wz);
-            vertices[i + 2] = wz;
-        }
-
-        var indices = new int[TerrainCells * TerrainCells * 6];
-        int n = 0;
-
-        for (int z = 0; z < TerrainCells; z++)
-        for (int x = 0; x < TerrainCells; x++)
-        {
-            int i0 = z * side + x, i1 = i0 + 1, i2 = i0 + side, i3 = i2 + 1;
-            indices[n++] = i0;
-            indices[n++] = i2;
-            indices[n++] = i1;
-            indices[n++] = i1;
-            indices[n++] = i2;
-            indices[n++] = i3;
-        }
-
+        var vertices = TerrainVertices(centre, heights, spacing);
+        var indices = TerrainIndices();
         var vertexBuffer = _ctx.Device.NewBuffer((ulong)(vertices.Length * 4), MTLResourceOptions.ResourceStorageModeShared);
         var indexBuffer = _ctx.Device.NewBuffer((ulong)(indices.Length * 4), MTLResourceOptions.ResourceStorageModeShared);
-        vertexBuffer.Label = (NSString)"metal gi terrain vertices";
-        indexBuffer.Label = (NSString)"metal gi terrain indices";
+        vertexBuffer.Label = (NSString)(name + " vertices");
+        indexBuffer.Label = (NSString)(name + " indices");
         Marshal.Copy(vertices, 0, vertexBuffer.Contents, vertices.Length);
         Marshal.Copy(indices, 0, indexBuffer.Contents, indices.Length);
 
@@ -572,9 +605,58 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
             GeometryDescriptors = NSArray.Array(new NSObject(geometry.NativePtr)),
             Usage = MTLAccelerationStructureUsage.PreferFastIntersection,
         };
-        Build("metal gi terrain", descriptor, out var acceleration, out var scratch);
+        Build(name, descriptor, out var acceleration, out var scratch);
         _ctx.DeferDelete(scratch.Dispose);
-        return new TerrainBlas(acceleration, vertexBuffer, indexBuffer, centre);
+
+        var record = new GeometryRecord(vertexBuffer.GpuAddress, indexBuffer.GpuAddress, 12, TerrainKind);
+        return new TerrainBlas(acceleration, vertexBuffer, indexBuffer, record, centre, spacing);
+    }
+
+    /// <summary>
+    /// The terrain grid's positions: (<see cref="TerrainCells"/> + 1)² samples of the heights, <paramref name="spacing"/> apart round
+    /// <paramref name="centre"/>.
+    /// </summary>
+    static float[] TerrainVertices(Vector3 centre, HeightSnapshot heights, float spacing)
+    {
+        int side = TerrainCells + 1;
+        var vertices = new float[side * side * 3];
+
+        for (int z = 0; z < side; z++)
+        for (int x = 0; x < side; x++)
+        {
+            int i = (z * side + x) * 3;
+            float wx = centre.X + (x - TerrainCells * 0.5f) * spacing;
+            float wz = centre.Z + (z - TerrainCells * 0.5f) * spacing;
+            vertices[i] = wx;
+            vertices[i + 1] = heights.HeightAt(wx, wz);
+            vertices[i + 2] = wz;
+        }
+
+        return vertices;
+    }
+
+    /// <summary>
+    /// The terrain grid's triangles, two a cell, counter-clockwise seen from above (their cross product points up).
+    /// </summary>
+    static int[] TerrainIndices()
+    {
+        int side = TerrainCells + 1;
+        var indices = new int[TerrainCells * TerrainCells * 6];
+        int n = 0;
+
+        for (int z = 0; z < TerrainCells; z++)
+        for (int x = 0; x < TerrainCells; x++)
+        {
+            int i0 = z * side + x, i1 = i0 + 1, i2 = i0 + side, i3 = i2 + 1;
+            indices[n++] = i0;
+            indices[n++] = i2;
+            indices[n++] = i1;
+            indices[n++] = i1;
+            indices[n++] = i2;
+            indices[n++] = i3;
+        }
+
+        return indices;
     }
 
     /// <summary>
@@ -615,45 +697,52 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     {
         if (objects is null) return false;
 
-        int built = 0;
-        var candidates = new List<(ObjectStreamer.Instance Instance, float Distance)>();
+        var candidates = NearestObjects(eye, objects);
 
-        foreach (var inst in objects.RayInstances(eye, ObjectRange))
+        foreach (var (inst, _) in candidates)
         {
-            if (inst.Gpu is null) continue;
+            var mesh = inst.Gpu!;
+            if (FindBlas(mesh) is not null) continue;
 
-            candidates.Add((inst, Vector3.Distance(inst.Centre, eye)));
+            EvictIfFull();
+            if (BuildObjectBlas(mesh) is null) continue;
+
+            _lastTlasFrame = long.MinValue / 2;
+            return true;
         }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The object instances within <see cref="ObjectRange"/> of the eye that have a mesh on the GPU, nearest first, at most
+    /// <see cref="MaxObjects"/>.
+    /// </summary>
+    static List<(ObjectStreamer.Instance Instance, float Distance)> NearestObjects(Vector3 eye, WorldObjectRenderer objects)
+    {
+        var candidates = new List<(ObjectStreamer.Instance Instance, float Distance)>();
+        foreach (var inst in objects.RayInstances(eye, ObjectRange))
+            if (inst.Gpu is not null) candidates.Add((inst, Vector3.Distance(inst.Centre, eye)));
 
         candidates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-        int count = Math.Min(candidates.Count, MaxObjects);
+        if (candidates.Count > MaxObjects) candidates.RemoveRange(MaxObjects, candidates.Count - MaxObjects);
 
-        for (int i = 0; i < count; i++)
-        {
-            var mesh = candidates[i].Instance.Gpu!;
-            if (FindBlas(mesh) is not null) continue;
-            if (built >= 1) break;
+        return candidates;
+    }
 
-            if (_blasCache.Count >= MaxCachedMeshes)
-            {
-                var oldest = _blasCache.MinBy(e => e.LastUsed);
+    /// <summary>
+    /// Drops the least recently used bottom level when the cache is full (released after the frames in flight) and forces a top level rebuild.
+    /// </summary>
+    void EvictIfFull()
+    {
+        if (_blasCache.Count < MaxCachedMeshes) return;
 
-                if (oldest is not null)
-                {
-                    _blasCache.Remove(oldest);
-                    _ctx.DeferDelete(oldest.Blas.Dispose);
-                    _lastTlasFrame = long.MinValue / 2;
-                }
-            }
+        var oldest = _blasCache.MinBy(e => e.LastUsed);
+        if (oldest is null) return;
 
-            if (BuildObjectBlas(mesh) is not null)
-            {
-                built++;
-                _lastTlasFrame = long.MinValue / 2;
-            }
-        }
-
-        return built > 0;
+        _blasCache.Remove(oldest);
+        _ctx.DeferDelete(oldest.Blas.Dispose);
+        _lastTlasFrame = long.MinValue / 2;
     }
 
     /// <summary>
@@ -684,8 +773,8 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// Builds a mesh's bottom level from its parts at its current level (or its manual mesh), caches it and returns it; null when no part has a
-    /// triangle.
+    /// Builds a mesh's bottom level from its parts at its current level (or its manual mesh), with a geometry record per part, caches it and returns
+    /// it; null when no part has a triangle.
     /// </summary>
     BlasEntry? BuildObjectBlas(GpuObjectMesh mesh)
     {
@@ -693,6 +782,8 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         var source = mesh.Manual.Length > level && mesh.Manual[level] is { } manual ? manual : mesh;
         int sourceLevel = ReferenceEquals(source, mesh) ? level : 0;
         var geometries = new List<MTLAccelerationStructureTriangleGeometryDescriptor>();
+        var records = new List<GeometryRecord>();
+        var buffers = new List<nint>();
         var sources = new List<object> { source };
 
         foreach (var part in source.Parts)
@@ -702,18 +793,23 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
             int count = part.Count[sourceLevel];
             if (count < 3) continue;
 
-            var geometry = new MTLAccelerationStructureTriangleGeometryDescriptor
+            var vertices = _ctx.BufferAt(part.Vertices.Handle);
+            var indices = _ctx.BufferAt(part.Indices.Handle);
+            ulong indexOffset = (ulong)part.Offset[sourceLevel] * 4;
+            geometries.Add(new MTLAccelerationStructureTriangleGeometryDescriptor
             {
-                VertexBuffer = _ctx.BufferAt(part.Vertices.Handle),
+                VertexBuffer = vertices,
                 VertexStride = (ulong)part.Stride,
                 VertexFormat = MTLAttributeFormat.Float3,
-                IndexBuffer = _ctx.BufferAt(part.Indices.Handle),
-                IndexBufferOffset = (ulong)part.Offset[sourceLevel] * 4,
+                IndexBuffer = indices,
+                IndexBufferOffset = indexOffset,
                 IndexType = MTLIndexType.UInt32,
                 TriangleCount = (ulong)(count / 3),
                 Opaque = true,
-            };
-            geometries.Add(geometry);
+            });
+            records.Add(new GeometryRecord(vertices.GpuAddress, indices.GpuAddress + indexOffset, (uint)part.Stride, ObjectKind));
+            buffers.Add(vertices.NativePtr);
+            buffers.Add(indices.NativePtr);
             sources.Add(part.Vertices);
         }
 
@@ -726,7 +822,10 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         };
         Build("metal gi object", descriptor, out var accel, out var scratch);
         _ctx.DeferDelete(scratch.Dispose);
-        var entry = new BlasEntry { Mesh = mesh, Level = level, Sources = sources.ToArray(), Blas = accel, LastUsed = _frame };
+        var entry = new BlasEntry
+        {
+            Mesh = mesh, Level = level, Sources = [.. sources], Blas = accel, Records = [.. records], Buffers = [.. buffers], LastUsed = _frame,
+        };
         _blasCache.Add(entry);
         return entry;
     }
@@ -745,88 +844,98 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// Rebuilds the top level: the terrain, then the nearest objects.
+    /// Rebuilds the top level: the two terrains, then the nearest objects whose bottom levels are built.
     /// </summary>
     void RebuildTlas(Vector3 eye, WorldObjectRenderer? objects)
     {
-        var blas = new List<MTLAccelerationStructure> { _terrain!.Blas };
-        var infos = new List<Vector4> { new(0.50f, 0.48f, 0.42f, 0f) };
-        int count = 0;
-        WriteInstance(0, Matrix4x4.Identity, 5, 0);
-        count++;
+        var scene = new SceneLists();
+        AddTerrain(scene, _terrain!);
+        AddTerrain(scene, _coarse!);
+        if (objects is not null) AddObjectInstances(eye, objects, scene);
 
-        if (objects is not null) count = AddObjectInstances(eye, objects, blas, infos, count);
-        if (count == 0) return;
-
-        BuildTlas(blas, infos, count);
+        BuildTlas(scene);
     }
 
     /// <summary>
-    /// The object instances within <see cref="ObjectRange"/> of the eye, nearest first, up to <see cref="MaxObjects"/>: each written after the
-    /// <paramref name="count"/> so far, its mesh's bottom level added to <paramref name="blas"/> once; returns the new count.
+    /// Adds a terrain's instance (untransformed) with its bottom level, record and buffers.
     /// </summary>
-    int AddObjectInstances(Vector3 eye, WorldObjectRenderer objects, List<MTLAccelerationStructure> blas, List<Vector4> infos, int count)
+    void AddTerrain(SceneLists scene, TerrainBlas terrain)
     {
-        var candidates = new List<(ObjectStreamer.Instance Instance, float Distance)>();
-        foreach (var inst in objects.RayInstances(eye, ObjectRange))
-            if (inst.Gpu is not null) candidates.Add((inst, Vector3.Distance(inst.Centre, eye)));
+        WriteInstance(scene.FirstRecords.Count, Matrix4x4.Identity, TerrainOptions, scene.Bottoms.Count);
+        scene.FirstRecords.Add((uint)scene.Records.Count);
+        scene.Records.Add(terrain.Record);
+        scene.Bottoms.Add(terrain.Blas);
+        scene.Resident.AddRange([terrain.Blas.NativePtr, terrain.Vertices.NativePtr, terrain.Indices.NativePtr]);
+    }
 
-        candidates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+    /// <summary>
+    /// Adds the nearest object instances whose bottom levels are built: each instance after those so far, each bottom level with its records and
+    /// buffers once.
+    /// </summary>
+    void AddObjectInstances(Vector3 eye, WorldObjectRenderer objects, SceneLists scene)
+    {
+        var added = new Dictionary<nint, (int Bottom, uint FirstRecord)>();
 
-        foreach (var (inst, _) in candidates)
+        foreach (var (inst, _) in NearestObjects(eye, objects))
         {
-            if (count > MaxObjects) break;
-
             var entry = FindBlas(inst.Gpu!);
             if (entry is null) continue;
 
-            int index = blas.FindIndex(a => a.NativePtr == entry.Blas.NativePtr);
-
-            if (index < 0)
+            if (!added.TryGetValue(entry.Blas.NativePtr, out var at))
             {
-                index = blas.Count;
-                blas.Add(entry.Blas);
+                at = (scene.Bottoms.Count, (uint)scene.Records.Count);
+                added[entry.Blas.NativePtr] = at;
+                scene.Bottoms.Add(entry.Blas);
+                scene.Records.AddRange(entry.Records);
+                scene.Resident.Add(entry.Blas.NativePtr);
+                scene.Resident.AddRange(entry.Buffers);
             }
 
-            WriteInstance(count, inst.Transform, 5, index);
-            infos.Add(new Vector4(0.40f, 0.38f, 0.35f, 1f));
-            count++;
+            WriteInstance(scene.FirstRecords.Count, inst.Transform, ObjectOptions, at.Bottom);
+            scene.FirstRecords.Add(at.FirstRecord);
         }
-
-        return count;
     }
 
     /// <summary>
-    /// The top level over the <paramref name="count"/> instances written, with their surface infos; the old one goes after the frames in flight.
+    /// The top level over the instances written, with their first records and the geometry records; the old one goes after the frames in flight.
     /// </summary>
-    void BuildTlas(List<MTLAccelerationStructure> blas, List<Vector4> infos, int count)
+    void BuildTlas(SceneLists scene)
     {
+        int count = scene.FirstRecords.Count;
         var instBuffer = _ctx.Device.NewBuffer((ulong)(64 * count), MTLResourceOptions.ResourceStorageModeShared);
         Marshal.Copy(_instanceBytes, 0, instBuffer.Contents, count * 64);
-        var infoFloats = new float[count * 4];
-        for (int i = 0; i < count; i++)
-            for (int k = 0; k < 4; k++) infoFloats[i * 4 + k] = infos[i][k];
-
-        var infoBuf = _ctx.Device.NewBuffer((ulong)(16 * count), MTLResourceOptions.ResourceStorageModeShared);
-        Marshal.Copy(infoFloats, 0, infoBuf.Contents, infoFloats.Length);
+        var firstBuffer = SharedBuffer<uint>(CollectionsMarshal.AsSpan(scene.FirstRecords));
+        var recordBuffer = SharedBuffer<GeometryRecord>(CollectionsMarshal.AsSpan(scene.Records));
 
         var descriptor = new MTLInstanceAccelerationStructureDescriptor
         {
             InstanceCount = (ulong)count,
             InstanceDescriptorBuffer = instBuffer,
             InstanceDescriptorStride = 64,
-            InstancedAccelerationStructures = ArrayOf(blas.Select(a => a.NativePtr)),
+            InstancedAccelerationStructures = ArrayOf(scene.Bottoms.Select(a => a.NativePtr)),
             InstanceDescriptorType = MTLAccelerationStructureInstanceDescriptorType.Default,
             InstanceTransformationMatrixLayout = MTLMatrixLayout.ColumnMajor,
             Usage = MTLAccelerationStructureUsage.PreferFastIntersection,
         };
         Build("metal gi top", descriptor, out var acceleration, out var scratch);
         _ctx.DeferDelete(scratch.Dispose);
+
         var old = _tlas;
-        _tlas = new Tlas(acceleration, instBuffer, infoBuf, count);
+        _tlas = new Tlas(acceleration, instBuffer, firstBuffer, recordBuffer, count, [.. scene.Resident.Distinct()]);
         InstanceCount = count;
         _lastTlasFrame = _frame;
         if (old is not null) _ctx.DeferDelete(old.Dispose);
+    }
+
+    /// <summary>
+    /// A new shared buffer holding <paramref name="items"/> (at least 16 bytes).
+    /// </summary>
+    MTLBuffer SharedBuffer<T>(ReadOnlySpan<T> items) where T : unmanaged
+    {
+        var bytes = MemoryMarshal.AsBytes(items);
+        var buffer = _ctx.Device.NewBuffer((ulong)Math.Max(bytes.Length, 16), MTLResourceOptions.ResourceStorageModeShared);
+        bytes.CopyTo(new Span<byte>((void*)buffer.Contents, bytes.Length));
+        return buffer;
     }
 
     /// <summary>
@@ -834,35 +943,14 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// </summary>
     void WriteInstance(int index, Matrix4x4 m, uint options, int blas)
     {
-        int o = index * 64;
+        var span = _instanceBytes.AsSpan(index * 64, 64);
 
-        // MTLPackedFloat4x3: four columns of three floats (column-major).
-        WriteFloat(o + 0, m.M11);
-        WriteFloat(o + 4, m.M12);
-        WriteFloat(o + 8, m.M13);
-        WriteFloat(o + 12, m.M21);
-        WriteFloat(o + 16, m.M22);
-        WriteFloat(o + 20, m.M23);
-        WriteFloat(o + 24, m.M31);
-        WriteFloat(o + 28, m.M32);
-        WriteFloat(o + 32, m.M33);
-        WriteFloat(o + 36, m.M41);
-        WriteFloat(o + 40, m.M42);
-        WriteFloat(o + 44, m.M43);
-        WriteUInt(o + 48, options);
-        WriteUInt(o + 52, 0xFF);
-        WriteUInt(o + 56, 0);
-        WriteUInt(o + 60, (uint)blas);
+        // MTLPackedFloat4x3: four columns of three floats (column-major); a System.Numerics row-vector matrix's rows are those columns.
+        ReadOnlySpan<float> transform = [m.M11, m.M12, m.M13, m.M21, m.M22, m.M23, m.M31, m.M32, m.M33, m.M41, m.M42, m.M43];
+        MemoryMarshal.AsBytes(transform).CopyTo(span);
+        ReadOnlySpan<uint> fields = [options, 0xFF, 0, (uint)blas];
+        MemoryMarshal.AsBytes(fields).CopyTo(span[48..]);
     }
-
-    /// <summary>
-    /// Writes a float into <see cref="_instanceBytes"/>.
-    /// </summary>
-    void WriteFloat(int offset, float value) => BitConverter.GetBytes(value).CopyTo(_instanceBytes, offset);
-    /// <summary>
-    /// Writes a uint into <see cref="_instanceBytes"/>.
-    /// </summary>
-    void WriteUInt(int offset, uint value) => BitConverter.GetBytes(value).CopyTo(_instanceBytes, offset);
 
     /// <summary>
     /// An NSArray of Objective-C objects.
@@ -876,7 +964,38 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// A cached object bottom level: the mesh, its level and the sources it was built from.
+    /// A bottom level's geometry as the probe shader reads it (<c>GeometryRecord</c>): its positions' and indices' GPU addresses (the indices at the
+    /// part's first), the vertex stride and <see cref="TerrainKind"/> or <see cref="ObjectKind"/>.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    readonly record struct GeometryRecord(ulong Vertices, ulong Indices, uint Stride, uint Kind);
+
+    /// <summary>
+    /// What a top level is built from: per instance its first geometry record, the records, the bottom levels and every resource the trace reaches
+    /// by address.
+    /// </summary>
+    sealed class SceneLists
+    {
+        /// <summary>
+        /// Per instance, the index of its bottom level's first record in <see cref="Records"/>.
+        /// </summary>
+        public readonly List<uint> FirstRecords = [];
+        /// <summary>
+        /// The bottom levels' geometry records, each bottom level's together.
+        /// </summary>
+        public readonly List<GeometryRecord> Records = [];
+        /// <summary>
+        /// The bottom levels the instances refer to by index.
+        /// </summary>
+        public readonly List<MTLAccelerationStructure> Bottoms = [];
+        /// <summary>
+        /// The bottom levels and the vertex and index buffers of the records, as native pointers.
+        /// </summary>
+        public readonly List<nint> Resident = [];
+    }
+
+    /// <summary>
+    /// A cached object bottom level: the mesh, its level, the sources it was built from and its parts' records.
     /// </summary>
     sealed class BlasEntry
     {
@@ -897,28 +1016,49 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         /// </summary>
         public required MTLAccelerationStructure Blas;
         /// <summary>
+        /// One record per geometry, in the bottom level's geometry order.
+        /// </summary>
+        public required GeometryRecord[] Records;
+        /// <summary>
+        /// The records' vertex and index buffers, as native pointers (made resident with the top level).
+        /// </summary>
+        public required nint[] Buffers;
+        /// <summary>
         /// The update it was last used at (<see cref="MaxCachedMeshes"/> evicts the oldest).
         /// </summary>
         public long LastUsed;
     }
 
     /// <summary>
-    /// The terrain bottom level with its vertex and index buffers.
+    /// A terrain bottom level with its vertex and index buffers and its record.
     /// </summary>
-    sealed class TerrainBlas(MTLAccelerationStructure blas, MTLBuffer vertices, MTLBuffer indices, Vector3 centre) : IDisposable
+    sealed class TerrainBlas(MTLAccelerationStructure blas, MTLBuffer vertices, MTLBuffer indices, GeometryRecord record, Vector3 centre,
+        float spacing) : IDisposable
     {
         /// <summary>
         /// The bottom level.
         /// </summary>
         public MTLAccelerationStructure Blas => blas;
         /// <summary>
-        /// The centre of the terrain grid.
+        /// The grid's positions.
+        /// </summary>
+        public MTLBuffer Vertices => vertices;
+        /// <summary>
+        /// The grid's triangles.
+        /// </summary>
+        public MTLBuffer Indices => indices;
+        /// <summary>
+        /// The grid's geometry record.
+        /// </summary>
+        public GeometryRecord Record => record;
+        /// <summary>
+        /// The centre of the grid.
         /// </summary>
         public Vector3 Centre => centre;
         /// <summary>
-        /// The grid's size and centre, for <see cref="Describe"/>.
+        /// The grid's size, spacing and centre, for <see cref="Describe"/>.
         /// </summary>
-        public string Description => $"{TerrainCells}² grid at {centre.X:0},{centre.Z:0}";
+        public string Description => $"{TerrainCells}² grid {spacing:0} apart at {centre.X:0},{centre.Z:0}";
 
         /// <summary>
         /// Releases the bottom level and its buffers.
@@ -932,22 +1072,32 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// A top level with its instance descriptors and per-instance surface info.
+    /// A top level with its instance descriptors, the instances' first records, the geometry records and what the trace needs resident.
     /// </summary>
-    sealed class Tlas(MTLAccelerationStructure acceleration, MTLBuffer instances, MTLBuffer info, int count) : IDisposable
+    sealed class Tlas(MTLAccelerationStructure acceleration, MTLBuffer instances, MTLBuffer firstRecords, MTLBuffer records, int count,
+        nint[] resident) : IDisposable
     {
         /// <summary>
         /// The acceleration structure.
         /// </summary>
         public MTLAccelerationStructure Acceleration => acceleration;
         /// <summary>
-        /// The per-instance surface info buffer the probe update reads.
+        /// Per instance, its first geometry record (the probe update's <c>firstRecord</c>).
         /// </summary>
-        public MTLBuffer Info => info;
+        public MTLBuffer FirstRecords => firstRecords;
+        /// <summary>
+        /// The geometry records (the probe update's <c>records</c>).
+        /// </summary>
+        public MTLBuffer Records => records;
         /// <summary>
         /// The instances in it.
         /// </summary>
         public int Count => count;
+        /// <summary>
+        /// The native pointers of the bottom levels and the records' buffers, which a trace needs resident
+        /// (<see cref="MetalCommandList.UseResources"/>).
+        /// </summary>
+        public nint[] Resident => resident;
 
         /// <summary>
         /// Releases the acceleration structure and its buffers.
@@ -956,7 +1106,8 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         {
             acceleration.Dispose();
             instances.Dispose();
-            info.Dispose();
+            firstRecords.Dispose();
+            records.Dispose();
         }
     }
 

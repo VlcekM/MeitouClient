@@ -369,9 +369,7 @@ All environment variables starting with `MEITOU_` are automatically recorded in 
 | `MEITOU_METAL_NO_TERRAIN_TEXTURES` | `Host/MetalGameLoop.cs` | `1`: disables terrain textures on Metal (prints a notice). |
 | `MEITOU_METAL_NO_PARTICLES` | `Host/MetalGameLoop.cs` | `1`: disables weather particles on Metal. |
 | `MEITOU_METAL_GROUND_RELIEF` | `Host/MetalGameLoop.cs` | `0`/`false`: disables ground parallax relief on Metal. |
-| `MEITOU_METAL_GI` | `Host/MetalGameLoop.cs` | `1`/`true`: enables experimental native Metal probe GI. |
 | `MEITOU_METAL_GI_LOG` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: logs Metal probe GI diagnostics. |
-| `MEITOU_METAL_GI_FALLBACK` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: disables the sky-light term in Metal probe GI (A/B test). |
 | `MEITOU_METAL_NO_GRASS` | `Host/MetalGameLoop.cs` | `1`: disables grass blades on Metal. |
 | `MEITOU_METAL_NO_FOLIAGE_MESHES` | `Host/MetalGameLoop.cs` | `1`: disables foliage meshes on Metal (keeps grass). |
 | `MEITOU_METAL_GPU_CULL` | `Rendering/Foliage/MetalGpuCull.cs` (read by `MetalGameLoop.cs`, `MetalFrame.cs`, `FoliageRenderer.cs`) | GPU foliage culling is the default on Metal; `0`/`false`: the CPU cull. |

@@ -703,22 +703,20 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The experimental native probe GI, when asked for and the device ray traces.
+    /// The native probe GI, unless <c>--no-gi</c>, on a GPU that traces rays in hardware (<see cref="MetalContext.HasRayQuery"/>: M3 and later).
     /// </summary>
     void CreateGi()
     {
-        // Native Metal GI is experimental and opt-in: on this M1 Pro it could freeze the machine during a save load.
-        // Keep the unfinished path out of normal launches; --no-gi still wins, and F10 can turn it off after it is on.
-        bool metalGi = host.WorldOptions.Gi && Environment.GetEnvironmentVariable("MEITOU_METAL_GI") is "1" or "true";
-        if (metalGi && _ctx.Device.SupportsRaytracing)
+        if (!host.WorldOptions.Gi) return;
+
+        if (!_ctx.HasRayQuery)
         {
-            _worldGpu.ProbeGi = new MetalProbeGi(_ctx) { Enabled = host.WorldOptions.GiProbes, InteriorEnabled = host.WorldOptions.InteriorGi };
-            Console.WriteLine($"gi        {_worldGpu.ProbeGi.Describe()} (experimental, MEITOU_METAL_GI=1)");
+            Console.WriteLine("gi        metal off: the GPU has no hardware ray tracing (Apple9 family, M3 and later)");
+            return;
         }
-        else if (metalGi)
-            Console.WriteLine("gi        metal off: the device does not support ray tracing");
-        else if (host.WorldOptions.Gi)
-            Console.WriteLine("gi        metal off: experimental (set MEITOU_METAL_GI=1 to enable)");
+
+        _worldGpu.ProbeGi = new MetalProbeGi(_ctx) { Enabled = host.WorldOptions.GiProbes, InteriorEnabled = host.WorldOptions.InteriorGi };
+        Console.WriteLine($"gi        {_worldGpu.ProbeGi.Describe()}");
     }
 
     /// <summary>

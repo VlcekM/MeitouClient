@@ -192,7 +192,7 @@ static class BenchmarkSpec
     }
 
     /// <summary>
-    /// <c>--benchmark</c> at a tier that needs ray queries on a device without them (Metal has none): says so on stderr, true when the run must
+    /// <c>--benchmark</c> at a tier that needs ray queries on a device without them (on Metal: before the M3): says so on stderr, true when the run must
     /// not start (exit <see cref="NoRayQueriesExit"/>).
     /// </summary>
     public static bool LacksRayQueries(GameOptions game, bool hasRayQuery, string deviceName)

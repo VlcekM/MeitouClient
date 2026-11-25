@@ -7,7 +7,7 @@ namespace Meitou.Game.Host;
 /// <summary>
 /// The quality tier an Apple-silicon GPU suits (an engine choice, docs/launcher.md "Graphics"): its Geekbench 7 Metal score against the frame
 /// rates an M6 measured in the launcher benchmark's bases scenario, where every tier is GPU-bound; the highest tier predicted at
-/// <see cref="TargetFps"/> or more, High at most (Ultra and Extreme are not measured on Metal, which has no ray tracing).
+/// <see cref="TargetFps"/> or more, High at most (Ultra and Extreme, which need hardware ray tracing, have no M6 measurements yet).
 /// </summary>
 static partial class AppleGpuTiers
 {

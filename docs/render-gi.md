@@ -193,6 +193,31 @@ A character's light from the probes alone is the probes' at its place, metres ap
 - **Apply** (`CharacterOcclusionPass.Apply`): the mean of the block's gathers over the same surface (`uAlbedo` bit 19, depth within 0.004 z + 0.05); the scene loses albedo x (the ambient `kenshiLight` took, with `giWeight` and the floor - gathered), times the haze's transmittance, and gains where the rays found more. What the fragment took of the sky beside its diffuse (the ambient's specular, skin's sheen, a metal's reflection; luminance packed in the sun term's alpha, [Traced sun](render-shadows.md#traced-sun)) becomes the same share of that difference, in the gathered hue: left alone the sky shone on a forehead under a fringe. For a character whose light is gathered `kenshiLight` gives that reflection its ambient's hue (no blue veil indoors). The earlier visibility trace (`CharacterOcclusionPass.Trace`) is not called.
 - **Observed** (editor's bar at night, 2560 x 1440, a hooded Greenlander, and `siwa-test6` by day close-up; against the path-traced reference as above, same albedo, same display chain; two scenes only, one frame each): engine / reference luminance in the bar, before all character work / now: face under the hood 3.85 / 1.0, shadowed shoulder 4.35 / 0.93, clavicle - / 0.98, lit chest 1.49 / 1.0, armpit 5.64 / 1.14, hood's lit top - / 0.65, inside of the hood's fold 0.008 absolute (0.024 before the [worn rule](render-lights.md#traced-lamp-shadows)), the reference's 0.015 with its cloth sheen, 0.006 without. Outdoors 0.84-1.12 by zone. The armpit's gathered light is 1.14 x the reference's indirect light. The reference's cloth sheen weight is an unsourced choice, so the hood's top is not a settled gap. **Unknown**: the armpit (the stand-in for off-screen character hits), eyes (the engine's whites are brighter), other interiors, a day interior, crowds, cost (nothing optimised or timed: 16 rays a character pixel with full hit shading, an RGBA32F term target).
 
+## Metal
+
+`Metal/Gi/MetalProbeGi.cs` and `ProbeGi.metal`: the probes on Metal ray tracing, a narrower path than Vulkan's beside it (the world shaders
+read the same atlases and globals, `IProbeGi`).
+
+- **Gate.** Hardware ray tracing only: Metal's Apple9 family, M3 and later (`MetalContext.TracesInHardware`, its `HasRayQuery`, the
+  benchmark record's `rayQueries`). An M1 or M2 reports ray tracing in software; a save load with the probes on froze an M1 Pro
+  (**Observed**), so they count as having none: no probes, no Indirect light switches, Ultra and Extreme refused (exit 5). On by default
+  elsewhere; `--no-gi` turns it off.
+- **Scene.** A fine terrain (256² cells 32 apart, re-centred in 512 steps) and a coarse one (256² cells 160 apart, 2560 steps) from
+  `HeightSnapshot.HeightAt`, both back-face culled; the nearest 64 objects within 2500 (their finest resident level, one bottom level built a
+  frame, 64 cached), not culled. The top level is rebuilt when either changes or every 30 updates. A geometry record per bottom-level geometry
+  (positions and indices by GPU address) gives the hit's normal; the top level's bottom levels and those buffers are declared resident on the
+  dispatch (`useResources`): an instance structure reaches them by address only.
+- **Update.** One kernel traces and blends: 32 rays a probe, a random rotation each update, 1 of 4 probes a frame (all at once with
+  hysteresis 0 after the grid moved, 8 or more cells). What a ray sees and the blend are the Vulkan [probe](#probes) trace's and blend's
+  (`ProbeTrace`, `ProbeBlend`, `UpdateHysteresis` from 0.97): a miss the sky's ambient, a hit the sun through a shadow ray plus the sky's
+  ambient on the object albedo or the ground colour map, an object's back face dark at -0.2 its distance.
+- **Not on Metal** (Vulkan has them): the further bounces at hits (the probes' own light), lamps, object and foliage textures, foliage and
+  characters in the scene, probe relocation, sleep and the interior grid, fog hiding; Hybrid GI, the traced sun, lamp shadows, GI traced on
+  characters and traced grass. The panel offers only Indirect light and Indoor GI there, so the tiers' other traced switches do nothing.
+- **Observed** (Apple M6, macOS 27.2, the play bench's settle and orbit on `bench-bases-2026-10-27`, 1920x1080 scene, one run each): orbit
+  59 fps, frame p50 15.4 ms, GPU 15.7 ms against 68, 12.9 and 13.5 with `--no-gi`. A still of the same save at night matches the
+  no-GI picture's tones; the round building's roof shows darker patches from probes inside it (no relocation).
+
 ## Performance and verification
 
 `gi-top-reuse`, `gi-far`, `gi-top-trace`, `gi-terrain-refit`, `gi-lazy-scene`,

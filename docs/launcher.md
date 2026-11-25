@@ -239,8 +239,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   base chips 28,496 / 43,540 / 48,180 / 54,230 / 72,805 / 89,357; Pro, Max and Ultra in the class) predicts its frame rate in proportion,
   against an M6 that ran the launcher benchmark's bases scenario at 164 fps Low, 136 Medium and 113 High (**Observed** 2026-11-25, two runs
   each, 1920x1080 without an upscaler; GPU time 93-103% of the frame time in every group, so GPU-bound). The tier is the highest predicted at
-  60 fps or more: from a score of 39.4k Medium, from 47.6k High, never above High (Ultra and Extreme are not measured on Metal, which has no
-  ray tracing): M1 Low, M2 Medium, M3 and later and every Pro, Max and Ultra High. A chip not in the table: a later generation counts as the
+  60 fps or more: from a score of 39.4k Medium, from 47.6k High, never above High (Ultra and Extreme, which need hardware ray tracing, have
+  no M6 measurement yet): M1 Low, M2 Medium, M3 and later and every Pro, Max and Ultra High. A chip not in the table: a later generation counts as the
   newest, a missing variant is that variant's newest score scaled by the base chips (M6 Pro: M5 Pro x M6 / M5). Under 12 GB of memory Medium at
   most, under 8 GB Low; a GPU name that is not an Apple chip's goes by memory (Medium from 16 GB, else Low). A GeForce goes by its model against the classes the tiers are meant for (`GeForceTier`: RTX 3060
   Medium, 3070 to 4070 High, 4070 Ti to 4080 Ultra, 4080 Super and 4090 Extreme, other series by their place among these, a laptop

@@ -186,7 +186,8 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
                 : Tr("• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"),
             metal ? Tr("• Chosen quality tier (Meitou look), no upscaler or anti-aliasing")
                 : Tr("• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"),
-            metal ? Tr("• No ray tracing: Low, Medium and High only") : Tr("• Ray tracing only on Ultra and Extreme"),
+            // A Mac before the M3 cannot run Ultra and Extreme (no hardware ray tracing); the page marks those tiers itself.
+            Tr("• Ray tracing only on Ultra and Extreme"),
             Tr("• Your saved graphics settings and mods are ignored and never modified"),
         });
     }

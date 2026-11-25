@@ -15,8 +15,8 @@ namespace Meitou.Game.DevTools.Benchmark;
 /// <summary>
 /// The launcher benchmark's hardware record (docs/bench.md "Launcher benchmark"): the CPU, its threads, the memory, the GPU the game picks, its
 /// driver and video memory, whether it offers ray queries, and the OS. <c>--benchmark-probe</c> writes it alone; result.json carries it. On
-/// Metal the GPU is the Mac's, the driver "Metal", the video memory the device's recommended working set and ray queries are none (the Metal
-/// path has no traced effects).
+/// Metal the GPU is the Mac's, the driver "Metal", the video memory the device's recommended working set and ray queries hardware ray tracing
+/// (<see cref="MetalContext.TracesInHardware"/>: M3 and later).
 /// </summary>
 sealed record HardwareRecord(string Cpu, int Threads, int RamGb, string Gpu, string Driver, long VramMb, bool RayQueries, string Os,
     string Kernel, string OsFamily)
@@ -59,10 +59,10 @@ sealed record HardwareRecord(string Cpu, int Threads, int RamGb, string Gpu, str
 #pragma warning disable CA1416
     /// <summary>
     /// The record with the Metal GPU <paramref name="device"/>: its name, "Metal" as the driver, its recommended working set as the video memory,
-    /// no ray queries.
+    /// ray queries where it traces rays in hardware.
     /// </summary>
     static HardwareRecord OfMetal(MTLDevice device) =>
-        Of(device.Name.ToString() ?? "", "Metal", (long)(device.RecommendedMaxWorkingSetSize >> 20), false);
+        Of(device.Name.ToString() ?? "", "Metal", (long)(device.RecommendedMaxWorkingSetSize >> 20), MetalContext.TracesInHardware(device));
 
     /// <summary>
     /// The record with the Mac's default Metal device (no window needed).

@@ -316,7 +316,7 @@ sealed class GameOptions
                                      default settings (meitou.user.json neither read nor written, no autosave), a 1920x1080 window, the Meitou look, frame limit
                                      and vsync off, on Vulkan or with --renderer metal (a window of 1920x1080 pixels, Retina or not, no upscaler); writes
                                      frames.csv, summary.md and result.json there. Exit 7: unknown scenario; 6: the save is not the scenario's; 5: the tier
-                                     needs ray queries the GPU lacks (Metal has none: low, medium and high only)
+                                     needs ray queries the GPU lacks (on Metal: before the M3)
           --benchmark-list <file>    the only arguments: writes the benchmark's version and scenarios as JSON and exits
           --benchmark-probe <file> [--renderer metal]
                                      the only arguments: writes the benchmark's hardware record (CPU, memory, GPU, driver, ray queries, OS) as JSON and exits;

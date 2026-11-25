@@ -7342,10 +7342,6 @@ msgid "• Full screen at 1920×1080 render resolution, Metal, VSync & frame lim
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
-msgid "• No ray tracing: Low, Medium and High only"
-msgstr ""
-
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
 msgid "• Ray tracing only on Ultra and Extreme"
 msgstr ""
 

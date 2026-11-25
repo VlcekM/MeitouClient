@@ -238,9 +238,10 @@ is the launcher's benchmark: the play bench machinery with a fixed workload, com
   are none). `resolution` in result.json is that render size. Tried, not kept (**Observed**, 2026-11-25, same machine and scenario, 3840x2160
   screen, one run each): a layer whose drawable is 1920x1080 and which the compositor shows unscaled in the middle of the screen
   (`contentsGravity` center) gave the same frame times as the stretch (all-groups 64.5 and 65.6 fps, GPU p50 15.9 and 15.8 ms; circle-high 71 and
-  72 fps, the Space's refresh cap lifted in both), so the full-screen stretch costs nothing measurable here. Tiers apply to the sliders and switches the Metal panel has (`MetalBenchmark.ApplyTier`); Metal has no
-  ray queries (probe `rayQueries` false, hardware `driver` "Metal", `vramMb` the recommended working set), so Ultra and Extreme exit 5
-  there. The GPU foliage cull is on (its default); the memory guard's budget is the game's default for the Mac. The Metal fingerprint
+  72 fps, the Space's refresh cap lifted in both), so the full-screen stretch costs nothing measurable here. Tiers apply to the sliders and switches the Metal panel has (`MetalBenchmark.ApplyTier`); hardware `driver`
+  is "Metal", `vramMb` the recommended working set, `rayQueries` hardware ray tracing (M3 and later, [render-gi](render-gi.md#metal)): an
+  M1 or M2 exits 5 at Ultra and Extreme. There those tiers turn on the probe GI, Metal's only traced effect; the panel has none of their other
+  traced switches. The GPU foliage cull is on (its default); the memory guard's budget is the game's default for the Mac. The Metal fingerprint
   differs from the Vulkan one (its own fixed settings, `BenchmarkSpec.Fingerprint(scenario, renderer)`; the Vulkan one is unchanged), and
   result.json names the `renderer`. `frame_ms` is bound by the display refresh only in a window, so use the Space for comparable numbers; the
   Metal columns are those of the [play benchmark](#play-benchmark) (`gpu_total`, no GPU stages).

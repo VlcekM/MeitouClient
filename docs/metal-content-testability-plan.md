@@ -47,7 +47,7 @@ picture is not at Vulkan parity yet".
 - Changing simulation rules or adding new content.
 - Replacing the Metal-specific frame loop with the Vulkan loop. The host may call shared methods,
   but it keeps its Metal display and post chain.
-- GI: Metal GI remains opt-in via `MEITOU_METAL_GI=1` and is outside this plan.
+- GI: outside this plan ([render-gi](render-gi.md#metal)).
 
 ## Current baseline
 
