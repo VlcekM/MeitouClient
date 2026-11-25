@@ -2086,6 +2086,10 @@ public sealed partial class MainWindow : Window
             .Where(r => r.Kind == ReleaseKind.Game && (_config.IncludePrereleases || !r.Prerelease || installed.Contains(r.Version)))
             .Select(r => new ReleaseRow(r, installed.Contains(r.Version), r.Version == PlayVersion))
             .ToList();
+
+        // A build made from source and copied into versions/ is not on GitHub: it is listed first, so it can be selected.
+        var local = Releases.LocalReleases(_allReleases).Select(r => new ReleaseRow(r, true, r.Version == PlayVersion)).ToList();
+        rows.InsertRange(0, local);
         ReleaseListBox.ItemsSource = rows;
         ReleaseListBox.SelectedItem = rows.FirstOrDefault(r => r.Release.Tag == selected);
         NotesEmpty.IsVisible = ReleaseListBox.SelectedItem is null;
@@ -2093,7 +2097,7 @@ public sealed partial class MainWindow : Window
         ReleasesEmpty.Text = Tr(_allReleases.Any(r => r.Kind == ReleaseKind.Game)
             ? "Only nightly builds so far: tick Nightly builds beside Play to list them."
             : "No releases listed yet. Check for releases below.");
-        VersionCount.Text = Tr("{1} releases · {2} installed", rows.Count, installed.Count);
+        VersionCount.Text = Tr("{1} releases · {2} installed", rows.Count - local.Count, installed.Count);
         ShowVersionButtons();
         ShowFooter();
     }
@@ -2505,7 +2509,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// The game's start: the executable run from the launcher's data folder (its settings file shared by every version), the install in KENSHI_PATH,
-    /// the Metal GPU cull variables removed.
+    /// the Metal memory budget variable removed (the launcher's setting passes it).
     /// </summary>
     static ProcessStartInfo GameStartInfo(string exe, GameInstall gameInstall)
     {
@@ -2520,8 +2524,6 @@ public sealed partial class MainWindow : Window
         };
         start.Environment[GameInstall.EnvironmentVariable] = gameInstall.Root;
 
-        // The Metal GPU cull is experimental and has caused GPU progress timeouts; it is not a user setting.
-        start.Environment.Remove("MEITOU_METAL_GPU_CULL");
         start.Environment.Remove("MEITOU_METAL_GPU_BUDGET_MB");
         return start;
     }

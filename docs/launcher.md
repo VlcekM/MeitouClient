@@ -30,7 +30,7 @@ flipped above the pointer near the screen's bottom covered the cursor and took t
   outside `news/`, `site/`, `launcher/`, `docs/` and `.github/workflows/` changed since the newest game tag (nightly or full). Only the newest 14
   nightlies are kept, so the releases page and the launcher's Versions list stay short. Each nightly's commit list, and each full or launcher release's changelog section, is posted to Discord
   as the Tinfist bot (secret `DISCORD_BOT_TOKEN`, repository variable `DISCORD_NIGHTLY_CHANNEL`), else through the `DISCORD_WEBHOOK_URL`
-  channel webhook, when set. The launcher shows them with the Nightly builds checkbox beside Play ticked ("Play latest nightly"; ticking it asks first, with Yes under the pointer, warning of crashes and corrupted saves) (GitHub pre-releases; `IncludePrereleases` in `launcher.json`). Installed versions stay listed either way; an update is offered only for a release newer than the newest installed.
+  channel webhook, when set. The launcher shows them with the Nightly builds checkbox beside Play ticked ("Play latest nightly"; ticking it asks first, with Yes under the pointer, warning of crashes and corrupted saves) (GitHub pre-releases; `IncludePrereleases` in `launcher.json`). Installed versions stay listed either way; an update is offered only for a release newer than the newest installed. An installed version GitHub does not list (a build made from source and copied into `versions/`, e.g. `99.0.0-dev`; `Releases.LocalReleases`) is a row at the top of the Versions list, selectable, uninstallable and openable like the others, and is the arrow menu's "Latest" while it is the newest.
 - Game assets: `Meitou-<version>-<rid>.zip`, `<rid>` as .NET's `RuntimeInformation.RuntimeIdentifier` (`win-x64`, `linux-x64`,
   `osx-x64`, `osx-arm64`). Legacy Mac assets append `-legacy` to the RID. The legacy launcher selects only those assets and uses
   matching Velopack channels (`osx-x64-legacy`, `osx-arm64-legacy`), so self-updates stay on .NET 10. Its pack ID and app title are
@@ -166,8 +166,8 @@ Macs, High 8120 MB. Auto passes nothing and the game sizes the ceiling to the Ma
 8192 on 24 GB). It is the game's soft `VramGuard` ceiling, not a hard VRAM reservation; Apple silicon uses unified memory
 shared with macOS and other apps. The launcher passes a chosen size as `MEITOU_METAL_GPU_BUDGET_MB` only when it starts Metal. A
 `launcher.json` that stored 5120 before Auto existed keeps it. The
-experimental GPU foliage cull is deliberately not exposed here or in the game: it has caused GPU progress timeouts, so the
-launcher clears any inherited `MEITOU_METAL_GPU_CULL` before Play.
+GPU foliage cull is on by default in the game ([metal-gpu-cull-plan](metal-gpu-cull-plan.md)); `MEITOU_METAL_GPU_CULL=0` is a
+diagnostic the launcher passes through.
 
 ### Kenshi data
 
@@ -462,12 +462,16 @@ folder, never in the installed versions or Kenshi's save folder:
 
 - Build: every game release GitHub lists, marked target or not from `GET /bench/targets`; the newest target is chosen. Install (shown when
   not yet installed) or Start unpacks its zip for the platform (`win-x64` under Proton) into `builds/`, then `--benchmark-list <file>` names
-  its scenarios.
+  its scenarios. A version installed in `versions/` that GitHub does not list (a build made from source, such as a `99.0.0-dev` copied there)
+  is offered first, never a target (so never submitted); Install or Start copies it anew into `builds/`, so its list is asked for again.
 - Platform: the host's build (`native` on Linux, `windows`, `macos`), and on Linux each Proton with a `proton` script in
   `steamapps/common/Proton*` of every Steam library (`libraryfolders.vdf`) or in `compatibilitytools.d/` (Flatpak Steam's are not used).
   Proton runs `python3 <proton> run ./MeitouClient.exe` from the build's folder with `STEAM_COMPAT_DATA_PATH` = `proton-prefix/` (made
   first: Proton refuses a missing one) and `STEAM_COMPAT_CLIENT_INSTALL_PATH` = the Steam folder; every path the game gets (arguments,
-  `KENSHI_PATH`) is `Z:` + the path with backslashes. macOS adds the Vulkan loader's environment like Play and refuses without one.
+  `KENSHI_PATH`) is `Z:` + the path with backslashes. On macOS (`BenchmarkPlatform.Renderer`) Apple silicon runs the benchmark on **Metal** when the
+  build's list names it in `renderers` (`--renderer metal` on the probe and every run, no Vulkan loader needed), else on Vulkan with the
+  loader's environment like Play, refusing without one. The listing starts the game with neither. Every inherited `MEITOU_METAL_*`
+  variable is cleared from the game's environment.
 - Choices: scenario check boxes from the build's list (`bases` ticked; before install only `bases`), tiers Low..Extreme with Medium and the
   tier the played version's `--recommend-preset` names ticked (nothing is saved to `meitou.user.json`) and Recommended / All quick links;
   Ultra and Extreme are greyed ("Needs ray tracing") once a probe said `rayQueries: false`. The estimate is two runs per ticked scenario

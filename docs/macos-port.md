@@ -27,6 +27,10 @@ A native Metal path next to Vulkan: [metal-backend](metal-backend.md).
   (**Observed**, #20). The launcher's **Metal** choice starts the game with `--renderer metal` and removes
   `DYLD_LIBRARY_PATH`; it needs neither the loader nor MoltenVK. **Auto** uses Vulkan when the loader exists and Metal otherwise,
   so a new Apple-silicon user does not need Homebrew. Metal is offered on Apple silicon only in the launcher for now.
+- Running a checkout: `tools/scripts/meitou-dev-macos.sh` builds the game (Release) and runs it with Metal; `--launcher` instead copies the build
+  into the launcher's `versions/` as `99.0.0-dev` (with the settings schema a release ships, so Play, Graphics, Detect and the Benchmark page
+  treat it as an installed version) and runs the Debug launcher from the checkout. The launcher otherwise runs installed releases only
+  ([launcher](launcher.md)); its `DebugGame` hook looks for the Windows `.exe`. Options and variables: `--help`.
 - Screenshots and other `C:\Temp` defaults land in a folder literally named `C:\Temp` under the CWD.
 
 ## MoltenVK constraints and the fixes

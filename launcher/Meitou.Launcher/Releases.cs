@@ -33,9 +33,26 @@ public sealed record Release(ReleaseKind Kind, string Tag, string Version, strin
     string Notes, string PageUrl, IReadOnlyList<ReleaseAsset> Assets)
 {
     /// <summary>
+    /// The tag of a local release is this and its version.
+    /// </summary>
+    const string LocalTagPrefix = "local-";
+
+    /// <summary>
     /// The zip for this build's platform and compatibility channel.
     /// </summary>
     public ReleaseAsset? Asset => Assets.FirstOrDefault(a => a.Name == AssetName);
+
+    /// <summary>
+    /// A version installed in <c>versions/</c> that GitHub does not list (a build made from source and copied there): no notes, page or download.
+    /// </summary>
+    public bool IsLocal => Tag.StartsWith(LocalTagPrefix, StringComparison.Ordinal);
+
+
+    /// <summary>
+    /// The local release of installed <paramref name="version"/>, built (its folder last written) at <paramref name="built"/>.
+    /// </summary>
+    public static Release Local(string version, DateTimeOffset built) =>
+        new(ReleaseKind.Game, LocalTagPrefix + version, version, $"v{version}", false, built, "", "", []);
 
     /// <summary>
     /// The name of <see cref="Asset"/>.
@@ -280,6 +297,17 @@ public sealed class Releases(HttpClient http)
             .Where(d => FindGame(d) is not null)
             .Select(Path.GetFileName).OfType<string>()
             .Order(Comparer<string>.Create((a, b) => CompareVersions(b, a)))];
+    }
+
+    /// <summary>
+    /// The installed versions that are not among <paramref name="listed"/> (GitHub's releases) as local releases, newest version first: the build
+    /// made from source, which the Versions and Benchmark pages offer beside the published ones.
+    /// </summary>
+    public static List<Release> LocalReleases(IEnumerable<Release> listed)
+    {
+        var known = listed.Where(r => r.Kind == ReleaseKind.Game).Select(r => r.Version).ToHashSet(StringComparer.Ordinal);
+        return [.. Installed().Where(version => !known.Contains(version))
+            .Select(version => Release.Local(version, Directory.GetLastWriteTimeUtc(VersionDirectory(version))))];
     }
 
     /// <summary>

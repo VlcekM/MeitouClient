@@ -148,7 +148,7 @@ the game's default applies; its fixed Safe, Balanced and High sizes are unchange
 
 ### A2. Port the GPU-side draw path
 
-The mesh/rock cull is ported but opt-in on Metal (`MEITOU_METAL_GPU_CULL=1`; status in
+The mesh/rock cull is ported and on by default on Metal (`MEITOU_METAL_GPU_CULL=0` or `MEITOU_METAL_CPU_CULL=1` keeps the CPU cull; status in
 [metal-gpu-cull-plan](metal-gpu-cull-plan.md)): `FoliageGpuCull` uses `IGpuContext`, `FrameScratch` is
 backend-neutral, and `MetalFrame.PreFrame` is a command buffer of its own committed before the frame. The remaining
 A2 work is grass and the other indirect draw producers; the concrete plan is in

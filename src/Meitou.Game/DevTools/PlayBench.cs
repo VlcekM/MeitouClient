@@ -468,9 +468,8 @@ sealed class PlayBench(GameHost host)
             return;
         }
 
-        var device = host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk ? vk.Device : null;
-        var hardware = Benchmark.HardwareRecord.Of(device);
-        Benchmark.BenchmarkResult.Write(dir, new(scenario, tier, Applied ?? "", hardware, size.X, size.Y, _startedAt));
+        var hardware = Benchmark.HardwareRecord.Of(host.Gpu.Sky.Gpu);
+        Benchmark.BenchmarkResult.Write(dir, new(scenario, tier, host.GameOptions.Renderer, Applied ?? "", hardware, size.X, size.Y, _startedAt));
     }
 
     /// <summary>

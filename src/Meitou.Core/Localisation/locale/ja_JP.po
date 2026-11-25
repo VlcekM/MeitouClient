@@ -5893,3 +5893,15 @@ msgstr "ネイティブ"
 #. machine-translated
 msgid "Native AA"
 msgstr "ネイティブAA"
+
+#. machine-translated
+msgid "• Full screen at 1920×1080 render resolution, Metal, VSync & frame limit off, HDR off"
+msgstr "• フルスクリーン、レンダリング解像度 1920×1080、Metal、垂直同期・FPS上限オフ、HDRオフ"
+
+#. machine-translated
+msgid "• Chosen quality tier (Meitou look), no upscaler or anti-aliasing"
+msgstr "• 選択した品質ティア（Meitou ルック）、アップスケーラーとアンチエイリアスなし"
+
+#. machine-translated
+msgid "• No ray tracing: Low, Medium and High only"
+msgstr "• レイトレーシングなし：低・中・高のみ"

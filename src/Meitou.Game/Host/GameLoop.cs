@@ -303,7 +303,8 @@ sealed class GameLoop(GameHost host)
     internal int Run()
     {
         using var owned = OpenDisplay();
-        if (BenchmarkLacksRayQueries()) return BenchmarkSpec.NoRayQueriesExit;
+        var device = _display.Context.Device;
+        if (BenchmarkSpec.LacksRayQueries(host.GameOptions, device.HasRayQuery, device.DeviceName)) return BenchmarkSpec.NoRayQueriesExit;
         ShowWindow();
         if (LoadWorld() is { } exit) return exit;
         CreateDebugTools();
@@ -335,18 +336,6 @@ sealed class GameLoop(GameHost host)
         return host.AgentChannel.ControlExitCode;
     }
 
-    /// <summary>
-    /// <c>--benchmark</c> at a tier that needs ray queries on a device without them: says so on stderr (the run does not start).
-    /// </summary>
-    bool BenchmarkLacksRayQueries()
-    {
-        var device = _display.Context.Device;
-        if (host.GameOptions.Benchmark is not { } tier || !QualityTiers.NeedsRayQueries(tier) || device.HasRayQuery)
-            return false;
-
-        Console.Error.WriteLine($"--benchmark {BenchmarkSpec.TierName(tier)} needs ray queries, which {device.DeviceName} lacks");
-        return true;
-    }
 
     // ---- start-up ----
 

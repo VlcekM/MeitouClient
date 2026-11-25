@@ -39,14 +39,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             return float4(xy * 2.0 - 1.0, 0.0, 1.0);
         }
 
-        fragment float4 present_fragment(float4 position [[position]], constant float2& targetSize [[buffer(1)]],
+        fragment float4 present_fragment(float4 position [[position]], constant float4& target [[buffer(1)]],
             texture2d<float> source, sampler source_sampler)
         {
             // No flip: the engine's GL-style shaders land right side up in the backbuffer on Metal (the NDC points up as GL's
             // does), so row for row is the picture (the Vulkan path's blit flips instead - its backbuffer is upside down).
             // Divide by the drawable, not the source: on a scaled display the drawable is larger than the framebuffer the
-            // scene and HUD are drawn into, and dividing by the source there showed only its top-left part.
-            float2 uv = position.xy / targetSize;
+            // scene and HUD are drawn into, and dividing by the source there showed only its top-left part. The target is the
+            // picture's rectangle in the drawable (x, y, width, height): the whole drawable, or a letterboxed part of it.
+            float2 uv = (position.xy - target.xy) / target.zw;
             return source.sample(source_sampler, uv);
         }
         """;
@@ -1203,7 +1204,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
 
         float scale = Math.Clamp(RenderScale, 0.25f, 1f);
-        (SceneWidth, SceneHeight) = SceneSize(width, height, scale);
+        (SceneWidth, SceneHeight) = FixedSceneSize ?? SceneSize(width, height, scale);
 
         if (_depth is not { } currentDepth || currentDepth.Desc.Width != SceneWidth || currentDepth.Desc.Height != SceneHeight)
         {
@@ -1276,6 +1277,18 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// The frame's present shows <see cref="Picture"/> stretched to the drawable (nearest) instead of the backbuffer; cleared when a frame begins.
     /// </summary>
     public bool PresentPicture { get; set; }
+
+    /// <summary>
+    /// A render size that does not follow the backbuffer or <see cref="RenderScale"/> (the launcher benchmark's, whatever the screen is); null: the
+    /// scale decides. The host sets <see cref="StretchPicture"/> with it, so the picture is made apart where the sizes differ.
+    /// </summary>
+    public (int Width, int Height)? FixedSceneSize { get; set; }
+
+    /// <summary>
+    /// The present keeps the picture's aspect ratio when it stretches it, black where it does not reach (a picture of another shape than the
+    /// screen); off, it fills the drawable.
+    /// </summary>
+    public bool LetterboxPicture { get; set; }
 
     /// <summary>
     /// The target the scene's composite writes: the backbuffer, or while it is stretched a target of the render size.
@@ -1406,18 +1419,38 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("MTLRenderPassDescriptor"), "renderPassDescriptor"));
         var attachments = descriptor.ColorAttachments;
         var attachment = attachments.Object(0);
+        var source = PresentPicture ? Picture : _backbuffer!;
+        int drawableWidth = (int)drawable.Texture.Width, drawableHeight = (int)drawable.Texture.Height;
+        var (x, y, width, height) = PictureRect(source.Desc.Width, source.Desc.Height, drawableWidth, drawableHeight);
+        bool bars = width < drawableWidth || height < drawableHeight;
         attachment.Texture = drawable.Texture;
-        attachment.LoadAction = MTLLoadAction.DontCare;
+        attachment.LoadAction = bars ? MTLLoadAction.Clear : MTLLoadAction.DontCare;
+        attachment.ClearColor = new MTLClearColor { red = 0, green = 0, blue = 0, alpha = 1 };
         attachment.StoreAction = MTLStoreAction.Store;
         attachments.SetObject(attachment, 0);
         var encoder = command.RenderCommandEncoder(descriptor);
         encoder.SetRenderPipelineState(_presentPipeline);
-        encoder.SetFragmentTexture(TextureAt(PresentPicture ? Picture : _backbuffer!), 0);
+        encoder.SetFragmentTexture(TextureAt(source), 0);
         encoder.SetFragmentSamplerState(Samplers.Backend(Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest))), 0);
-        var targetSize = stackalloc float[2] { (float)drawable.Texture.Width, (float)drawable.Texture.Height };
-        encoder.SetFragmentBytes((nint)targetSize, 8, 1);
+        encoder.SetViewport(new MTLViewport { originX = x, originY = y, width = width, height = height, znear = 0, zfar = 1 });
+        var target = stackalloc float[4] { x, y, width, height };
+        encoder.SetFragmentBytes((nint)target, 16, 1);
         encoder.DrawPrimitives(MTLPrimitiveType.Triangle, 0, 3);
         encoder.EndEncoding();
+    }
+
+    /// <summary>
+    /// Where a <paramref name="sourceWidth"/> x <paramref name="sourceHeight"/> picture goes in a <paramref name="width"/> x <paramref name="height"/>
+    /// drawable (x, y, width, height in pixels): all of it, or with <see cref="LetterboxPicture"/> the largest part of its shape, centred.
+    /// </summary>
+    (int X, int Y, int Width, int Height) PictureRect(int sourceWidth, int sourceHeight, int width, int height)
+    {
+        if (!LetterboxPicture || (long)sourceWidth * height == (long)sourceHeight * width) return (0, 0, width, height);
+
+        float scale = MathF.Min(width / (float)sourceWidth, height / (float)sourceHeight);
+        int fitWidth = Math.Clamp((int)MathF.Round(sourceWidth * scale), 1, width);
+        int fitHeight = Math.Clamp((int)MathF.Round(sourceHeight * scale), 1, height);
+        return ((width - fitWidth) / 2, (height - fitHeight) / 2, fitWidth, fitHeight);
     }
 
     /// <inheritdoc/>

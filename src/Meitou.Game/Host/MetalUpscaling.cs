@@ -74,10 +74,17 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     }
 
     /// <summary>
-    /// Whether the scene renders below the screen's size and is stretched to it: Disabled, at a fraction below 1 (in a window virtual Retina pixels
-    /// on a Retina display, in full screen a division above 1).
+    /// A render size the Disabled mode keeps whatever the screen is (the launcher benchmark's 1920x1080; <see cref="MetalBenchmark"/>): the
+    /// picture is made at it, stretched to the screen with its aspect ratio kept (black bars), and the interface is drawn at it too. Null: the
+    /// screen's size or its division decides.
     /// </summary>
-    internal bool Stretched => Mode == MetalUpscalerMode.Disabled && RenderFraction < 1f;
+    internal (int Width, int Height)? FixedSize { get; set; }
+
+    /// <summary>
+    /// Whether the scene renders at a size of its own and is stretched to the screen: Disabled, at a <see cref="FixedSize"/>, or at a fraction below
+    /// 1 (in a window virtual Retina pixels on a Retina display, in full screen a division above 1).
+    /// </summary>
+    internal bool Stretched => Mode == MetalUpscalerMode.Disabled && (FixedSize is not null || RenderFraction < 1f);
 
     /// <summary>
     /// The share of the screen's pixels the scene renders at without the upscaler (<see cref="MetalRenderFraction.Of"/>).
@@ -93,7 +100,7 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     /// The render size of a <paramref name="width"/> x <paramref name="height"/> screen at the saved division (the screen's own when not stretched).
     /// </summary>
     internal (int Width, int Height) RenderSize(int width, int height) =>
-        Stretched ? MetalContext.SceneSize(width, height, RenderFraction) : (width, height);
+        FixedSize ?? (Stretched ? MetalContext.SceneSize(width, height, RenderFraction) : (width, height));
 
     /// <summary>
     /// The interface's size on a <paramref name="width"/> x <paramref name="height"/> screen: the render size when it is drawn with the picture,
@@ -103,13 +110,15 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
 
     /// <summary>
     /// Brings the context to the state the mode and full screen ask for, before a frame: the render scale of Disabled (<see cref="RenderFraction"/>)
-    /// and whether the picture is made apart and stretched.
+    /// or its <see cref="FixedSize"/>, and whether the picture is made apart and stretched.
     /// </summary>
     internal void Update()
     {
         bool stretched = Stretched;
         ctx.StretchPicture = stretched;
-        if (Mode == MetalUpscalerMode.Disabled) ctx.RenderScale = stretched ? RenderFraction : 1f;
+        ctx.FixedSceneSize = Mode == MetalUpscalerMode.Disabled ? FixedSize : null;
+        ctx.LetterboxPicture = FixedSize is not null;
+        if (Mode == MetalUpscalerMode.Disabled) ctx.RenderScale = FixedSize is null && stretched ? RenderFraction : 1f;
     }
 
     /// <summary>
@@ -235,6 +244,7 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     /// </summary>
     internal string UpscalerStatusText() => Mode switch
     {
+        MetalUpscalerMode.Disabled when FixedSize is { } fixedSize => $"No upscaler, fixed {fixedSize.Width}x{fixedSize.Height}",
         MetalUpscalerMode.Disabled => Stretched ? $"No upscaler, {RenderFraction:0.##} of the screen's size" : "No upscaler",
         MetalUpscalerMode.Temporal => $"MetalFX temporal {ctx.RenderScale:0.00}",
         MetalUpscalerMode.Spatial => $"MetalFX spatial {ctx.RenderScale:0.00}",

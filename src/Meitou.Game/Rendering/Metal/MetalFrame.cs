@@ -205,11 +205,11 @@ public sealed unsafe class MetalFrame : IGpuFrame
     MTLCommandBuffer _preCommand;
 
     /// <summary>
-    /// Whether the pre-frame gets a command buffer of its own (<c>MEITOU_METAL_GPU_CULL</c>): part of the opt-in Metal GPU-cull path. With the CPU
-    /// cull, the upstream pre-frame work (uploads, the ocean's FFT, impostor bakes) stays in the frame's own command list as before the 2026-10-23
-    /// cull change: the extra command buffer is not needed and is one more ordering point on a path that has produced GPU progress timeouts.
+    /// Whether the pre-frame gets a command buffer of its own: part of the Metal GPU-cull path (<see cref="Foliage.MetalGpuCull"/>). With the CPU
+    /// cull (the reference path), the pre-frame work (uploads, the ocean's FFT, impostor bakes) stays in the frame's own command list: the extra
+    /// command buffer is not needed.
     /// </summary>
-    static readonly bool SeparatePreFrame = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";
+    static readonly bool SeparatePreFrame = Foliage.MetalGpuCull.Enabled;
 
     /// <summary>
     /// The commands recorded ahead of the frame's passes (the GPU cull's dispatches, the ocean's FFT, the impostor

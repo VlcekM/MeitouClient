@@ -3302,7 +3302,7 @@ msgstr ""
 msgid "Meitou ports of your mods"
 msgstr ""
 
-#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkRunner.cs launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Meitou {1} is not installed any more."
 msgstr ""
 
@@ -7331,6 +7331,18 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
 msgid "• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "• Chosen quality tier (Meitou look), no upscaler or anti-aliasing"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "• Full screen at 1920×1080 render resolution, Metal, VSync & frame limit off, HDR off"
+msgstr ""
+
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
+msgid "• No ray tracing: Low, Medium and High only"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs

@@ -9,6 +9,7 @@ using Meitou.Data.Save;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 using Meitou.Game.DevTools;
+using Meitou.Game.DevTools.Benchmark;
 using Meitou.Game.Editor;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
@@ -185,6 +186,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         using var display = OpenDisplay();
         using var ctx = OpenContext();
+        if (BenchmarkSpec.LacksRayQueries(host.GameOptions, ctx.HasRayQuery, ctx.Device.Name.ToString() ?? "")) return BenchmarkSpec.NoRayQueriesExit;
+
         SetUpMemoryAndWindow();
 
         ReadSwitches();
@@ -210,6 +213,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         RunLoop();
 
         Shutdown();
+
+        // A benchmark whose script did not finish (the window closed) wrote no result.json.
+        if (host.GameOptions.Benchmark is not null && !host.PlayBench.Completed) return 1;
         return host.AgentChannel.ControlExitCode;
     }
 
@@ -345,6 +351,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
 
         _upscaling = new MetalUpscaling(host.Config, _ctx, _taa, _metalFx, _metalFxSpatial, () => _display.FullScreen, BackingScale);
         _upscaling.ApplyMode(mode);
+        if (host.GameOptions.Benchmark is not null) MetalBenchmark.UseFixedResolution(_upscaling, host.Config);
         if (_upscaling.NoTaa) Console.WriteLine("metal     no TAA/upscaler: no jitter, no temporal resolve");
         // The seam's post chain for the shared WorldFrame.Draw: the scene effects and the composite are the same calls the local
         // loop used, with the jitter and temporal choice decided live as the settings change them.
@@ -361,6 +368,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     MetalUpscalerMode ChooseUpscalerMode()
     {
+        // The launcher benchmark draws every tier at the window's pixels with no upscaler (the settings and the environment do not apply).
+        if (host.GameOptions.Benchmark is not null)
+        {
+            _ctx.RenderScale = 1f;
+            return MetalUpscalerMode.Disabled;
+        }
+
         MetalUpscalerMode mode = host.Config.MetalUseUpscaling ? host.Config.MetalUpscaler : MetalUpscalerMode.Disabled;
         float scale = Math.Clamp(host.Config.MetalRenderScale, 0.33f, 1f);
         if (_noTaaRequested)
@@ -550,7 +564,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void Shutdown()
     {
-        _bench.Finish(_window.FramebufferSize);
+        _bench.Finish(host.GameOptions.Benchmark is null ? _window.FramebufferSize : new Vector2D<int>(_ctx.SceneWidth, _ctx.SceneHeight));
 
         // Let the queue finish before the renderers release views, buffers and bindless entries; a quit during a
         // streaming upload otherwise freed resources the GPU was still reading and could fault on the way out.
@@ -738,14 +752,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _foliage.SwaySeconds = 0;   // a still picture: the grass holds still, so it repeats
             _foliage.DrawGrass = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_GRASS") != "1";
             _foliage.DrawMeshes = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_FOLIAGE_MESHES") != "1";
-            // The CPU cull is the reference path (and the A/B diagnostic for the Metal GPU cull). The GPU cull is
-            // opt-in on Metal after the 2026-10-23 progress timeouts; `MEITOU_METAL_CPU_CULL=1` still forces CPU.
-            bool gpuCullWanted = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";
-            _foliage.GpuCull = gpuCullWanted && Environment.GetEnvironmentVariable("MEITOU_METAL_CPU_CULL") != "1";
+            // The GPU cull is the default; the CPU cull is the reference path and the A/B diagnostic (MEITOU_METAL_GPU_CULL=0 or
+            // MEITOU_METAL_CPU_CULL=1, see MetalGpuCull).
+            _foliage.GpuCull = MetalGpuCull.Enabled;
             Console.WriteLine(_foliage.GpuCull
-                ? "warning   metal foliage GPU cull is experimental (MEITOU_METAL_GPU_CULL=1): it has produced GPU progress timeouts "
-                    + "after a few minutes"
-                : "metal     foliage CPU cull (GPU cull off by default; MEITOU_METAL_GPU_CULL=1 enables the experimental path)");
+                ? "metal     foliage GPU cull"
+                : "metal     foliage CPU cull (MEITOU_METAL_GPU_CULL=0 or MEITOU_METAL_CPU_CULL=1)");
         }
     }
 
@@ -1390,6 +1402,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             CameraRotateSpeedChanged = ApplyCameraRotateSpeed,
             CameraChanged = () => host.Config.ApplyCamera(host.Session.Camera.Settings),
             AudioChanged = host.Sound.AudioSettingsChanged,
+            NoDiskWrites = host.GameOptions.Benchmark is not null,   // nor the look presets beside meitou.user.json
         };
         ApplySavedSettings(_settingsValues, _settings);
     }
@@ -1417,6 +1430,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                     && (value >= 0.5f) != toggle.Get())
                 toggle.Set(value >= 0.5f);
         settings.Tiers.ApplySavedPreset();
+        if (host.GameOptions.Benchmark is { } tier) host.PlayBench.Applied = MetalBenchmark.ApplyTier(settings, settingsValues, tier);
         // The impostor atlas path is re-enabled after the frame-slot fence. Keep the diagnostic off switch as a
         // fallback; the saved "Far impostors" toggle is otherwise allowed through.
         if (_foliage is not null && !_metalImpostors) _foliage.DisableImpostors();

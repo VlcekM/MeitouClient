@@ -70,6 +70,26 @@ sealed record BenchmarkScenario(string Id, string? Save, IReadOnlyList<string> G
     public static List<BenchmarkScenario>? ReadList(string buildFolder) => Parse(ListPath(buildFolder));
 
     /// <summary>
+    /// The renderers the build in <paramref name="buildFolder"/> runs the benchmark on (<c>renderers</c> of its list); a build that names none runs
+    /// it on Vulkan only.
+    /// </summary>
+    public static IReadOnlyList<string> ReadRenderers(string buildFolder)
+    {
+        try
+        {
+            string file = ListPath(buildFolder);
+            if (!File.Exists(file) || JsonNode.Parse(File.ReadAllText(file)) is not JsonObject list || list["renderers"] is not JsonArray named)
+                return ["vulkan"];
+
+            return [.. named.OfType<JsonValue>().Select(value => value.TryGetValue(out string? renderer) ? renderer : null).OfType<string>()];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        {
+            return ["vulkan"];
+        }
+    }
+
+    /// <summary>
     /// Where <see cref="ReadList"/> looks in <paramref name="buildFolder"/>.
     /// </summary>
     public static string ListPath(string buildFolder) => Path.Combine(buildFolder, ListFile);
