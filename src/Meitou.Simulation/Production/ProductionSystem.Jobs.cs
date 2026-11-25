@@ -899,7 +899,7 @@ public sealed partial class ProductionSystem
     {
         if (store.Storage is not { } grid || cold.Inventory is not { } inv) return null;
         if (store.Data.HaulsAnyOfType)
-            return LooseSource.Nearest(world, _towns, cold, at, g => Stores(store, g.Item) && Fits(inv, g.Item), ownOnly: true);
+            return LooseSource.Nearest(world, _towns, cold, at, g => StoresLoose(store, g.Item) && Fits(inv, g.Item), ownOnly: true);
 
         foreach (string record in store.Data.StorageLimit)
         {
@@ -909,6 +909,14 @@ public sealed partial class ProductionSystem
 
         return null;
     }
+
+    /// <summary>
+    /// A loose item on the ground the storage takes and has room for. Its section is not asked: a loose item keeps the one it was saved or dropped
+    /// with (<b>Observed</b>, the owner's save: an item spawned on the ground has an empty section; one taken off the body keeps its equipment
+    /// section), and picking it up puts it in <c>main</c>.
+    /// </summary>
+    static bool StoresLoose(Machine store, Items.ItemInstance item) =>
+        !item.LockedOn && item.Contents is null && store.Data.Accepts(item.Record, item.Type) && Fits(store.Storage!, item);
 
     /// <summary>
     /// A loose stack (not the character's own kit) the storage takes and has room for.

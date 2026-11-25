@@ -1206,6 +1206,54 @@ public class ProductionTests
         Assert.Equal((1, 0), (rig.Count(farmer, Crop), tank.Items.Count(i => i.Record == Crop)));
     }
 
+    /// <summary>
+    /// A storage for one kind of gear (ARMOUR <c>itemtype limit</c>, no list) on a "Hauling to" job takes in loose armour whatever section it
+    /// keeps: one spawned on the ground (no section) and one taken off a body (its equipment section), but not one another faction owns
+    /// (docs/simulation.md "Production", job 124). Catches the loose pass asking an inventory item's section of a ground item, which left spawned
+    /// and stripped gear lying.
+    /// </summary>
+    [Fact]
+    public void A_gear_storage_hauls_loose_gear_of_any_section_but_not_another_factions()
+    {
+        var db = Database();
+        var file = new FcsFile();
+        foreach (var (id, name) in new[] { ("900-t", "Spawned Shirt"), ("901-t", "Stripped Shirt"), ("902-t", "Owned Shirt") })
+        {
+            var armour = Rec(id, FcsRecordType.Armour, name);
+            armour.Floats["weight kg"] = 1;
+            file.Records.Add(armour);
+        }
+
+        var box = Building("903-t", "Armour Box", "88-t");
+        box.Bools["has inventory"] = true;
+        box.Ints["storage size width"] = 8;
+        box.Ints["storage size height"] = 8;
+        box.Ints["itemtype limit"] = (int)FcsRecordType.Armour;
+        file.Records.Add(box);
+        db.Apply(file, "gear.mod");
+        using var rig = new Rig(db, Constants, ["903-t"]);
+        var hauler = rig.Add(0, StatsEnumerated.Labouring, Unit);
+        rig.World.RunTick();
+
+        var at = rig.World.Buildings.Find(rig.Sites[0])!.Position;
+        void Lay(string record, string section, float dx, int owner)
+        {
+            var item = rig.Items.Create(record, 1)!;
+            item.Section = section;
+            rig.World.GroundItems.Place(item, at + new Vector3(dx, 0, 40), 0, null, owner);
+        }
+
+        Lay("900-t", "", 60, -1);
+        Lay("901-t", "armour", -60, -1);
+        Lay("902-t", "main", 90, rig.World.Player.Faction + 7);
+        rig.World.Commands.Enqueue(new AddJob([hauler], Data.Gameplay.Ai.TaskType.OperateStorage, rig.Sites[0]) { Tick = rig.World.Tick });
+        int Stored(string r) => rig.Machine(0).Storage!.Items.Where(i => i.Record == r).Sum(i => i.Quantity);
+        for (int t = 0; t < 30000 && Stored("900-t") + Stored("901-t") < 2; t++) rig.World.RunTick();
+        for (int t = 0; t < 3000; t++) rig.World.RunTick();
+
+        Assert.Equal((1, 1, 0), (Stored("900-t"), Stored("901-t"), Stored("902-t")));
+    }
+
     // ------------------------------------------------------------------ storage priorities
 
     /// <summary>
