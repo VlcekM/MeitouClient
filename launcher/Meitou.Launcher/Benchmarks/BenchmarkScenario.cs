@@ -15,6 +15,11 @@ sealed record BenchmarkScenario(string Id, string? Save, IReadOnlyList<string> G
     public const string Default = "bases";
 
     /// <summary>
+    /// The scenarios this launcher knows, offered before a build has listed its own; a build without one skips it with a notice.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Known = [Default, "shark-flyby"];
+
+    /// <summary>
     /// The file a build's list is kept in, in its folder, so it is asked for once.
     /// </summary>
     const string ListFile = "benchmark-scenarios.json";

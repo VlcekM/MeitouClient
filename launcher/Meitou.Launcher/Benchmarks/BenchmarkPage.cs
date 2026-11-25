@@ -355,22 +355,19 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     List<BenchmarkScenario>? Listed => _release is null ? null : BenchmarkScenario.ReadList(Platform.BuildFolder(_release.Version));
 
     /// <summary>
-    /// A check box per benchmark the build lists (only the default one before it is installed), with its short name, estimate and subtitle.
+    /// A check box per benchmark the build lists (the ones this launcher knows before it listed them), with its short name, estimate and subtitle.
     /// </summary>
     Border ScenarioRow()
     {
         var listed = Listed;
-        var ids = listed?.Select(scenario => scenario.Id).ToList() ?? [BenchmarkScenario.Default];
+        var ids = listed?.Select(scenario => scenario.Id).ToList() ?? [.. BenchmarkScenario.Known];
         var boxes = new StackPanel { Spacing = 6 };
         foreach (string id in ids)
         {
             var listedScenario = listed?.FirstOrDefault(s => s.Id == id);
             boxes.Children.Add(ScenarioOption(id, listedScenario));
         }
-        string description = listed is null
-            ? Tr("Install the build to see all the benchmarks it has.")
-            : Tr("Each ticked benchmark is run at each ticked tier.");
-        return BenchmarkLayout.Row(Tr("Benchmarks"), description, boxes, ControlWidth);
+        return BenchmarkLayout.Row(Tr("Benchmarks"), Tr("Each ticked benchmark is run at each ticked tier."), boxes, ControlWidth);
     }
 
     /// <summary>

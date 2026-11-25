@@ -2613,10 +2613,6 @@ msgstr ""
 msgid "Install latest"
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
-msgid "Install the build to see all the benchmarks it has."
-msgstr ""
-
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Install v{1} (skipped)"
 msgstr ""
