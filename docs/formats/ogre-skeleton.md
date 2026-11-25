@@ -51,13 +51,13 @@ retain source scope; [animation](../animation.md) supplies slider/factor definit
 ### Animation links
 
 An `ANIMATION_LINK` names another skeleton file whose clips the skeleton plays: a clip the skeleton's own animations lack is taken from its
-links in order, each one's own animations then its links, tracks by bone handle (**Verified**, OgreMain `Skeleton::_getAnimationImpl`,
-[animation files](../animation.md#animation-files)). **Observed** (read with `OgreSkeletonReader`: base data and the 234 workshop items of
-#1418): every link has scale 1.
+links in order, tracks by bone handle (**Verified**, OgreMain `Skeleton::_getAnimationImpl`, [animation files](../animation.md#animation-files)).
+**Observed** (read with `OgreSkeletonReader`: base data and the 234 workshop items of #1418): every link has scale 1, and no linked skeleton
+found has links of its own.
 `Guild Escort Contracts.mod` (workshop 3798671709) gives Greenlanders and Scorchlanders `human_male_fingers.mesh` / `human_female_fingers.mesh`,
 whose 45-bone skeletons (the 30 body bones plus fingers) hold one animation and link `male_skeleton.skeleton` / `female_skeleton.skeleton` for
-the rest. Meitou (`SkeletonRig.Clip`) follows the links by file name as a body's own skeleton is found, 8 deep at most (engine choice), and plays
-them at scale 1; without them those bodies have no clip at all (a carried one hangs straight off the shoulder, #1418).
+the rest. Meitou (`SkeletonRig.Clip`) follows the links by file name as a body's own skeleton is found, and a linked skeleton's own links too, 8 deep
+at most (engine choice), at scale 1; without them those bodies have no clip at all (a carried one hangs straight off the shoulder, #1418).
 
 ### Meshes and skeletons
 
