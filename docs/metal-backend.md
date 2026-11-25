@@ -196,7 +196,11 @@ operation a later pass needs first throws (`InvalidOperationException` naming it
   description's is applied at bind, as clamps), `MetalUploads` (a batch is its own command buffer:
   blit copies from a shared staging ring, committed in order before the frame's own; `IGpuUploads.Scope` lets the render thread's batches
   share one command buffer, which `WorldTextureCache.Pump` uses: a queue holds 64 command buffers and `commandBuffer` blocks while it is full, so
-  one per 512 KB texture slab stalled the render thread 8-17 ms **Observed** 2026-11-13, M6, outstanding 59-107 at each stall). Encoders are labelled with the
+  one per 512 KB texture slab stalled the render thread 8-17 ms **Observed** 2026-11-13, M6, outstanding 59-107 at each stall). A batch's staging
+  is freed once its command has completed: at each frame's start and whenever 64 MB more has been retired (`RetiredSweepBytes`). With the frame
+  start alone, the first frame's object and foliage settles left 2,016 completed staging buffers (1.86 GB) held for about 6 s on the title scene,
+  the device allocation reached 92% of a 5120 MB budget and the guard clamped the ranges to x0.36, recovering over about 30 s (**Observed**,
+  2026-11-25, M-series 24 GB, `--metal-gpu-budget 5120`, the title scene: the scene itself held 2.5-3.0 GB). Encoders are labelled with the
   innermost `BeginLabel` (else the list's name), for Metal System Trace.
 - Resources: textures (`MTLTextureDescriptor`, shared storage - Apple silicon's unified memory is
   the device-local memory; a colour or depth target that is not a storage image is private, without `shaderWrite` or

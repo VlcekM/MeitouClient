@@ -531,9 +531,24 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     readonly List<(long Frame, MTLCommandBuffer Command, MTLTexture[] Views)> _retiredLevelViews = [];
     /// <summary>
-    /// Upload batches' staging buffers, kept until the command buffer that reads them has completed.
+    /// Upload batches' staging buffers, kept until the command buffer that reads them has completed. Batches retire them from any thread
+    /// (<see cref="_retiredUploadsLock"/>).
     /// </summary>
     readonly List<(long Frame, MTLCommandBuffer Command, MTLBuffer Buffer, string Label)> _retiredUploads = [];
+    /// <summary>
+    /// Guards <see cref="_retiredUploads"/> and <see cref="_retiredSinceSweep"/>.
+    /// </summary>
+    readonly Lock _retiredUploadsLock = new();
+    /// <summary>
+    /// The staging bytes retired since completed ones were last released.
+    /// </summary>
+    ulong _retiredSinceSweep;
+    /// <summary>
+    /// The staging retired between two releases of the completed ones (bytes), besides the release at each frame's start: the first frame's
+    /// settles (the objects' and the foliage's <c>Settle</c>) stream for seconds inside one frame, and released only by the next frame their
+    /// completed staging reached 1.8 GB on the title scene and put the memory guard into pressure (docs/metal-backend.md, MetalUploads).
+    /// </summary>
+    const ulong RetiredSweepBytes = 64 << 20;
     /// <summary>
     /// Whether a failed upload command buffer has been logged (only the first is).
     /// </summary>
@@ -844,7 +859,12 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
 
         Retain_objc_retain(command.NativePtr);
-        _retiredUploads.Add((_frameNumber, command, buffer, label));
+        lock (_retiredUploadsLock)
+        {
+            _retiredUploads.Add((_frameNumber, command, buffer, label));
+            _retiredSinceSweep += buffer.Length;
+            if (_retiredSinceSweep >= RetiredSweepBytes) ReleaseCompletedUploads(force: false);
+        }
     }
 
     /// <summary>
@@ -853,6 +873,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     void ReleaseRetiredUploads(bool force = false)
     {
+        lock (_retiredUploadsLock) ReleaseCompletedUploads(force);
+    }
+
+    /// <summary>
+    /// <see cref="ReleaseRetiredUploads"/> with the lock held.
+    /// </summary>
+    void ReleaseCompletedUploads(bool force)
+    {
+        _retiredSinceSweep = 0;
         if (_retiredUploads.Count == 0) return;
 
         for (int i = 0; i < _retiredUploads.Count;)

@@ -2662,6 +2662,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     bool Frame()
     {
+        Rendering.Frame.FrameTick.Advance();
         RepeatMenuKey();
         if (host.DevConsoleHost.ControlQuit) return false;
         double now = _clock.Elapsed.TotalSeconds, frameStart = now, dt = now - _last;
