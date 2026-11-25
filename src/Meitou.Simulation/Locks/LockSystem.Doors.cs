@@ -166,6 +166,21 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
+    /// Whether one standing at <paramref name="position"/> is at its work on <paramref name="f"/>: within the reach of its <see cref="WorkSpot"/>
+    /// (<paramref name="at"/>, <paramref name="reach"/>), and at a cage on its floor. The cage rows (107 Get in, 110 Set Free, the lock work) reach
+    /// it through <c>isAtLocation</c>, <c>AI::isWithinChoppingRange</c> (<c>FUN_14059c6d0</c>, <b>Verified</b>: the flat distance and the same
+    /// floor, <see cref="FixtureRegistry.WorkHeight"/> here), so one standing under a cage on an upper storey is not at it (#1397). Doors and
+    /// containers keep the flat test: a container's walk floor lies up to 17 off its origin (docs/game/locks.md, #292).
+    /// </summary>
+    static bool AtWorkSpot(World world, Fixture f, Vector3 position, out Vector2 at, out float reach)
+    {
+        (at, reach) = WorkSpot(world, f, Flat(position));
+        bool level = f.Kind != FixtureKind.Cage || MathF.Abs(position.Y - f.Position.Y) < FixtureRegistry.WorkHeight;
+
+        return level && Vector2.Distance(Flat(position), at) <= reach;
+    }
+
+    /// <summary>
     /// The <see cref="OrderEntry.TaskPoint"/> of a door's right click: its own order is made at the door on the terrain
     /// (<see cref="OrderEntry.AtBuilding"/>); the walk to a barred one (no Alt) is a move made at the door's <c>getPositionMarker</c> from the zero
     /// point (<c>FUN_1407fc6e0</c> -> <c>FUN_1407fa850</c>, vfunc <c>0x470</c> <c>FUN_14054b850</c> with <c>ZERO</c>, <b>Verified</b>).
@@ -256,8 +271,7 @@ public sealed partial class LockSystem
                 continue;
             }
 
-            var (at, reach) = WorkSpot(world, door, Flat(n.Position));
-            if (Vector2.Distance(Flat(n.Position), at) > reach)
+            if (!AtWorkSpot(world, door, n.Position, out var at, out float reach))
             {
                 // Still walking; another order (a new goal) or a failed path ends it, and so does being led away from the work.
                 if (job.Work > 0 || Redirected(n, at, reach)) c.DoorJob = null;
@@ -331,8 +345,7 @@ public sealed partial class LockSystem
         }
 
         ref var n = ref table.Next[s];
-        var (at, reach) = WorkSpot(world, door, Flat(n.Position));
-        if (Vector2.Distance(Flat(n.Position), at) > reach)
+        if (!AtWorkSpot(world, door, n.Position, out var at, out float reach))
         {
             if (Redirected(n, at, reach)) c.DoorWalk = null;
             return;

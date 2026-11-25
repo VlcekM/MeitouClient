@@ -149,9 +149,7 @@ public sealed partial class LockSystem
                 continue;
             }
 
-            float reach = cage.UseRange + Reach;
-            var at = Flat(cage.Position);
-            if (Vector2.Distance(Flat(next[s].Position), at) > reach)
+            if (!AtWorkSpot(world, cage, next[s].Position, out var at, out float reach))
             {
                 // Still walking; another order (a new goal) or a failed path ends it.
                 if (Redirected(next[s], at, reach))
