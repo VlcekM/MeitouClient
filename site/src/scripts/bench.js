@@ -638,7 +638,7 @@
     return d;
   }
 
-  /** One dot per machine, platform and build: the builds of a range perform alike, so X only spreads the dots apart. */
+  /** One dot per machine, platform and build: the builds of a range perform alike, so X only spreads the machines apart. */
   function chart(host, rows) {
     const metric = metricDef(), box = el("div", { class: "chart" });
     const head = el("div", { class: "chart-head" });
@@ -684,14 +684,14 @@
     });
   }
 
-  /** Each plotted session's both runs and its place along X, from its id and line so it never moves with the selection. */
+  /** Each plotted session's both runs and its place along X, from its machine alone: a PC keeps its X in every scenario, tier and segment. */
   function points(rows, key) {
     const out = [];
     rows.forEach((e) => {
       const shown = shownRun(e, key);
       if (shown < 0) return;
       const v1 = shown === 1 && e.runs[0] ? e.runs[0][key] : null;
-      out.push({ x: spread(e.id + "|" + e.line), e: e, shown: shown, v: e.runs[shown][key], v1: v1 });
+      out.push({ x: spread(str(e.machine.id || e.machine.name)), e: e, shown: shown, v: e.runs[shown][key], v1: v1 });
     });
     return out;
   }
