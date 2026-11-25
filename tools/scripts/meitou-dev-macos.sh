@@ -1,12 +1,14 @@
 #!/bin/sh
-# Builds this checkout and runs it on macOS (Apple silicon), the game directly or through the launcher.
+# Builds this checkout and runs it on macOS (Apple silicon), the game directly or through the launcher. Each runs from an app bundle beside its
+# build folder (bin/<config>/MeitouClient.app, bin/Debug/meitou-launcher.app; tools/scripts/macos-bundle.sh, the build hard-linked in), so the
+# game gets Game Mode and the launcher its name and icon.
 #
 # Usage: meitou-dev-macos.sh [options] [--] [args...]
-#   (default)    Builds the game (Release) and runs it from its build folder; args go to the game. Metal unless args name --renderer.
-#   --launcher   Builds the game (Release) and the launcher (Debug), installs the game in the launcher's versions/ folder as the dev
-#                version (newest, so Play uses it, and the Versions and Benchmark pages list it) in the app bundle a release ships,
-#                with its settings schema, then runs the launcher. Remaining args go to the launcher; game arguments belong in its
-#                Launch arguments.
+#   (default)    Builds the game (Release) and runs it with its build folder as the working directory (its own meitou.user.json); args go to
+#                the game. Metal unless args name --renderer.
+#   --launcher   Builds the game (Release) and the launcher (Debug), installs the game's bundle in the launcher's versions/ folder as the dev
+#                version (newest, so Play uses it, and the Versions and Benchmark pages list it) with its settings schema, as a release
+#                ships, then runs the launcher. Remaining args go to the launcher; game arguments belong in its Launch arguments.
 #   --no-build   Skips the builds (the last ones are used).
 #   --remove     Removes the dev version from versions/ and exits.
 #   -h, --help   This text.
@@ -53,6 +55,10 @@ VERSION=${MEITOU_DEV_VERSION:-99.0.0-dev}
 CONFIG=${MEITOU_GAME_CONFIG:-Release}
 DATA=${MEITOU_DATA_DIR:-"$HOME/Library/Application Support/Meitou"}
 BUILD="$REPO/src/Meitou.Game/bin/$CONFIG/net11.0"
+GAME_APP="$REPO/src/Meitou.Game/bin/$CONFIG/MeitouClient.app"
+GAME="$GAME_APP/Contents/MacOS/MeitouClient"
+LAUNCHER_BUILD="$REPO/launcher/Meitou.Launcher/bin/Debug/net11.0"
+LAUNCHER_APP="$REPO/launcher/Meitou.Launcher/bin/Debug/meitou-launcher.app"
 
 # The folder the launcher keeps versions/ in: its install folder setting, else the data folder.
 install_dir() {
@@ -74,9 +80,30 @@ if [ -z "${DOTNET_ROOT:-}" ] && [ -x "$HOME/.dotnet/dotnet" ]; then export DOTNE
 if [ -n "${DOTNET_ROOT:-}" ]; then PATH="$DOTNET_ROOT:$PATH"; export PATH; fi
 command -v dotnet >/dev/null 2>&1 || { echo "meitou-dev-macos: no dotnet found; install the .NET 11 SDK or set DOTNET_ROOT" >&2; exit 1; }
 
-# Builds run in the repo, where global.json selects the SDK.
-build_game() { (cd "$REPO" && dotnet build -c "$CONFIG" src/Meitou.Game --nologo -v q); }
-build_launcher() { (cd "$REPO" && dotnet build -c Debug launcher/Meitou.Launcher --nologo -v q); }
+# Copies a build, leaving out what a run writes beside the executable or in its working directory (logs, settings, the typed-in install), on
+# either side.
+sync_build() {
+    rsync -a --exclude='log*.txt' --exclude='vram-*.txt' --exclude='meitou.user.json' --exclude='meitou.local.json' "$@"
+}
+
+# The build in its bundle: hard links to the build's files (nothing copied), the Info.plist and the icon.
+bundle() {
+    mkdir -p "$2/Contents/MacOS"
+    sync_build --delete --link-dest="$1/" "$1/" "$2/Contents/MacOS/"
+    shift 2
+    "$REPO/tools/scripts/macos-bundle.sh" "$@"
+}
+
+# Builds run in the repo, where global.json selects the SDK. The game's bundle carries the settings schema a release ships.
+build_game() {
+    (cd "$REPO" && dotnet build -c "$CONFIG" src/Meitou.Game --nologo -v q) || return 1
+    bundle "$BUILD" "$GAME_APP" "$GAME_APP" "$VERSION" 14.0
+    "$GAME" --settings-schema "$GAME_APP/Contents/MacOS/settings-schema.json"
+}
+build_launcher() {
+    (cd "$REPO" && dotnet build -c Debug launcher/Meitou.Launcher --nologo -v q) || return 1
+    bundle "$LAUNCHER_BUILD" "$LAUNCHER_APP" --launcher "$LAUNCHER_APP" "$VERSION" 14.0
+}
 
 if [ "$mode" = launcher ]; then
     # The launcher must not run with Homebrew on the dyld path: its libpng/libjpeg/libtiff shadow the system ones and crash
@@ -84,26 +111,24 @@ if [ "$mode" = launcher ]; then
     unset DYLD_LIBRARY_PATH
 
     if [ "$build" = 1 ]; then build_game && build_launcher || exit 1; fi
-    [ -x "$BUILD/MeitouClient" ] || { echo "meitou-dev-macos: no game build in $BUILD (run without --no-build)" >&2; exit 1; }
+    [ -x "$GAME" ] || { echo "meitou-dev-macos: no game bundle in $GAME_APP (run without --no-build)" >&2; exit 1; }
+    [ -x "$LAUNCHER_APP/Contents/MacOS/meitou-launcher" ] || { echo "meitou-dev-macos: no launcher bundle in $LAUNCHER_APP (run without --no-build)" >&2; exit 1; }
 
-    # The game as an installed version, laid out as a release (package-release.ps1): the build in the app bundle, with the schema the
-    # Graphics page and the Metal check read. Anything else in the version's folder (an older, flat install) goes.
-    app="$DEV/MeitouClient.app"
+    # The game as an installed version, laid out as a release (package-release.ps1), with the schema the Graphics page and the Metal check read.
+    # Copied, not linked (the install folder may be on another disk). Anything else in the version's folder (an older, flat install) goes.
     mkdir -p "$DEV"
     find "$DEV" -mindepth 1 -maxdepth 1 ! -name MeitouClient.app -exec rm -rf {} +
-    "$REPO/tools/scripts/macos-bundle.sh" "$app" "$VERSION" 14.0
-    rsync -a --delete "$BUILD/" "$app/Contents/MacOS/"
-    "$app/Contents/MacOS/MeitouClient" --settings-schema "$app/Contents/MacOS/settings-schema.json"
+    sync_build --delete "$GAME_APP/" "$DEV/MeitouClient.app/"
     echo "installed $VERSION in $DEV"
 
     cd "$REPO"
-    exec dotnet run -c Debug --no-build --project launcher/Meitou.Launcher -- "$@"
+    exec "$LAUNCHER_APP/Contents/MacOS/meitou-launcher" "$@"
 fi
 
 # Direct run: Homebrew's GLFW is found through the dyld path.
 export DYLD_LIBRARY_PATH="${HOMEBREW_PREFIX:-/opt/homebrew}/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 if [ "$build" = 1 ]; then build_game || exit 1; fi
-[ -x "$BUILD/MeitouClient" ] || { echo "meitou-dev-macos: no game build in $BUILD (run without --no-build)" >&2; exit 1; }
+[ -x "$GAME" ] || { echo "meitou-dev-macos: no game bundle in $GAME_APP (run without --no-build)" >&2; exit 1; }
 
 # The game defaults to Vulkan, which macOS lacks: Metal comes first, and a --renderer in the arguments overrides it.
 renderer="--renderer metal"
@@ -113,4 +138,4 @@ done
 
 cd "$BUILD"
 # shellcheck disable=SC2086
-exec "$BUILD/MeitouClient" $renderer "$@"
+exec "$GAME" $renderer "$@"
