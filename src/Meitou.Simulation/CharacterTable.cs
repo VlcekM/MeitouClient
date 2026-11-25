@@ -856,8 +856,7 @@ public sealed class CharacterCold
     public bool CarryRelinkIsCarrier { get; set; }
 
     /// <summary>
-    /// While carried: lifted awake by a friendly carrier (the player's Pick Up on a standing squad mate), so it stays on the shoulder until put down
-    /// rather than being set down as one that came round.
+    /// While carried: awake on the shoulder (lifted awake by a friendly carrier, or come round there); it rides until put down.
     /// </summary>
     public bool CarriedAwake { get; set; }
 

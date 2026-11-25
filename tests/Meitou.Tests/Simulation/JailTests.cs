@@ -236,7 +236,7 @@ public class JailTests
     {
         using var j = new Jail();
         var prisoner = j.Hero(new Vector2(200, 0), "prisoner", Weak);
-        j.Cold(prisoner).Medical!.KnockOut(100000);   // an awake body is set down again at once (CarrySystem), so the lifted one is out cold
+        j.Cold(prisoner).Medical!.KnockOut(100000);   // lifted out cold
         var lifter = j.Hero(new Vector2(200, 30), "lifter", Weak);
 
         Assert.True(j.World.Fixtures.Imprison(j.World, prisoner, j.CageA));

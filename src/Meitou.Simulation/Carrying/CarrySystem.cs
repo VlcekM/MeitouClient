@@ -28,9 +28,8 @@ namespace Meitou.Simulation.Carrying;
 /// carrier does not regard as friendly is knocked out again.</item>
 /// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A body that comes round on an NPC
 /// carrier rides on awake until a goal of the carrier's puts it down (169, <see cref="PutDownGoals"/>, or any goal that needs empty hands: the
-/// plan's step 69); a player-side carrier sets only a friendly one down (one that is no friend is knocked out again on the shoulder, engine
-/// choice). A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until
-/// put down.</item>
+/// plan's step 69); on a player's carrier, whose lists hold no 169, until the player puts it down. A squad mate lifted awake
+/// (<see cref="CharacterCold.CarriedAwake"/>) rides until put down.</item>
 /// <item><b>Rescue</b>: the rescue job, and the rescue goals 148 and 142 of anyone whose lists weigh them (<see cref="RescueGoals"/>).</item>
 /// <item><b>Loot</b> (<see cref="CharacterTask.Loot"/>): the walk, then everything of the main inventory and the backpack that fits moves to the
 /// looter (<see cref="LootOrder"/>), or the body's inventory opens in a window to take from (<see cref="OpenLootOrder"/>); a member of the victim's
@@ -1278,24 +1277,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 Unlink(world, i, b, drop: true);
                 continue;
             }
-            if (body.Medical is { Incapacitated: true }) body.CarriedAwake = false;   // knocked out on the shoulder: set down when it comes round
-            else if (body.Medical is not null && !body.CarriedAwake)
-            {
-                // The body came round. An NPC carrier's goals put it down through the chooser (169 PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK,
-                // PutDownGoals, or a goal that needs empty hands: the plan's step 69); until then it rides on awake. The put-down task knocks a
-                // body the carrier does not regard as friendly out again on the ground.
-                if (PlayerSide(world, cold))
-                {
-                    if (RegardsBody(world, i, b))
-                    {
-                        Unlink(world, i, b, drop: false);
-                        continue;
-                    }
+            // A body knocked out on the shoulder rides on awake once it comes round, the player's carrier's too: only goal 169
+            // (PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK, PutDownGoals; listed by AI packages alone) or a goal that needs empty hands (the plan's step 69)
+            // puts it down. The put-down task knocks a body the carrier does not regard as friendly out again on the ground.
+            if (body.Medical is { Incapacitated: true }) body.CarriedAwake = false;
+            else if (body.Medical is not null) body.CarriedAwake = true;
 
-                    KnockOutHeld(cold, body);
-                }
-                else body.CarriedAwake = true;
-            }
             ref var bn = ref next[b];
             bn.Position = next[i].Position;
             bn.Yaw = next[i].Yaw;

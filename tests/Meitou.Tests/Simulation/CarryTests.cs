@@ -168,7 +168,7 @@ public class CarryTests
     }
 
     [Fact]
-    public void A_squad_mate_lifted_awake_stays_carried_and_one_lifted_down_is_set_down_when_it_wakes()
+    public void A_squad_mate_lifted_awake_and_one_that_wakes_on_the_shoulder_stay_carried_until_put_down()
     {
         using var rig = new Rig();
         var a = rig.Add(1000, 2000);
@@ -183,10 +183,12 @@ public class CarryTests
         Assert.True(rig.Cold(awake).CarriedAwake);
         Assert.True(rig.Body(down).Incapacitated && !rig.Cold(down).CarriedAwake);
 
-        for (int t = 0; t < 1500 && !rig.Cold(down).CarriedBy.IsNone; t++) rig.World.RunTick();
+        for (int t = 0; t < 1500 && rig.Body(down).Incapacitated; t++) rig.World.RunTick();
+        rig.World.RunTick();
 
         Assert.False(rig.Body(down).Incapacitated);
-        Assert.True(rig.Cold(down).CarriedBy.IsNone, "set down once it came round");
+        Assert.Equal(b, rig.Cold(down).CarriedBy);
+        Assert.True(rig.Cold(down).CarriedAwake, "rides on awake once it came round");
         Assert.Equal(a, rig.Cold(awake).CarriedBy);
 
         rig.Say(new PutDownOrder([a]) { Tick = rig.World.Tick });
