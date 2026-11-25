@@ -45,7 +45,7 @@ public sealed partial class CombatSystem
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, blow, 0);
         bool wasIncapacitated = medical.Incapacitated;
         Bodies.HealthObservers.Before(world, d);
-        var (part, damage, absorbed) = world.Player.OnePunch && ac.IsPlayer
+        var (part, damage, absorbed, _) = world.Player.OnePunch && ac.IsPlayer
             ? HitResolver.LandLethal(medical, ctx, DebugCheats.OnePunchDamage, false, false, events)
             : HitResolver.LandDetailed(medical, ctx, packet, armour, cover, toughness, false, false, _combat, events);
         Bodies.HealthObservers.After(world, d, Bodies.HealthChangeKind.Hit);

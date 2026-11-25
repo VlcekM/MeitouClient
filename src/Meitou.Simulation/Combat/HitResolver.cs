@@ -72,7 +72,7 @@ public static class HitResolver
         List<MedicalEvent>? events)
         where TCover : struct, ICoverRoll
     {
-        var (part, damage, _) = LandDetailed(medical, ctx, packet, armour, coverRoll, toughness, lowStrike, directionSix, c, events);
+        var (part, damage, _, _) = LandDetailed(medical, ctx, packet, armour, coverRoll, toughness, lowStrike, directionSix, c, events);
         return (part, damage);
     }
 
@@ -85,23 +85,25 @@ public static class HitResolver
     /// <summary>
     /// The debug "One-punch man mode": <paramref name="damage"/> cut damage on the part a blow would pick (the same roll as a normal hit, with the
     /// strike's height and direction), ignoring armour and toughness. A body the damage does not kill (a robot's limb, which cannot bleed) is killed
-    /// outright. Returns what <see cref="LandDetailed{TCover}"/> returns, with nothing absorbed.
+    /// outright. Returns what <see cref="LandDetailed{TCover}"/> returns, with nothing absorbed and no armour struck.
     /// </summary>
-    public static (int Part, HitDamage Damage, ArmourAbsorbed Absorbed) LandLethal(MedicalState medical, in MedicalContext ctx, float damage,
-        bool lowStrike, bool directionSix, List<MedicalEvent>? events)
+    public static (int Part, HitDamage Damage, ArmourAbsorbed Absorbed, ArmourType? Struck) LandLethal(MedicalState medical, in MedicalContext ctx,
+        float damage, bool lowStrike, bool directionSix, List<MedicalEvent>? events)
     {
         int part = medical.ChoosePart(ctx, lowStrike, directionSix);
-        if (part < 0) return (-1, default, default);
+        if (part < 0) return (-1, default, default, null);
+
+        var struck = StruckMaterial(medical.Parts[part], [], []);
         var hit = new HitDamage(damage, 0, 0);
         medical.ApplyHit(part, hit, ctx, events);
         if (!medical.Dead) medical.Kill(events);
-        return (part, hit, default);
+        return (part, hit, default, struck);
     }
 
     /// <summary>
-    /// <see cref="Land{TCover}"/> that also reports what the armour stopped.
+    /// <see cref="Land{TCover}"/> that also reports what the armour stopped and what the blow struck (<see cref="StruckMaterial"/>).
     /// </summary>
-    public static (int Part, HitDamage Damage, ArmourAbsorbed Absorbed) LandDetailed<TCover>(
+    public static (int Part, HitDamage Damage, ArmourAbsorbed Absorbed, ArmourType? Struck) LandDetailed<TCover>(
         MedicalState medical,
         in MedicalContext ctx,
         in DamagePacket packet,
@@ -115,16 +117,32 @@ public static class HitResolver
         where TCover : struct, ICoverRoll
     {
         int part = medical.ChoosePart(ctx, lowStrike, directionSix);
-        if (part < 0) return (-1, default, default);
+        if (part < 0) return (-1, default, default, null);
 
         string partId = medical.Parts[part].Template.StringId;
         Span<bool> covering = armour.Length <= 32 ? stackalloc bool[armour.Length] : new bool[armour.Length];
         for (int i = 0; i < armour.Length; i++) covering[i] = ArmourStack.Covers(armour[i].Data, partId, coverRoll.Roll(i));
 
+        var struck = StruckMaterial(medical.Parts[part], armour, covering);
         var effect = ArmourStack.Stack(armour, covering, packet.ArmourPenetration);
         var damage = Resolve(packet, effect, toughness, ctx.Options.GlobalDamageMultiplier, c);
         medical.ApplyHit(part, damage, ctx, events);
-        return (part, damage, Absorbed(packet, effect));
+        return (part, damage, Absorbed(packet, effect), struck);
+    }
+
+    /// <summary>
+    /// What a blow struck (the medical hit <c>FUN_1406508d0</c>'s out value, <b>Verified</b> disassembly, docs/game/combat.md "Punch self-damage"):
+    /// the <c>material type</c> of the last covering piece in worn order, metal plate on a fitted prosthetic, null for bare flesh. A robot race's
+    /// body is metal plate too; the punch tests that itself.
+    /// </summary>
+    static ArmourType? StruckMaterial(HealthPart part, ReadOnlySpan<ArmourPiece> armour, ReadOnlySpan<bool> covering)
+    {
+        if (part.Template.LimbSlot >= 0 && part.Limb == LimbState.Replaced) return ArmourType.MetalPlate;
+
+        ArmourType? last = null;
+        for (int i = 0; i < armour.Length; i++)
+            if (covering[i]) last = armour[i].Data.Material;
+        return last;
     }
 
     /// <summary>

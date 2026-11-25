@@ -235,7 +235,7 @@ public sealed partial class CombatSystem
         bool wasAlive = observe && !medical.Dead, wasIncapacitated = observe && medical.Incapacitated;
         bool intended = observe && d == aSlot.TargetSlot && prev[d].Generation == aSlot.TargetGeneration;
         Bodies.HealthObservers.Before(world, d);
-        var (part, damage, absorbed) = world.Player.OnePunch && ac.IsPlayer
+        var (part, damage, absorbed, struck) = world.Player.OnePunch && ac.IsPlayer
             ? HitResolver.LandLethal(medical, ctx, DebugCheats.OnePunchDamage, tech.LowStrike, direction == 6, events)
             : HitResolver.LandDetailed(medical, ctx, packet, world.ArmourFilters.Pieces(world, CombatHitSource.Melee, table.IdOf(d), target), cover,
                 toughness, tech.LowStrike, direction == 6, _combat, events);
@@ -261,7 +261,7 @@ public sealed partial class CombatSystem
         // An unarmed one (stat-set kind 5) hit trains dodge in place of melee defence (FUN_1408c6980 event 4 -> FUN_1408c6360), against the
         // attacker's rating.
         if (target.Unarmed) DodgeXp(dc, aSlot.AttackSkill, dodged: false);
-        Punch(world, a, ac, dc, tech, blow, 2);
+        Punch(world, a, ac, dc, tech, blow, PunchMaterial(struck));
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: dSlot.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race!.IsRobot);
         Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce, fighter.Unarmed ? -1 : a);
         if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce, part);
@@ -412,11 +412,12 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// The martial artist's own limb takes its blow (<c>MedicalSystem::punchSomething</c> <c>FUN_140666780</c>, <b>Verified</b>, docs/game/combat.md
-    /// "Punch self-damage"), at the end of every take-hit: <paramref name="material"/> is the hit material, 5 blocked, 0 dodged, 2 hit, and 1 (metal)
-    /// against a robot race. Only a person fighting with fists whose race is not a robot, on the limb of the blow's impact point (<c>limb N</c>; 4,
-    /// the weapon, takes none) unless a prosthetic is fitted there. Packet: cut 2 and blunt 2 on metal, cut 5 and blunt 1 blocked, else blunt 1;
-    /// times (1 - 0.5 x (fist rating + toughness x scale) / 100), unclamped, x the Global damage multiplier x the gear's <c>fist injury mult</c>. The
-    /// punch then pays the puncher's toughness XP (<see cref="XpService.ToughnessFromDamage"/>).
+    /// "Punch self-damage"), at the end of every take-hit: <paramref name="material"/> is the hit material, 5 blocked, 0 dodged, a hit's from what it
+    /// struck (<see cref="PunchMaterial"/>), and 1 (metal) against a robot race. Only a person fighting with fists whose race is not a robot, on the
+    /// limb of the blow's impact point (<c>limb N</c>; 4, the weapon, takes none) unless a prosthetic is fitted there. Packet: cut 2 and blunt 2 on
+    /// metal, cut 5 and blunt 1 blocked, cut 1 and blunt 1 on chain, else blunt 1; times (1 - 0.5 x (fist rating + toughness x scale) / 100),
+    /// unclamped, x the Global damage multiplier x the gear's <c>fist injury mult</c>. The punch then pays the puncher's toughness XP
+    /// (<see cref="XpService.ToughnessFromDamage"/>).
     /// </summary>
     void Punch(World world, int a, CharacterCold ac, CharacterCold dc, CombatTechnique tech, int blow, int material)
     {
@@ -435,6 +436,17 @@ public sealed partial class CombatSystem
         Bodies.HealthObservers.After(world, a, Bodies.HealthChangeKind.Hit);
         if (hurt) _xp.ToughnessFromDamage(stats, ac.Race, material);
     }
+
+    /// <summary>
+    /// A landed blow's hit material (the take-hit <c>FUN_1404394f0</c> maps the medical hit's out value through the table {2, 2, 6, 1}, <b>Verified</b>
+    /// disassembly): flesh (2) for bare skin, cloth or leather, chain (6) for chain, metal (1) for metal plate or a fitted prosthetic.
+    /// </summary>
+    static int PunchMaterial(ArmourType? struck) => struck switch
+    {
+        ArmourType.Chain => 6,
+        ArmourType.MetalPlate => 1,
+        _ => 2,
+    };
 
     /// <summary>
     /// A blow's packet times its impact point's <c>power N</c> (stored x0.01): cut, blunt, pierce and extra stun (<b>Verified</b>,
