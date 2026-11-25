@@ -170,6 +170,9 @@ public sealed partial class CaptiveSystem
         var goals = export || unholy ? SquadGoals.Of(world) : null;
         var asker = table.IdOf(slot);
 
+        // Every caller of FUN_1408db510 skips a cage on the gatherer's give-up list (FUN_1405b0290): one it lost its walk to waits out the 20 s.
+        if (cold.IsIgnored(new IgnoreKey(f.Id, default), world.Tick)) return false;
+
         // 173 claims nothing (FUN_1408db510 with the finder limit 0x100): gatherers of any squad may head for the same cage, the first lifts.
         if (unholy && SquadClaimed(world, goals!, asker, cold, f)) return false;
         if (!export && f.Owner != cold.Faction || OccupantSlot(world, f) is not (>= 0 and var s)) return false;
