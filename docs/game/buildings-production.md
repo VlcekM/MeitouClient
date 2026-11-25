@@ -1392,7 +1392,7 @@ inputs in list order as the finder does, takes storages before producers and ski
   [order pops](ai-tasks.md#finished-tests)): the plain order leaves at once and the 152 job is always skipped; with Shift the 124 companion fetches
   Fuel from a storage into the tank.
 - **Auto-Haul order** (152 without Shift, **Verified**, [order pops](ai-tasks.md#finished-tests)): leaves once the machine's output holds nothing
-  a storage takes (Meitou's hauler carries it there first).
+  a storage or machine takes ([storage pick](#hauling); Meitou's hauler carries it there first).
 - **Storage pick** (**Verified**, `FUN_14059acd0`, also called by the 242 ditch finder `FUN_1405a59a0`): the candidates are the current town's
   buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, other than the served
   machine (the third argument; the ditch finder passes its target's) and of another record (vfunc `0x18`), whose slot `0x4a0`

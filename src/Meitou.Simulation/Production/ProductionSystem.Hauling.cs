@@ -8,7 +8,7 @@ namespace Meitou.Simulation.Production;
 /// <summary>
 /// Hauling (docs/simulation.md "Production"; the original's Task_EmptyMachine / Task_FillMachine in docs/game/buildings-production.md "Hauling"):
 /// with Settings.AutoHaul an operator at its machine fills empty inputs with what it carries, takes a full output, carries the output to the nearest
-/// storage that takes it and fetches an empty input's item from the nearest storage or producer output holding it (NearestSource). The trip is
+/// storage or machine that takes it (StorageFor) and fetches an empty input's item from the nearest storage or producer output holding it (NearestSource). The trip is
 /// CharacterCold.HaulSite / HaulFetch; Schedule walks there, and the operator walks back to its machine once the items have moved.
 /// </summary>
 public sealed partial class ProductionSystem
@@ -30,11 +30,11 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// What an operator at its machine does before working; true when it set off for a storage. <paramref name="autoHaul"/> (row 152, whose plan is 93
-    /// at a storage, docs/game/ai-tasks.md "Finished tests") takes an output that holds any, not only a full one, takes any carried output to the
-    /// storage and fetches no input (its 124 companion's work).
+    /// What an operator standing at <paramref name="at"/> by its machine does before working; true when it set off for a storage or a machine that
+    /// takes its output. <paramref name="autoHaul"/> (row 152, whose plan is 93 at a storage, docs/game/ai-tasks.md "Finished tests") takes an output
+    /// that holds any, not only a full one, takes any carried output there and fetches no input (its 124 companion's work).
     /// </summary>
-    bool StartHaul(World world, CharacterCold cold, BuildSite site, Machine m, bool autoHaul = false)
+    bool StartHaul(World world, CharacterCold cold, Vector3 at, BuildSite site, Machine m, bool autoHaul = false)
     {
         if (cold.Inventory is not { } inv) return false;
         bool changed = PutCarried(inv, m);
@@ -42,14 +42,14 @@ public sealed partial class ProductionSystem
         // A full output is taken only when some storage takes it; without one the machine stays full.
         bool took = false;
         if (m.Output is { Count: > 0 } output && (output.Full || autoHaul) && _items.Create(output.Recipe.Item, output.Count) is { } made
-            && StorageFor(world, site, made, cold) is not null)
+            && StorageFor(world, site, made, cold, at) is not null)
         {
             int moved = Placed(inv, made);
             if (moved > 0) { output.Count -= moved; changed = took = true; }
         }
 
         // A bench full on its first craft: its finished items a storage takes (#762).
-        if (m.Craft is { } craft && CraftFull(craft) && TakeDone(craft, inv, i => StorageFor(world, site, i, cold) is not null))
+        if (m.Craft is { } craft && CraftFull(craft) && TakeDone(craft, inv, i => StorageFor(world, site, i, cold, at) is not null))
             changed = took = true;
 
         if (changed) world.Machines.Touch();
@@ -59,7 +59,7 @@ public sealed partial class ProductionSystem
         bool full = m.Output is { Full: true } || m.Craft is { } c && CraftFull(c);
         string? into = took || full || autoHaul
             ? CarriedMade(inv, m)
-                .Select(i => StorageFor(world, site, i, cold))
+                .Select(i => StorageFor(world, site, i, cold, at))
                 .FirstOrDefault(s => s is not null)
             : null;
         if (into is not null) return Go(cold, into, null);
@@ -340,12 +340,13 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// Where <paramref name="site"/>'s output <paramref name="item"/> goes (the per-item storage finder <c>FUN_14059acd0</c>, <b>Verified</b>): the
     /// nearest building <paramref name="by"/> uses within <see cref="InFinderRange"/> whose slot <c>0x4a0</c> takes it (<see cref="TakesOutput"/>),
-    /// a storage or a machine, so a miner's stone goes into a stone processor nearer than any storage (#1406).
+    /// a storage or a machine, so a miner's stone goes into a stone processor nearer than any storage (#1406). Measured from the operator's spot
+    /// <paramref name="at"/>, as the finder measures from the character; without one (a job's look from afar) from the machine.
     /// </summary>
-    string? StorageFor(World world, BuildSite site, ItemInstance item, CharacterCold by)
+    string? StorageFor(World world, BuildSite site, ItemInstance item, CharacterCold by, Vector3? at = null)
     {
         string? own = world.Machines.Find(site.Id)?.Data.Id;
-        return NearestStorage(world, site, by, item.Record, s => TakesOutput(s, own, item));
+        return NearestStorage(world, site, at ?? site.Position, by, item.Record, s => TakesOutput(s, own, item));
     }
 
     /// <summary>
@@ -413,12 +414,12 @@ public sealed partial class ProductionSystem
         m.Output is { Count: > 0 } o && o.Recipe.Item == record && (o.Full || by?.OperateSite != s.Id);
 
     /// <summary>
-    /// The nearest complete building <paramref name="by"/> uses (<see cref="StoresFor"/>) within <see cref="InFinderRange"/> of a machine, other
-    /// than that machine, that passes <paramref name="ok"/> and the storage filters for putting <paramref name="record"/> in
-    /// (<see cref="IStorageFilter"/>; ties: the lower site id). The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the
-    /// character, who stands at the machine (#965: a storage 3000 or more away was missed).
+    /// The nearest complete building <paramref name="by"/> uses (<see cref="StoresFor"/>) within <see cref="InFinderRange"/> of <paramref name="at"/>,
+    /// other than the machine <paramref name="from"/>, that passes <paramref name="ok"/> and the storage filters for putting <paramref name="record"/>
+    /// in (<see cref="IStorageFilter"/>; ties: the lower site id). The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the
+    /// character (#965: a storage 3000 or more away was missed).
     /// </summary>
-    string? NearestStorage(World world, BuildSite from, CharacterCold by, string record, Func<Machine, bool> ok)
+    string? NearestStorage(World world, BuildSite from, Vector3 at, CharacterCold by, string record, Func<Machine, bool> ok)
     {
         string? best = null;
         float bestGap = float.MaxValue;
@@ -426,9 +427,9 @@ public sealed partial class ProductionSystem
         {
             if (s.Site == from.Id || Site(world, s.Site) is not { Complete: true } site || !StoresFor(world, by, site)) continue;
 
-            float gap = Gap(site.Position, from.Position);
+            float gap = Gap(site.Position, at);
             if (gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0)) continue;
-            if (!InFinderRange(site.Position, from.Position) || !ok(s)) continue;
+            if (!InFinderRange(site.Position, at) || !ok(s)) continue;
             if (!world.StorageAllows(by, s.Site, StorageUse.Put, record)) continue;
 
             best = s.Site;
