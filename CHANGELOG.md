@@ -3,6 +3,23 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.23.2
+
+- Town NPCs no longer cut a stair's foot across the ground beside it or into the storey below their goal (#1414)
+- Guards and other walkers no longer circle endlessly at a corner or a stair ramp; navmeshes rebuild once (#1387)
+- Slave gatherers reach a cage from its own floor and give up on cages they can't reach, ending the slave-taking loop (#1383)
+- An NPC medic finishing a friendly prisoner's first aid takes it out of its cage, as the original (#1414)
+- A mod's run animation in another file no longer changes the run speed of characters, and action ends keep their timing (#1410)
+- Zoomed in near a building, the ground no longer vanishes (#1411)
+- The launcher's Benchmark page offers every benchmark, so Shark fly-by needs no Bases run first (#1412)
+- Benchmark runs show the fps counter from the start
+- Storages get put and take priorities, set in the panel or lowered with a right-click
+- Buildings you built can be named
+- Haulers fill armour and weapon storages with loose gear of their type
+- The Craft tab's item description shows the crafted product's stats
+- Worn unarmed weapons sit on the body's skeleton
+- Mod API: mods add bars to the building panel, and job offers may take any faction's buildings (ModJobOffer.Owners)
+
 ## v0.23.1
 
 - Right-click and drag item moves between two of your characters' windows respect trading range (#1378)
