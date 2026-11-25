@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Dialogue;
 using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Population;
 
@@ -346,17 +347,14 @@ public sealed partial class DialogueSystem
         Cold(world, id) is { SquadId: >= 0 } c && world.Squads.Find(c.SquadId) is { } squad ? squad.Members : [id];
 
     /// <summary>
-    /// The members of <paramref name="target"/>'s squad that <paramref name="me"/> perceives (<c>FUN_140855960</c>): the target itself, and the
-    /// others within <paramref name="me"/>'s sight range (engine stand-in for the original's sensed list).
+    /// The members of <paramref name="target"/>'s squad that <paramref name="me"/> knows (<c>FUN_140855960</c> with its flag clear, as every squad
+    /// search of the line check calls it): the target itself, <paramref name="me"/>, and the members its senses hold an entry of
+    /// (<see cref="CharacterFacts.Knows"/>).
     /// </summary>
     static IEnumerable<CharacterId> Known(World world, CharacterId me, CharacterId target)
     {
-        var table = world.Characters;
-        if (!table.TryResolveNext(me, out int ms) || table.Cold(ms) is not { } mc) return [];
-        var at = table.Next[ms].Position;
-        float r = AggroSystem.RangeOf(mc, AggroSystem.OutdoorSight);
-        return SquadOf(world, target).Where(m => m == target || m == me
-            || table.TryResolveNext(m, out int s) && Vector3.DistanceSquared(table.Next[s].Position, at) <= r * r);
+        if (!world.Characters.TryResolveNext(me, out int ms)) return [];
+        return SquadOf(world, target).Where(m => m == target || m == me || CharacterFacts.Knows(world, ms, m));
     }
 
     /// <summary>

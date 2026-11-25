@@ -226,7 +226,7 @@ child's (`FUN_1406ad9d0`).
    `my subrace`. Each list is OR within itself. The race tests (`my race`, `target race`, the +2 below, T_TARGET_WITH_RACE, DA 47) match
    a race when the listed RACE is that race or any race of its RACE_GROUP (`FUN_14042ecd0`; the group's `races` set race +0x120, a race in
    two groups keeps the last loaded, `FUN_140430070`); `my subrace` is an exact RACE compare (**Verified**, decompile). The four squad tests count only the target and members the speaker perceives
-   (`FUN_140855960`, **Observed** in `FUN_140678f30`); Meitou reads "perceives" as within the speaker's sight range.
+   (**Verified**, `FUN_140678f30` and `FUN_140676950` call `FUN_140855960` on the speaker's senses with its flag clear: the speaker itself, a member its sensed map holds an entry of, seen now or not; else its dialogue partner's hand). Meitou: `CharacterFacts.Knows`. So a hiver squad mate the Hive Trader has sensed makes its `target race` Hive Prince line (43366-rebirth.mod, Hive group race) pass for any talker of the squad, the talk staying with the talker (#1428).
    **Item tests** (**Verified**, `FUN_140678f30`): `target has item type` is one `item function` (0 = no test; the node reads only its first reference) and
    `target has item` a list; both are one pass over the eligible squad members in squad order. Flags: the list flag starts true when the list is empty, the
    function flag when no function is set. Per member the function is tested first (`FUN_14004b84e`: the member's own inventory list, any section, flat; the
