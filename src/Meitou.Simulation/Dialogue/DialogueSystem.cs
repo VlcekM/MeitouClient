@@ -131,8 +131,8 @@ public sealed class DialogueSettings
 /// (<see cref="World.ApplyPausedInterfaceCommands"/>);
 /// effects that give AI orders start on the next tick.
 /// <list type="bullet">
-/// <item><b>Engine choices</b>: a childless NPC line is shown with a single <c>[Leave]</c> (the original ends at once and how it shows such a line is
-/// <b>Unknown</b>); a reply whose best
+/// <item><b>Engine choices</b>: an NPC line whose children all fail is shown with a single <c>[Leave]</c> (a childless one ends the conversation
+/// and is said as a bubble, as the original's); a reply whose best
 /// next line is another reply shows that reply as the only choice; conditions whose inputs Meitou lacks compute "no"
 /// (<see cref="Condition"/>).</item>
 /// <item><b>State</b> (hashed): last use per line (global, as the original's), permanent chance rolls and event counters per character, the squads'
@@ -675,6 +675,12 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// </summary>
     void Say(World world, Conversation c, DialogueNode line, CharacterId speaker)
     {
+        if (line.Children.Count == 0)
+        {
+            SayAsBubble(world, c, line, speaker);
+            return;
+        }
+
         c.Line = line;
         c.Speaker = speaker;
         MarkUsed(world, c, line);
@@ -690,6 +696,18 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         RunEffects(world, c, line, speaker);
         if (c.Ended) return;
         Offer(world, c, line);
+    }
+
+    /// <summary>
+    /// A player conversation's NPC line with no children (<c>FUN_1406839a0</c>, <b>Verified</b>): the conversation ends and the line is said as a
+    /// bubble (<c>FUN_140683910</c>: its text and bubble, then its effects), never shown in the window.
+    /// </summary>
+    void SayAsBubble(World world, Conversation c, DialogueNode line, CharacterId speaker)
+    {
+        c.Ended = true;
+        if (!world.Characters.TryResolveNext(speaker, out int n)) return;
+
+        SayBubble(world, new Bubble(c, line, world.Tick, speaker), n);
     }
 
     /// <summary>

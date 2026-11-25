@@ -322,8 +322,10 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
   ([save](../formats/save.md#order-queue)). Meitou: `DialogueOrders` / `PlayerTalks` ([order queue](../simulation.md#order-queue)); a target dead or out cold drops the order.
 - **Walking to a moving NPC** (**Observed**: the player-reported vanilla behaviour of issue #136, the chase of a moving pick-up target; the task-12 walk's own re-aim code is not read): the talker follows the NPC's current position until in range. Meitou (`PlayerTalks`, the Talk and Trade orders): the walk on the Talk task is aimed anew when the NPC is more than `TalkReach` from its goal (`DialogueOrders.WalkTo`, as order 102's); no NPC is kept still (the original holds none), so a walking NPC is chased; a walk with no way there ends the order. Once the conversation opens the NPC is turned once to face the talker and goes on with its task.
 
-**Saying a line** (`FUN_1406839a0`): in a player conversation a line with **no children ends the conversation at once** without being
-shown. Otherwise: pick a text and mark the line and its parent chain
+**Saying a line** (`FUN_1406839a0`): in a player conversation (event `+0x188` 1, which `FUN_140684320` always sets) a line with **no
+children ends the conversation at once** (`FUN_140674830`) and is then said as a bubble (`FUN_140683910`: text picked and stamped, bubble,
+effects), never in the window (**Verified**, decompile). So a Talk whose opening line is childless shows no window, only the NPC's bubble
+(#1428). Meitou: `DialogueSystem.SayAsBubble`. Otherwise: pick a text and mark the line and its parent chain
 used, expand [tokens](#tokens), **run its effects at once**, log the text and put it in the NPC panel, then build the choices.
 
 **Last use** (**Verified**, `FUN_140671770`; said line `FUN_140675320`, clicked reply `FUN_140683c00`): the stamp is each node's `repetition limit` clock.

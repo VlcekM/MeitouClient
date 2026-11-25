@@ -1368,6 +1368,7 @@ static class SaveProbe
 
         var dialogue = probe.World.Systems.OfType<DialogueSystem>().First();
         for (int waited = 0; dialogue.PublishConversation() is null && waited < 60 * 40; waited += 20) probe.Tick(20);
+        PrintTalk(probe.World);
         foreach (int choice in choices.Prepend(-1))
         {
             if (choice >= 0)
@@ -1385,6 +1386,16 @@ static class SaveProbe
             + $"{probe.Who(npc)} player={t.Cold(npc)!.IsPlayer}");
         PrintRequest(probe, dialogue.PublishRequest());
         probe.PrintMessages();
+    }
+
+    /// <summary>
+    /// The talk lines and bubbles said since the last call, and the dialogue log's talk, say and bubble entries (a Talk that ends at once shows no
+    /// window, only its bubble).
+    /// </summary>
+    static void PrintTalk(World world)
+    {
+        foreach (var line in world.TakeSaid()) Console.WriteLine($"  SAID {line.Owner}: {line.Text}");
+        foreach (string line in world.DialogueLines.Take()) Console.WriteLine($"  LOG {line}");
     }
 
     /// <summary>

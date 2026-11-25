@@ -377,10 +377,10 @@ public class CharacterObserverTests
             world.Commands.Enqueue(new DialogueChoice(0) { Tick = world.Tick });
             world.RunTicks(2);
 
+            // the childless follow-up ends the talk and is said as a bubble (FUN_1406839a0)
             Assert.Single(passingHook.Observed);
-            var view = dialogue2.PublishConversation();
-            Assert.NotNull(view);
-            Assert.Equal("Vanilla follow-up.", view.Text);
+            Assert.Null(dialogue2.PublishConversation());
+            Assert.Equal("Vanilla follow-up.", dialogue2.PublishSpeech().Single(b => b.Speaker == npc).Text);
         }
     }
 

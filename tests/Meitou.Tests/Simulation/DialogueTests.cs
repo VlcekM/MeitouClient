@@ -117,6 +117,11 @@ public class DialogueTests
 
         public void Say(SimCommand c) => World.Commands.Enqueue(c with { Tick = World.Tick });
         public ConversationView? Talk => Dialogue.PublishConversation();
+
+        /// <summary>
+        /// The bubble <paramref name="who"/> shows now, or null.
+        /// </summary>
+        public string? Bubble(CharacterId who) => Dialogue.PublishSpeech().FirstOrDefault(b => b.Speaker == who)?.Text;
     }
 
     [Fact]
@@ -132,12 +137,8 @@ public class DialogueTests
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
         v.World.RunTicks(2);
 
-        Assert.Equal(("Hello.", "[Leave]"), (v.Talk!.Text, v.Talk.Choices.Single()));
-
-        v.Say(new DialogueChoice(0) { Tick = 0 });
-        v.World.RunTicks(1);
-
-        Assert.Null(v.Talk);
+        // a childless line ends the talk and is said as a bubble (FUN_1406839a0)
+        Assert.Equal((null, "Hello."), (v.Talk, v.Bubble(v.Villager)));
 
         v.World.Player.Money = 1000;
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
@@ -159,7 +160,7 @@ public class DialogueTests
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });   // locked: back to "plain"
         v.World.RunTicks(2);
 
-        Assert.Equal("Hello.", v.Talk!.Text);
+        Assert.Equal((null, "Hello."), (v.Talk, v.Bubble(v.Villager)));
 
         // The lock is saved as the original's lok0 pair.
         var state = new FcsRecord { StringId = "s", RecordType = FcsRecordType.GamestateCharacter };
@@ -194,14 +195,14 @@ public class DialogueTests
             v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
             v.World.RunTicks(2);
 
-            Assert.Equal("Hello.", v.Talk!.Text);
+            Assert.Equal("Hello.", v.Bubble(v.Villager));
         }
         using (var v = new Village(data: Dumb(listed: true)))
         {
             v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
             v.World.RunTicks(2);
 
-            Assert.Equal("Hello.", v.Talk!.Text);
+            Assert.Equal("Hello.", v.Bubble(v.Villager));
         }
     }
 
@@ -224,7 +225,7 @@ public class DialogueTests
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
         v.World.RunTicks(2);
 
-        Assert.Equal("Need to sell off some junk?", v.Talk!.Text);
+        Assert.Equal("Need to sell off some junk?", v.Bubble(v.Villager));
         Assert.False(v.Data.Relations.RaiseRank(guild, 1));   // the join line's cap
         Assert.Equal(1, v.Data.Relations.Rank(guild));
     }
@@ -325,7 +326,8 @@ public class DialogueTests
             Rec("ask-l", FcsRecordType.DialogueLine,
                     r => { r.Strings["text0"] = "Talk to the boss."; r.References["effects"] = [Ref("leader-da")]; }),
             Rec("boss-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("boss-l")]),
-            Rec("boss-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "What do you want?"),
+            Rec("boss-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "What do you want?"; r.References["lines"] = [Ref("nothing-l")]; }),
+            Rec("nothing-l", FcsRecordType.DialogueLine, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Nothing."; }),
         ]), []);
         var dialogue = new DialogueSystem(data);
         var ground = new OpenGroundWalkability((_, _) => 150);
@@ -356,12 +358,9 @@ public class DialogueTests
         world.Commands.Enqueue(new TalkOrder(hero, guard) { Tick = world.Tick });
         world.RunTicks(2);
 
-        Assert.Equal(("Talk to the boss.", "[Leave]"), (dialogue.PublishConversation()!.Text, dialogue.PublishConversation()!.Choices.Single()));
-
-        world.Commands.Enqueue(new DialogueChoice(0) { Tick = world.Tick });
-        world.RunTicks(1);
-
+        // the guard's childless line ends the talk as a bubble (FUN_1406839a0); its effect still sends the leader
         Assert.Null(dialogue.PublishConversation());
+        Assert.Equal("Talk to the boss.", dialogue.PublishSpeech().Single(b => b.Speaker == guard).Text);
 
         for (int i = 0; i < 600 && dialogue.PublishConversation() is null; i++) world.RunTicks(1);
         var talk = dialogue.PublishConversation();
