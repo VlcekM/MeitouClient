@@ -1492,7 +1492,9 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   does nothing otherwise; a slave bought free out of a squad of others leads a new squad of the old one's template with a copy of its memory (`DialogueSystem.Separate`, as DA 28), or a new player
   squad for one of the player's; event 51 fires after it is out of its cage; the window closes when the slaver or the customer is no longer awake. It is neither saved nor hashed.
 - A bought slave stands at its cage's exit spot, ordered 133 with its queue cleared (`Locks.FreedPrisoner`; its leave finds the hold already cleared:
-  [locks](game/locks.md#cages-and-beds)). DA 48 opens the same window for animals ([buying animals](game/animals.md#buying-animals)). A sold character obeys the slaver's squad (187, [below](#captives)) and is chained: `Character::setChainedMode` (`FUN_14032e590`,
+  [locks](game/locks.md#cages-and-beds)). Its new squad has no town: its package's go-home rows lead it to the town `AiSystem.HomelessTown` finds
+  ([127](game/ai-tasks.md#town-goals)), and a save writes it as a homeless platoon with its contract and `change AI`
+  ([save](formats/save.md#wild-and-nest-platoons-meitou-mapping)). DA 48 opens the same window for animals ([buying animals](game/animals.md#buying-animals)). A sold character obeys the slaver's squad (187, [below](#captives)) and is chained: `Character::setChainedMode` (`FUN_14032e590`,
 **Verified** by decompile) puts the ARMOUR `SHACKLES` (boots) on one wearing no locked shackles, `SHACKLES-BODY` when its boots section is disabled (Meitou: the race's `no shoes`),
 what it wore there going into its inventory (engine choice; `DialogueSystem.Chain`). Its other callers (a dialogue action, `FUN_1405dbd80`, `FUN_1405dc310`, `FUN_140583a10`) are not traced.
 

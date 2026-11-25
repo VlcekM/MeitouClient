@@ -753,7 +753,10 @@ holding the slaver, the customer, the character list and val0.
   DC 77 line ("You're freeing me?... Thanks!") joins it to the player at once (DA 18) when it is recruitable, else it runs off or stays free (**Observed**,
   line walk over the base data, issue #1015). The other races' root (`Tough bought from slavery`, Dialogue.mod 54741) needs the buyer within talking range
   (DC 16, 260), so a slave bought from a pen far from the slaver says nothing and its new squad's AI goes on: for the base pens' "slaves 3-7" template, package
-  "Slave only squad" (172 finds no cage without an owner; rebirth.mod's 127 Go Home (Run away)) (**Observed**, issue #1017). Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
+  "Slave only squad" (172 finds no cage without an owner; rebirth.mod's 127 Go Home (Run away)) (**Observed**, issue #1017). The split's platoon has no home town (its Ownerships
+  `+0x30` stays null: `FUN_1407cb9d0`, no save record, **Verified**), so 127 is wanted wherever it stands and runs it to the gate of the nearest town its faction owns or lives
+  in, the pen's town when its slave squads are housed there ([127](ai-tasks.md#town-goals)); the last slave of a pen is not split (`FUN_1405ce4e0` returns for a
+  platoon of one) and stays in its town's squad, at home there (**Verified** by decompile; issue #1386). Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
   nothing is paid to the slaver.
 - The window's gate (`FUN_1407281c0`) makes such a shortfall unreachable: confirm is enabled only with a row ticked and the total within the buyer's money (the slaver's when
   selling, the player's when buying).

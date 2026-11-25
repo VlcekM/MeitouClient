@@ -1043,6 +1043,13 @@ public static partial class SaveCapture
     }
 
     /// <summary>
+    /// Whether an NPC is written with a record of its own in a new platoon: one the population made, or one made from a save's platoon it has left
+    /// since (a captive split off its squad, <c>PopulationSystem.SplitCaptives</c>; a slave bought free or a character split off by dialogue,
+    /// <c>DialogueSystem.Separate</c>). Any other character of a save is written into its own platoon.
+    /// </summary>
+    static bool OwnRecord(World world, CharacterCold cold) => cold.Save is not { } link || world.Saved?.MemberOf(link) is { Gone: true };
+
+    /// <summary>
     /// Holds back the target handles of the character's jobs on a character until every character has one (<see cref="MemoryPass.JobTargets"/>).
     /// </summary>
     static void DeferJobTargets(FcsRecord ai, CharacterCold cold, IReadOnlyDictionary<Data.Gameplay.Ai.TaskType, string>? modJobs)
@@ -1707,10 +1714,9 @@ public static partial class SaveCapture
         }
 
         /// <summary>
-        /// Whether a character gets a record of its own here: one the population made, or one made from a save's platoon it has left since (a
-        /// captive split off its squad, <c>PopulationSystem.SplitCaptives</c>). Any other character of a save is written into its own platoon.
+        /// Whether a character gets a record of its own here (<see cref="SaveCapture.OwnRecord"/>).
         /// </summary>
-        bool OwnRecord(CharacterCold cold) => cold.Save is not { } link || _world.Saved?.MemberOf(link) is { Gone: true };
+        bool OwnRecord(CharacterCold cold) => SaveCapture.OwnRecord(_world, cold);
 
         /// <summary>
         /// Writes one squad in the world, with its platoon's state when it has one (else <c>dead</c> as <paramref name="declared"/>).

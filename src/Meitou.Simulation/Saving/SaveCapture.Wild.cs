@@ -294,7 +294,7 @@ public static partial class SaveCapture
 
                 writer.Write(site, squad.TemplateId, squad.Faction, squad.Money, squad.Ai?.Current?.Id,
                     [.. every.Select(id => (table.Cold(id.Slot)!, table.Previous[id.Slot].Position, table.Previous[id.Slot].Yaw, id, id == leader))],
-                    MemoryOf(world)?.Snapshot(squad.Id), dead: dead, board: squad.Ai);
+                    MemoryOf(world)?.Snapshot(squad.Id), dead: dead, board: squad.Ai, ai: AiSave.Of(squad.Ai) ?? squad.SavedAi);
             }
 
             // Kept while the site is unloaded (the Meitou KeepWild switch): their characters as they were stored.
@@ -305,7 +305,7 @@ public static partial class SaveCapture
                 bool hasLeader = k.Stored.Members.Any(m => m.Leader);
                 writer.Write(site, k.TemplateId, k.Faction, k.Money, k.Stored.Package,
                     [.. k.Stored.Members.Select((m, i) => (m.Cold, m.Position, m.Yaw, CharacterId.None, m.Leader || !hasLeader && i == 0))],
-                        k.Stored.Memory);
+                        k.Stored.Memory, ai: k.Stored.Ai);
             }
         }
     }
@@ -328,13 +328,14 @@ public static partial class SaveCapture
                 || squad.Faction < 0 || squad.Faction >= data.Factions.Count)
                 continue;
 
-            var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false, Save: null }).ToList();
+            // A character of a save's platoon that left it (a slave bought free out of a saved pen) is written here, not in its old platoon.
+            var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false } c && OwnRecord(world, c)).ToList();
             var alive = every.Where(m => table.Cold(m.Slot)!.DiedTick < 0).ToList();
             if (!WritesSquad(world, squad, alive, every, false, out var leader, out bool dead)) continue;
 
             writer.Write(null, squad.TemplateId, squad.Faction, squad.Money, squad.Ai?.Current?.Id,
                 [.. every.Select(id => (table.Cold(id.Slot)!, table.Previous[id.Slot].Position, table.Previous[id.Slot].Yaw, id, id == leader))],
-                MemoryOf(world)?.Snapshot(squad.Id), persistent: true, dead: dead, board: squad.Ai);
+                MemoryOf(world)?.Snapshot(squad.Id), persistent: true, dead: dead, board: squad.Ai, ai: AiSave.Of(squad.Ai) ?? squad.SavedAi);
         }
     }
 
@@ -366,11 +367,12 @@ public static partial class SaveCapture
         /// <summary>
         /// A platoon of the wild <paramref name="site"/> (none: homeless) with its <paramref name="members"/>; a <paramref name="dead"/> one is
         /// declared dead (<c>dead</c>, not persistent, as <c>Platoon::declareDead</c> leaves it); its squad's <paramref name="board"/> gives its
-        /// town and arrival hour (none: the new record's null handle and 0).
+        /// town and arrival hour (none: the new record's null handle and 0), and <paramref name="ai"/> its dialogue-given contract and
+        /// <c>change AI</c>, written as every platoon's are (<see cref="WriteAi"/>), so a bought slave's contract outlives a load.
         /// </summary>
         public void Write(WildSite? site, string templateId, int factionIndex, long money, string? package,
             List<(CharacterCold Cold, Vector3 Position, float Yaw, CharacterId Id, bool Leader)> members, SquadMemoryData? memory = null,
-            bool persistent = false, bool dead = false, Ai.Blackboard? board = null)
+            bool persistent = false, bool dead = false, Ai.Blackboard? board = null, AiSave? ai = null)
         {
             var faction = data.Factions[factionIndex];
             factions.TryGetValue(faction.Id, out var state);
@@ -392,6 +394,7 @@ public static partial class SaveCapture
 
             WriteMapArea(record, data, at);
             if (package is not null) record.Strings["currentPackage"] = package;
+            WriteAi(record, ai);
             WriteCurrentTown(record, board);
             NoteMemory(record, memory);
             foreach (var m in members)
