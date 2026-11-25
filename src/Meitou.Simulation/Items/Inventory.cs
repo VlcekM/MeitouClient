@@ -177,10 +177,11 @@ public sealed class Inventory(int width, int height)
     /// <summary>
     /// Whether one unit of <paramref name="item"/> would find a place in <see cref="Add"/> (a dry run, nothing changes): a stack of it in the main
     /// grid or the backpack with room left, or a free cell in either. The state <c>gotInventoryRoomForResources</c> (82, <c>FUN_14059bd80</c>: the
-    /// inventory, else the worn backpack's; never the backpack for a container holding items).
+    /// inventory, else the worn backpack's; never the backpack for a container holding items). <paramref name="mainShut"/>: the main grid takes
+    /// nothing, only the backpack does, as in <see cref="Add"/>.
     /// </summary>
-    public bool HasRoomFor(ItemInstance item) =>
-        Room(this, "main", item) || InventoryCommands.FitsInBag(item) && Backpack?.Contents is { } bag && Room(bag, "backpack_content", item);
+    public bool HasRoomFor(ItemInstance item, bool mainShut = false) => !mainShut && Room(this, "main", item)
+        || InventoryCommands.FitsInBag(item) && Backpack?.Contents is { } bag && Room(bag, "backpack_content", item);
 
     /// <summary>
     /// Whether <paramref name="section"/> takes one unit of <paramref name="item"/> (a dry run): a stack of it with room left, or a free cell.

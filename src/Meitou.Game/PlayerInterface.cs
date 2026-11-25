@@ -972,7 +972,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     bool PortraitRightDown(Vector2 p, CharacterId member, bool shift)
     {
         if (Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == member) is { } shown
-            && ContextMenuWindow.ContextPressOn(p, at => ContextMenuWindow.Menu(ShownName(shown), at, ContextMenuWindow.Verbs(shown)),
+            && ContextMenuWindow.ContextPressOn(p, at => ContextMenuWindow.CharacterMenu(shown, at),
                 () => FocusMember(member, shift), ContextMenuWindow.PortraitHoldSeconds)) return true;
         _memberPress = member;
         return true;

@@ -1318,17 +1318,22 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// The walk to the cage: within its <c>use range</c> + the job's reach (<see cref="ReachOf"/>) it has arrived, or when a walk ended within
-    /// <see cref="CaptiveSettings.Slack"/>; a walk that ended farther counts against <see cref="CaptiveSettings.Walks"/>. Its own faction's shut
-    /// doors on the way are unlocked first (the lock rounds' "keys", engine choice). False: give up.
+    /// The walk to the cage, onto its floor (<see cref="MovementSystem.GoToFloor"/>): within its <c>use range</c> + the job's reach
+    /// (<see cref="ReachOf"/>) it has arrived, or when a walk ended within <see cref="CaptiveSettings.Slack"/>; a walk that ended farther counts
+    /// against <see cref="CaptiveSettings.Walks"/>. Either way only on the cage's level: the rows these jobs plan reach a cage through
+    /// <c>isAtLocation</c>, which for a building is <c>AI::isWithinChoppingRange</c> (<c>FUN_14059c6d0</c>, <b>Verified</b>: the flat distance
+    /// and the same floor, <see cref="FixtureRegistry.WorkHeight"/> here), so one standing under a cage on an upper storey is not at it, and 107
+    /// <c>Task_UseCage</c>'s start (<c>FUN_140358040</c>) puts it into the cage wherever it stands. Its own faction's shut doors on the way are
+    /// unlocked first (the lock rounds' "keys", engine choice). False: give up.
     /// </summary>
     bool Walk(World world, CaptiveJob j, int w, Fixture cage, out bool arrived)
     {
         var table = world.Characters;
         ref var n = ref table.Next[w];
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(cage.Position.X, cage.Position.Z));
+        bool level = MathF.Abs(n.Position.Y - cage.Position.Y) < FixtureRegistry.WorkHeight;
         bool walking = WalksOwn(table, w, j);
-        arrived = d <= cage.UseRange + ReachOf(j) || !walking && j.Walks > 0 && d <= Settings.Slack;
+        arrived = level && (d <= cage.UseRange + ReachOf(j) || !walking && j.Walks > 0 && d <= Settings.Slack);
         if (arrived || walking) return true;
         if (Lost(j, new IgnoreKey(cage.Id, default))) return false;
         if (++j.Walks > Settings.Walks)
@@ -1340,7 +1345,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (world.Fixtures.IsShut(cage.Building) && world.Fixtures.DoorOwner(cage.Building) == j.Faction)
             world.Fixtures.SetDoorsLocked(cage.Building, false);
 
-        TaskStart.Walk(world, w, new Vector2(cage.Position.X, cage.Position.Z), SpeedMode.Walk, RowOf(j.Kind), j.Source);
+        TaskStart.Walk(world, w, cage.Position, SpeedMode.Walk, RowOf(j.Kind), j.Source);   // onto its floor: a flat goal ends under an upper cage
         return true;
     }
 

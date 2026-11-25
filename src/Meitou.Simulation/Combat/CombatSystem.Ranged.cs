@@ -872,7 +872,7 @@ public sealed partial class CombatSystem : IProjectileSource
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
         Bodies.HealthObservers.Before(world, v);
-        var (part, damage, absorbed) = world.Player.OnePunch && p.ShooterIsPlayer
+        var (part, damage, absorbed, _) = world.Player.OnePunch && p.ShooterIsPlayer
             ? HitResolver.LandLethal(dc.Medical, ctx, DebugCheats.OnePunchDamage, false, true, events)
             : HitResolver.LandDetailed(dc.Medical, ctx, packet, armour, cover, toughness, false, true, _combat, events);
         Bodies.HealthObservers.After(world, v, Bodies.HealthChangeKind.Hit);

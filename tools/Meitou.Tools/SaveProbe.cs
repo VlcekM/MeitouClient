@@ -276,7 +276,7 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// One door of <see cref="Doors"/>: its state and the squads living in its building.
+    /// One door of <see cref="Doors"/>: its state, its building's house flag and the squads living in its building.
     /// </summary>
     static string DoorLine(ProbeWorld probe, Fixture door)
     {
@@ -286,7 +286,8 @@ static class SaveProbe
             .Select(q => $"{q.Id}:'{q.Name}' goal={LeaderGoal(probe, q.Leader.Slot)}");
         return $"{door.Id} {door.HostRecordId} at=<{door.Position.X:F0}, {door.Position.Z:F0}> gate={door.IsGate} owner={probe.Faction(door.Owner)} {door.Motion} open={door.OpenAmount:F2} "
             + $"locked={door.Lock?.Locked} wants={door.WantsLock} broken={door.DoorBroken} restored={door.Restored} "
-            + $"level={LevelDoor(world, door)} homes=[{string.Join(", ", squads)}]";
+            + $"level={LevelDoor(world, door)} homelok={world.SystemOf<LockSystem>()?.IsHouseLocked(world, door.Building)} "
+            + $"homes=[{string.Join(", ", squads)}]";
     }
 
     /// <summary>

@@ -165,7 +165,7 @@ the game calls `Root::restoreConfig` / `saveConfig` (**Verified**), which use th
 | --- | --- | --- |
 | `Render System` (top) | Direct3D11 Rendering Subsystem | launcher (the start-up dialog, FUN_140129190 also knows Direct3D9) |
 | `Rendering Device` | the GPU name | launcher |
-| `Video Mode` | `1920 x 1080 @ 32-bit colour` | launcher; options "Resolution (need restart)" |
+| `Video Mode` | `1920 x 1080 @ 32-bit colour` | launcher; options "Resolution (need restart)". Under Direct3D11 the launcher writes ` [<n>]` after the mode (FUN_140121b80): its monitor choice, 0-based, from a list of 1-based monitor numbers (FUN_1401215d0 fills it, FUN_140121a60 stores the pick minus 1; **Verified** in the decompile; the row is labelled "Monitor:", **Observed**). The install's file has `[0]` and `kenshi.log`'s `_createRenderWindow` line `monitorIndex=0` (**Observed**). Meitou's counterpart is the Display page's Monitor ([viewer](../viewer.md), Alt+Enter) |
 | `Full Screen` | No | launcher; options "Full screen (need restart)" (Yes / No) |
 | `Border` | None | launcher "Borderless"; options "Borderless (need restart)" (None = borderless, otherwise Default) |
 | `VSync` | No | launcher |

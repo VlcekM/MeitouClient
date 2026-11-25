@@ -274,10 +274,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// </summary>
     public float? MaskHit(Vector3 origin, Vector3 direction, float maxDistance)
     {
-        if (_maskCorners.Length == 0) return null;
-        var min = new Vector3(Footprint.Min(p => p.X), YMin, Footprint.Min(p => p.Y));
-        var max = new Vector3(Footprint.Max(p => p.X), YMax, Footprint.Max(p => p.Y));
-        if (!FloorSurfaces.RayBox(origin, direction, min, max, maxDistance)) return null;
+        if (_maskCorners.Length == 0 || !RayMeetsBounds(origin, direction, maxDistance)) return null;
+
         float? best = null;
         for (int i = 0; i + 2 < _maskCorners.Length; i += 3)
         {
@@ -286,6 +284,36 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
                 best = t;
         }
         return best;
+    }
+
+    /// <summary>
+    /// How much nearer than a point the building's collision has to be met on the ray to stand before it, world units: the roof under a bed or an
+    /// item is met just past the hit on it (engine choice).
+    /// </summary>
+    const float StructureMargin = 1;
+
+    /// <summary>
+    /// Whether the point <paramref name="distance"/> along the ray, inside the volume, lies in the open on the building: none of its floors or roofs
+    /// over it (<see cref="Covered"/>) and none of its collision on the ray before it: there the original's ray meets furniture drawn on an open
+    /// roof before the building (docs/game/ui-input.md "Character picking"; #1376), so the <see cref="MaskHit"/> met on the way to it is no wall.
+    /// False while the building's collision is not known.
+    /// </summary>
+    public bool InTheOpen(Vector3 origin, Vector3 direction, float distance)
+    {
+        var at = origin + direction * distance;
+        if (_floors is null || !Contains(at) || Covered(at)) return false;
+
+        return _floors.Value.FirstHit(origin, direction, distance - StructureMargin) is null;
+    }
+
+    /// <summary>
+    /// Whether the picking ray reaches the volume's box within the given distance, using the footprint bounds shared by all rays to the room.
+    /// </summary>
+    bool RayMeetsBounds(Vector3 origin, Vector3 direction, float maxDistance)
+    {
+        var min = new Vector3(_edges.Min.X, YMin, _edges.Min.Y);
+        var max = new Vector3(_edges.Max.X, YMax, _edges.Max.Y);
+        return FloorSurfaces.RayBox(origin, direction, min, max, maxDistance);
     }
 
     /// <summary>
@@ -362,11 +390,9 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// </summary>
     public (float Distance, Vector3 Position)? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
-        if (Footprint.Length < 3 || _floors is null) return null;
-        var min = new Vector3(Footprint.Min(p => p.X), YMin, Footprint.Min(p => p.Y));
-        var max = new Vector3(Footprint.Max(p => p.X), YMax, Footprint.Max(p => p.Y));
-        return FloorSurfaces.RayBox(origin, direction, min, max, maxDistance)
-            ? _floors.Value.MoveHit(origin, direction, floor, maxDistance) : null;
+        if (_floors is null || !RayMeetsBounds(origin, direction, maxDistance)) return null;
+
+        return _floors.Value.MoveHit(origin, direction, floor, maxDistance);
     }
 
     /// <summary>

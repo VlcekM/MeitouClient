@@ -76,6 +76,31 @@ public sealed partial class FloorSurfaces
     }
 
     /// <summary>
+    /// The distance at which the ray first meets any of the parts within <paramref name="maxDistance"/> (floors, stairs and walls of every floor,
+    /// unwalkable roofs, slab undersides); null when it meets none.
+    /// </summary>
+    public float? FirstHit(Vector3 origin, Vector3 direction, float maxDistance)
+    {
+        float? best = null;
+
+        foreach (var s in _surfaces.Concat(_roofs).Concat(_undersides))
+        {
+            float limit = best ?? maxDistance;
+            if (!RayBox(origin, direction, new(s.Min.X, s.YMin, s.Min.Y), new(s.Max.X, s.YMax, s.Max.Y), limit)) continue;
+
+            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+            {
+                if (RayTriangle(origin, direction, s.Corners[i], s.Corners[i + 1], s.Corners[i + 2]) is not { } t || t > limit) continue;
+
+                best = t;
+                limit = t;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
     /// The upward unit normal of the floor surface a ray straight down from <paramref name="point"/> (raised by <paramref name="reach"/>) meets
     /// first, on floors up to the viewed one; null when it meets none. The indoor ghost's single slope ray (<c>FUN_1404daa20</c>, <b>Verified</b>:
     /// one ray at its origin when it has a parent building).

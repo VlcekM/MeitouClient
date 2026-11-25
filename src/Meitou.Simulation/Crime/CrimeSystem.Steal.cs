@@ -85,8 +85,23 @@ public sealed partial class CrimeSystem
     }
 
     /// <summary>
-    /// The stolen mark of goods of <paramref name="building"/> owned by <paramref name="faction"/> (an item of one of its containers, a loose item
-    /// of one of its slots): its resident squad's leader of that faction, else the faction alone. The original names a character (<b>Observed</b>,
+    /// The stolen mark goods taken out of <paramref name="goods"/>' window get (<c>Item::notifyTheftFrom</c>, <c>FUN_140792780</c> ->
+    /// <c>FUN_140792680</c>, <b>Verified</b> decompile): the residents hand of the building they stand in (<see cref="StealSource.StandsIn"/>, else
+    /// the holder itself), here its resident squad's (<see cref="ResidentSquad"/>) leader, whatever its faction; none when nobody lives there (a null
+    /// hand leaves the item ownerless, so goods of a town mine are never stolen and no shop asks to fence them).
+    /// </summary>
+    public static StolenMark GoodsMark(World world, StealSource goods)
+    {
+        var table = world.Characters;
+        if (ResidentSquad(world, goods.StandsIn ?? goods.Building) is not { } squad || !table.TryResolveNext(squad.Leader, out int s))
+            return StolenMark.None;
+
+        return table.Cold(s) is { } leader ? StolenMark.Of(leader, squad.Leader) : StolenMark.None;
+    }
+
+    /// <summary>
+    /// The stolen mark of a loose item of one of <paramref name="building"/>'s slots owned by <paramref name="faction"/>: its resident squad's leader
+    /// of that faction, else the faction alone. The original names a character (<b>Observed</b>,
     /// docs/game/economy.md "Fencing, stealing and smuggling": the item's <c>ownedby</c> is the bar's barman); that it is the leader rather than
     /// another resident is <b>Unknown</b>.
     /// </summary>

@@ -443,6 +443,17 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Func<string>? FrameGenerationStatus { get; init; }
 
     /// <summary>
+    /// The Monitor row's monitor names, in the order its numbers count (<see cref="Rendering.Display.GlfwMonitors.Names"/>); null on a host without that
+    /// setting.
+    /// </summary>
+    public Func<IReadOnlyList<string>>? MonitorNames { get; init; }
+
+    /// <summary>
+    /// Moves a full-screen window to the newly chosen monitor.
+    /// </summary>
+    public Action? MonitorChanged { get; init; }
+
+    /// <summary>
     /// Applies a new attackers-per-target setting to the running combat system.
     /// </summary>
     public Action<int?>? AttackSlotsChanged { get; init; }
@@ -598,6 +609,19 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The Tick ahead row's choices.
     /// </summary>
     internal static readonly string[] TickAheadChoices = ["Faithful (in series)", "Meitou (when busy)", "Always on"];
+    /// <summary>
+    /// The Monitor row's name.
+    /// </summary>
+    internal const string MonitorName = "Monitor";
+    /// <summary>
+    /// The Monitor row's hint (<see cref="UserConfig.Monitor"/>).
+    /// </summary>
+    internal const string MonitorHint =
+        "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor).";
+    /// <summary>
+    /// The highest monitor number the launcher offers: it cannot list the computer's monitors, the game's own row does.
+    /// </summary>
+    internal const int LauncherMonitors = 4;
     /// <summary>
     /// The names of the HDR output rows of the Display page and of the launcher (docs/render-post.md "HDR output").
     /// </summary>
@@ -1102,16 +1126,17 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The Display page: its sliders, the frame limit, world tick, frame generation and HDR output, in the catalogue's order; modes replace their
-    /// sliders.
+    /// The Display page: its sliders, the frame limit, the monitor, world tick, frame generation and HDR output, in the catalogue's order; modes
+    /// replace their sliders.
     /// </summary>
     List<Entry> DisplayRows(List<Entry> result)
     {
-        // The Display page in the catalogue's order, as the launcher's: full screen, VSync, frame limit, frame generation, world tick, then the
-        // display sliders.
+        // The Display page in the catalogue's order, as the launcher's: full screen, monitor, VSync, frame limit, frame generation, world tick,
+        // then the display sliders.
         var fps = LauncherSchema.Find("fpsLimit");
         result.Add(new(fps?.Name ?? "Frame limit", fps?.Description ?? "", Slider: fps is null ? frameLimit
             : frameLimit with { Min = fps.Min, Max = fps.Max, Text = fps.Text }, Raw: "fpsLimit"));
+        if (MonitorNames is not null) result.Add(MonitorRow());
         result.Add(new("World tick alongside drawing", TickAheadHint, Choice: new(() => TickAheadChoices, () => (int)Config.TickAhead,
             i => Config.TickAhead = (TickAheadMode)i),
             Raw: "tickAhead"));
@@ -1127,6 +1152,28 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         result = [.. result.OrderBy(e => RowOrder(e.Raw ?? ""))];
 
         return [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
+    }
+
+    /// <summary>
+    /// The Monitor row: Automatic, then the monitors there are now, by number and name.
+    /// </summary>
+    Entry MonitorRow()
+    {
+        var options = new List<string> { "Automatic" };
+        var names = MonitorNames?.Invoke() ?? [];
+        for (int i = 0; i < names.Count; i++) options.Add(Loc.Tr("Monitor {1}: {2}", i + 1, names[i]));
+
+        var choice = new Choice(() => options, () => Config.Monitor < options.Count ? Math.Max(Config.Monitor, 0) : 0, ChooseMonitor);
+        return new(MonitorName, MonitorHint, Choice: choice, Raw: "monitor");
+    }
+
+    /// <summary>
+    /// Chooses the monitor (0 automatic) and moves a full-screen window there.
+    /// </summary>
+    void ChooseMonitor(int index)
+    {
+        Config.Monitor = index;
+        MonitorChanged?.Invoke();
     }
 
     /// <summary>

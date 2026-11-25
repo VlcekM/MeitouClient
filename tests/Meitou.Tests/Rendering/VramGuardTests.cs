@@ -57,7 +57,7 @@ public class VramGuardTests
     }
 
     [Fact]
-    public void Pressure_ends_under_80_percent_and_the_ranges_come_back_only_after_calm_under_74()
+    public void Pressure_ends_under_80_percent_and_the_ranges_climb_back_to_a_step_below_the_entry_then_to_1()
     {
         var r = new Rig();
         r.Run(2, 0.95);
@@ -70,8 +70,9 @@ public class VramGuardTests
 
         Assert.True(r.Guard.Pressure);
 
-        // Under the low mark streaming resumes, but the ranges stay while the use is above the recovery mark.
-        r.Run(10, 0.78);
+        // Under the low mark streaming resumes; the ranges stay while the use is at the recovery mark or over.
+        r.Run(10, 0.79);
+        r.Run(10, 0.82);
 
         Assert.False(r.Guard.Pressure);
         Assert.True(r.Guard.Streaming);
@@ -79,10 +80,10 @@ public class VramGuardTests
 
         float held = r.Guard.RangeScale;
 
-        Assert.True(held <= clamped);
+        Assert.True(r.Guard.RangeScale < VramGuard.StepDown);
         Assert.Contains("recovering", r.Guard.Status);
 
-        // Calm under 74%: four seconds of rest, then 4% a second.
+        // Calm under 80%: four seconds of rest, then 4% a second, up to a step below the scale the pressure began at (1).
         r.Run(3, 0.60);
 
         Assert.Equal(held, r.Guard.RangeScale);
@@ -91,7 +92,13 @@ public class VramGuardTests
 
         Assert.True(r.Guard.RangeScale > held);
 
-        r.Run(120, 0.60);
+        r.Run(40, 0.60);
+
+        Assert.Equal(VramGuard.StepDown, r.Guard.RangeScale, 4);
+        Assert.True(r.Guard.Active);
+
+        // The cap lifts CapSeconds after the pressure ended.
+        r.Run(VramGuard.CapSeconds, 0.60);
 
         Assert.Equal(1f, r.Guard.RangeScale);
         Assert.False(r.Guard.Active);

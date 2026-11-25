@@ -1452,15 +1452,57 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>
     /// The nearest distance along the ray at which it enters a loaded building seen from outside (not in <see cref="InteriorView"/>), within
-    /// <paramref name="maxDistance"/>: characters and items beyond it are hidden from the pointer. Null when none is in the way.
+    /// <paramref name="maxDistance"/>: characters and items beyond it are hidden from the pointer. One does not hide a drawn object of its own in the
+    /// open at <paramref name="maxDistance"/> (<see cref="InteriorVolume.InTheOpen"/>, <see cref="DrawnFurnitureAt"/>: a bed on its roof, #1376).
+    /// Null when none is in the way.
     /// </summary>
     public float? ClosedBuildingHit(Vector3 origin, Vector3 direction, float maxDistance)
     {
         float? best = null;
         foreach (var zone in _streamer.AllZones)
+        {
             foreach (var room in zone.Interiors)
-                if (!InteriorView.ContainsKey(room.PlacementId) && room.MaskHit(origin, direction, best ?? maxDistance) is { } t) best = t;
+            {
+                if (InteriorView.ContainsKey(room.PlacementId) || room.MaskHit(origin, direction, best ?? maxDistance) is not { } t) continue;
+                if (room.InTheOpen(origin, direction, maxDistance) && DrawnFurnitureAt(room, origin + direction * maxDistance)) continue;
+
+                best = t;
+            }
+        }
+
         return best;
+    }
+
+    /// <summary>
+    /// Whether the bounds of an object that goes with <paramref name="room"/>'s building and is drawn while it is closed hold <paramref name="at"/>: a
+    /// layout object with the outside flag (not <see cref="PlacedMesh.Interior"/>), or a building placed in it that <see cref="ClosedAround"/> leaves
+    /// drawn. Layout furniture without the flag (Stack's rooftop camp beds) is hidden while closed, so it is not pointed at either.
+    /// </summary>
+    bool DrawnFurnitureAt(InteriorVolume room, Vector3 at)
+    {
+        foreach (var zone in _streamer.AllZones)
+        {
+            if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, at) > InteriorOver) continue;
+
+            foreach (var inst in zone.Real)
+            {
+                if (inst.Gpu is null || Vector3.DistanceSquared(inst.Centre, at) > inst.Radius * inst.Radius) continue;
+                if (DrawnWithClosed(inst, room.PlacementId)) return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether the instance goes with building <paramref name="key"/> and stays drawn while that building is closed (<see cref="DrawnFurnitureAt"/>).
+    /// </summary>
+    bool DrawnWithClosed(ObjectStreamer.Instance inst, string key)
+    {
+        var p = inst.Placed;
+        if (p.ParentPlacementId == key) return !p.Interior;
+
+        return p.Contained && InteriorOf(inst).Building == key && !ClosedAround(inst);
     }
 
     /// <summary>
@@ -1471,6 +1513,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public float? ShownInteriorHit(Vector3 origin, Vector3 direction, float maxDistance)
     {
+        if (InteriorView.Count == 0) return null;
+
         float? best = null;
         foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)

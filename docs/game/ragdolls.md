@@ -421,3 +421,7 @@ WHOLE from the loaded animated pose.
 Meitou adds GAMESTATE_CHARACTER string `meitou ragdoll` for a whole-body (not carried) ragdoll: `frozen age n`, then per body (definition order)
 position x y z and rotation x y z w, invariant floats; absent otherwise (a world without ragdolls keeps the loaded key); the original ignores it. **Observed** (headless, real data, a knocked-out
 human frozen after 61 ticks): save → load gives the same 13 body poses (offset 0), frozen flag and age; without the key it falls again from the clip.
+An unsettled pose (flag 0, or frozen under `FreezeEarliest`) settles again from where it was with a new ragdoll's timers (age 0), as the original's ragdoll made on load:
+its bodies start still, and with the saved age the freeze test passed on the first tick that had no physics step. **Observed** (headless, #1388: a goat dropped from a
+carrier knocked out at 5x, saved in the air with flag 0 at age 2.17, loaded at 5x): with the saved age it froze at once with its root 9 above the floor and was saved
+again with flag 1, then restored frozen in the air on every load; with age 0 it lands and freezes at 7.03 s, its lowest body 0.9 above the floor.

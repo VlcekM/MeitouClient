@@ -825,8 +825,15 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : blow, advanced, world.Seed);
         if (restored)
         {
-            (r.Age, r.WindowStart) = (restore!.Age, FreezeEarliest);
-            if (restore.Frozen && restore.Age >= FreezeEarliest) Freeze(r);
+            // A settled pose comes back frozen with its age. An unsettled one settles again with the timers of a new ragdoll, as the original's
+            // ragdoll made on load: its bodies start still, and with its saved age the first tick before a physics step (2x, 5x) froze it in the air
+            // (#1388).
+            if (restore!.Frozen && restore.Age >= FreezeEarliest)
+            {
+                (r.Age, r.WindowStart) = (restore.Age, FreezeEarliest);
+                Freeze(r);
+            }
+
             hot.Position = r.Definition.RootAt(r.Pose);   // a frozen one is never read back
         }
 

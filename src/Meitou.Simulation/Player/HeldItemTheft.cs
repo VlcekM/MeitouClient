@@ -31,8 +31,8 @@ static class HeldItemTheft
 
     /// <summary>
     /// The stolen mark a held item gets when it goes to <paramref name="taker"/>'s faction: from a take that marks
-    /// (<see cref="Crime.CrimeSystem.MarksTheft"/>) the body (its faction, itself and its squad), from another faction's container its owner
-    /// (<see cref="Crime.CrimeSystem.OwnerMark"/>), else unchanged; a drag marks only an unmarked item, a give (<paramref name="overwrite"/>) any
+    /// (<see cref="Crime.CrimeSystem.MarksTheft"/>) the body (its faction, itself and its squad), from another faction's container its resident
+    /// (<see cref="Crime.CrimeSystem.GoodsMark"/>), else unchanged; a drag marks only an unmarked item, a give (<paramref name="overwrite"/>) any
     /// (<c>Item::notifyTheftFrom</c> call sites). Handed to its owner's faction it loses the mark (the engine clears the owner when the item goes to
     /// its owner or a member of the owner's faction). Into the container or storage machine at <paramref name="site"/>: out of a player's window as
     /// <see cref="PutMark"/> with the site's owner (<see cref="OwnerOf"/>), out of another's (a character's, a container's or a town machine's) the
@@ -57,8 +57,8 @@ static class HeldItemTheft
 
     /// <summary>
     /// The mark a take out of another's window gives the held item (<see cref="MarkFor"/>): the body's from a character that marks
-    /// (<see cref="Crime.CrimeSystem.MarksTheft"/>), the owner's (<see cref="Crime.CrimeSystem.OwnerMark"/>) from goods not of
-    /// <paramref name="takerFaction"/> (-1: any goods), else the item's own; only an unmarked item but with <paramref name="overwrite"/>.
+    /// (<see cref="Crime.CrimeSystem.MarksTheft"/>), the resident's (<see cref="Crime.CrimeSystem.GoodsMark"/>, when one lives there) from goods
+    /// not of <paramref name="takerFaction"/> (-1: any goods), else the item's own; only an unmarked item but with <paramref name="overwrite"/>.
     /// </summary>
     static StolenMark TheftMark(World world, HeldItem held, int takerFaction, bool overwrite)
     {
@@ -71,8 +71,8 @@ static class HeldItemTheft
             && table.TryResolveNext(held.Actor, out int a) && Crime.CrimeSystem.MarksTheft(world, table.Cold(a)!,
                     victim)) return StolenMark.Of(victim, table.IdOf(v));
         if (held.From.Holder == ItemHolder.Site && Goods(world, held.From.Site) is { Owner: >= 0 } box && box.Owner != takerFaction
-            && Crime.CrimeSystem.IsStealing(world, box))
-            return Crime.CrimeSystem.OwnerMark(world, box.Building, box.Owner);
+            && Crime.CrimeSystem.IsStealing(world, box) && Crime.CrimeSystem.GoodsMark(world, box) is var goods && goods != StolenMark.None)
+            return goods;
         return item.Mark;
     }
 

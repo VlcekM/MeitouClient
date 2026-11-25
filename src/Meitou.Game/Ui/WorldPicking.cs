@@ -536,7 +536,7 @@ sealed class WorldPicking(PlayerInterface player)
             Offer(Picked.Character, PickWhereAt(p, c => c.Id == order.Target)?.T ?? 0);
         }
         else if (PickWhereAt(p, _ => true) is { } any && player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == any.Id) is { } held
-            && player.ContextMenuWindow.Verbs(held).Count > 0)
+            && player.ContextMenuWindow.HasMenu(held))
         {
             Offer(Picked.Character, any.T);   // no quick order, but a held click opens its menu
         }

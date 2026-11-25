@@ -263,6 +263,8 @@ public sealed partial class World : IDisposable
             CrimeObservers.Register(this._systems[k], k);
             NeedRateFilters.Register(this._systems[k], k);
             HealthObservers.Register(this._systems[k], k);
+            StateObservers.Register(this._systems[k], k);
+            DialogueChoiceObservers.Register(this._systems[k], k);
             RemovalVetoes.Register(this._systems[k], k);
             ItemCreatedObservers.Register(this._systems[k], k);
             CombatEngageFilters.Register(this._systems[k], k);
@@ -616,6 +618,15 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Bodies.HealthObservers HealthObservers { get; } = new();
     /// <summary>
+    /// The systems told of character lifecycle and state changes (knockout, limb state, carry, held state, faction, recruit, equip, removal).
+    /// </summary>
+    internal CharacterStateObservers StateObservers { get; } = new();
+    /// <summary>
+    /// The systems observing or intercepting player dialogue choices (<see cref="Dialogue.IDialogueChoiceObserver"/>,
+    /// <see cref="Dialogue.IDialogueChoiceFilter"/>).
+    /// </summary>
+    internal Dialogue.DialogueChoiceObservers DialogueChoiceObservers { get; } = new();
+    /// <summary>
     /// The systems asked before a character or body is taken out of the world (<see cref="Bodies.IRemovalVeto"/>).
     /// </summary>
     internal Bodies.RemovalVetoes RemovalVetoes { get; } = new();
@@ -926,6 +937,8 @@ public sealed partial class World : IDisposable
         CrimeObservers.Register(system, _systems.Count - 1);
         NeedRateFilters.Register(system, _systems.Count - 1);
         HealthObservers.Register(system, _systems.Count - 1);
+        StateObservers.Register(system, _systems.Count - 1);
+        DialogueChoiceObservers.Register(system, _systems.Count - 1);
         RemovalVetoes.Register(system, _systems.Count - 1);
         ItemCreatedObservers.Register(system, _systems.Count - 1);
         CombatEngageFilters.Register(system, _systems.Count - 1);
@@ -958,7 +971,7 @@ public sealed partial class World : IDisposable
             Bodies.ExperienceFilters.UnbindAll(this);
         }
 
-        if (!DeathObservers.Active && !ExperienceFilters.Active && !HealthObservers.Active) return;
+        if (!DeathObservers.Active && !ExperienceFilters.Active && !HealthObservers.Active && !StateObservers.Active) return;
 
         Characters.Watch ??= new CharacterWatch(this);
         if (ExperienceFilters.Active) Bodies.ExperienceFilters.BindAll(this);
@@ -1070,6 +1083,7 @@ public sealed partial class World : IDisposable
         RunSlowWorld(prof);
         DeathObservers.Sweep(this);
         HealthObservers.Tell(this);
+        StateObservers.Tell(this);
         PlatoonObservers.Tell(this);
         Bodies.StatusEffects.Step(this);
         AfterPhase?.Invoke(this, "slow world");
@@ -1619,6 +1633,8 @@ public sealed partial class World : IDisposable
         CrimeObservers.HashFaults(ref h);
         NeedRateFilters.HashFaults(ref h);
         HealthObservers.HashFaults(ref h);
+        StateObservers.HashFaults(ref h);
+        DialogueChoiceObservers.HashFaults(ref h);
         RemovalVetoes.HashFaults(ref h);
         ItemCreatedObservers.HashFaults(ref h);
         CombatEngageFilters.HashFaults(ref h);

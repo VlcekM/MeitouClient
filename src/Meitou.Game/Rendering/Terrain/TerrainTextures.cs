@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Content;
@@ -952,16 +951,17 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>
     /// Grows the near arrays to <see cref="NearLayers"/> slots per kept place (<see cref="Areas"/>, at most <see cref="MaxNearSlots"/>) when no layer
     /// is in flight and the guard allows it: there is no image copy, so every pair loses its slot (its biomes read the far arrays) and loads near
-    /// again, nearest first. The arrays never shrink while running.
+    /// again, nearest first. The arrays never shrink while running, and do not grow while the guard clamps the ranges (<see cref="VramGuard.Active"/>:
+    /// the growth took the room the clamp freed, #1390).
     /// </summary>
     void GrowNear()
     {
         int want = Math.Min(Math.Min(_pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
         if (GpuContext.DiagNoGrow || want <= Capacity || want >= _nearRefused || _inFlight > 0 || _nearLoading > 0 || _diffuseArray is null
-            || _normalArray is null)
+            || _normalArray is null || Guard is { Active: true })
             return;
 
-        if (Guard is { } guard && !guard.Allows((ulong)Bytes(_layerSize, _levelCount, want, 32)))
+        if (Guard is { } guard && !guard.AllowsGrowth((ulong)Bytes(_layerSize, _levelCount, want, 32)))
         {
             _nearRefused = want;
             Console.WriteLine($"terrain   near layer slots not grown to {want}: memory budget (VramGuard)");
@@ -1659,7 +1659,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         {
             int w = Math.Max(width >> l, 1), h = Math.Max(height >> l, 1), pw = Math.Max(width >> (l - 1), 1), ph = Math.Max(height >> (l - 1), 1);
             var src = levels[l - 1];
-            var dst = pooled ? ArrayPool<byte>.Shared.Rent(w * h * 4) : new byte[w * h * 4];
+            var dst = pooled ? BoundedBytePool.Streaming.Rent(w * h * 4) : new byte[w * h * 4];
             Parallel.For(0, h, y =>
             {
                 int y1 = Math.Min(2 * y + 1, ph - 1);
@@ -2490,9 +2490,9 @@ sealed class MapWindows
     public sealed record Update(int Px0, int Pz0, List<Piece> Pieces)
     {
         /// <summary>
-        /// Returns the levels (rented from the shared pool, sized at least as needed) once they are uploaded.
+        /// Returns the levels (rented from <see cref="BoundedBytePool.Streaming"/>, sized at least as needed) once they are uploaded.
         /// </summary>
-        public void Release() { foreach (var p in Pieces) foreach (var l in p.Levels) ArrayPool<byte>.Shared.Return(l); }
+        public void Release() { foreach (var p in Pieces) foreach (var l in p.Levels) BoundedBytePool.Streaming.Return(l); }
     }
 
     /// <summary>
@@ -2552,11 +2552,11 @@ sealed class MapWindows
 
     /// <summary>
     /// Cuts a w × h RGBA8 rectangle at (<paramref name="x0"/>, <paramref name="z0"/>) out of the map of <paramref name="cache"/>'s tiles (missing
-    /// tiles stay zero); the array is rented from <see cref="ArrayPool{T}.Shared"/>.
+    /// tiles stay zero); the array is rented from <see cref="BoundedBytePool.Streaming"/>.
     /// </summary>
     static byte[] Cut(TileCache cache, int tile, int x0, int z0, int w, int h)
     {
-        var result = ArrayPool<byte>.Shared.Rent(w * h * 4);   // returned with the update's other levels once uploaded
+        var result = BoundedBytePool.Streaming.Rent(w * h * 4);   // returned with the update's other levels once uploaded
         Array.Clear(result, 0, w * h * 4);
         int tx0 = x0 / tile, tx1 = (x0 + w - 1) / tile, tz0 = z0 / tile, tz1 = (z0 + h - 1) / tile;
         var keys = new List<(int, int)>();
@@ -2595,7 +2595,7 @@ sealed class MapWindows
         for (int l = 0; l < levels.Length; l++)
         {
             int bw = (w >> l) / 4, bh = (h >> l) / 4;
-            levels[l] = ArrayPool<byte>.Shared.Rent(bw * bh * 16);
+            levels[l] = BoundedBytePool.Streaming.Rent(bw * bh * 16);
             Array.Clear(levels[l], 0, bw * bh * 16);
         }
         foreach (var (tx, tz) in keys)

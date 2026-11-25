@@ -218,8 +218,8 @@ public sealed record DebugDamageMultiplier(float Multiplier) : DebugCommand;
 
 /// <summary>
 /// Puts <see cref="Quantity"/> of item record <see cref="Record"/> on the character, at <see cref="Quality"/> (0 to 100) for the types that have one:
-/// one unit into its free equipment slot (<see cref="Items.InventoryCommands.TryEquip"/>), the rest into the inventory; what does not fit is dropped
-/// at the character's feet.
+/// one unit into its free equipment slot (<see cref="Items.InventoryCommands.TryEquip"/>), the rest into the inventory (a live animal's worn bag
+/// only); what does not fit is dropped at the character's feet.
 /// </summary>
 public sealed record DebugGiveItem(CharacterId Character, string Record, int Quantity, int Quality = 0) : DebugCommand
 {
@@ -1054,7 +1054,8 @@ static class DebugCheats
     }
 
     /// <summary>
-    /// Gives the character an item at the given quality, worn when asked and its slot allows; the rest goes to the grids, else the ground.
+    /// Gives the character an item at the given quality, worn when asked and its slot allows; the rest goes to the grids, else the ground. A live
+    /// animal's shut grid takes none, only its worn bag does (<see cref="Items.InventoryCommands.MainClosed"/>, as every auto-add).
     /// </summary>
     static void Give(World world, PopulationData data, CharacterAssembly? assembly, DebugGiveItem give)
     {
@@ -1069,6 +1070,7 @@ static class DebugCheats
         if (!SetQuality(world, data, give.Exact, give.Quality, item)) return;
 
         var wearer = table.Cold(owner);
+        bool shut = Items.InventoryCommands.MainClosed(wearer);
         if (give.Equip && item.Type == FcsRecordType.Container && item.Contents is not null)
         {
             WearBackpack(world, assembly, inventory, item, wearer);
@@ -1083,14 +1085,14 @@ static class DebugCheats
         {
             // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids; with no room nothing
             // changes and nothing is dropped.
-            if (!inventory.HasRoomFor(displaced))
+            if (!inventory.HasRoomFor(displaced, shut))
             {
                 world.Post($"{item.Name} not worn: the worn {displaced.Name} has no room in the grids (strip the inventory first); "
                     + "nothing dropped.");
                 return;
             }
 
-            worn = SwapWorn(world, inventory, item, displaced, wearer);
+            worn = SwapWorn(world, inventory, item, displaced, wearer, shut);
         }
 
         if (worn)
@@ -1101,7 +1103,7 @@ static class DebugCheats
             item = item.WithQuantity(item.Quantity - 1);
         }
 
-        if (inventory.Add(item)) return;
+        if (inventory.Add(item, shut)) return;
         if (give.Equip)
         {
             world.Post($"{item.Quantity} x {item.Name} did not fit; not given (nothing dropped).");
@@ -1160,14 +1162,15 @@ static class DebugCheats
 
     /// <summary>
     /// Takes the worn item off its slot and wears the new one; the old one goes back when the new one does not fit, else to the grids (destroyed
-    /// when it does not fit them). Returns whether the new one is worn.
+    /// when it does not fit them; only the bag when the main grid is <paramref name="shut"/>). Returns whether the new one is worn.
     /// </summary>
-    static bool SwapWorn(World world, Items.Inventory inventory, Items.ItemInstance item, Items.ItemInstance displaced, CharacterCold? wearer)
+    static bool SwapWorn(World world, Items.Inventory inventory, Items.ItemInstance item, Items.ItemInstance displaced, CharacterCold? wearer,
+        bool shut)
     {
         inventory.Items.Remove(displaced);
         bool worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
         if (!worn) inventory.Items.Add(displaced);
-        else if (!inventory.Add(displaced))
+        else if (!inventory.Add(displaced, shut))
             world.Post($"{displaced.Name} came off and did not fit the inventory; destroyed (nothing dropped).");
 
         return worn;

@@ -531,8 +531,8 @@ public sealed class CharacterSnapshot
     /// </summary>
     public IReadOnlyList<Crime.BountyLine> Bounties { get; internal set; } = [];
     /// <summary>
-    /// Slave (state 1) or escaped slave (state 2) and its owner's name, for the status lines of the bounty panel's tooltip (docs/game/ui-screens.md
-    /// section 4); null otherwise.
+    /// Slave (state 1), escaped slave (state 2) or ex-slave (state 3) with its owner's name and lie-low facts, for the status lines of the bounty
+    /// panel's tooltip (docs/game/ui-screens.md section 4) and the data panel; null otherwise.
     /// </summary>
     public SlaveView? Slave { get; internal set; }
     /// <summary>
@@ -909,9 +909,11 @@ public readonly record struct PrisonView(bool Locked, float Sentence, double Hou
 
 /// <summary>
 /// The slave state of a character (1 slave, 2 escaped slave, 3 ex-slave; <c>SlaveStateEnum</c>), the name of the faction that owns it ("someone" is
-/// the caller's word for none) and its "looks like a slave" level in 0..1 (<see cref="Kidnap.CaptiveSystem.LooksLikeSlaveLevel"/>).
+/// the caller's word for none), its "looks like a slave" level in 0..1 (<see cref="Kidnap.CaptiveSystem.LooksLikeSlaveLevel"/>), the whole game
+/// hours an escaped slave or ex-slave has left to lie low (<see cref="Locks.FixtureRegistry.SlaveHoursLeft"/>) and whether it has been seen (the
+/// recently-wanted marker runs, <see cref="CharacterCold.RecentlyWanted"/>).
 /// </summary>
-public readonly record struct SlaveView(int State, string Owner, float Looks = 0);
+public readonly record struct SlaveView(int State, string Owner, float Looks = 0, int HoursLeft = 0, bool Seen = false);
 
 /// <summary>
 /// A disguise for the data panel and the health word (docs/game/ui-screens.md "Which lines"): the clothing level, the uniform faction's name, the

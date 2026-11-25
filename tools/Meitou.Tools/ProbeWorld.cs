@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Data.Ogre;
 using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation;
@@ -104,6 +105,7 @@ sealed class ProbeWorld : IDisposable
         var layouts = new BuildingLayouts(db, levels.Interiors);
         ResidentRuins.Apply(db, levels, layouts);   // the homes' ruins and layouts before anything reads the levels, as the game's boot
         var data = PopulationData(install, db, levels, layouts, height);
+        data.ResourceNodes = ResourceNodes(install, db, levels);
         var save = SaveGame.Load(SaveFolder.Open(saveFolder));
         ReportProblems(save);
         if (!HasPlayerCharacter(save))
@@ -237,6 +239,16 @@ sealed class ProbeWorld : IDisposable
         var biomes = Meitou.Data.Gameplay.BiomeMap.Create(db, WeatherAreas.Load(install));
         return Meitou.Simulation.Population.PopulationData.Create(db, levels.Towns().ToList(), new GeneratedAppearances(db, install.Root),
             biomes: biomes, buildings: buildings, roads: levels.Roads(), townZones: levels.TownZones(), level: levels.Level);
+    }
+
+    /// <summary>
+    /// The mineable rocks as the game's boot places them (<c>WorldBoot</c>), with their meshes' footprints: a rock's walk and arrival read them.
+    /// </summary>
+    static FoliageResourceNodes ResourceNodes(GameInstall install, GameDatabase db, WorldLevelData levels)
+    {
+        var assets = new AssetLocator(install);
+        var world = new FoliageWorld(install, db, levels, FoliageCatalog.Load(db));
+        return new FoliageResourceNodes(world, db, name => assets.Find(name));
     }
 
     /// <summary>
@@ -382,11 +394,12 @@ sealed class ProbeWorld : IDisposable
     }
 
     /// <summary>
-    /// Disposes the world and the buildings' collision.
+    /// Disposes the world, the buildings' collision and the rocks' foliage.
     /// </summary>
     public void Dispose()
     {
         World.Dispose();
         Buildings?.Dispose();
+        (Data.ResourceNodes as IDisposable)?.Dispose();
     }
 }

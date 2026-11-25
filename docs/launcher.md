@@ -5,6 +5,10 @@ launcher, keeps mod presets and starts the game. Styled after the Meitou UI kit 
 is read from the Kenshi install, nothing is shipped. Mods come only from disk (`mods/` and downloaded workshop
 items); the launcher never downloads or hosts mods.
 
+Tooltips open beside the pointer, never under it (`ToolTipPlacement.cs`): below the cursor, else above it with a 4 px gap. **Observed**
+(Avalonia 12.1.4 `ManagedPopupPositioner`, decompiled): a flip keeps the popup's offset, so the stock pointer placement (offset 20 px down)
+flipped above the pointer near the screen's bottom covered the cursor and took the next click; the gaps are part of the anchor box instead.
+
 ## Releases
 
 - One repository, two tag families: the game `v<version>` (`release.yml`, nightlies `nightly.yml`), the launcher `launcher-v<version>`

@@ -128,11 +128,12 @@ sealed class FoliageGrassStore
     /// <paramref name="zones"/> is dropped and made again, nearest first. The store never shrinks while running (a lowered setting keeps it), so a
     /// slider drag rebuilds it at most a few times. The old store is disposed once the frames in flight are done with it; its pages' ranges are not
     /// given back to it (<see cref="FoliageGrassBuffer.Store"/>). The guard (<see cref="VramGuard.Allows"/>) is asked for the new store while the old
-    /// one is still held; refused, the store stays as it is.
+    /// one is still held; refused, the store stays as it is. While the guard clamps the ranges (<see cref="VramGuard.Active"/>) it waits: a larger
+    /// store then takes the room the clamp freed and keeps the ranges from coming back (#1390: 320 to 480 MB at x0.53).
     /// </summary>
     public void Grow(float grassRange, int areas, VramGuard? guard, Dictionary<ZoneCoordinate, FoliageZoneState> zones)
     {
-        if (GpuContext.DiagNoGrow) return;
+        if (GpuContext.DiagNoGrow || guard is { Active: true }) return;
         if (StoreScale(grassRange, areas, 0) is var wanted && (wanted <= _grassStoreScale || wanted <= _grassStoreRefused))
             return;
         int scale = StoreScale(grassRange, areas, guard is { BudgetBytes: > 0 } g ? (ulong)g.BudgetBytes : _gpu.VideoMemoryBudget);
@@ -142,7 +143,7 @@ sealed class FoliageGrassStore
             _grassStoreRefused = wanted;
             return;
         }
-        if (guard is { } vram && !vram.Allows(GrassArenaBytes * (ulong)scale))
+        if (guard is { } vram && !vram.AllowsGrowth(GrassArenaBytes * (ulong)scale))
         {
             _grassStoreRefused = wanted;
             Console.WriteLine($"foliage   grass store not grown to {GrassArenaBytes * (ulong)scale >> 20} MB: memory budget (VramGuard)");

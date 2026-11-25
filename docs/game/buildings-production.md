@@ -148,7 +148,7 @@ location (**Verified**). At an object it is
 - the X/Z distance to `getPositionMarker(charPos)` (slot 0x470: the nearest valid usage node, else the construction position
   +0x26c when fewer than 2) is below `getReachRange()` (slot 0x350), **doubled when not moving**, and the character is on the
   same floor (slot 0x60) or |dy| below a limit: 130 when the door byte (+0x1a0) is set or the building has a door child (slot 0x3e0), else 45 when its containing-building handle (slot 0x1d8) is null (outside any building) or slot 0x428 is true, else 15 (**Verified**, `AI::isWithinChoppingRange` `FUN_14059c6d0`, constants 130 / 45 / 15 in `data_values.txt`; what slot 0x428 is stays **Observed**: ceiling-mounted class).
-- Meitou: one shared `FixtureRegistry.AtCage` / `AtFixture` for the cage goals (arrest, kidnap, town duty) and the town errands' containers and beds: flat distance to the fixture's position below its `use range` (doubled when not moving) and |dy| below 15; no slack (a fixture's position marker, the floor number and the outdoor 45 are not modelled). The town errands' player machines use the operators' test (`ProductionSystem.AtMachine`), their disposals the corpse job's (`ProductionSystem.AtDisposal`).
+- Meitou: the player's cage orders and lock work test a cage's level the same way (`LockSystem.AtWorkSpot`; doors and containers keep the flat reach), the captive jobs in `CaptiveSystem.Walk`. One shared `FixtureRegistry.AtCage` / `AtFixture` for the cage goals (arrest, kidnap, town duty) and the town errands' containers and beds: flat distance to the fixture's position below its `use range` (doubled when not moving) and |dy| below 15; no slack (a fixture's position marker, the floor number and the outdoor 45 are not modelled). The town errands' player machines use the operators' test (`ProductionSystem.AtMachine`), their disposals the corpse job's (`ProductionSystem.AtDisposal`).
 - For a character (type 1): X/Z distance below 7 x 2 (x 3 when `FUN_1407d1440` is false), doubled when not moving, plus a value of the
   target's (`FUN_1405c83b0`, not read), with |dy| < 10 or the same floor and |dy| < 35; else below 7 x 1.6 = 11.2 on the same floor or with
   |dy| < 35 (**Verified** `FUN_14059c6d0`; 7 is `DAT_141e3c5d0`, a writable global, its initial value). Meitou's lift reach
@@ -166,7 +166,12 @@ the goal conditions (the call is virtual). Meitou applies the height limit above
 every update, and `FUN_140596800`, which gives the arrival test above its point): for a building that is not foliage and has no object at
 slot 0x2c8 (a constant null for `UseableStuff` and `ProductionBuilding`, `FUN_1400f6b20`) both are `getPositionMarker(the character's
 position)` (`FUN_14054b850`): with two or more use nodes the one nearest the character (squared 3D distance, the bad nodes skipped), else
-the marker. Data (**Verified**, merged base game): Quarry Mine A and B hold eight `Node Use` instances 120 to 140 units round the mine
+the marker. For a foliage building (a rock, `+0xc0`) with no point given: 65 (`DAT_1416f0010`) from the rock's position toward the
+character (the 3D direction), put on the navmesh by the closest-point query `FUN_1403a3ac0` with cube 150 (`_DAT_1416cf06c`) and extent 10
+(`DAT_14167fad4`), the door and water filter ([refit snap](pathfinding.md#refit-snap)); with a point given, that point with cube 50
+(`DAT_141683170`); when the query finds nothing, the rock's position (**Verified**, decompile; constants read from the 1.0.68 exe). That a
+miner's walk gives no point is **Observed**: the planner `FUN_14026b530` makes its Task_Move steps with the point ZERO, which
+`FUN_140354600` hands on, but the plan of row 87 was not traced to it. Data (**Verified**, merged base game): Quarry Mine A and B hold eight `Node Use` instances 120 to 140 units round the mine
 (local radius 133 to 155, `scale` 0.9), a Well eight at 21 to 33; the Stone mine's `use range` is 40, the Well's 18.
 
 Meitou's NPC town workers (189, 190, and a player slave's work, `AiSystem.AtWorkplace`, `WorkFunctionality.MarkerOf`): they walk to the
@@ -188,11 +193,17 @@ passed over), and its operator or hauler walks to that node; for a machine insid
 floor, as the node does (`IWalkability.InteriorNear`, engine choice). **Observed** (original 1.0.68, #1180: a Copper Alloy Bench against a
 Storm House's inner wall, a worker on its operate job standing against the wall outside, about 33 from the nearest node, within the reach
 rule above once stopped): the worker walked round through the door and worked the bench from inside.
-A rock's operator has arrived within 10 (20 once stopped) of its mesh's footprint (the convex hull of
-its vertices seen from above) as the instance places it (its bounds circle without the mesh); it walks to the bounds box's centre and
-faces it (a rock's origin can lie off its pile). Engine choice, nearer than the original: its rule above has a copper rock (`use range`
-100) mined from 100 to 200 off its position marker (#587), and the bounds box let miners work a scattered or long rock from 20 m off
-(#332). **Observed** (navmesh walks at the two copper rocks by 52474,-95934, zone 43.11): a walker reaches the footprint itself. Taking its ore
+A rock's operator walks to the original's point above (`ProductionSystem.RockGoal`: `RefitSnap` with cube 150 and extent 10 where the
+walkability knows its faces, else the closest walkable point in X/Z) and faces the rock's bounds centre (a rock's origin can lie off its pile).
+It has arrived within 10 (20 once stopped) of its mesh's footprint (the convex hull of its vertices seen from above) as the instance places
+it (its bounds circle without the mesh), or stopped within 75 of the rock's position in X/Z (the walk point's 65 plus 10 for the clearance
+step: a small rock's walk point stands off its footprint, where the original's iron miner arrives by its `use range` 50, doubled once
+stopped). Engine choice, nearer than the original: its rule above has a copper rock (`use range` 100) mined from 100 to 200 off its
+position marker (#587), and the bounds box let miners work a scattered or long rock from 20 m off (#332). **Observed** (navmesh walks at
+the two copper rocks by 52474,-95934, zone 43.11): a walker reaches the footprint itself. **Observed** (#1391 save, an Iron Resource at
+-53422,881.7,2493, scale 2.5, flipped): its position and bounds centre lie inside the pile, 30 under the ground round it and off the
+navmesh, and no path led there, so a miner sent from 100 off never set out; the original's walk point lies on the mesh at the footprint's
+edge and is reached. Taking its ore
 measures 40 to the footprint's edge. Height: Meitou knows no floor of a player building or of one standing in it, so `SiteReach.AtHeight` requires |dy| below the limit above (130 door, 15 inside a building, else 45; slot 0x428 not read) for every site goal, except that a builder or fetcher outdoors at an outdoor site (no parent, or snapped to a building's outside; floor 0) is on its floor whatever the height, as the original compares the worker's floor (0 outdoors) with the building's `floornum` (`+0xa4`, **Verified** by the state reader `FUN_140552b70`) (`ConstructionSystem.OnSiteFloor`; **Observed**, #1255: `more building.mod`'s Outpost s-V big stands with its origin 219 under its own slab, 199 under the terrain, and its builders stood on the slab without ever arriving; #1246: a Spotlight snapped to a house's outside wall 56 over the ground had its builders stand under it for ever); a builder measures a `ceiling placement` site from the floor under it (`ConstructionSystem.FloorHeight`), as the same-floor test passes it (#592: lamps hang 26 to 48 over a swamp house floor). Walk: a builder, a storage fetcher, a player machine's operator or hauler and a corpse carrier to a player machine walk to the site's position on its floor when they can stand there within that limit, else to the point nearest them, on rings round the site out to the reach plus 40, that stands on the floor within the limit and within the reach (builders 40, machines the `use range`) of the hull (`SiteReach.WorkSpot`, engine choice standing in for the position marker; a turret's gunner and a rock's miner keep their own spots): furniture cuts holes in a floor's mesh, and a path to the position itself may end on any surface within its goal floor slack (`NavQuery.GoalFloorSlack` 40), such as a stair beside the site, where the height test above never passes.
 
 Repair (**Verified**, Building slot 0x328 `FUN_1400f6b70`, `Task_Build` `FUN_14034a440`): a building needs repair when
@@ -1358,7 +1369,7 @@ replan (the failed flag `+0x26d`, handler `FUN_14050d080`); a walk that ended sh
 inputs in list order as the finder does, takes storages before producers and skips the machine's own record. Power share: a town machine that draws power works at a share of 1 (its draw is the frame's pseudo consumer, `NpcDraws`); only a layout's battery bank is a member of the frame. A resident staying home at a workstation of its house (221) operates that layout object's machine as a worker of 190 does (`HomePretenders`, [town goals](ai-tasks.md#town-goals)).
   A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).
   Town farms (#625) and unattended producers (#763: `Well II` / `Well III`, raw `max operators` 0, which `UnattendedStep` runs with no operator) start as a farm with no saved keys
-  does ([farming](#farming)), so they grow and work whether a worker came; a worker of 87 at a farm harvests and tends it as a player's operator does (`HarvestStep`), its crop goes to the output, which row 92
+  does ([farming](#farming)), so they grow and work whether a worker came; a worker of 87 at a farm harvests and clears it as a player's operator does (`HarvestStep`), its crop goes to the output, which row 92
   empties. Whether the planner sends town farmers to a ripe farm is the planner's ([farming](#farming): status 3 has no provider of 87). The player's Use and Loot on a town machine:
   [ui-input](ui-input.md#building-picking-and-selection). Crop eaters (232) still look only in player towns (`CaptiveSystem.CropsToEat`).
 ### Hauling

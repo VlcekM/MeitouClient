@@ -677,7 +677,7 @@ msgstr ""
 msgid "Auto: {1}."
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LauncherSchema.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Automatic"
 msgstr ""
 
@@ -3402,6 +3402,14 @@ msgstr ""
 msgid "Mods: {1} of {2} loaded"
 msgstr ""
 
+#: src/Meitou.Game/SettingsMenu.cs
+msgid "Monitor"
+msgstr ""
+
+#: src/Meitou.Game/SettingsMenu.cs
+msgid "Monitor {1}: {2}"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Move the camera backward."
 msgstr ""
@@ -5591,6 +5599,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "The mod order already meets every dependency."
+msgstr ""
+
+#: src/Meitou.Game/SettingsMenu.cs
+msgid "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor)."
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs

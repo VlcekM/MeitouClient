@@ -151,7 +151,7 @@ public class BedSelectionTests
         world.RunTick();
 
         Assert.Equal(0, world.Snapshot.InspectedBuilding!.Bed!.Cost);
-        Assert.DoesNotContain(ui.BuildingSelection.BuildingLines(focus).State, l => l.Label == "Cost to use:");
+        Assert.Contains(ui.BuildingSelection.BuildingLines(focus).State, l => l.Label == "Cost to use:" && l.Value == "(Pay c.0)");
 
         data.Relations.Set(data.FactionIndex("owner"), data.PlayerFaction, 0);
         world.Squads.Remove(1);

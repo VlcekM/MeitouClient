@@ -1,4 +1,3 @@
-using System.Buffers;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Game.Rendering.Gpu;
@@ -450,8 +449,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     /// <summary>
     /// The mark (MB) for <paramref name="highWaterMb"/> and <paramref name="share"/> of the guard's budget, scaled by <paramref name="areas"/> (the
-    /// share to at most <paramref name="maxShare"/>): the smaller of the two, and three quarters of it under pressure. Infinite marks stay infinite;
-    /// without a known budget only the scaled mark counts.
+    /// share to at most <paramref name="maxShare"/>): the smaller of the two, and three quarters of it while the guard is active (under pressure, or
+    /// the ranges not back at 1: a full mark refilled the room the clamp freed, and the ranges never came back, #1390). Infinite marks stay
+    /// infinite; without a known budget only the scaled mark counts.
     /// </summary>
     internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard, int areas = 1, double maxShare = MaxAreaShare)
     {
@@ -460,7 +460,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         highWaterMb *= areas;
         share = Math.Max(share, Math.Min(share * areas, maxShare));
         if (guard is not { BudgetBytes: > 0 } g) return highWaterMb;
-        return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Pressure ? 0.75 : 1);
+        return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Active ? 0.75 : 1);
     }
 
     /// <summary>
@@ -1024,7 +1024,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             // stored upload after its last step.
             var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, Math.Max(Math.Max(dropMips, MipStreaming.Drop(w.Width, w.Height,
                 need, streaming, perDistance, bias, extra)),
-                LevelsAbove(w.Width, w.Height, leanSize))), out var whole, ArrayPool<byte>.Shared);
+                LevelsAbove(w.Width, w.Height, leanSize))), out var whole, Data.BoundedBytePool.Streaming);
             bool handedOver = false;
             try
             {
@@ -1044,7 +1044,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             }
             finally
             {
-                if (!handedOver) ArrayPool<byte>.Shared.Return(dds.Data);
+                if (!handedOver) Data.BoundedBytePool.Streaming.Return(dds.Data);
             }
         }
         return new TextureData(new LoadedTexture([TextureLoader.LoadImage(File.ReadAllBytes(Content.GameFiles.Resolve(path)))], null), null);
@@ -1161,7 +1161,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             // BC4 is one channel; the decoder (and so the RGBA8 path) shows it as grey with alpha 1.
             Publish(t, texture!, data, Math.Min(dds.MipCount, texture!.Desc.Levels), dds.Format == DdsFormat.Bc4 ? GpuSwizzle.RrrOne : default,
                 dds.Surfaces.Sum(s => (long)s.Length));
-            ArrayPool<byte>.Shared.Return(dds.Data);   // rented by Load; every slab above has been copied to staging
+            Data.BoundedBytePool.Streaming.Return(dds.Data);   // rented by Load; every slab above has been copied to staging
         });
     }
 

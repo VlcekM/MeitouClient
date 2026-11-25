@@ -115,7 +115,8 @@ sealed class StealthView(PlayerInterface player)
     const int LightLevelFrames = 7;
 
     /// <summary>
-    /// Whether the world leaves a character undrawn (above the viewed floor, or inside a closed building): its tag shows only while it is selected.
+    /// Whether the world leaves a character undrawn (above the viewed floor, or inside a closed building): its task bar does not show and it
+    /// cannot be picked; its name tag still shows, as in the original (docs/game/perception.md).
     /// </summary>
     public Func<CharacterId, bool>? HiddenInWorld { get; set; }
 
@@ -131,7 +132,8 @@ sealed class StealthView(PlayerInterface player)
     /// grey and bare otherwise (<c>NameTagSelected</c> / <c>NameTagUnselected</c>, the brackets from a screenshot of the original; <b>Observed</b>);
     /// while it sneaks, also the <c>LightLevel</c> icon on the right from its light level. The panel stands on the head like a speech bubble does
     /// (<see cref="TagAnchor"/>). A name too long for the layout's box widens the panel (<see cref="PanelWidth"/>). A dead character has
-    /// none, as in the original (<b>Observed</b>, docs/game/perception.md).
+    /// none, as in the original (<b>Observed</b>, docs/game/perception.md). One left undrawn above the viewed floor or in a closed building
+    /// keeps its tag (<b>Verified</b>, decompile; docs/game/perception.md).
     /// </summary>
     internal void AddNameTags(List<UiControl> controls)
     {
@@ -142,7 +144,6 @@ sealed class StealthView(PlayerInterface player)
         {
             if (!c.IsPlayer || c.Name.Length == 0 || player.CharacterEditor.EditorOpen) continue;
             if (c.Body is { Dead: true }) continue;
-            if (!c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
 
             // FUN_1406e8100: a carried character's position is its carrier's feet (FUN_1405ce680) and its tag is lifted by one text-box height
             // (0x1406e84fa) so it stacks above the carrier's tag (anchored at the carrier's height so incapacitated/animal loads do not drop to waist height).

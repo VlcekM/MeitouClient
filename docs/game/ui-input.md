@@ -331,6 +331,13 @@ faction's dead body carried over the selected character's shoulder, where the bo
 a carried squad member and any other character in front of one of the player's were not tested. Meitou: with Shift only the player's characters count.
 A building seen from outside (its interior not shown, [interior masks](../formats/zones.md#interior-masks)) hides what is inside or behind it from these picks and from
 ground-item picks: the ray stops where it meets the building's `interior mask` collision (engine choice, standing in for the original's building hits in the same ray).
+A point inside the mask with none of the building's floors or roofs over it and none of its collision met more than a unit before it on the ray
+(`InteriorVolume.InTheOpen`) is not hidden when the bounds of an object of that building drawn while it is closed hold it (`WorldObjectRenderer.DrawnFurnitureAt`: a
+layout object with the outside flag, or a building placed in it and left drawn, [closed interiors](../render-objects.md#closed-interiors)): furniture on an open roof,
+which the original's ray meets before the building. Layout furniture without the flag (the install's rooftop camp beds in Stack) stays hidden, as it is not drawn.
+**Observed** (#1376 save, headless `world pick`, the modded `Bar` `4014-TwoStorey.mod` closed): its mask hull holds the space over its roof, met at 342.4 along the
+ray to a camp bed on the roof at 375.5, the roof's collision at 377.5; the bed was not clickable before. In the same save the beds under a roof of closed houses
+(zone 18.35, Stack) are not drawn and stay hidden.
 Characters, furniture (containers, beds, seats, cages, dummies, doors, rocks, town turrets) and ground items behind the terrain or the collision of a building
 without rooms (a wall, a level prop, a player's site) met more than a unit nearer are not picked either (`WorldPicking.Blocked`), as the original's walk ends at the
 ground and at a building taken first ([building picking](#building-picking-and-selection)); a building whose collision shape holds the hit point (a body in a
@@ -506,7 +513,7 @@ that activation menu-only; once the ruin becomes an unfinished construction site
 - Occupied beds and cages whose BUILDING_FUNCTIONALITY has `occupant selection` (+0x3a8, read by `FUN_1402a0900`): the hover and both clicks
   go to the occupant (`FUN_1407fb410`). An occupant of another faction ends it there; for one of the player's, the building logic continues and a
   left click selects the occupant. Meitou: cages (`PlayerInterface.PickWhereAt`, where the ray meets the cage before any other character); engine choices: a player's occupant's right
-  click goes to it as well, and the press opens only the occupant's menu, which carries the cage's verbs (`PrisonerVerbs`), not the cage's menu beside it (below); beds not modelled.
+  click goes to it as well; the press opens the cage's menu and the occupant's beside it, as the original (`ContextMenuWindow.CharacterMenu`, below); beds not modelled.
 - A cage (its quick click is reached only when the context menu does not open at once, last point): `use` while the lead selected character
   (+0xf0) carries someone (+0x348). Another faction's empty cage: 108 PUT_IN_CAGE when carrying, else 107 USE_CAGE; the player's own cage:
   108 (slot 131). In another faction's cage holding one of yours, Alt + right click gives 76 PICK_LOCK when its lock is locked or
@@ -607,7 +614,10 @@ Stealth KO (228) is also offered on a down character (`FUN_1407a6bc0`:583-594: a
   nothing; 45, 223 and 273 are always jobs.
 - **Empty**, every selected character down (slot 107): "Your selected character is unconscious" / "Your selected characters are unconscious".
 - **Beds and cages**: a character in a bed or cage (+0x2f8 ≠ 0, +0x308 = 0) is replaced by its bed/cage; one with `occupant selection` (+0x3a8) opens
-  the building's menu and the occupant's in a second menu beside it.
+  the building's menu and the occupant's in a second menu beside it (**Verified**, `FUN_1407a6bc0`: the cage rows 76, 285, 286 / 78, 77 / 107, 108, 110 go to
+  the first list, the occupant's, with the shackles' 201, 185, 186, to the second, so a shackled prisoner in a locked cage shows Use Tools and Use Strength
+  in both, under their own titles). `ContextMenuGUI::show` (`FUN_1407a7fe0`) sets a menu at the cursor, kept on screen, and the second one its own width further
+  left, so its right edge meets the first's left edge; an empty list shows no menu (**Observed**, decompile). Meitou: `ContextMenu.Beside` (#1385).
 
 Labels (`FUN_14079b2d0`): 2 Build; 3 Pick Up, or Steal when the item's owner faction is not the player's and lacks flag +0x1d0; 5 Attack Target;
 12 Talk To; 16 Attack All; 17, 45 Bodyguard; 25 First Aid; 26 Inventory (player's building), Trade (player's character), else Loot (with Shift only a building hand is special-cased: Trade on an own character adds perma-job 238 Foraging animals like Loot, `FUN_1407fa650`, **Verified**; the trader's Trade does not); 28, 65 Stand Up;
@@ -667,8 +677,7 @@ Containers and doors open their menu on a held press (a quick click as before); 
 Unprovoked, Stealth KO, Follow (`FollowOrder`, [simulation](../simulation.md)), Loot, Trade (the player's own character, standing or down: the nearest selected walks over and its inventory opens beside the
 selection's, as the loot window; both offered when `CharacterSnapshot.CanOpenInventory`, the simulation's own `CarrySystem.Openable`, holds: a carried or playing-dead body too, unless its carrier was selected first), Pick Up on a standing non-hostile character of another faction that regards the lead as friendly and is not a Diplomat (NPC class 5; a plain 225, never Kidnap, no trader exclusion, `FUN_1407a6bc0`:552-576, **Verified**; the further gate on class 6 and `FUN_1407956a0` is unresolved and ignored; the simulation lifts such a character awake, `CarrySystem.AwakeFriend`, [carry-loot](carry-loot.md)), Pick Up and Kidnap (the same pick-up order; Pick Up on the player's own character standing too, when it carries no one: `FUN_1407a6bc0`'s own-faction
 branch adds 26, 45, 31 and, with no selected carrier of it, the pick-up verb for a carriable race not carrying (+0x348) nor carried (+0x3d4), with no down test, **Observed**; Kidnap when the gates above pass (another faction's town, a real faction, not friendly or a trader squad's member or a Diplomat, no bounty, not a Bandit), with its chance, also on a sleeper (with Stealth KO, and Attack Unprovoked, Bodyguard, Talk To when not hostile; Loot on a sleeper in a bed or a caged character opens it as a pickpocket, [carry-loot](carry-loot.md#theft-and-witnesses); [carry-loot](carry-loot.md#kidnapping)),
-[carry-loot](carry-loot.md)), First Aid, Splint Injuries, Unlock Shackles / Use Tools / Use Strength (shackles), Pick Lock / Use Tools / Use Strength (another faction's locked cage, whatever the occupant's state: the cage rows of `FUN_1407a6bc0` test only its lock and owner, #1357) or Lock / Unlock (the player's own), as its cage row, / Escape / Pick Up / Set Free on a caged
-character, Inventory / Loot / Pick Lock / Use Tools / Use Strength on containers (Loot uses the Alt path: another faction's shop stock is stolen from at once, [locks](locks.md#containers-meitou)),
+[carry-loot](carry-loot.md)), First Aid, Splint Injuries, Unlock Shackles / Use Tools / Use Strength (shackles), Escape / Pick Up / Set Free on a caged character beside its cage's menu (Pick Lock / Use Tools / Use Strength on another faction's locked cage, whatever the occupant's state: the cage rows of `FUN_1407a6bc0` test only its lock and owner, #1357; Lock / Unlock on the player's own; Set Free; [beds and cages](#context-menu-verbs)), Inventory / Loot / Pick Lock / Use Tools / Use Strength on containers (Loot uses the Alt path: another faction's shop stock is stolen from at once, [locks](locks.md#containers-meitou)),
 Open / Close / Lock / Unlock (all the building's doors) / Pick Lock / Use Tools / Use Strength / Smash on doors ([locks](locks.md#player-orders-on-locks)), Build (any standing unfinished building whatever its owner, **Verified** `FUN_1407a6bc0`: a destroyed one of another faction has no menu; a foreign site is accepted all the way: the order giver `FUN_1407f9e20` has no owner test, row 2's conditions (38, 51, isAtLocation, !26) none, and `Task_Build` update `FUN_14034a440`, the event case 11 and Building slot 70 `FUN_1405595a0` never read the owner (**Verified** by decompile; only the completion message needs a player-faction owner); order 2's acceptance `FUN_1405d1940` tests only the builder's materials), Repair (owned ruined/damaged houses; Shift adds Engineer), Use, Auto-Haul (storage: one haul trip, the Hauling to job with Shift, `FUN_1407fa650`),
 Inventory (storage, furnace, research bench: after Use, as `FUN_1407a6bc0` adds 26 to every building with an inventory, **Verified**; a research cost is paid only from the benches' inventories, so books carried by a character do not count), Man Turret (with Shift, Inventory on a storage adds Hauling to and Man Turret the Turret guard job), Dismantle, Auto-Haul 152 on an automatic machine (in place of Use; the 152 job with Shift, else the 152 order, which leaves once the output holds nothing a storage takes, [order pops](ai-tasks.md#finished-tests)). **Bodyguard** (45, `FollowOrder.Guard`): follows like 31 and fights whoever attacks the target (engine reading); the menu always adds it as the perma-job, Shift or not (`FUN_1407fa650`, [jobs](ai-tasks.md#perma-jobs)). **Attack All** (16, **engine reading**): every standing hostile within 800 of the clicked one is a target and each selected character attacks the nearest. **Shoot At** (235): replaces the
 attack verbs when the lead mans a turret; `ShootAtOrder` gives order 235 to every selected character, the queue cleared (the quick click on the target appends it), and each gunner fires at the target until it is down ([combat](combat.md#ranged-and-turrets)). **Cages** are published
@@ -678,7 +687,7 @@ complete buildings with doors (Meitou's stand-in for the target's building handl
 the walls (`TownDutySystem.AmInsideTownWalls`: gate code, else the built-up area) and the lead (the last selected, as for the turret test) does not regard it as friendly; no 223 there.
 **Corpse Disposal** (136) on the player's corpse machine (function 11). **Verified**: the original gives 136 (menu and quick click alike, `FUN_1407fa650` with 0) through
 `FUN_1407f9e20` to every selected character, its queue cleared; row 136's list A (100, nothing carried) makes it done at once for one carrying nothing. Meitou: with Shift the Corpse disposal job (137, finder 138), else order 136 on that machine for every selected character, menu and quick click alike
-(`DisposeCorpseOrder`, [order queue](../simulation.md#order-queue)): one carrying a dead body walks it there and feeds it in. Not built: item menus beyond a ground item's Pick Up / Steal, the occupant's second menu and the unconscious message.
+(`DisposeCorpseOrder`, [order queue](../simulation.md#order-queue)): one carrying a dead body walks it there and feeds it in. Not built: item menus beyond a ground item's Pick Up / Steal and the unconscious message.
 
 ### Edit boxes and keyboard focus
 
@@ -736,7 +745,7 @@ there), so the portraits stay free to drop on; the title bar moves it.
   (any part, ignoring case; by name, each at every quality) up to 100 cells, the last item cut to the qualities that fit; "Nothing found" for none. CLEAR
   empties the box and brings the lists back at once.
 - Drag (left button, 5 px; Esc or a right click cancels; the cell is empty while dragged; the stock never runs out). Released over a squad bar portrait
-  (`PortraitBar.SquadBarMemberAt`): given to that character (`DebugGiveItem`: worn when its slot is free, else the grid, else at its feet). Over the world:
+  (`PortraitBar.SquadBarMemberAt`): given to that character (`DebugGiveItem`: worn when its slot is free, else the grid (a live animal's worn bag only, its grid being shut), else at its feet). Over the world:
   placed at the camera's target (`DebugPlaceItem` with the quality or exact grade, at the ground or floor height). Over any other interface: nothing. Shift
   at the release gives five single units (a weapon cannot stack), on the ground 0.6 apart. A paused world runs one tick to apply them.
 

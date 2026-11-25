@@ -1298,16 +1298,28 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Whether a character is within its squad's home town's radius (a site's or an outpost's, <see cref="HomePlace"/>); true when the squad has no
-    /// town or the character is not alive.
+    /// Whether a character is within its squad's home town's radius (a site's or an outpost's, <see cref="HomePlace"/>). False wherever it stands
+    /// for a <see cref="Homeless"/> squad; true when the character is not alive, or its home town is not placed here (a nest's).
     /// </summary>
     internal bool AtHomeTown(World world, Squad squad, Blackboard board, CharacterId self)
     {
-        if (HomePlace(world, board) is not { } town || !world.Characters.IsAlive(self)) return true;
+        if (!world.Characters.IsAlive(self)) return true;
+
+        // FUN_1405a3710 wants the way home when the status town is none or not the Ownerships home town (+0x30): with no home town, everywhere.
+        if (Homeless(world, squad, board)) return false;
+        if (HomePlace(world, board) is not { } town) return true;
 
         var p = Flat(world.Characters.Previous[self.Slot].Position);
         return Vector2.DistanceSquared(p, town.Centre) <= town.Radius * town.Radius;
     }
+
+    /// <summary>
+    /// Whether an NPC squad has no Ownerships home town (<see cref="SquadTown.Home"/>: no site, outpost or nest), as the squad a slave bought free
+    /// or a character split off by dialogue leads: the split's new platoon (<c>FUN_1405ce4e0</c> -> <c>FUN_1407f4420</c>) is made with no save
+    /// record and its Ownerships constructor (<c>FUN_1407cb9d0</c>) writes +0x30 null (<b>Verified</b>). The player's squads are left out.
+    /// </summary>
+    static bool Homeless(World world, Squad squad, Blackboard board) =>
+        squad.Faction != world.Player.Faction && SquadTown.Home(world, squad, board).IsNone;
 
     /// <summary>
     /// Where the squad's home town (<see cref="Blackboard.HomeTown"/>: its site, or the outpost an autonomous squad's player-built home stands in)
@@ -1328,6 +1340,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The desire and the target ask on every worker: one scratch list each.
     /// </summary>
     [ThreadStatic] static List<TownBuilding>? s_sellingScratch;
+
+    /// <summary>
+    /// The sites a faction's town squads live in, for a homeless character's town search (<see cref="HousedSites"/>): one scratch set per worker.
+    /// </summary>
+    [ThreadStatic] static HashSet<int>? s_housedScratch;
 
     /// <summary>
     /// BuildingDesignation BD_BAR.
@@ -2846,7 +2863,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             ? SpareBed(world, board, mind, slot) : null;
         var (target, home, floor, facing, watch) = spare is not null
             ? (Flat(spare.Position), true, spare.Position.Y, (float?)null, false)
-            : SpotFor(world, mind, board, behaviour, type);
+            : SpotFor(world, slot, mind, board, behaviour, type);
         var speed = type is TaskType.RunAwayHometown or TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk;
         if (!GoToSpot(world, slot, mind, target, home ? GiveUp.Home : GiveUp.Post, speed, height: floor)) return;
 
@@ -2854,7 +2871,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         // At its home's bed: the serial step lies it in (Task_UseBed via 98 Sleeping); resting on the floor stays the fallback when no
         // bed is free.
-        if (behaviour == AiBehaviour.Sleep && home && floor is not null && (spare?.Id ?? BedSpotOf(board, mind)) is { } bed)
+        if (behaviour == AiBehaviour.Sleep && home && floor is not null && (spare?.Id ?? HomeBedOf(world, board, mind, slot, type)) is { } bed)
         {
             mind.BedAt = bed;
             Interlocked.Exchange(ref _bedding, 1);
@@ -3189,22 +3206,30 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// The height 156 Entering building walks to: the home's own (its ground floor), so the walk ends in its room and not on a level over the home's
+    /// point that is no indoor volume, where 107 never holds (<b>engine choice</b>; <b>Observed</b>, #1369's save: a Bughouse member stood there all
+    /// night, its lock-up never started). Null for the other walks home.
+    /// </summary>
+    static float? EnterFloor(AiMind mind, TownBuilding home) => mind.Step == TaskType.EnterBuilding ? home.Position.Y : null;
+
+    /// <summary>
     /// Where a goal is acted out: a node of the home building by goal (shopkeeper, guard, throne, general; any node when the home has none of that
     /// kind), a bed for sleep (the home itself when it has no bed), the home or the town for going home; else (no home, or its spots kept failing)
     /// the character's post. True in <c>Home</c> when the spot is the home's; <c>Floor</c> is the height of a node or bed (so the walk ends on the
     /// floor it is on, not on the ground below); <c>Yaw</c> the way a node faces, which the character turns to on arriving; <c>Watch</c> when the
     /// spot is a shopkeeper node or a guard post, where the character watches who it senses (<see cref="Watch"/>).
     /// </summary>
-    (Vector2 Target, bool Home, float? Floor, float? Yaw, bool Watch) SpotFor(World world, AiMind mind, Blackboard board, AiBehaviour behaviour, TaskType type)
+    (Vector2 Target, bool Home, float? Floor, float? Yaw, bool Watch) SpotFor(World world, int slot, AiMind mind, Blackboard board,
+        AiBehaviour behaviour, TaskType type)
     {
         if (behaviour == AiBehaviour.GoHome)
         {
             // Retreating (128) and Retreating fast (127) walk to the home town's waypoint outside its gates (FUN_14033dd70 -> Town vfunc 0x38), never
             // to a building.
-            if (type is TaskType.RetreatHometown or TaskType.RunAwayHometown && RetreatPoint(mind.Squad) is { } waypoint)
+            if (type is TaskType.RetreatHometown or TaskType.RunAwayHometown && RetreatPoint(world, slot, mind.Squad, board) is { } waypoint)
                 return (waypoint, true, null, null, false);
 
-            if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, null, null, false);
+            if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, EnterFloor(mind, h), null, false);
             if (HomePlace(world, board) is { } town) return (town.Centre, true, null, null, false);
             return (mind.Squad.HomeCentre, true, null, null, false);
         }
@@ -3220,6 +3245,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (at is not { } home || mind.HomeUnreachable || type == TaskType.HoldPosition)
             return (mind.Post, false, null, null, false);
 
+        // Going to bed: the first free bed of the home no squad mate claimed (HomeBedClaims); without one it sleeps in the house.
+        if (type is TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure)
+        {
+            return HomeBedClaims.Of(world, board, mind, slot) is { } bed
+                ? (Flat(bed.Position), true, bed.Position.Y, null, false)
+                : (Flat(home.Position), true, null, null, false);
+        }
+
         HomeSpotKind kind = behaviour == AiBehaviour.Sleep ? HomeSpotKind.Bed : type switch
         {
             TaskType.StandAtShopkeeperNode => HomeSpotKind.Shopkeeper,
@@ -3227,7 +3260,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 or TaskType.StandAtGuardNodeHometownOutside => HomeSpotKind.Guard,
             _ => HomeSpotKind.General,
         };
-        ulong roll = kind == HomeSpotKind.Bed ? 0 : mind.NodeRoll;   // beds stay round robin (the bed search is not the node finders')
+        ulong roll = kind == HomeSpotKind.Bed ? 0 : mind.NodeRoll;   // a floor sleeper's bed spot stays round robin
         if (kind == HomeSpotKind.Guard && mind.GuardVisitorHeld is { } visitor && Nearest(home, kind, visitor) is { } beside)
             return (Flat(beside.Position), true, beside.Position.Y, beside.Yaw, true);
 
@@ -3252,11 +3285,62 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Where Task_GoHomeTown / Task_GoHomeTownFast walk (<c>FUN_14033dd70</c>, <b>Verified</b>): the platoon's object hand (<c>+0xb8</c> of its
-    /// platoon, meaning <b>Unknown</b>, never set here) if it resolves, else the point outside the gates of the ownerships' home town
-    /// (<see cref="TownExit"/>, Town vfunc <c>0x38</c>), else (no home town) the character's own spot; null for that last case.
+    /// platoon, never set here) if it resolves, else the point outside the gates (<see cref="TownExit"/>, Town vfunc <c>0x38</c>) of the
+    /// ownerships' home town, else, for a <see cref="Homeless"/> squad, of the town <see cref="HomelessTown"/> finds for the character; null
+    /// otherwise.
     /// </summary>
-    Vector2? RetreatPoint(Squad squad) =>
-        squad.Town >= 0 && squad.Town < data.Sites.Count ? TownExit.Of(data.Sites[squad.Town], _locks?.Regions) : null;
+    Vector2? RetreatPoint(World world, int slot, Squad squad, Blackboard board)
+    {
+        if (squad.Town >= 0 && squad.Town < data.Sites.Count) return TownExit.Of(data.Sites[squad.Town], _locks?.Regions);
+        if (!Homeless(world, squad, board) || HomelessTown(world, slot) is not { } town) return null;
+
+        return TownExit.Of(town, _locks?.Regions);
+    }
+
+    /// <summary>
+    /// The town a character of a squad with no home town makes for (<c>FUN_140997f00</c> -> <c>FUN_1409279a0</c> over the town list's towns,
+    /// <b>Verified</b>): the one nearest it (flat) that its faction (AI vfunc <c>0x8</c>, <c>AI::getFaction</c>) owns or lives in
+    /// (<see cref="Hosts"/>), else the one farthest from it, whoever's. Engine choice: the placed towns only, player towns left out.
+    /// </summary>
+    TownSite? HomelessTown(World world, int slot)
+    {
+        var at = Flat(world.Characters.Previous[slot].Position);
+        int faction = world.Characters.Cold(slot)?.Faction ?? -1;
+        var housed = HousedSites(world, faction);
+        TownSite? nearest = null, farthest = null;
+        float nearestD = float.MaxValue, farthestD = 0;
+        foreach (var site in data.Sites)
+        {
+            if (site.Town.Type is TownType.NestMarker or TownType.Null) continue;
+
+            float d = Vector2.DistanceSquared(at, Flat(site.Position));
+            if (d > farthestD) (farthest, farthestD) = (site, d);
+            if (d < nearestD && Hosts(site.Index, faction, housed)) (nearest, nearestD) = (site, d);
+        }
+
+        return nearest ?? farthest;
+    }
+
+    /// <summary>
+    /// The sites a town squad of <paramref name="faction"/> lives in (<see cref="Squad.TownOwn"/>), in the worker's scratch set.
+    /// </summary>
+    static HashSet<int> HousedSites(World world, int faction)
+    {
+        var sites = s_housedScratch ??= [];
+        sites.Clear();
+        foreach (var squad in world.Squads.All)
+            if (squad.Faction == faction && squad.TownOwn) sites.Add(squad.Town);
+
+        return sites;
+    }
+
+    /// <summary>
+    /// Whether placed town <paramref name="site"/> is <paramref name="faction"/>'s (Town vfunc <c>0x2c0</c> <c>FUN_140952060</c>, <b>Verified</b>):
+    /// its own faction, else one of its set of factions <c>+0xe8</c>, which the housing <c>FUN_14057f820</c> fills with each housed squad's faction
+    /// (here the <paramref name="housed"/> sites of its town squads). Any town for no faction (<c>FUN_1409279a0</c> skips the test).
+    /// </summary>
+    bool Hosts(int site, int faction, HashSet<int> housed) =>
+        faction < 0 || site < data.SiteFactions.Count && data.SiteFactions[site] == faction || housed.Contains(site);
 
     /// <summary>
     /// The goals that stand at a node of the home building by its type: 20 shopkeeper, 47 general and the guard posts (<c>FUN_14099ec70</c>,
@@ -3305,8 +3389,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The fixture id of the bed <see cref="SpotFor"/> sends a sleeper to (the <see cref="Pick"/> of its home's beds, numbered as
-    /// <c>FixtureRegistry</c> numbers them); null without one.
+    /// The fixture id of the home bed <see cref="SpotFor"/> sends a sleeper to: going to bed, the one <see cref="HomeBedClaims.Of"/> finds; sleeping
+    /// on the floor, the bed spot it rests at (<see cref="BedSpotOf"/>). Null without one.
+    /// </summary>
+    static string? HomeBedOf(World world, Blackboard board, AiMind mind, int slot, TaskType type) =>
+        type is TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure
+            ? HomeBedClaims.Of(world, board, mind, slot)?.Id
+            : BedSpotOf(board, mind);
+
+    /// <summary>
+    /// The fixture id of the bed spot <see cref="SpotFor"/> sends a sleeper on the floor (175) to (the <see cref="Pick"/> of its home's beds,
+    /// numbered as <c>FixtureRegistry</c> numbers them); null without one.
     /// </summary>
     static string? BedSpotOf(Blackboard board, AiMind mind)
     {
@@ -3317,17 +3410,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The bed a sleeper whose home has no bed spot goes to (153/239 Go home go to bed, docs/game/locks.md "Bed search, other characters"): an
+    /// The bed a sleeper whose home has no BF_BED bed goes to (153/239 Go home go to bed, docs/game/locks.md "Bed search, other characters"): an
     /// occupier's bed of the town it holds, else the NPC bed search (a free bed of its home building, else of its town). A squad without a town takes
     /// only its own or an ally's beds within <see cref="Locks.FixtureRegistry.BedSearchRange"/>, standing in for the original's allied BF_BED
-    /// buildings in the zones around it (engine choice for the range). Null for a home with bed spots (<see cref="SpotFor"/> picks one) or when no
-    /// bed is found. A visitor in a player town takes a bed it can rent there first (<see cref="Locks.BedSystem.RentableBed"/>; only while a code mod
-    /// prices the player's beds).
+    /// buildings in the zones around it (engine choice for the range). Null for a home with such beds (their list is the search's only candidates,
+    /// <see cref="HomeBedClaims"/>) or when no bed is found. A visitor in a player town takes a bed it can rent there first
+    /// (<see cref="Locks.BedSystem.RentableBed"/>; only while a code mod prices the player's beds).
     /// </summary>
     Locks.Fixture? SpareBed(World world, Blackboard board, AiMind mind, int slot)
     {
         if (board.InTown.PlayerTown > 0 && world.SystemOf<Locks.BedSystem>()?.RentableBed(world, slot) is { } rented) return rented;
-        if (board.Home is not null && !mind.HomeUnreachable && BedSpotOf(board, mind) is not null) return null;
+        if (HomeBedClaims.HasBeds(world, board, mind)) return null;
         if (board.Home is { } built && !mind.HomeUnreachable && SquadAutonomy.HomeBed(world, built, mind) is { } own) return own;
         if (board.Home is null && !mind.HomeUnreachable && OccupiedBed(world, board, mind, slot) is { } occupied) return occupied;
         if (world.Characters.Cold(slot) is not { } self) return null;
@@ -3338,11 +3431,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Whether a sleeper has a bed to go to: lying in one, a bed spot of its home, or a <see cref="SpareBed"/>.
+    /// Whether a sleeper has a bed to go to: lying in one, a free bed of its home no squad mate claimed (<see cref="HomeBedClaims.Of"/>), or a
+    /// <see cref="SpareBed"/>. A home whose beds are all taken has none: the search takes no other candidates.
     /// </summary>
     bool HasBed(World world, Blackboard board, AiMind mind, int slot) =>
         world.Characters.Cold(slot)?.InSomething == Locks.HeldState.Bed
-        || board.Home is not null && !mind.HomeUnreachable && BedSpotOf(board, mind) is not null
+        || HomeBedClaims.Of(world, board, mind, slot) is not null
         || SpareBed(world, board, mind, slot) is not null;
 
     #endregion
@@ -3705,6 +3799,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly TownPlaceClaims _claims = new(data);
 
     /// <summary>
+    /// The beds of their home the sleepers claim on the package cadence.
+    /// </summary>
+    readonly HomeBedClaims _beds = new();
+
+    /// <summary>
     /// The player's squads the AI runs: their switch and home commands and their homes.
     /// </summary>
     readonly SquadAutonomy _autonomy = new(data);
@@ -3933,7 +4032,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// One squad's turn on the package cadence: its board's state and package (a campaign's phase package), the contract end talk, the
-    /// minds and crowd of its members, and the claims (turrets, seats, sitting, work, town posts) and gate.
+    /// minds and crowd of its members, and the claims (turrets, seats, home beds, sitting, work, town posts) and gate.
     /// </summary>
     void UpdateSquad(World world, Squad squad)
     {
@@ -3968,6 +4067,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         squad.Resume = false;
         _claims.ClaimTurrets(world, board, squad);
         _claims.ClaimSeats(world, board, squad);
+        _beds.Claim(world, board, squad);
         _claims.ClaimSitting(world, board, squad, _townPlaces);
         ClaimWork(world, squad);
         _claims.ClaimTownPosts(world, board, squad, _townPlaces);

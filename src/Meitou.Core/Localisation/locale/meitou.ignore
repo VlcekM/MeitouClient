@@ -403,6 +403,7 @@ Locked (lvl: {1,num})
 Locking
 Lockpicking
 Lockpicking (Chance {1}%)
+Looks like a slave:
 Looks like slave:
 Loot
 Looting
@@ -596,6 +597,7 @@ Save game
 Science
 Sciences
 Security:
+Seen!
 Sell
 Set Free
 Severe limb damage has now led to critical blood loss. You will die without medical attention.
@@ -607,6 +609,7 @@ Show movement marker
 Show rotation marker
 Simple info
 Sit when idle
+Situation:
 Skill:
 Slave
 Slave of:
@@ -734,6 +737,7 @@ Throw out of home
 Throw out of town
 Time left to harvest
 Time left to harvest all plants before they go bad.
+Time remaining:
 To add jobs, hold shift key when giving an order
 Total Metals:
 Total Weight:
@@ -761,6 +765,7 @@ Unconscious
 Unconscious from blood loss and bleeding to death. Hope that the bleeding stops before it's too late.
 Unconscious from blood loss. It will recover over time, bed rest will help.
 Under construction
+Undiscovered
 Undo:
 Uniform Theft
 Unlock
@@ -873,6 +878,7 @@ someone
 when finished
 {1,num=fix,p=1} mph
 {1,num} Days, {2,num}hrs
+{1,num} hour
 {1,num} hr
 {1,num} kg
 {1,num} mins

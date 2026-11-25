@@ -227,8 +227,8 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// One tick of an owner at its locked door: the lock is worked for <see cref="LockWorkSeconds"/> (Task_UnlockDoor, 0.3 per game second), then
-    /// cleared with the unlock sound and the door starts opening (row 122 / 72), and the pursuit carries on. Others standing at the leaf do not
-    /// stop the work (the bash's ray test is Task_BashDoor's own).
+    /// cleared with the unlock sound and the door starts opening (row 122 / 72, <see cref="UnlockAndOpen"/>), and the pursuit carries on. Others
+    /// standing at the leaf do not stop the work (the bash's ray test is Task_BashDoor's own).
     /// </summary>
     void UnlockOwn(World world, int s, CharacterCold c, Fixture door)
     {
@@ -237,9 +237,7 @@ public sealed partial class LockSystem
         StampLockWork(world, c, c.BashTime, locking: false);
         if (c.BashTime < LockWorkSeconds) return;
 
-        world.Fixtures.SetLocked(door, false);
-        FixtureRegistry.OpenDoor(door);
-        world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
+        UnlockAndOpen(world, s, c, door);
         StopBashing(world.Characters, s, c);
     }
 
@@ -757,8 +755,8 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// Its own door's lock worked on the way (Task_UnlockDoor, 0.3 per game second): cleared with the unlock sound, the door opened, and the walk
-    /// goes on.
+    /// Its own door's lock worked on the way (Task_UnlockDoor, 0.3 per game second): cleared with the unlock sound, the door opened
+    /// (<see cref="UnlockAndOpen"/>), and the walk goes on.
     /// </summary>
     void UnlockOnTheWay(World world, int s, CharacterCold c, Fixture door)
     {
@@ -766,9 +764,7 @@ public sealed partial class LockSystem
         StampLockWork(world, c, c.BashTime, locking: false);
         if (c.BashTime < LockWorkSeconds) return;
 
-        world.Fixtures.SetLocked(door, false);
-        FixtureRegistry.OpenDoor(door);
-        world.EmitSound(SoundKind.Unlocked, s, world.Characters.Next[s].Position);
+        UnlockAndOpen(world, s, c, door);
         WalkOn(world.Characters, s, c);
     }
 

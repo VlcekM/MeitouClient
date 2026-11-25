@@ -116,7 +116,7 @@ static partial class WorldApp
         s_streamline = display.Streamline;
         s_ngx = display.Ngx;
         var window = display.Window!;
-        if (!o.Windowed) BorderlessFullScreen.Toggle(window);
+        if (!o.Windowed) BorderlessFullScreen.Toggle(window, followWindow: false);
         return new InteractiveSession(install, scene, assets, o, display, window, s_streamline, s_ngx).Run();
     }
 

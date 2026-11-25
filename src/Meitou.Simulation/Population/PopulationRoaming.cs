@@ -438,8 +438,11 @@ public sealed partial class PopulationSystem
         {
             foreach (var m in saved.Members)
             {
-                if (!m.Dead && !m.Gone && m.Source.SquadMemberType == (int)SquadRole.Slave
-                    && m.Source.GameState?.Ints.GetValueOrDefault(Saving.SlaveSave.StateKey) == 1)
+                bool slave = m.Cold is { } left
+                    ? left.Role == (int)SquadRole.Slave && left.SlaveState == 1 && left.Medical is not { Dead: true }
+                    : !m.Dead && m.Source.SquadMemberType == (int)SquadRole.Slave
+                        && m.Source.GameState?.Ints.GetValueOrDefault(Saving.SlaveSave.StateKey) == 1;
+                if (!m.Gone && slave)
                 {
                     slaves = true;
                     break;
@@ -629,7 +632,7 @@ public sealed partial class PopulationSystem
     {
         if (p.Saved is { } gone)
         {
-            if (p.Stored is null) Saving.SavedCharacters.Store(world, gone, p.Position);
+            if (p.Stored is null) Saving.SavedCharacters.Store(world, gone, p.Position, leavingWorld: false);
             gone.PlatoonId = -1;
         }
 
@@ -1173,6 +1176,12 @@ public sealed partial class PopulationSystem
             if (p.Saved is { } empty) empty.PlatoonId = -1;
             world.Platoons.Remove(p.Id, PlatoonGone.NoMembers);
             return;
+        }
+
+        if (p.Saved is { SquadId: >= 0 } sp && p.Stored is null)
+        {
+            RepointSlaves(world, sp.SquadId, squad.Id);
+            sp.SquadId = -1;
         }
 
         if (squad.SpawnSize == 0) squad.SpawnSize = p.Saved?.Members.Count ?? p.Size;

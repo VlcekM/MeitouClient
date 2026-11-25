@@ -642,8 +642,9 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// <summary>
     /// The status lines of a slave (<c>FUN_1405d4260</c>, <b>Observed</b>; docs/game/ui-screens.md section 4): a title, "Slave" (state 1), "Escaped
     /// slave" (state 2) or "Ex-slave" (state 3), and its text naming the owner ("someone" without one); a player character's text ends with the hint
-    /// on the obedient-slave job (state 1) or on keeping the looks-like-a-slave level low (states 2 and 3). Engine choices: the hint is shown for
-    /// player characters, the title takes the Title colour and the text the Main one.
+    /// on the obedient-slave job (state 1) or on keeping the looks-like-a-slave level low (states 2 and 3); states 2 and 3 have the lie-low rows
+    /// between them (<see cref="LieLowRows"/>). Engine choices: the hint is shown for player characters, the title takes the Title colour and the
+    /// text the Main one.
     /// </summary>
     static List<(string Key, string Value)> SlaveRows(SlaveView slave, bool player)
     {
@@ -657,8 +658,35 @@ sealed class TooltipRuntime(PlayerInterface player)
             _ => Loc.Tr("A slave belonging to {1}. Not considered a person with rights, "
                 + "a slave works for his master until death and nothing more. {2}", owner, player ? SlaveHint() : ""),
         };
-        return [(TitleTag + SlaveTitle(slave.State), ""), (MainTag + text.TrimEnd(), "")];
+        return [(TitleTag + SlaveTitle(slave.State), ""), .. LieLowRows(slave), (MainTag + text.TrimEnd(), "")];
     }
+
+    /// <summary>
+    /// An escaped slave's or ex-slave's rows (<c>FUN_1405d4260</c>, <b>Observed</b> by decompile; docs/game/ui-screens.md section 4), each label in
+    /// Main after a <c>-</c>: Situation (Undiscovered in Good, else SEEN! in Bad while the recently-wanted marker runs), Looks like a slave (the
+    /// level x 100 as a float, Main) and Time remaining (the whole hours left to lie low, Main); none for a slave.
+    /// </summary>
+    static List<(string Key, string Value)> LieLowRows(SlaveView slave)
+    {
+        if (slave.State <= 1) return [];
+
+        string situation = slave.Seen
+            ? ProductionWindows.BadTag + Loc.Tr("Seen!").ToUpperInvariant()
+            : ProductionWindows.GoodTag + Loc.Tr("Undiscovered");
+        string looks = MainTag + Loc.Format("{1,num,p=6}%", slave.Looks * 100);
+        string left = MainTag + Loc.Plural("{1,num} hour", "{1,num} hours", slave.HoursLeft, slave.HoursLeft);
+        return
+        [
+            (LieLowLabel(Loc.Tr("Situation:")), situation),
+            (LieLowLabel(Loc.Tr("Looks like a slave:")), looks),
+            (LieLowLabel(Loc.Tr("Time remaining:")), left),
+        ];
+    }
+
+    /// <summary>
+    /// A lie-low row's label: Main, a <c>-</c>, then the game's word.
+    /// </summary>
+    static string LieLowLabel(string label) => MainTag + "-" + label;
 
     /// <summary>
     /// The slave title of <paramref name="state"/>: escaped (2), ex-slave (3), else slave.

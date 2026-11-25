@@ -27,7 +27,8 @@ namespace Meitou.Simulation.Kidnap;
 /// their source in the original is <b>Unknown</b>)
 /// and the cuff makes it a slave of the capturer's faction (<c>setChainedMode</c>, see <see cref="Hand"/>).</item>
 /// <item><b>Carry</b> (168 "Carrying slaves", finder <c>FUN_1408cdf50</c>): a downed slave owned by the carrier's faction is treated when it needs
-/// it and lifted (row 170, <see cref="StartLift"/>); the lift ends the goal, and the carrier's own goals take the slave on (112 cages it).</item>
+/// it and lifted (row 170, <see cref="StartLift"/>); the lift ends the goal, and the carrier's own goals take the slave on (112 cages it). A slave up
+/// again before the lift is given up (<see cref="GotUp"/>).</item>
 /// <item><b>Shout</b> (188 "Working the slaves", finder <c>FUN_1408cd940</c>): the worker says event 38 SHOUT_AT_SLAVE_WORKER to a random slave of
 /// its squad that is alive, uncarried and uncaged (the row's TaskData event, <b>Verified</b>: the registration of 188 stores 0x26 at <c>+0x130</c>)
 /// and keeps with it, saying the event again at each of its think turns, until it says a line: the row's B list is
@@ -203,7 +204,7 @@ public sealed partial class CaptiveSystem
         if (Busy(id)) return false;
 
         if (!capture)
-            return c.SlaveState != 0 && c.SlaveOwner == me.Faction && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
+            return c.SlaveState != 0 && c.SlaveOwner == me.Faction && Carriable(c);
 
         if (c.SlaveState == 1 || c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat
                 || Maimed(c.Medical!) || LockSystem.WornShackles(c) is not null)
@@ -297,10 +298,7 @@ public sealed partial class CaptiveSystem
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
         if (j.Kind == CaptiveJobKind.Shout) return StepShout(world, j, w, c, to);
 
-        // It got up: a caged one is beaten down first (196 Beat prisoner, Task_KillPrisoner: B list 78 imprisoned, 5 weapon drawn; effect 7 target
-        // down) by an armed worker; any other is given up.
-        if (!Down(cc) && j.Kind == CaptiveJobKind.Capture && (!cc.IsImprisoned || combat is null || wc.Fighter is not { Unarmed: false }))
-            return End(world, j, CaptiveEventKind.GaveUp);
+        if (GotUp(world, j, w, wc, cc)) return End(world, j, CaptiveEventKind.GaveUp);
 
         if (j.Phase == CaptivePhase.Walk)
         {
@@ -326,6 +324,26 @@ public sealed partial class CaptiveSystem
 
         return j.Kind == CaptiveJobKind.Carry ? Lift(world, j, w, cc) : CaptureAt(world, j, w, c, wc, cc);
     }
+
+    /// <summary>
+    /// Whether the capture's or carry's target got up so that the job is given up. A capture's: a caged one is beaten down first (196 Beat prisoner,
+    /// <c>Task_KillPrisoner</c>: B list 78 imprisoned, 5 weapon drawn; effect 7 target down) by an armed worker, any other is given up. A carry's:
+    /// one the carry finder no longer takes (<see cref="Carriable"/>), as an NPC lifts only the knocked out
+    /// (<see cref="CarrySystem.CanBeLifted(CharacterCold)"/>), so a carrier does not trail a slave that walks off (#1382); a treatment under way runs
+    /// on (the lift then gives up).
+    /// </summary>
+    bool GotUp(World world, CaptiveJob j, int w, CharacterCold wc, CharacterCold cc)
+    {
+        if (j.Kind == CaptiveJobKind.Carry)
+            return !Carriable(cc) && world.Characters.Next[w].Task != (byte)CharacterTask.Treat;
+
+        return j.Kind == CaptiveJobKind.Capture && !Down(cc) && (!cc.IsImprisoned || combat is null || wc.Fighter is not { Unarmed: false });
+    }
+
+    /// <summary>
+    /// <see cref="Down"/> as the carry finder takes it: not just staying low (it refuses posture 1).
+    /// </summary>
+    static bool Carriable(CharacterCold c) => Down(c) && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
 
     /// <summary>
     /// 168 at its slave (plan <c>[1, 25, 170, 168]</c>): row 170 wants !22, so a slave that needs first aid is treated first (row 25,

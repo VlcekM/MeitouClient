@@ -166,6 +166,39 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
+    /// Whether the character <paramref name="n"/> is at its work on <paramref name="f"/>: within the reach of its <see cref="WorkSpot"/>
+    /// (<paramref name="at"/>, <paramref name="reach"/>; while it walks, the side its walk aims at, as a walk up a ramp round a building passes nearer
+    /// the door's inner side, #1405), at a cage on its floor and at a door within <see cref="DoorPlan.DoorHeight"/> of the leaf's foot. The rows
+    /// reach it through <c>isAtLocation</c>, <c>AI::isWithinChoppingRange</c> (<c>FUN_14059c6d0</c>, <b>Verified</b>: the flat distance and the
+    /// same floor, <see cref="FixtureRegistry.WorkHeight"/> for a cage, 130 for a door), so one standing under an upper-storey cage (#1397) or under
+    /// a door up a ramp (#1405) is not at it. Containers keep the flat test: a container's walk floor lies up to 17 off its origin
+    /// (docs/game/locks.md, #292).
+    /// </summary>
+    static bool AtWorkSpot(World world, Fixture f, in CharacterHot n, out Vector2 at, out float reach)
+    {
+        var position = n.Position;
+        (at, reach) = WorkSpot(world, f, n.Task == (byte)CharacterTask.GoTo ? n.Goal : Flat(position));
+        bool level = f.Kind switch
+        {
+            FixtureKind.Cage => MathF.Abs(position.Y - f.Position.Y) < FixtureRegistry.WorkHeight,
+            FixtureKind.Door => world.Fixtures.DoorSpotOf(f) is not { } spot || MathF.Abs(position.Y - spot.Foot) <= DoorPlan.DoorHeight,
+            _ => true,
+        };
+
+        return level && Vector2.Distance(Flat(position), at) <= reach;
+    }
+
+    /// <summary>
+    /// A work spot <paramref name="at"/> of <paramref name="f"/> (<see cref="WorkSpot"/>) at the height its walk aims for: a door's leaf foot, anything
+    /// else its own height. A door's position is its host building's origin, which can lie far under the door (a door up a ramp, #1405).
+    /// </summary>
+    static Vector3 WorkPoint(World world, Fixture f, Vector2 at)
+    {
+        float y = world.Fixtures.DoorSpotOf(f) is { } spot ? spot.Foot : f.Position.Y;
+        return new Vector3(at.X, y, at.Y);
+    }
+
+    /// <summary>
     /// The <see cref="OrderEntry.TaskPoint"/> of a door's right click: its own order is made at the door on the terrain
     /// (<see cref="OrderEntry.AtBuilding"/>); the walk to a barred one (no Alt) is a move made at the door's <c>getPositionMarker</c> from the zero
     /// point (<c>FUN_1407fc6e0</c> -> <c>FUN_1407fa850</c>, vfunc <c>0x470</c> <c>FUN_14054b850</c> with <c>ZERO</c>, <b>Verified</b>).
@@ -256,8 +289,7 @@ public sealed partial class LockSystem
                 continue;
             }
 
-            var (at, reach) = WorkSpot(world, door, Flat(n.Position));
-            if (Vector2.Distance(Flat(n.Position), at) > reach)
+            if (!AtWorkSpot(world, door, n, out var at, out float reach))
             {
                 // Still walking; another order (a new goal) or a failed path ends it, and so does being led away from the work.
                 if (job.Work > 0 || Redirected(n, at, reach)) c.DoorJob = null;
@@ -331,8 +363,7 @@ public sealed partial class LockSystem
         }
 
         ref var n = ref table.Next[s];
-        var (at, reach) = WorkSpot(world, door, Flat(n.Position));
-        if (Vector2.Distance(Flat(n.Position), at) > reach)
+        if (!AtWorkSpot(world, door, n, out var at, out float reach))
         {
             if (Redirected(n, at, reach)) c.DoorWalk = null;
             return;
@@ -588,6 +619,21 @@ public sealed partial class LockSystem
     internal void NoteDoorOpened(World world, Fixture door, int openerFaction)
     {
         if (openerFaction != world.Player.Faction) _houseLocked.Remove(door.Building);
+    }
+
+    /// <summary>
+    /// An owner's door unlocked and opened on its way (Task_UnlockDoor, then Task_OpenDoor): the unlock's end clears the unlocker's squad's house flag
+    /// when the door is its home's (<c>FUN_14033d420</c>, <b>Verified</b>), and the opening clears it as <see cref="NoteDoorOpened"/>.
+    /// </summary>
+    void UnlockAndOpen(World world, int slot, CharacterCold c, Fixture door)
+    {
+        world.Fixtures.SetLocked(door, false);
+        FixtureRegistry.OpenDoor(door);
+        world.EmitSound(SoundKind.Unlocked, slot, world.Characters.Next[slot].Position);
+
+        var squad = world.Squads.Find(c.SquadId);
+        if ((squad?.Ai?.OwnHome ?? squad?.HomeBuilding)?.Key == door.Building) _houseLocked.Remove(door.Building);
+        NoteDoorOpened(world, door, c.Faction);
     }
 
     /// <summary>

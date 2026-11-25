@@ -70,6 +70,14 @@ public sealed class SavedMember
     /// Its bounties when its platoon left the world (null: the save's).
     /// </summary>
     public Crime.BountyLedger? Bounties { get; set; }
+    /// <summary>
+    /// Its detached cold state when its platoon left the world (null: never left, wiped without unloading, or in the world now).
+    /// </summary>
+    public CharacterCold? Cold { get; set; }
+    /// <summary>
+    /// Whether it led its squad when its platoon left the world.
+    /// </summary>
+    public bool Leader { get; set; }
 }
 
 /// <summary>
@@ -114,6 +122,10 @@ public sealed class SavedPlatoon
     /// The world's stand-in (-1 once it is gone: its squad was wiped out).
     /// </summary>
     public int PlatoonId { get; set; } = -1;
+    /// <summary>
+    /// The squad id its members were stored from (-1: none yet), so slaves obeying it are pointed to the squad it comes back as.
+    /// </summary>
+    public int SquadId { get; set; } = -1;
     /// <summary>
     /// The platoon's characters in the save's order.
     /// </summary>
@@ -284,6 +296,7 @@ public sealed class SavedPopulation
         if (cold.Save is not { } link || MemberOf(link) is not { } member) return;
 
         member.Gone = true;
+        member.Cold = null;
         member.Live = CharacterId.None;
     }
 
@@ -771,7 +784,8 @@ internal static class SavedCharacters
         var squad = NewSquad(world, platoon, sp, data, name, homeCentre, homeRadius);
         var notes = new List<string>();
         var made = new List<(SavedMember Member, int Role)>();
-        bool hasLeader = built.Any(b => b.Parts.Source.IsLeader && b.Parts.Medical is not { Dead: true });
+        bool hasLeader = built.Any(b => (b.Member.Cold is not null ? b.Member.Leader : b.Parts.Source.IsLeader)
+            && b.Parts.Medical is not { Dead: true });
 
         // Without one the first living member that is not an animal leads (SquadRegistry.Successor).
         var alive = built.Where(b => b.Parts.Medical is not { Dead: true }).ToList();
@@ -787,15 +801,30 @@ internal static class SavedCharacters
             if (moved) at = MovedSpot(walk, platoon, at, delta);
 
             float yaw = m.Position is null ? SaveRotation.YawOf(p.Source.Rotation) : m.Yaw;
-            bool leads = !corpse && (p.Source.IsLeader || ReferenceEquals(m, successor));
+            bool wasLeader = m.Cold is not null ? m.Leader : p.Source.IsLeader;
+            bool leads = !corpse && (wasLeader || ReferenceEquals(m, successor));
             var task = corpse
                 ? CharacterTask.Idle
                 : leads ? (sp.Pinned || sp.Wild is not null ? CharacterTask.Wander : CharacterTask.Idle) : CharacterTask.Follow;
-            var id = Make(world, p, sp.Name, squad, platoon.Faction, context.PlayerFaction, false, at, yaw, task, SpeedMode.Walk, data, assembly,
-                context, m.Bounties, notes);
+            CharacterId id;
+            if (m.Cold is { } kept)
+            {
+                id = Respawn(world, kept, squad, at, yaw, task);
+                m.Cold = null;
+            }
+            else
+            {
+                id = Make(world, p, sp.Name, squad, platoon.Faction, context.PlayerFaction, false, at, yaw, task, SpeedMode.Walk, data, assembly,
+                    context, m.Bounties, notes);
 
-            // Made again after its platoon left the world: the save's ragdoll is from before that.
-            if (m.Position is not null && world.Characters.Cold(id.Slot)?.Save is { } link) link.Ragdoll = null;
+                // Made again after its platoon left the world: the save's ragdoll and carry link are from before that.
+                if (m.Position is not null && world.Characters.Cold(id.Slot)?.Save is { } link)
+                {
+                    link.Ragdoll = null;
+                    link.CarryPartner = Hand.Null;
+                    link.CarryIsCarrier = false;
+                }
+            }
 
             ref var hot = ref world.Characters.Next[id.Slot];
             hot.TaskTime = 0.5f + Rng.Float(Rng.Hash(world.Seed, (ulong)squad.Id << 8 | (uint)(m.Slot & 0xFF), RngPurpose.Think)) * 3;
@@ -900,15 +929,44 @@ internal static class SavedCharacters
     }
 
     /// <summary>
-    /// The platoon leaves the world (serial phase): each member's place, body, kit and bounties are kept for the next time; one whose body is gone is
-    /// marked.
+    /// Puts a saved platoon member's kept <paramref name="cold"/> state back in the world at <paramref name="position"/> facing
+    /// <paramref name="yaw"/>, without re-reading stale records from the loaded save.
     /// </summary>
-    public static void Store(World world, SavedPlatoon sp, Vector2 anchor)
+    static CharacterId Respawn(World world, CharacterCold cold, Squad squad, Vector3 position, float yaw, CharacterTask task)
+    {
+        float? seat = world.Walkability.SeatHeight(position.X, position.Z, position.Y);
+        if (seat is { } floor) position.Y = floor;
+
+        cold.SquadId = squad.Id;
+        var hot = new CharacterHot
+        {
+            Position = position,
+            Yaw = yaw,
+            Health = 100,
+            Task = (byte)(cold.InSomething == Locks.HeldState.Bed ? CharacterTask.Sleep : task),
+            Mode = SpeedMode.Walk,
+            MaxSpeed = cold.Race is { } race && cold.Stats is { } stats && cold.Medical is { } medical
+                ? Speed.Run(race, stats, medical, 1)
+                : CharacterAssembly.StandInMaxSpeed,
+            WalkSpeed = cold.Race?.WalkSpeed ?? 15,
+        };
+        return world.Characters.Spawn(hot, cold, world.Tick);
+    }
+
+    /// <summary>
+    /// The platoon leaves the world (serial phase): each member's place, body, kit and bounties are kept for the next time; one whose body is gone is
+    /// marked. When <paramref name="leavingWorld"/> is true (an unload that removes the members right after), active carries are dropped and kept as
+    /// unload links (<see cref="Carrying.CarrySystem.DropForUnload"/>) and the detached cold state is retained so re-spawning and saving never fall
+    /// back to stale records of the loaded save.
+    /// </summary>
+    public static void Store(World world, SavedPlatoon sp, Vector2 anchor, bool leavingWorld = true)
     {
         var table = world.Characters;
-
-        if (sp.PlatoonId >= 0 && world.Platoons.Find(sp.PlatoonId) is { } platoon && world.Squads.Find(platoon.SquadId) is { } squad)
+        var carry = leavingWorld ? world.SystemOf<Carrying.CarrySystem>() : null;
+        Squad? squad = sp.PlatoonId >= 0 && world.Platoons.Find(sp.PlatoonId) is { } platoon ? world.Squads.Find(platoon.SquadId) : null;
+        if (squad is not null)
         {
+            sp.SquadId = squad.Id;
             sp.Shop = squad.Shop;
             sp.Ai = AiSave.Of(squad.Ai) ?? squad.SavedAi;
             if (world.Saved?.Memory is { } memory) (sp.Memory, sp.MemorySet) = (memory.Take(squad.Id), true);
@@ -921,12 +979,34 @@ internal static class SavedCharacters
             if (!table.TryResolveNext(m.Live, out int slot) || table.Cold(slot) is not { } cold)
             {
                 m.Gone = true;
+                m.Cold = null;
                 m.Live = CharacterId.None;
                 continue;
             }
 
-            m.Position = table.Previous[slot].Position;
-            m.Yaw = table.Previous[slot].Yaw;
+            var hot = table.Previous[slot];
+            if (leavingWorld)
+            {
+                // Its carry is let go and the link kept (FUN_1404ff410 writes it, then FUN_1404feed0's destroy unlinks).
+                if (hot.Alive) carry?.DropForUnload(world, slot);
+                if (cold.Save is { } link)
+                {
+                    link.CarryPartner = Hand.Null;
+                    link.CarryIsCarrier = false;
+                    link.Ragdoll = null;
+                }
+
+                m.Leader = squad is not null && squad.Leader == m.Live;
+                PopulationSystem.Detach(world, slot, cold, clearJobs: false);
+                m.Cold = cold;
+            }
+            else
+            {
+                m.Cold = null;
+            }
+
+            m.Position = hot.Position;
+            m.Yaw = hot.Yaw;
             m.Stats = cold.Stats;
             m.Medical = cold.Medical;
             m.Inventory = cold.Inventory;

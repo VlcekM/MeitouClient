@@ -24,6 +24,16 @@ public sealed partial class ProductionSystem
     /// original takes the rock's bounds box scaled 1.2 or its <c>use range</c> (50 iron, 100 copper) of its position marker.
     /// </summary>
     const float RockReach = 10;
+    /// <summary>
+    /// How far from a rock's position toward the walker its walk aims (<c>getPosWithinChoppingRange</c> <c>FUN_14059bf30</c>, the foliage branch:
+    /// 65 at <c>DAT_1416f0010</c>, <b>Verified</b>).
+    /// </summary>
+    const float RockApproach = 65;
+    /// <summary>
+    /// The navmesh query that puts a rock's walk aim on the mesh (<see cref="RefitSnap"/>, <b>Verified</b> <c>FUN_14059bf30</c>): the
+    /// half size of its search cube (150, <c>DAT_1416cf06c</c>) and its clearance extent (10, <c>DAT_14167fad4</c>).
+    /// </summary>
+    const float RockSnapReach = 150, RockSnapExtent = 10;
 
     /// <summary>
     /// The rocks' sites by id, made on first use (null: the id names no rock).

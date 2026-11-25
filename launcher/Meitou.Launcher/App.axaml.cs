@@ -18,6 +18,7 @@ public sealed class App : Application
         var config = LauncherConfig.Load();
         var install = config.KenshiPath is { } saved && GameInstall.IsValid(saved) ? GameInstall.Open(saved) : GameInstall.Locate();
         KenshiFonts.Register(install);
+        ToolTipPlacement.Register();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             desktop.MainWindow = new MainWindow(config, install);
 

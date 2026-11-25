@@ -555,12 +555,12 @@ public sealed partial class FoliageRenderer
     }
 
     /// <summary>
-    /// The limit from the current budget and pressure (once a scan).
+    /// The limit from the current budget, the smaller one while the guard is active (under pressure or the ranges clamped; once a scan).
     /// </summary>
     void UpdateImpostorLimit()
     {
         long budget = _guard is { BudgetBytes: > 0 } g ? g.BudgetBytes : (long)Math.Min(Gpu.VideoMemoryBudget, (ulong)long.MaxValue);
-        _impostorLimitBytes = (long)(ImpostorBudget.LimitMb(ImpostorBudgetMb, budget, Gpu.IsIntegrated, _guard is { Pressure: true }) * 1048576);
+        _impostorLimitBytes = (long)(ImpostorBudget.LimitMb(ImpostorBudgetMb, budget, Gpu.IsIntegrated, _guard is { Active: true }) * 1048576);
     }
 
     /// <summary>

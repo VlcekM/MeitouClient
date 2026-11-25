@@ -553,7 +553,8 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   threat counts zeroed, focus cleared. `getTimeSinceLastCombatModeInHours` reads +0x138, stamped at start.
 - **Weapon away.** The fight's end sheathes nothing. Idleness (14), first aid, splinting, repair, lockpicking and patrols need
   `!hasWeaponEquipped`, so the planner puts 7 Sheathing weapon before them: a character stays armed while urgent goals run and sheathes when it
-  drops to Idleness or is ordered to such a job.
+  drops to Idleness or is ordered to such a job. `Task_OperateMachine`'s start puts it away (vfunc 0x2d0, `FUN_14035b430`); a training dummy's start draws or sheathes
+  by the dummy's stat ([97](ai-tasks.md#perma-jobs)).
 - **Orders beat goals.** `AITaskSytem::chooseGoal` tries, in order: the player's order queue (`checkOrders`, OrdersReceiver +0x38), jobs, urgent
   perma-jobs, priority-3 goals (Self preservation, Hold's goal 16, package goals), the other perma-jobs, priority 2 then 1 goals, the hold-position
   task. So a character with an order does not defend itself: a hit staggers it (below) and the queue's first order then runs again, unless its row needs no melee threat
@@ -635,7 +636,7 @@ A fighter on that chase starts no attack: the attack decision `FUN_14060c8b0` ru
 
 **Observed** (static reading, `FUN_1402af1e0` → `FUN_1404354d0`; the stat from `FUN_1408866b0` → `FUN_140883a80`): the lead point is the target's position + its velocity (Character vfuncs 9 speed × 10 heading, movement +0xb8 and +0xd0) × `(1 − r) × 2 + 1.2` seconds, recomputed every tick, with r the chaser's CharStats +0x188: its attack play rate (lerp(0.01 (0.6 dex + 0.4 attack), 0.8, 1.2) × G, capped at 1.2, the rate attack clips play at; × 0.8 when `FUN_1405c7fd0(character) == 3`, swimming). So 0.8 s ahead at r = 1.2, 1.6 s at 0.8, more for a slowed attacker; a faster chaser aims past the runner, and since the lead follows the velocity it swings to the new side when the runner turns, and drops as soon as the runner slows under 9 or leaves plain movement (the 1.5 s timer restarts). The steering faces its movement while leading. A second override (`CharMovement::vfunc_28` sets movement +0x168 and a point at +0x16c, the steering's +0x50/+0x54): the chaser heads for that point instead at most 55 u/s, the lead is off, and it clears within 10 units; `CombatClassAI::vfunc_9` skips its chase while it is set.
 
-Meitou (`PursuitSystem`, engine rules): the lead is a path goal, re-pathed when it moves over 12 units (at most every 0.5 s, so a turn can overshoot by ~12 units at a run), put a further 0.5 s of the runner's way ahead (a path ends in a stop and a fighter's speed ramps back slowly) and `PassWidth` 1.25 × the two footprints (clear of the separation radius) beside the runner's track on the chaser's side (bodies are solid, so the chaser passes the runner instead of pushing it along; the original's runs through it). It is used only while the chaser is behind the nearer of the lead point and the swing's aim point (target + velocity × `AimLeadSeconds` 1.2); level with it, it goes for the target and stands once the aim point is within reach, so the runner comes into its swing. Standing is measured to that aim point, as the swing is (stood within reach of the runner itself, the aim point would be out of reach and the chaser idle). A fighter at its path's end asks for the next one after `RepathSeconds` 0.5 (not the wanderer's 3 to 10 s wait). A lead off the navmesh falls back to the target. The +0x168 override is not modelled.
+Meitou (`PursuitSystem`, engine rules): the lead is a path goal, re-pathed when it moves over 12 units (at most every 0.5 s, so a turn can overshoot by ~12 units at a run), put a further 0.5 s of the runner's way ahead (a path ends in a stop and a fighter's speed ramps back slowly) and `PassWidth` 1.25 × the two footprints (clear of the separation radius) beside the runner's track on the chaser's side (bodies are solid, so the chaser passes the runner instead of pushing it along; the original's runs through it). It is used only while the chaser is behind the nearer of the lead point and the swing's aim point (target + velocity × `AimLeadSeconds` 1.2); level with it, it goes for the target and stands once the aim point is within reach, so the runner comes into its swing. Standing is measured to that aim point, as the swing is (stood within reach of the runner itself, the aim point would be out of reach and the chaser idle). A fighter at its path's end asks for the next one after `RepathSeconds` 0.5 (not the wanderer's 3 to 10 s wait). The point past the runner is tested by walking the ground to it from the runner in 4-unit steps, each step's height carried on (`PursuitSystem.GroundAlong`), and the path is asked at the height found there; a lead whose ground breaks (a wall, a cliff, off the navmesh) falls back to the target. Tested at the runner's own height instead, a point 100+ units ahead up or down a slope was out of a standing step's 12-unit reach, so a faster chaser kept falling back to the runner's place and trailed it about 70 behind at its speed, never swinging (**Observed**, #1394 save: two Beak Things behind a skeleton running uphill west of Vain). The +0x168 override is not modelled.
 
 ### Fight steering
 
@@ -776,18 +777,23 @@ KO/coma/death thresholds use [character-stats](character-stats.md). Never tick m
 
 **Verified** (`MedicalSystem::punchSomething` `FUN_140666780`, called on the attacker's medical at the end of the take-hit `FUN_1404394f0`; arguments material, target,
 technique, combo index per KenshiLib 1ce4a16; constants from `re/data_values.txt`). Every blow that reaches a defender hurts a martial artist's own limb:
-- Material: 5 blocked, 0 dodged, 2 hit (`HitMaterialType`: 0 missed, 1 metal, 2 flesh, 3 sand, 4 wood, 5 sword, 6 chain); 1 when the target's race `is robot`.
-  A swing that reaches nobody never calls it.
+- Material (`HitMaterialType`: 0 missed, 1 metal, 2 flesh, 3 sand, 4 wood, 5 sword, 6 chain): 5 blocked, 0 dodged; 1 when the target's race `is robot`.
+  A hit's comes from the medical hit `FUN_1406508d0`'s out value: the ARMOUR `material type` (piece `+0x23c`, set by `FUN_140898e90`) of the last
+  piece in worn order that covered the struck part, -1 for none, 3 when the struck part is a limb with a fitted prosthetic (limb state 2) or the race is
+  a robot; the take-hit maps it through {2, 2, 6, 1} (-1 stays 2): bare, cloth and leather are flesh, chain is chain, metal plate is metal (**Verified**,
+  disassembly at `140439888`; the decompile drops this lookup). A swing that reaches nobody never calls it.
 - None unless the attacker's stat-set kind is 5 (fists), its race is not `is robot`, the blow's impact point `limb` (clamped combo index) is not 4, and
   that limb (0 left arm, 1 right arm, 2 left leg, 3 right leg) has no fitted robot limb (part `+0x28`).
 - Packet: material 1 cut 2 blunt 2; 5 cut 5 blunt 1; 6 cut 1 blunt 1; else blunt 1. Times f = (1 - 0.5 x (fist rating + toughness x scale) / 100)
   x Global damage multiplier x the gear's `fist injury mult` product (CharStats `+0x4c`); fist rating = `FUN_140884e00` with its flag, toughness the raw stat
   (`+0x90`) x `+0x34`. No clamp: above 200 together f is negative and the blow heals the limb.
 - Written as `FUN_140644a70`: flesh -= cut + `blunt permanent organ damage` x blunt, stun += the rest of the blunt (no armour, wound, bleed or toughness
-  resistance). With the base organ damage 0 a landed or dodged punch only stuns the limb; blocked blows and robot targets cut it.
+  resistance). With the base organ damage 0 a punch landed on flesh or dodged only stuns the limb (about 1 stun a blow for a beginner, so a long
+  beating greys out the arm's bar, as in the original); blocked blows, chain, metal plate, prosthetics and robot targets cut it.
 - Then the part-down test asks for the collapse (`FUN_140649870`) and the attacker gains toughness ([character-stats](character-stats.md), `FUN_1408c68e0`).
 
-Meitou: `CombatSystem.Punch`, `MedicalState.PunchDamage`, `Fighter.FistInjury`; the medical tick sees the down part.
+Meitou: `CombatSystem.Punch` and `PunchMaterial`, `HitResolver.StruckMaterial`, `MedicalState.PunchDamage`, `Fighter.FistInjury`; the medical tick sees
+the down part.
 
 ### Block sparks
 

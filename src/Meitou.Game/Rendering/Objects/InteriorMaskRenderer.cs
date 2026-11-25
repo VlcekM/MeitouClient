@@ -45,6 +45,12 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     public const float NoFront = 65000;
 
     /// <summary>
+    /// The GLSL of <c>interiorFront(range)</c>: the mask's R as the game's (0 where no face of its R pass is: the half float keeps
+    /// <see cref="NoFront"/> as 64992 or 65024, so anything above 60000 is it). With no face at all A is 0 and nothing is cut either way.
+    /// </summary>
+    internal const string FrontGlsl = "float interiorFront(vec4 range) { return range.r > 60000.0 ? 0.0 : range.r; }\n";
+
+    /// <summary>
     /// How far behind a mask's floor the cut reaches, along the view (<see cref="CutUnderFloor"/>).
     /// </summary>
     const string UnderFloor = "24.0";
@@ -72,15 +78,15 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         """;
 
     /// <summary>
-    /// Every face writes its view depth + 1 (the game's value, interiormask.hlsl) to R (min blend: the nearest) and A (max blend: the farthest). The
-    /// game splits the faces by facing instead; for a closed mesh seen from outside the nearest face is a front face and the farthest a back face,
-    /// the same. With the eye inside the building's hull (<c>uInside</c>) every face it sees is a back face: the game's R stays 0, so here R = 0.
+    /// A face writes its view depth + 1 (the game's value, interiormask.hlsl) by its facing, as the game's two passes do: the faces its R pass draws
+    /// (culling anticlockwise: the mesh's back side, here not <c>gl_FrontFacing</c>) to R (min blend: the nearest), the others to A (max blend: the
+    /// farthest). Where only A's faces are seen (the eye inside the mask, or looking in through an open side) R keeps <see cref="NoFront"/>, which
+    /// the readers take as the game's 0 there (<see cref="FrontGlsl"/>): cut from the eye.
     /// </summary>
     const string Fragment = """
         #version 330 core
         out vec4 fragColour;
         in vec3 vRel;
-        uniform int uInside;
         uniform float uFloor;
         uniform int uOpen;    // the building is in the interior view (its roof hidden): b keeps its farthest face for the particles
         void main()
@@ -90,7 +96,9 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
             // reaches under (Cut).
             vec3 n = cross(dFdx(vRel), dFdy(vRel));
             bool flat_ = uFloor > 1.5 ? true : uFloor > 0.5 && abs(n.y) > 0.7 * length(n) && vRel.y < 0.0;
-            fragColour = vec4(uInside != 0 ? 0.0 : w, flat_ ? -w : 0.0, uOpen != 0 ? -w : 0.0, w);
+            // r: the R pass's faces (65000: NoFront, none); a: the others.
+            bool near_ = !gl_FrontFacing;
+            fragColour = vec4(near_ ? w : 65000.0, flat_ ? -w : 0.0, uOpen != 0 ? -w : 0.0, near_ ? 0.0 : w);
         }
         """;
 
@@ -115,9 +123,9 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     readonly NativeSegment _segment;
 
     /// <summary>
-    /// The program's <c>uMvp</c> and <c>uInside</c> uniforms.
+    /// The program's <c>uMvp</c>, <c>uNode</c>, <c>uFloor</c> and <c>uOpen</c> uniforms.
     /// </summary>
-    readonly UniformHandle _mvp, _inside, _node, _floor, _open;
+    readonly UniformHandle _mvp, _node, _floor, _open;
 
     /// <summary>
     /// The mask meshes' vertex input: one position stream, 12 bytes a vertex.
@@ -169,7 +177,6 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         _program = LegacyProgram.Create(gpu, Vertex, Fragment, "interior mask");
         _segment = new NativeSegment(gpu, _program, PrimitiveType.Triangles, "interior mask");
         _mvp = _program.Uniform("uMvp");
-        _inside = _program.Uniform("uInside");
         _node = _program.Uniform("uNode");
         _floor = _program.Uniform("uFloor");
         _open = _program.Uniform("uOpen");
@@ -277,7 +284,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
                 // Under the mask's floor too (its farthest face here is one, kept in g by the mask's pass): the ground between the floor's boards and
                 // the mask's bottom, a hump of terrain with its grass coming through a floor (Meitou; the game's rule ends 1 unit behind the face).
                 float interiorBack = -interiorRange.g >= interiorRange.a - 0.3 ? interiorRange.a + {{UnderFloor}} : interiorRange.a;
-                if (interiorDepth < interiorBack && interiorDepth > interiorRange.r) discard;
+                if (interiorDepth < interiorBack && interiorDepth > interiorFront(interiorRange)) discard;
             }
         """;
 
@@ -291,7 +298,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
             System.Text.RegularExpressions.RegexOptions.RightToLeft);
         if (!main.Success) throw new InvalidOperationException("InteriorMaskRenderer.WithCut: no main() in the fragment text.");
         return fragment.Insert(main.Index + main.Length, "\n" + Cut)
-            .Insert(main.Index, "uniform sampler2D uInteriorMask;\nuniform bool uInteriorCut;\n");
+            .Insert(main.Index, "uniform sampler2D uInteriorMask;\nuniform bool uInteriorCut;\n" + FrontGlsl);
     }
 
     #endregion
@@ -360,7 +367,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         var node = v.Node;
         node.Translation -= eye;
         var m = node * relative;
-        bool any = false, eyeInside = v.Contains(eye);
+        bool any = false;
         bool open = _objects.CutRainOverViewed && _objects.InteriorView.ContainsKey(v.PlacementId);
         var min = new Vector2(float.MaxValue);
         var max = new Vector2(float.MinValue);
@@ -368,7 +375,6 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         {
             if (Mesh(path) is not { Vertices: { } buffer } mesh) continue;
             _program.Set(_mvp, in m);
-            _program.Set(_inside, eyeInside ? 1 : 0);
             _program.Set(_node, in node);
             _program.Set(_floor, CutUnderFloor ? 1f : 0f);
             _program.Set(_open, open ? 1 : 0);

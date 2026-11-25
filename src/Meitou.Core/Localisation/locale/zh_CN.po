@@ -6590,3 +6590,15 @@ msgstr "{1} / {2}"
 msgid "{1} mod"
 msgid_plural "{1} mods"
 msgstr[0] "{1} 个模组"
+
+#. machine-translated
+msgid "Monitor"
+msgstr "显示器"
+
+#. machine-translated
+msgid "Monitor {1}: {2}"
+msgstr "显示器 {1}：{2}"
+
+#. machine-translated
+msgid "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor)."
+msgstr "游戏启动并进入全屏的显示器。自动：窗口所在的显示器（在 Wayland 上为第一个显示器）。"

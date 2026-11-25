@@ -12,12 +12,15 @@ namespace Meitou.Game.Rendering.Frame;
 /// zones and meshes within <see cref="NearReach"/> of the camera), the caches evict what has been idle for a couple of seconds instead of a minute,
 /// and <see cref="RangeScale"/> falls by about 12% every 0.75 s (down to <see cref="MinScale"/>) while the use stays high: every renderer multiplies
 /// the ranges it draws and streams to by it. The farthest things leave first because the ranges they were in end first.</item>
-/// <item>Pressure ends under <see cref="Low"/> (80%); streaming resumes. The ranges come back, 4% a second, only once the use has stayed
-/// under <see cref="Recover"/> (74%) for four seconds: the band between is where the system rests, so it does not swing.</item>
+/// <item>Pressure ends under <see cref="Low"/> (80%); streaming resumes. The ranges come back, 4% a second, while the use less the room free
+/// in our own blocks (<see cref="HeldFraction"/>: holes the evictions left, empty blocks, spares; new allocations fill them before the driver's
+/// figure grows) has stayed under <see cref="Recover"/> (80%) for four seconds, up to a step below the scale the pressure began at, and to 1
+/// <see cref="CapSeconds"/> after it ended; meanwhile the caches keep their smaller marks and the optional enlargements wait (<see cref="Active"/>).
+/// Measured on the driver's figure against 74%, with full marks and the enlargements going on, a clamp stayed as long as watched (#1390).</item>
 /// <item>Allocations that can be large call <see cref="Allows"/> first (a texture's image, a bigger scratch buffer or instance arena): it asks
 /// for a fresh sample and refuses what would take the use past <see cref="Ceiling"/> (92%), counting what was reserved since the sample, and a
-/// refusal puts the guard into pressure at once. Streaming moves a gigabyte in a quarter of a second at its fastest, so the sampling alone
-/// would be too slow.</item>
+/// refusal puts the guard into pressure at once (not that of an enlargement the caller can do without, <see cref="AllowsGrowth"/>). Streaming
+/// moves a gigabyte in a quarter of a second at its fastest, so the sampling alone would be too slow.</item>
 /// <item>At the default settings the use is a third of an 11 GB card's budget: the guard never leaves its idle state there
 /// (<see cref="RangeScale"/> 1 multiplies exactly, so pictures are unchanged).</item>
 /// </list>
@@ -29,7 +32,7 @@ public sealed class VramGuard
     /// The use fractions of the budget: pressure starts at <see cref="High"/> and ends under <see cref="Low"/>, the ranges return only under <see
     /// cref="Recover"/>, and <see cref="Allows"/> refuses past <see cref="Ceiling"/>.
     /// </summary>
-    public const double High = 0.90, Low = 0.80, Recover = 0.74, Ceiling = 0.92;
+    public const double High = 0.90, Low = 0.80, Recover = 0.80, Ceiling = 0.92;
 
     /// <summary>
     /// The most of the driver's budget the guard holds back for the other programs on the card (bytes), and the largest share of the budget that
@@ -54,6 +57,11 @@ public sealed class VramGuard
     /// Seconds between samples, between two steps down, and between two steps up; and the calm needed before the ranges return.
     /// </summary>
     public const double SampleSeconds = 0.25, StepDownSeconds = 0.75, StepUpSeconds = 1.0, CalmSeconds = 4.0;
+
+    /// <summary>
+    /// Seconds after a pressure ends before the ranges may climb past the step below the scale that pressure began at.
+    /// </summary>
+    public const double CapSeconds = 90;
 
     /// <summary>
     /// The newest a sample must be for <see cref="Allows"/> to use it.
@@ -113,9 +121,25 @@ public sealed class VramGuard
     float _scale = 1f;
 
     /// <summary>
+    /// The highest the ranges climb back to: a step below the scale the last pressure began at, until <see cref="CapSeconds"/> after it ended
+    /// (then 1). Where the full ranges do not fit, climbing to 1 at once began the pressure again every minute or so (#1390).
+    /// </summary>
+    float _cap = 1f;
+
+    /// <summary>
+    /// When the last pressure ended (seconds).
+    /// </summary>
+    double _pressureEnded;
+
+    /// <summary>
     /// The last sample's use and budget, and the bytes <see cref="Allows"/> granted since it.
     /// </summary>
     long _used, _budget, _reserved;
+
+    /// <summary>
+    /// The room free in the allocator's device-local blocks at the last sample (<see cref="Gpu.Core.GpuAllocator.Slack"/>; 0 without one).
+    /// </summary>
+    long _slack;
 
     /// <summary>
     /// Whether the one log line was written.
@@ -179,6 +203,12 @@ public sealed class VramGuard
     public double Fraction => _budget == 0 ? 0 : (double)_used / _budget;
 
     /// <summary>
+    /// The last sample less the room free in our own blocks, as a fraction of the budget: what the ranges' return (<see cref="Recover"/>) is
+    /// measured by.
+    /// </summary>
+    public double HeldFraction => _budget == 0 ? 0 : (double)Math.Max(_used - _slack, 0) / _budget;
+
+    /// <summary>
     /// The driver's device-local budget at the last sample less <see cref="ReserveBytes"/> (0 until one is taken, or when unknown).
     /// </summary>
     public long BudgetBytes => _budget;
@@ -223,7 +253,8 @@ public sealed class VramGuard
     /// </summary>
     public string Status =>
         Active ? $"guard: ranges x{_scale:0.00}{(_pressure ? ", streaming paused" : ", recovering")}, "
-                + $"{Fraction * 100:0}% of the {_budget / 1048576} MB budget{(Refusals > 0 ? $", {Refusals} allocations refused" : "")}"
+                + $"{Fraction * 100:0}% ({HeldFraction * 100:0}% held) of the {_budget / 1048576} MB budget"
+                + $"{(Refusals > 0 ? $", {Refusals} allocations refused" : "")}"
                 + $"{(PriorityGrants > 0 ? $", {PriorityGrants} scratch grants over the ceiling" : "")}"
                : $"guard: ok, {Fraction * 100:0}% of the {_budget / 1048576} MB budget"
                 + $"{(LowestBudget < HighestBudget ? $" (sampled {LowestBudget / 1048576} to {HighestBudget / 1048576} MB)" : "")}";
@@ -245,9 +276,21 @@ public sealed class VramGuard
         _lastSample = now;
         var (u, b) = _sample();
         (_used, _budget, _reserved) = ((long)u, Usable((long)b), 0);
+        _slack = FreeInBlocks();
         if (_budget > 0)
             (LowestBudget, HighestBudget) = (LowestBudget == 0 ? _budget : Math.Min(LowestBudget, _budget), Math.Max(HighestBudget, _budget));
         Step(now);
+    }
+
+    /// <summary>
+    /// The room free in the allocator's device-local blocks (bytes; 0 without an allocator).
+    /// </summary>
+    long FreeInBlocks()
+    {
+        if (Allocator is null) return 0;
+
+        var (empty, spare, scattered, _) = Allocator.Slack();
+        return (long)(empty + spare + scattered);
     }
 
     /// <summary>
@@ -270,19 +313,35 @@ public sealed class VramGuard
     /// <see cref="Allows(ulong)"/> with <paramref name="pending"/> bytes the caller knows are on their way but are not in the memory in use yet (they
     /// count against the room without being reserved again).
     /// </summary>
-    public bool Allows(ulong bytes, ulong pending)
+    public bool Allows(ulong bytes, ulong pending) => Grants(bytes, pending, true);
+
+    /// <summary>
+    /// <see cref="Allows(ulong)"/> for an enlargement the caller does without when refused (a larger grass store, more terrain layer slots, the
+    /// material cache): what is drawn already fits, so a refusal declines the enlargement only and does not enter pressure. Observed (#1390,
+    /// 4K, Maximum textures, a 6.3 GB budget): the terrain layer slots' growth refused at 87.5% put the guard into pressure, and the ranges,
+    /// x0.53 within 4 s, did not come back while watched; without it they stayed at x1 at 87 to 90%.
+    /// </summary>
+    public bool AllowsGrowth(ulong bytes) => Grants(bytes, 0, false);
+
+    /// <summary>
+    /// Whether <paramref name="bytes"/> more (and <paramref name="pending"/> on their way) stay under <see cref="Ceiling"/>, reserving them if so;
+    /// a refusal is counted and, when <paramref name="pressing"/>, enters pressure.
+    /// </summary>
+    bool Grants(ulong bytes, ulong pending, bool pressing)
     {
         double now = _clock();
         if (now - _lastSample >= FreshSeconds) Sample(now);
         if (_budget <= 0) return true;
+
         long wanted = _used + _reserved + (long)pending + (long)bytes;
         if (wanted <= Ceiling * _budget)
         {
             _reserved += (long)bytes;
             return true;
         }
+
         Refusals++;
-        if (!_pressure) Enter(now, (double)wanted / _budget);
+        if (pressing && !_pressure) Enter(now, (double)wanted / _budget);
         return false;
     }
 
@@ -362,6 +421,7 @@ public sealed class VramGuard
     void Enter(double now, double fraction)
     {
         _pressure = true;
+        _cap = Math.Max(MinScale, _scale * StepDown);
         Activations++;
         if (Allocator is { } a) a.Lean = true;
         _lastStep = now - StepDownSeconds;   // the first step at once
@@ -393,24 +453,41 @@ public sealed class VramGuard
             if (Allocator is { } a) a.Lean = false;
             _calmSince = now;
             _lastStep = now;
+            _pressureEnded = now;
         }
-        if (_pressure)
+
+        if (_pressure) StepDownRanges(now);
+        else if (_scale < 1f) StepUpRanges(now);
+    }
+
+    /// <summary>
+    /// Under pressure: the ranges a step shorter every <see cref="StepDownSeconds"/>, down to <see cref="MinScale"/>.
+    /// </summary>
+    void StepDownRanges(double now)
+    {
+        if (now - _lastStep < StepDownSeconds) return;
+
+        _scale = Math.Max(MinScale, _scale * StepDown);
+        LowestScale = Math.Min(LowestScale, _scale);
+        _lastStep = now;
+    }
+
+    /// <summary>
+    /// Out of pressure: the ranges a step longer every <see cref="StepUpSeconds"/> while the held use (<see cref="HeldFraction"/>) has stayed under
+    /// <see cref="Recover"/> for <see cref="CalmSeconds"/>, up to the cap (<see cref="_cap"/>, lifted <see cref="CapSeconds"/> after the pressure).
+    /// </summary>
+    void StepUpRanges(double now)
+    {
+        if (now - _pressureEnded >= CapSeconds) _cap = 1f;
+        if (HeldFraction >= Recover)
         {
-            if (now - _lastStep >= StepDownSeconds)
-            {
-                _scale = Math.Max(MinScale, _scale * StepDown);
-                LowestScale = Math.Min(LowestScale, _scale);
-                _lastStep = now;
-            }
+            _calmSince = now;
+            return;
         }
-        else if (_scale < 1f)
-        {
-            if (f >= Recover) _calmSince = now;
-            else if (now - _calmSince >= CalmSeconds && now - _lastStep >= StepUpSeconds)
-            {
-                _scale = Math.Min(1f, _scale * StepUp);
-                _lastStep = now;
-            }
-        }
+
+        if (_scale >= _cap || now - _calmSince < CalmSeconds || now - _lastStep < StepUpSeconds) return;
+
+        _scale = Math.Min(_cap, _scale * StepUp);
+        _lastStep = now;
     }
 }

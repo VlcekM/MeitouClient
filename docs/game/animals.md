@@ -169,6 +169,11 @@ decompile), so a grown animal's run slows and starts at a higher speed with its 
 - A new animal's inventory (`FUN_14062a130`, slot 0x2c0, **Observed**; the grid size **Verified**, :79-107): a 5 x 4 `backpack_attach` section, the main grid `inventory w` x
   `inventory h` (each below 1 becomes 4 and 8 on its own: w=6, h=0 gives 6 x 8; neither set 4 x 8), then every `backpack` list entry is made and added equipped, whatever its values (Pack Bull's
   entry is (0, 0, 0)); a saved inventory replaces this. Pack Beast and Pack Bull carry their CONTAINER this way.
+- An animal has no clothing slots: `backpack_attach` (type 12) and `main` (type 7, general) are its only sections (**Verified**, `FUN_14062a130`). A general section takes any
+  item without the `RaceLimiter` (`FUN_14074bc30` returns true for type 7 before the slot test), so a down or dead other-faction animal's open grid takes clothing put in by hand,
+  as a person's does (**Verified** by decompile; Meitou the same, #1389: a Gi and Gi Pants in a knocked-out Beak Thing's `main`). The main section's weight multiplier `+0xac`
+  is set to 0 (`FUN_140745e90(main, 0)`; every section's constructor `FUN_1407495a0` sets 1.0), so what lies in an animal's main grid weighs nothing (`FUN_140749160` multiplies
+  the section's sum by it; **Verified** by decompile). Meitou still weighs it (the #1389 window's Total Weight 2 is those two 1 kg pieces).
 - The load (`FUN_14062a130`, `FUN_14074a3d0`, **Verified** by decompile): when the new animal wears a bag, each entry of its squad template's `vendors` list, or with none there of its own
   `inventory` list (VENDOR_LISTs too; no base animal has one), puts the list's `items count` items (40 when below 1) into the bag: picks as an item slot's
   ([`FUN_1409540d0`](factions-squads-towns.md#loose-items-in-buildings), for the animal's faction), at most twice as many tries, a pick that does not fit is destroyed. No chance, weight or

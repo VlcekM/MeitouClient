@@ -870,7 +870,7 @@ public sealed partial class AiSystem
                         return new PlanTarget(Targets.Seat, chair.Position);
 
                     if (_system.NodeGoalFindsNothing(_mind, _board, type)) return default;
-                    return Spot(Targets.Spot, _system.SpotFor(_world, _mind, _board, AiBehaviour.Post, type));
+                    return Spot(Targets.Spot, _system.SpotFor(_world, _slot, _mind, _board, AiBehaviour.Post, type));
                 case TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure:
                     // A character in a bed keeps it (the bed search FUN_1408cfe00, docs/game/locks.md "Bed search"): the target is where it lies.
                     if (_world.Characters.Cold(_slot) is { InSomething: Locks.HeldState.Bed })
@@ -880,9 +880,9 @@ public sealed partial class AiSystem
                         return Spot(Targets.Bed, (Flat(spare.Position), true, spare.Position.Y, null, false));
 
                     if (!_system.HasBed(_world, _board, _mind, _slot)) return default;
-                    return Spot(Targets.Bed, _system.SpotFor(_world, _mind, _board, AiBehaviour.Sleep, type));
+                    return Spot(Targets.Bed, _system.SpotFor(_world, _slot, _mind, _board, AiBehaviour.Sleep, type));
                 case TaskType.GoHomebuilding:
-                    return Spot(Targets.Spot, _system.SpotFor(_world, _mind, _board, AiBehaviour.GoHome, type));
+                    return Spot(Targets.Spot, _system.SpotFor(_world, _slot, _mind, _board, AiBehaviour.GoHome, type));
                 case TaskType.WanderTown or TaskType.Shopping or TaskType.Wanderer:
                     {
                         var behaviour = TaskBehaviours.Of(type);

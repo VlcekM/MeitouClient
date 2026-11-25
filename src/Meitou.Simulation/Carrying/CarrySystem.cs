@@ -962,8 +962,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// The carries a save held (see <see cref="RestoreLinks"/>), linked from either side with the roles the side's <c>carrying</c> bool names (the
-    /// reader <c>FUN_140627b30</c>, <b>Verified</b>): a body whose carrier's record no longer holds the link (its squad was destroyed or unloaded
-    /// first) is taken up again by it.
+    /// reader <c>FUN_140627b30</c>, <b>Verified</b>): an NPC body whose carrier's record no longer holds the link (its squad unloaded first) is taken
+    /// up again by it. Neither a player squad nor a squad carrying a player character unloads (<c>FUN_1404febd0</c>, <b>Verified</b>), so a link
+    /// involving a player-faction character must be mutual; a one-sided link on a player character is stale and dropped instead of teleporting it
+    /// (#1300).
     /// </summary>
     void RestoreSavedLinks(World world)
     {
@@ -987,19 +989,36 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 for (int s = 0; s < table.HighWater; s++)
                     if (next[s].Alive && table.Cold(s)?.Save is { } other) bySave[(other.Source.Handle.C, other.Source.Handle.I)] = s;
             }
+
             var hand = link.CarryPartner;
             if (!bySave.TryGetValue((hand.C, hand.I), out int b) || b == i) continue;
+
+            var partnerCold = table.Cold(b)!;
+            var partnerSave = partnerCold.Save!;
             link.CarryPartner = Meitou.Data.Save.Hand.Null;
-            table.Cold(b)!.Save?.CarryPartner = Meitou.Data.Save.Hand.Null;
-            if (link.CarryIsCarrier) Relink(world, i, b);
-            else Relink(world, b, i);
+            if (!SameCharacterHandle(hand, partnerSave.Source.Handle)) continue;
+
+            bool mutual = SameCharacterHandle(partnerSave.CarryPartner, link.Source.Handle) && partnerSave.CarryIsCarrier != link.CarryIsCarrier;
+            var (carrier, body) = link.CarryIsCarrier ? (i, b) : (b, i);
+            if (mutual) partnerSave.CarryPartner = Meitou.Data.Save.Hand.Null;
+            else if (PlayerSide(world, cold) || PlayerSide(world, partnerCold)) continue;
+            else if (SameCharacterHandle(partnerSave.CarryPartner, link.Source.Handle)) partnerSave.CarryPartner = Meitou.Data.Save.Hand.Null;
+
+            Relink(world, carrier, body);
         }
     }
 
     /// <summary>
+    /// Whether two character save handles name the same saved character (both non-null, matching container, container serial, slot and serial).
+    /// </summary>
+    static bool SameCharacterHandle(Meitou.Data.Save.Hand a, Meitou.Data.Save.Hand b) =>
+        !a.IsNull && !b.IsNull && a.C == b.C && a.Cs == b.Cs && a.I == b.I && a.S == b.S;
+
+    /// <summary>
     /// The links a squad kept when it left the world carrying or carried (<see cref="CharacterCold.CarryRelink"/>): once the partner is in the
     /// world again the carrier takes it up, from either side (the reader <c>FUN_140627b30</c> links with the roles its <c>carrying</c> bool names,
-    /// <b>Verified</b>); a partner not in the world is waited for (<c>FUN_140797ec0</c> has no give-up).
+    /// <b>Verified</b>); a partner not in the world is waited for (<c>FUN_140797ec0</c> has no give-up). A one-sided link involving a player-faction
+    /// character is dropped (as in <see cref="RestoreSavedLinks"/>).
     /// </summary>
     void RestoreUnloadLinks(World world)
     {
@@ -1019,10 +1038,14 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
             if (!byCold.TryGetValue(partner, out int p) || p == i) continue;
 
+            bool mutual = ReferenceEquals(partner.CarryRelink, cold) && partner.CarryRelinkIsCarrier != cold.CarryRelinkIsCarrier;
+            var (carrier, body) = cold.CarryRelinkIsCarrier ? (i, p) : (p, i);
             cold.CarryRelink = null;
-            if (ReferenceEquals(partner.CarryRelink, cold)) partner.CarryRelink = null;
-            if (cold.CarryRelinkIsCarrier) Relink(world, i, p);
-            else Relink(world, p, i);
+            if (mutual) partner.CarryRelink = null;
+            else if (PlayerSide(world, cold) || PlayerSide(world, partner)) continue;
+            else if (ReferenceEquals(partner.CarryRelink, cold)) partner.CarryRelink = null;
+
+            Relink(world, carrier, body);
         }
     }
 

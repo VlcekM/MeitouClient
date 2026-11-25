@@ -501,9 +501,9 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// A take out of another faction's town machine (<see cref="Take"/>): the stolen mark the taken items get
-    /// (<see cref="Crime.CrimeSystem.OwnerMark"/>; none for any other take), then, when the taker has <paramref name="room"/> for them with it, the
-    /// Theft and the steal roll (<see cref="Crime.CrimeSystem.Steal"/>), else the Theft alone (no roll, no thievery XP, #796). True: caught or no
-    /// room, nothing moves.
+    /// (<see cref="Crime.CrimeSystem.GoodsMark"/>; none for any other take or with nobody living there), then, when the taker has
+    /// <paramref name="room"/> for them with it, the Theft and the steal roll (<see cref="Crime.CrimeSystem.Steal"/>), else the Theft alone (no roll,
+    /// no thievery XP, #796). True: caught or no room, nothing moves.
     /// </summary>
     static bool CaughtTaking(World world, Crime.StealSource? goods, CharacterId taker, CharacterCold cold, Func<StolenMark, bool> room,
         out StolenMark mark)
@@ -511,7 +511,7 @@ public sealed partial class ProductionSystem
         mark = StolenMark.None;
         if (goods is not { Owner: >= 0 } g || g.Owner == cold.Faction || !Crime.CrimeSystem.IsStealing(world, g)) return false;
 
-        mark = Crime.CrimeSystem.OwnerMark(world, g.Building, g.Owner);
+        mark = Crime.CrimeSystem.GoodsMark(world, g);
         bool fits = room(mark);
         if (world.SystemOf<Crime.CrimeSystem>() is not { } crimes || !world.Characters.TryResolveNext(taker, out int thief)) return !fits;
 
@@ -629,8 +629,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     void TownOperate(World world, int slot, CharacterCold cold, Machine m, float dt)
     {
-        // tryOperate (slot 0x4f8, FUN_1400f8030) refuses while the bench needs no work: the player's research bench with no current research.
-        if (m.Data.IsResearch && CanResearch(world, m) && world.Research.Queue.Count == 0) return;
+        // tryOperate (slot 0x4f8, FUN_1400f8030) refuses while the building needs no work (dontNeedWorkRightNow, slot 0x4e8): the player's research
+        // bench with no current research, or a growing watered farm.
+        if (m.Data.IsResearch && CanResearch(world, m) && world.Research.Queue.Count == 0 || FarmNeedsNoWork(m)) return;
 
         if (m.Data.IsTraining)
         {
@@ -642,7 +643,7 @@ public sealed partial class ProductionSystem
 
         m.Operators++;
         cold.Operating = WorkStep(world, slot, cold, m, dt, ref _townResearch);
-        OperatingXp(world, cold, m.Data.Stat, dt);
+        if (m.Farm is null || cold.Operating) OperatingXp(world, cold, m.Data.Stat, dt);
     }
 
     /// <summary>

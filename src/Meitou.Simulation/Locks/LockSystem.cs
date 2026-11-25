@@ -225,9 +225,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
 
             if (!c.IsImprisoned)
             {
-                var (at, reach) = WorkSpot(world, f, new Vector2(next[s].Position.X, next[s].Position.Z));
-                float d = Vector2.Distance(new Vector2(next[s].Position.X, next[s].Position.Z), at);
-                if (d > reach)
+                if (!AtWorkSpot(world, f, next[s], out var at, out float reach))
                 {
                     // Still walking; another order (a new goal) or a failed path ends it.
                     if (Redirected(next[s], at, reach)) c.PickingLock = null;

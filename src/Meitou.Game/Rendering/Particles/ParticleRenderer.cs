@@ -203,9 +203,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
         uniform vec4 uSoft;                         // x: 0 hard (the game's), 1 fade the alpha, 2 the colour and alpha (additive), 3 towards white (modulate); y, z: the scene depth's near, far; w unused
         uniform float uCoverageMax, uCoverageGain;
         uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask); 3 / 4: the low-resolution target's premultiplied alpha / additive
-        uniform sampler2D uInteriorMask;            // the interior cut's depth range (InteriorMaskRenderer): r the nearest mask face's depth + 1, a the farthest's, b minus the farthest open building's
+        uniform sampler2D uInteriorMask;            // the interior cut's depth range (InteriorMaskRenderer): r the nearest near-side mask face's depth + 1 (none: above 60000, read as 0), a the farthest far-side one's, b minus the farthest open building's
         uniform vec4 uInterior;                     // x 1: the material clips inside buildings (CLIP_INTERIOR); y, z: the mask's pixels per pixel of this target; w 1: also cut in front of open buildings (full-size camera rain/ash)
-        """ + DepthConvention.Glsl + """
+        """ + DepthConvention.Glsl + InteriorMaskRenderer.FrontGlsl + """
         void main()
         {
             // basic.hlsl under CLIP_INTERIOR: a fragment between the nearest and the farthest interior-mask face is left out (rain in a building).
@@ -214,7 +214,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 ivec2 maskCoord = clamp(ivec2(gl_FragCoord.xy * uInterior.yz), ivec2(0), textureSize(uInteriorMask, 0) - 1);
                 vec4 interiorRange = texelFetch(uInteriorMask, maskCoord, 0);
                 float interiorDepth = 1.0 / gl_FragCoord.w;
-                if (interiorDepth < interiorRange.a && interiorDepth > interiorRange.r) discard;
+                float interiorNear = interiorFront(interiorRange);
+                if (interiorDepth < interiorRange.a && interiorDepth > interiorNear) discard;
                 // Meitou: camera rain and ash in front of a building whose roof is hidden too, so no streaks fall over the open room (b is 0 where
                 // there is none). When the scene depth is available, keep streaks over surfaces clearly in front of the building (its outer wall or
                 // a foreground structure) or behind it (sky or distant terrain seen through a hidden upper floor's mask).
@@ -222,8 +223,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 {
                     if (uSoft.x <= 0.0) discard;
                     float sceneZ = depthViewZ(texelFetch(uSoftDepth, ivec2(gl_FragCoord.xy), 0).r, uSoft.yz);
-                    float frontMargin = 2.0 + 0.002 * interiorRange.r;
-                    if (sceneZ >= interiorRange.r - frontMargin && sceneZ <= -interiorRange.b + 24.0) discard;
+                    float frontMargin = 2.0 + 0.002 * interiorNear;
+                    if (sceneZ >= interiorNear - frontMargin && sceneZ <= -interiorRange.b + 24.0) discard;
                 }
             }
             // basic.hlsl: texture * colour * vertex colour. A recoloured burst (negative vertex rgb, Burst's recolour) takes that colour instead of the texture's hue, keeping its brightness.

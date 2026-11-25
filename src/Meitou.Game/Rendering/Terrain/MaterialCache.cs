@@ -288,11 +288,13 @@ sealed class MaterialCache : IDisposable
     }
 
     /// <summary>
-    /// Makes the levels, their bindless entries and the bake program, unless the memory budget refuses them (then never again).
+    /// Makes the levels, their bindless entries and the bake program, unless the memory budget refuses them (then never again). Not while the
+    /// guard clamps the ranges (<see cref="VramGuard.Active"/>): it is asked again once they are back.
     /// </summary>
     bool CreateCache(TerrainTextures t)
     {
-        if (t.Guard is { } guard && !guard.Allows((ulong)CacheBytes))
+        if (t.Guard is { Active: true }) return false;
+        if (t.Guard is { } guard && !guard.AllowsGrowth((ulong)CacheBytes))
         {
             _cacheRefused = true;
             Console.WriteLine($"terrain   material cache not made: memory budget (VramGuard, {CacheBytes >> 20} MB)");

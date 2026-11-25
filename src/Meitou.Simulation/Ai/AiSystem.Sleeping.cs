@@ -39,7 +39,7 @@ public sealed partial class AiSystem
         if (SleepDanger(world, board, slot, me) > 0) return 0;
         if (DecisionSystem.Decides(me)) return PlayerSleepDesire(world, slot, me);
         if (me.InSomething == Locks.HeldState.Bed) return 1;
-        if (board.OwnHome is { } home && world.Sight.BuildingOf(slot) == home.Key && StrangerKnown(world, slot)) return 0;
+        if (board.OwnHome is { } home && world.Sight.BuildingOf(slot) == home.Key && StrangerKnown(world, slot, heard: false)) return 0;
         return BedClockDesire(me, (world.GameHours - me.BedUsedHours) * 60);
     }
 
@@ -63,15 +63,16 @@ public sealed partial class AiSystem
     /// <summary>
     /// The danger score the sleeping desire reads (AI slot 28, <c>FUN_1405a0b50</c>, <b>Verified</b>): 2 with an enemy sensed (<c>numEnemies</c>) or a
     /// threat on its threats list (AI <c>+0x80</c>, the list's count: someone of another faction whose fight targets it), 1.5 with an alarm of the
-    /// character's town near it (<see cref="AlarmOf"/>, stand-in for the alarm finder <c>FUN_14092a810</c>, <b>Observed</b>), 1 with a stranger it
-    /// knows in its home building (the original's: one it hears now, <c>FUN_1408557f0</c>; engine choice), else 0; but for a player-faction character
-    /// (<see cref="DecisionSystem.Decides"/>) the protect allies desire on itself (AI slot 14, <c>FUN_140599b90</c>, <see cref="ProtectGoalDesire"/>).
+    /// character's town near it (<see cref="AlarmOf"/>, stand-in for the alarm finder <c>FUN_14092a810</c>, <b>Observed</b>), 1 with a stranger in
+    /// its home building that it heard at its last look (<c>FUN_1408557f0</c>: the entry's heard flag <c>+0x39</c>, <b>Verified</b>; one only seen, or
+    /// known from before, does not get a sleeper up), else 0; but for a player-faction character (<see cref="DecisionSystem.Decides"/>) the protect
+    /// allies desire on itself (AI slot 14, <c>FUN_140599b90</c>, <see cref="ProtectGoalDesire"/>).
     /// </summary>
     internal float SleepDanger(World world, Blackboard board, int slot, CharacterCold me)
     {
         if (_aggro?.SensesOf(slot) is { } senses && (senses.Enemies > 0 || senses.Threats.Count > 0)) return 2;
         if (AlarmOf(world, slot, TaskType.InvestigateAlarms, board) is not null) return 1.5f;
-        if (board.OwnHome is { } home && world.Sight.BuildingOf(slot) == home.Key && StrangerKnown(world, slot)) return 1;
+        if (board.OwnHome is { } home && world.Sight.BuildingOf(slot) == home.Key && StrangerKnown(world, slot, heard: true)) return 1;
         if (!DecisionSystem.Decides(me) || me.Ai?.Squad is not { } squad) return 0;
 
         bool idle = (me.Orders & CharacterOrders.Passive) != 0 || (me.Orders & CharacterOrders.Sneak) != 0 && !me.InCombat;
@@ -80,9 +81,9 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// A sensed neutral or enemy (filter 6, not 0x208: neither KO nor imprisoned) in the same building as the character that it knows
-    /// (<c>FUN_140855960</c>, flag clear).
+    /// (<c>FUN_140855960</c>, flag clear: any entry), or with <paramref name="heard"/> that it heard at its last look (<c>FUN_1408557f0</c>).
     /// </summary>
-    bool StrangerKnown(World world, int slot)
+    bool StrangerKnown(World world, int slot, bool heard)
     {
         if (_aggro?.SensesOf(slot) is not { } senses) return false;
         var table = world.Characters;
@@ -90,6 +91,7 @@ public sealed partial class AiSystem
         foreach (var e in senses.Entries)
         {
             if ((e.Tags & (SenseTag.Neutral | SenseTag.Enemy)) == 0 || (e.Tags & (SenseTag.Ko | SenseTag.Imprisoned)) != 0) continue;
+            if (heard && !e.Heard) continue;
             if ((uint)e.Target >= (uint)table.HighWater
                 || !table.Previous[e.Target].Alive
                 || table.Previous[e.Target].Generation != e.Generation)

@@ -81,7 +81,9 @@ relation 50 or more (`FUN_1406b2630`); else, for a public town (slot 0x298, Town
 for a prison (Town `+0xd8` 7); any other town true). Flagged: the owners must not be enemies (faction test) and must be on the same floor, and the limit is 60, or the source owner's bounds radius + 40
 when the source is a building (class 0). The limits are stored squared (1e6, 3600). A move between the player's own windows is not stealing (`FUN_140711740`), so between a player character and a storage
 of the player's the limit is 1000 unless the character is imprisoned or the source stands in such a town. Meitou (`ProductionSystem.Near`, #1361): 1000
-X/Z then; flagged, 40 from the footprint or 60 from the position, an engine reading of the same place, floor and 60 / bounds radius + 40. Same owner: always allowed. A carried, unconscious squad member trades through its own window (**Observed** in the original 1.0.68, plain game, 2026-11-13: Zepp carries the unconscious Beep into a
+X/Z then; flagged, 40 from the footprint or 60 from the position, an engine reading of the same place, floor and 60 / bounds radius + 40. Between two player
+characters' windows, by right click (`QuickMoves`) or drag (`HeldItems.Reached`), `ItemMoveReach.CharactersNear`: 1000 X/Z, 60 when either is imprisoned or the
+source stands in such a town (#1378). Same owner: always allowed. A carried, unconscious squad member trades through its own window (**Observed** in the original 1.0.68, plain game, 2026-11-13: Zepp carries the unconscious Beep into a
 bar and trades with the barman; Beep's portrait clicked during the trade shows Beep's window beside the trader's, an item dragged from it to the trader sells for 27 and
 dragged back buys for 27). Meitou: an open trade passes to a knocked-out player character within 1000 whose window is used and stays with them, so stock dragged
 or right-clicked into that window is bought and their goods sell (`TradeSystem.Trades`, `Parties`; `HeldItems.KeepHeld` keeps a stock lift for them); opening a trade
@@ -751,7 +753,10 @@ holding the slaver, the customer, the character list and val0.
   DC 77 line ("You're freeing me?... Thanks!") joins it to the player at once (DA 18) when it is recruitable, else it runs off or stays free (**Observed**,
   line walk over the base data, issue #1015). The other races' root (`Tough bought from slavery`, Dialogue.mod 54741) needs the buyer within talking range
   (DC 16, 260), so a slave bought from a pen far from the slaver says nothing and its new squad's AI goes on: for the base pens' "slaves 3-7" template, package
-  "Slave only squad" (172 finds no cage without an owner; rebirth.mod's 127 Go Home (Run away)) (**Observed**, issue #1017). Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
+  "Slave only squad" (172 finds no cage without an owner; rebirth.mod's 127 Go Home (Run away)) (**Observed**, issue #1017). The split's platoon has no home town (its Ownerships
+  `+0x30` stays null: `FUN_1407cb9d0`, no save record, **Verified**), so 127 is wanted wherever it stands and runs it to the gate of the nearest town its faction owns or lives
+  in, the pen's town when its slave squads are housed there ([127](ai-tasks.md#town-goals)); the last slave of a pen is not split (`FUN_1405ce4e0` returns for a
+  platoon of one, **Verified** by decompile) and stays in the pen's squad (issue #1386). Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
   nothing is paid to the slaver.
 - The window's gate (`FUN_1407281c0`) makes such a shortfall unreachable: confirm is enabled only with a row ticked and the total within the buyer's money (the slaver's when
   selling, the player's when buying).
@@ -817,9 +822,10 @@ Roll convention: a `rand()` draw in [0, 1) against the chance p; the thief gets 
   Meitou (`TradeSystem.FenceOdds`, the trader of a code mod's [faction shop](../simulation.md#shopkeepers-of-the-players-faction-meitou-only) included): the owner is `ItemInstance.Owner` with the squad it was in when robbed (`OwnerSquad`, standing for `C`/`CS`), set where taking from a character is a
   theft (`CarrySystem`, `HeldItems`). A theft of a building's goods (an item of its container, a loose item of its slot) names the building's owner too: the original's
   `ownedby` is the bar's barman, the first member of the squad living there (**Observed**, plain game, The Hub's bar: the barrel's item had a null `ownedby` before the theft and the barman's
-  handle after it, "Stolen from: Barman"; the bar's loose items name him before any theft). Meitou
-  (`CrimeSystem.OwnerMark`) names the leader of the building's resident squad of the owning faction; with none the mark names only the faction, which no owner early-out applies to
-  and the home-town test reads as another town. The trader's town is `AiSystem.TownAt`, the owner's home town its squad's `Town`. Saved as the robbed character's handle in
+  handle after it, "Stolen from: Barman"; the bar's loose items name him before any theft). The hand is the residents hand of the building the goods
+  stand in, so goods out of a building nobody lives in (**Observed**: a town mine) stay ownerless and are never fenced ([carry-loot](carry-loot.md#stolen-ownership)). Meitou
+  (`CrimeSystem.GoodsMark`) names the leader of that building's resident squad, unmarked with none; a loose item of a building's slot (`CrimeSystem.OwnerMark`) the leader of its
+  resident squad of the owning faction, else the faction alone, which no owner early-out applies to and the home-town test reads as another town. The trader's town is `AiSystem.TownAt`, the owner's home town its squad's `Town`. Saved as the robbed character's handle in
   `ownedby` (the null handle when that character is not saved) and the robbed faction's id in Meitou's `meitou stolen from` (any mark; the only trace of a faction-only one or of
   a robbed character the save does not hold). Loading marks an item whose `ownedby` names a character of another faction than its holder's as stolen from that faction, and from
   the character once it is in the world (`SavedPopulation.NoteOwners`); else one whose `meitou stolen from` names another faction, from that faction.

@@ -1635,6 +1635,18 @@ public sealed partial class FixtureRegistry
     const float BedFloorReach = 40;
 
     /// <summary>
+    /// The game hours an escaped slave (state 2) lies low before it is an ex-slave, as the status tooltip's Time remaining counts them
+    /// (<c>DAT_1416adc00</c>, 12.0; docs/game/carry-loot.md "Escaped slaves lie low").
+    /// </summary>
+    const double EscapedSlaveHours = 12;
+
+    /// <summary>
+    /// The game hours an ex-slave (state 3) lies low before it is free, as the status tooltip's Time remaining counts them (<c>DAT_1416efde0</c>,
+    /// 96.0).
+    /// </summary>
+    const double ExSlaveHours = 96;
+
+    /// <summary>
     /// Whether a character is at a cage to use it (goal 108's <c>isAtLocation</c> for a building, <c>AI::isWithinChoppingRange</c>
     /// <c>FUN_14059c6d0</c>:114-122, docs/game/buildings-production.md "Work distance"): its flat distance to the cage's position is below the
     /// functionality's <c>use range</c>, doubled while it is not moving, and it is less than 15 above or below it (the original's same-floor test has
@@ -2058,12 +2070,16 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Puts a character leaving <paramref name="cage"/> at its <see cref="ExitSpot"/>, facing as it did; it stays where it is when the cage has no
-    /// use node.
+    /// Puts a character leaving <paramref name="cage"/> at its <see cref="ExitSpot"/>, facing as it did, standing through the start path as
+    /// <see cref="Hold"/> does (a cage keeps whatever task its occupant came in or was loaded with, <see cref="HoldCaged"/>); it stays where it is
+    /// when the cage has no use node.
     /// </summary>
     static void StepOut(CharacterTable table, int slot, Fixture cage)
     {
-        if (ExitSpot(cage) is { } at) table.Place(slot, at, table.Next[slot].Yaw);
+        if (ExitSpot(cage) is not { } at) return;
+
+        table.Place(slot, at, table.Next[slot].Yaw);
+        TaskStart.Step(table, slot, CharacterTask.Idle);   // the teleport stands it
     }
 
     /// <summary>
@@ -2399,6 +2415,18 @@ public sealed partial class FixtureRegistry
         }
         else if (c.SlaveState == 2 && elapsed > 12) (c.SlaveState, c.SlaveSince) = (3, world.GameHours);
     }
+
+    /// <summary>
+    /// The whole game hours an escaped slave or ex-slave has left to lie low (<c>FUN_140598b10</c>, <b>Verified</b> by decompile, constants read
+    /// from the binary): 12 (state 2) or 96 (state 3) less the hours since <see cref="CharacterCold.SlaveSince"/>, cut to a whole number towards
+    /// zero; 0 for any other state.
+    /// </summary>
+    public static int SlaveHoursLeft(World world, CharacterCold c) => c.SlaveState switch
+    {
+        2 => (int)(EscapedSlaveHours - (world.GameHours - c.SlaveSince)),
+        3 => (int)(ExSlaveHours - (world.GameHours - c.SlaveSince)),
+        _ => 0,
+    };
 
     /// <summary>
     /// Clears a character's hold: in nothing, no sentence, not kidnapped.

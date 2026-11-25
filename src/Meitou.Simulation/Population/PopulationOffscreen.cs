@@ -243,6 +243,7 @@ public sealed partial class PopulationSystem
         else if (member is Saving.SavedMember saved)
         {
             saved.Gone = true;
+            saved.Cold = null;
             recordId = saved.Source.RecordId;
         }
 

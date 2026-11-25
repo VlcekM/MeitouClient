@@ -475,8 +475,11 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   escaping. Needs to lay low for a day and avoid getting spotted. {2}"; "Ex-slave" - "Was once a slave of {1} but has now escaped. The heat has died down but he still needs to avoid getting found out. {2}".
   `{2}` is empty for a character with no squad (`+0x250`), else the hint: for state 1 "Your character will have a permanent job assigned called [Obedient slave]. While this is active he will
   automatically work for his master. You can remove this job, but beware of the consequences...", for 2 and 3 "Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and
-  find a plastic surgeon to restore your hair. Don't get spotted." (3: "... You should be safe if you stay out of towns."). For state 2 and 3 the same tooltip adds rows "Situation:" ("Undiscovered" when the
-  status `+0x110` is 0 or less, else "Seen!"), "Looks like a slave:" (`+0xf4` x 100 %) and "Time remaining:" (`FUN_140598b10` hours); the free-person text ("You are a free person.", "You are no slave.",
+  find a plastic surgeon to restore your hair. Don't get spotted." (3: "... You should be safe if you stay out of towns."). For state 2 and 3 (any character) the same tooltip first adds three rows, each label in Main after a `-` (`DAT_14168901c`): "Situation:" ("Undiscovered"
+  in Good when the status `+0x110` is 0 or less, else "Seen!" upper-cased in Bad), "Looks like a slave:" (Main, the float `+0xf4` x 100 through `{1,num}%`) and "Time remaining:" (Main,
+  `{1,num} hour` / `{1,num} hours` of `FUN_140598b10`: int(12.0 - elapsed) for state 2, int(96.0 - elapsed) for state 3, else 0, elapsed the game hours since the status `+0x8`
+  stamp, [lie low](carry-loot.md#escaped-slaves-lie-low); constants `DAT_1416adc00` 12.0 and `DAT_1416efde0` 96.0 **Verified** by reading the 1.0.68 `kenshi_x64.exe`, sha256 `a596ab4e407c…`);
+  then the bounty rows and the text. Meitou: `TooltipRuntime.LieLowRows`, `FixtureRegistry.SlaveHoursLeft`. The free-person text ("You are a free person.", "You are no slave.",
   "The faction that owns you.") belongs to the player's disguise tooltip.
 - Status entry (section 0x10 of the same builder, **Observed** by decompile), first match: the leader of its campaign (`Character::isLeadingAWarCampaign` `FUN_1409c4b10`: its platoon's leader and the campaign's
   leader) "War Leader" ("This is the Commander in charge of an entire army.") when `CampaignData::_isHostile` (+0x12, KenshiLib 1ce4a16), else "Leader" ("This is the leader of this group.");
@@ -747,7 +750,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   inventory (+0x430) holding no items (its count +0x18 is 0, `FUN_14004a0cf`) `[EMPTY]` in Title `#492620` (the uppercased translation of "Empty" in brackets, empty value; **Observed** decompile), `Training:` (function 7, any `stat used`: the
   label `Training:` with the editor stat name `FUN_140888440` of +0x3f8 appended, no separator, as the label of an empty-valued line; **Verified**
   decompile; Meitou puts a space between), `Cost to use:`
-  `Private` or `Pay c.{1,num}` (beds), `Lock state:` Locked / Unlocked, `Lock complexity:` `Level {1,num}`; 6 `Healing bonus:`
+  `Private` (slot 152 rent below 0) or `(Pay c.{1,num})`, 0 included, for function 6 (BF_BED) or 25 (BF_SKELETON_BED) whose owner faction (+0x10) is not the
+  player's (+0x250 null) (**Verified**, disassembly 0x140305333..0x140305395: no zero test; [rent](locks.md#beds); Meitou `BedDetail.Cost`), `Lock state:` Locked / Unlocked, `Lock complexity:` `Level {1,num}`; 6 `Healing bonus:`
   `x{1,num}` (beds), `Max Skill Level:` (training); 0xf `Money:`. Turrets, machines, generators and batteries have their own lines
   (`FUN_14030d620`, `FUN_140300090`, `FUN_140307bf0` ...: Working / No power / Out of resource / Output full, power, workers, fuel).
   A town bed (**Observed**, original-game screenshot of a Squin bar): a left click selects the bed itself, not the bar; panel:
