@@ -2457,7 +2457,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// <summary>
     /// Whether a walker at <paramref name="from"/> can step straight toward <paramref name="to"/> for <paramref name="probe"/> units (at least
     /// <see cref="ArriveRadius"/>), its height carried on as each step's is: a corner is cut early only then (engine choice; Observed: zone 22.10, a
-    /// walker beside a door stair's foot cut its corner up the stair's side and stood there).
+    /// walker beside a door stair's foot cut its corner up the stair's side and stood there), and never onto another layer than the leg's own
+    /// (<see cref="LeavesLeg"/>).
     /// </summary>
     static bool CanCut(IWalkability walk, Vector3 from, Vector3 to, float probe = ArriveRadius)
     {
@@ -2468,9 +2469,26 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         float y = from.Y;
         float most = MathF.Min(length, MathF.Max(probe, ArriveRadius));
         for (float d = 1; d <= most; d += 1)
-            if (!walk.TryStand(from.X + leg.X * (d / length), from.Z + leg.Y * (d / length), y, out y)) return false;
+        {
+            float t = d / length;
+            float x = from.X + leg.X * t, z = from.Z + leg.Y * t;
+            if (!walk.TryStand(x, z, y, out y) || LeavesLeg(walk, x, z, y, float.Lerp(from.Y, to.Y, t))) return false;
+        }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether a cut's step at (<paramref name="x"/>, <paramref name="z"/>), standing at <paramref name="y"/>, has left the leg it cuts along: off the
+    /// leg's straight height <paramref name="along"/> by more than <see cref="CorridorSlack"/> while another layer is there at that height (engine
+    /// choice, #1414: town guards cut a stair's foot across the ground beside it, walked on under the stair and into the storey below their upstairs
+    /// goal before turning back). Terrain that bulges off the straight height has no such layer and is cut as before.
+    /// </summary>
+    static bool LeavesLeg(IWalkability walk, float x, float z, float y, float along)
+    {
+        if (MathF.Abs(y - along) <= CorridorSlack) return false;
+
+        return walk.TryStand(x, z, along, out float own) && MathF.Abs(own - along) <= CorridorSlack && MathF.Abs(own - y) > CorridorSlack;
     }
 
     /// <summary>
