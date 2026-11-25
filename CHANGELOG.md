@@ -3,6 +3,40 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.23.1
+
+- Right-click and drag item moves between two of your characters' windows respect trading range (#1378)
+- Beds and other furniture on the roofs of closed buildings can be clicked again (#1376)
+- Characters inside a building you view from outside are drawn again, so slave shop slaves show without walking in (#1392)
+- Items on furniture on an upper deck no longer show through the floor above (#1395)
+- Town mines, wells and farms no longer mark their goods as stolen, so shops stop asking to fence them (#1379)
+- Skeleton beds show their rent, and a free bed of another faction shows "(Pay c.0)" (#1381)
+- Escaped slaves and ex-slaves show Situation, Looks like a slave and Time remaining in their status tooltip (#1398)
+- A caged character opens the cage's menu with the prisoner's beside it, so cage and shackle options no longer double up (#1385)
+- A cage shows the original's pointer: escape when unlocked, lockpick when locked (#1392)
+- Cages are entered, freed and picked only from their own floor, by you and by NPCs (#1396, #1397)
+- Locked doors at the top of a ramp are picked from the door, not from the ground below (#1405)
+- Bought slaves leave the pen and head for a town instead of idling, and keep their orders through save and load (#1386)
+- Slave carriers give up when their slave gets back up; one gatherer per cage, and caged players are processed by guards who see them (#1382, #1383, #1392)
+- Sleeping guards get up only for strangers they hear, so bedded slaver guards stop getting in and out of bed (#1403)
+- Sleepers take the first free home bed no squad mate claimed, as the original (#1387)
+- Town patrols throw intruders out through the Hub's gates instead of juggling them in its centre (#1399)
+- Miners walk to the edge of large rocks instead of standing idle (#1391)
+- Operators haul full output to the nearest machine that takes it (a stone processor), not only to storage (#1406)
+- Melee training dummies are trained with the character's weapon drawn (#1401)
+- Punches cut the fist on chain, plate and prosthetics; flesh only stuns, as the original (#1380)
+- Beak Things and other fast chasers catch runners on slopes (#1394)
+- A body saved while still falling no longer freezes in mid-air on load (#1388)
+- Characters high above the terrain (bridges, walkways, upper floors) no longer randomly move at double speed (#1384)
+- Blister Hill's Weapon Shop can be walked into and out of again; cached navmeshes rebuild once (#1393)
+- Textures: draw ranges come back after a VRAM squeeze, and optional growth no longer clamps them for good (#1390)
+- Full screen goes to the window's monitor, with a new Display > Monitor choice (#1402)
+- Medics use only kits from their own inventory and stop when theirs runs out, as the original (#1407)
+- Ceiling lamps and fans hung inside a house are drawn on the floor they belong to (#1408)
+- Debug give item puts items in an animal's backpack, never its shut inventory (#1375)
+- A graphics driver that refuses Vulkan 1.3 is named as such in log.txt and the launcher's Detect, not "GPU not found" (#1409)
+- Code mods built for another game version show the needs-an-update notice instead of Harmony's error
+
 ## v0.23.0
 
 - Unified AI chooser & real order queues for all NPCs, squads, raids, and town/captive duties
