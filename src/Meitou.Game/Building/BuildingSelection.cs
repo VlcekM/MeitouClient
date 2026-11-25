@@ -381,7 +381,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// </summary>
     bool SiteShownInside((Vector3 Origin, Vector3 Direction) ray, Simulation.Navigation.PlacedBuilding level,
         (Simulation.Construction.BuildingSnapshot Site, float T) site) =>
-        !level.Plot && !player.Hidden(ray, site.T) && player.Furniture.AboveViewedFloor?.Invoke(site.Site.Position) != true
+        !level.Plot && !player.Hidden(ray, site.T) && !player.Furniture.SiteAboveViewedFloor(site.Site)
         && level.Footprint.Gap(level.Placement.Position, level.Placement.Rotation, new Vector2(site.Site.Position.X, site.Site.Position.Z)) == 0;
 
     #endregion

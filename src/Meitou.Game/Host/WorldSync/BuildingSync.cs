@@ -307,6 +307,7 @@ sealed class BuildingSync(GameHost host)
             Contained = site.Parent is not null && !site.Outside,
             OutsideWhenUncovered = site.Parent is not null && !site.Outside,
             ContainerId = site.Parent,
+            OwnFloor = site.Parent is not null ? site.Floor : null,
             PlayerOwned = mine,
         };
     }

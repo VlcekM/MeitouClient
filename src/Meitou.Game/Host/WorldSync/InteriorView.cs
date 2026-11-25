@@ -229,8 +229,14 @@ sealed class InteriorView(GameHost host)
     /// <summary>
     /// Whether a place is above the shown floor of a building in the interior view, so what stands there is not drawn (as a character there).
     /// </summary>
-    internal bool AboveViewedFloor(System.Numerics.Vector3 at) => ViewedAt(at) is { } inView && InteriorFloors[inView.PlacementId] is var shown
-        && shown < 3 && inView.FloorAt(at) > shown;
+    internal bool AboveViewedFloor(System.Numerics.Vector3 at) => FloorAboveViewed(at, null);
+
+    /// <summary>
+    /// <see cref="AboveViewedFloor"/> for an object on <paramref name="floor"/> when it is known (a player building placed in another stores it, as
+    /// the game tests it), else on the floor of where it stands.
+    /// </summary>
+    internal bool FloorAboveViewed(System.Numerics.Vector3 at, int? floor) => ViewedAt(at) is { } inView
+        && InteriorFloors[inView.PlacementId] is var shown && shown < 3 && (floor ?? inView.FloorAt(at)) > shown;
 
     /// <summary>
     /// Whether a layout object on <paramref name="floor"/> of <paramref name="building"/> (its placement id) is not drawn, as the object renderer

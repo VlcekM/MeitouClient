@@ -599,6 +599,11 @@ public sealed record BuildingPlacement(
     public string? ContainerId { get; init; }
 
     /// <summary>
+    /// For a player building placed in or on another: the floor it stores (<see cref="PlacedMesh.OwnFloor"/>); null for any other.
+    /// </summary>
+    public int? OwnFloor { get; init; }
+
+    /// <summary>
     /// Laid out the same wherever it stands: no town's material, its parts' variants chosen as at a fixed place (the character editor's bar).
     /// </summary>
     public bool Standalone { get; init; }

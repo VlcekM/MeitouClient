@@ -1410,7 +1410,7 @@ sealed class BuildMode(PlayerInterface player)
             if (bounds is { } outline && !WorldPicking.RayPassesXz(ray, site.Position, SiteReach(host, site.Record, outline), ground)) continue;
 
             // Not drawn above the viewed floor of an opened house, so not picked there, as a bed or a container (FurnitureUse).
-            if (player.Furniture.AboveViewedFloor?.Invoke(site.Position) == true) continue;
+            if (player.Furniture.SiteAboveViewedFloor(site)) continue;
 
             if (SiteRayT(host, ray, site, bounds, terrain) is not { } hit || hit >= ground) continue;
 

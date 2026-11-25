@@ -457,7 +457,8 @@ interior-mask hulls); the hits are sorted nearest first (**Verified**, comparato
   taken though not visible. The shown floor (`FUN_1407f7230`) is the current floor for a building a player character is in, back to 4
   for one left; the flag of an interior's furniture follows the current floor itself (`FUN_14054a8f0`, +0xa4 against the viewed floor, PlayerInterface +0x1e4). Meitou
   (containers, beds and seats): one above the viewed floor of a building in the interior view is skipped, its floor from its height
-  (`InteriorVolume.FloorAt`); other layout furniture (`TownBuilding.Pieces`) above it by its layout floor and, while the building shows its
+  (`InteriorVolume.FloorAt`); a player's building placed in or on another by the floor it stores (`FurnitureUse.SiteAboveViewedFloor`: a ceiling
+  lamp's is its room's, [build placement](buildings-production.md)); other layout furniture (`TownBuilding.Pieces`) above it by its layout floor and, while the building shows its
   outside, unless the layout marks it outside, as drawn; not modelled:
   the flag's own test against the current floor in a building left within 10 s (Meitou shows every floor then) and the player's whole-shown interior exception.
 - Characters and ground items on a hidden floor are not visible either (**Verified**, decompile): a character in a building above the floor it shows (`FUN_1405c9f60`); a ground

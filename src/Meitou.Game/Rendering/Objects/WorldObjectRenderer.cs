@@ -1783,8 +1783,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>
     /// Whether a building of its own (a turret on a wall, furniture the player placed) stands above the viewed floor of a building in the interior
-    /// view, by where it stands in that building's hull: it is hidden with that floor (game: FUN_140547140 / FUN_14054a8f0, as the host does for
-    /// characters). A loose item: the game's answer (<see cref="HiddenItems"/>, FUN_1409fb540).
+    /// view: it is hidden with that floor (game: FUN_140547140 / FUN_14054a8f0 test the building's stored floor). A player building placed in or on
+    /// another is on the floor it stores (<see cref="PlacedMesh.OwnFloor"/>: a ceiling lamp hangs under the slab of the floor above, its room's); any
+    /// other on the floor of where it stands in that building's hull, as the host does for characters. A loose item: the game's answer
+    /// (<see cref="HiddenItems"/>, FUN_1409fb540).
     /// </summary>
     bool StandsAbove(ObjectStreamer.Instance inst)
     {
@@ -1792,8 +1794,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (p.Kind == PlacedKind.Item) return !AllFloors && HiddenItems.Contains(p.PlacementId);
         if (InteriorView.Count == 0 || AllFloors || p.Kind != PlacedKind.BuildingPart || p.ParentPlacementId is not null
             || InteriorView.ContainsKey(p.PlacementId)) return false;
+
         var answer = InteriorOf(inst);
-        return answer.Building is { } building && InteriorView.TryGetValue(building, out int floor) && answer.Floor > floor;
+        int standsOn = p.OwnFloor ?? answer.Floor;
+        return answer.Building is { } building && InteriorView.TryGetValue(building, out int floor) && standsOn > floor;
     }
 
     /// <summary>

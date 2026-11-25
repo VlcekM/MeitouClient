@@ -359,11 +359,24 @@ sealed class FurnitureUse(PlayerInterface player)
     /// Whether a place is above the floor shown in a building the player is in, where nothing is drawn (the host sets it; null: never).
     /// </summary>
     public Func<Vector3, bool>? AboveViewedFloor { get; set; }
+
+    /// <summary>
+    /// <see cref="AboveViewedFloor"/> for an object whose floor is known when given (the host sets it; null: never).
+    /// </summary>
+    public Func<Vector3, int?, bool>? FloorAboveViewed { get; set; }
+
     /// <summary>
     /// Whether a layout object of a building (placement key, floor number, outside flag) is not drawn: above the floor the building shows in the
     /// interior view, or inside while it shows its outside (the host sets it; null: never).
     /// </summary>
     public Func<string, int, bool, bool>? FloorHidden { get; set; }
+
+    /// <summary>
+    /// Whether a player's building is above the viewed floor of a building in the interior view, so not drawn nor picked: one placed in or on another
+    /// by the floor it stores (a ceiling lamp's is its room's, under the slab it hangs from), any other by where it stands.
+    /// </summary>
+    internal bool SiteAboveViewedFloor(Simulation.Construction.BuildingSnapshot site) =>
+        FloorAboveViewed?.Invoke(site.Position, site.Parent is not null ? site.Floor : null) == true;
 
     /// <summary>
     /// The container under <paramref name="pixel"/> (<see cref="PickContainerAt"/>).
