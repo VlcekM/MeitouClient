@@ -9,8 +9,8 @@ namespace Meitou.Simulation.Ai;
 /// <summary>
 /// A town's point outside its gates (<c>Town::getPositionOutsideTownGates(dist)</c>, <c>FUN_140927120</c> over <c>FUN_140929560</c>,
 /// docs/game/factions-squads-towns.md): the first of the town's gate set (its <c>is gateway</c> buildings, <see cref="TownBuilding.IsGateway"/>; Town
-/// <c>+0x390</c>, which <c>FUN_140929560</c> walks), in list order, that is a gate outside the walls (gate code 0) or a wall with an interior, moved
-/// <see cref="Offset"/> outward from the town's position; the town's position when there is none. It takes only the town, so
+/// <c>+0x390</c>, which <c>FUN_140929560</c> walks), in list order, that is a gate outside the walls (its own gate code 0) or a wall with an
+/// interior, moved <see cref="Offset"/> outward from the town's position; the town's position when there is none. It takes only the town, so
 /// every walker is given the same point (<b>Verified</b>; no walkability test anywhere, and the original's cache of the point is <b>Unknown</b>, not
 /// modelled). The patrols, the throwing out of an intruder (274), the travel rows 53 / 130, the war point and the homeward walks use it; for a town
 /// without gates the original's waypoint (Town <c>+0x38</c>) is the door point of the building under its position, for which the town's position
@@ -24,8 +24,8 @@ public static class TownExit
     public const float Offset = 200;
 
     /// <summary>
-    /// A placed town's point. Engine choice: an unknown gate code (off the navmesh, or no gate regions) counts as outside the walls; the building's
-    /// origin stands for the door point and "outward" is away from the town's position (<b>Observed</b>).
+    /// A placed town's point. Engine choice: an unknown gate code (no labelling listed the gate, or no gate regions) counts as outside the walls; the
+    /// building's origin stands for the door point and "outward" is away from the town's position (<b>Observed</b>).
     /// </summary>
     public static Vector2 Of(TownSite town, IGateRegions? regions, Func<TownBuilding, bool>? destroyed = null)
     {
@@ -42,13 +42,28 @@ public static class TownExit
 
     /// <summary>
     /// Whether a building of the gate set gives the point (<c>FUN_140929560</c>, <b>Verified</b>): a gate (a GatewayBuilding, Building slot 123) only
-    /// outside the walls and with a door (a ruin has none), never as a wall; any other building when it is a wall with an interior.
+    /// outside the walls (<see cref="OwnCode"/>) and with a door (a ruin has none), never as a wall; any other building when it is a wall with an
+    /// interior.
     /// </summary>
     static bool Qualifies(TownBuilding b, IGateRegions? regions, Func<TownBuilding, bool>? destroyed)
     {
-        if (b.IsGate) return !(destroyed?.Invoke(b) ?? b.Destroyed) && !(regions?.CodeAt(b.Position) > 0);
+        if (b.IsGate) return !(destroyed?.Invoke(b) ?? b.Destroyed) && !(OwnCode(regions, b.Key) > 0);
 
         return b.IsWall && b.HasInterior;
+    }
+
+    /// <summary>
+    /// A gate's own <c>amInsideTownWalls</c> (RootObject <c>+0xA0</c>): the second code the last labelling gave it, its outer side's
+    /// (<c>FUN_1402f03e0</c>, <b>Verified</b>), not the code under its origin, which can lie in the walled region (the Hub's two gates stood up
+    /// by its residents: codes [1, 0], origin code 1, <b>Observed</b>). Null when no labelling listed it (no door, or its zone not loaded).
+    /// </summary>
+    static int? OwnCode(IGateRegions? regions, string building)
+    {
+        if (regions is null) return null;
+
+        foreach (var gate in regions.Gates)
+            if (gate.Building == building && gate.Codes.Length > 0) return gate.Codes[^1];
+        return null;
     }
 
     /// <summary>
@@ -127,7 +142,7 @@ public static class TownExit
             if (site.Town != town.PlayerTown || !site.Complete || data.Db.Find(site.Record) is not { } r || !r.GetBool("is gateway")) continue;
 
             bool qualifies = TownBuildings.IsGate(data.Db, r, cache)
-                ? !(regions?.CodeAt(site.Position) > 0)
+                ? !(OwnCode(regions, site.Id) > 0)
                 : r.GetBool("links together") && r.GetReferences("interior").Count > 0;
             yield return (Flat(site.Position), qualifies);
         }
