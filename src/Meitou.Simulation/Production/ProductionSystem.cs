@@ -2405,8 +2405,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// Take an item (<see cref="TakeFromMachine.Count"/> units) out of a container into the character's inventory
     /// (<see cref="InventoryCommands.MoveInto"/>); what does not fit stays in the container. Taken from another faction's container it is stolen from
-    /// its owner (<see cref="Crime.CrimeSystem.OwnerMark"/>): a Theft and the steal roll (<see cref="Crime.CrimeSystem.Steal"/>), caught, nothing
-    /// moves.
+    /// its resident (<see cref="Crime.CrimeSystem.GoodsMark"/>; unmarked with nobody living there): a Theft and the steal roll
+    /// (<see cref="Crime.CrimeSystem.Steal"/>), caught, nothing moves.
     /// </summary>
     void TakeFromContainer(World world, Locks.Fixture container, CharacterCold cold, TakeFromMachine take)
     {
@@ -2416,7 +2416,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var mark = item.Mark;
         if (container.Owner >= 0 && container.Owner != cold.Faction && Crime.CrimeSystem.IsStealing(world, container)
             && mark == StolenMark.None)
-            item.Mark = Crime.CrimeSystem.OwnerMark(world, container.Building, container.Owner);
+            item.Mark = Crime.CrimeSystem.GoodsMark(world, Crime.StealSource.Of(container));
 
         bool bagFirst = take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack;
         int wanted = InventoryCommands.ClickCount(item, take.Count);

@@ -141,7 +141,7 @@ platoon `+0x1d8`; [whose](factions-squads-towns.md#whose-template-a-home-carries
 [squad leader](factions-squads-towns.md#squad-leader)), which keeps the member it falls back on as the backup. So a take out of a building that is no interior furniture (the wells, the outdoor farms, mines, refineries
 and wind generators: `is interior furniture` False in gamedata.base; the indoor farms, rain collectors and generators are True), out of interior
 furniture standing outdoors or out of furniture in a building nobody lives in is never a crime and has no roll; `isStealing` alone still marks the
-item. A building window's codes: the right click sets Theft 3 unless the owner character is down, when the loot permission decides
+item when the building it stands in has residents ([stolen ownership](#stolen-ownership)). A building window's codes: the right click sets Theft 3 unless the owner character is down, when the loot permission decides
 (`FUN_140793940`, which allows any subject that is no character, so no crime, but the roll follows); the drag sets Looting 10 (its downed-owner
 branch needs a character subject, vfunc `0x20` = 1); the give Theft 3. The roll's object is the window's subject (right click: the GUI's `+0x50`;
 drag: slot 16 `FUN_14070d010`), but the give passes the owner character, so a give out of a building's window rolls as a take out of that
@@ -195,7 +195,7 @@ keeps its damage, wear and stun on the item; a refused right-click move leaves i
 **Observed** item+0x140=from-owner, +0x160=current holder. Backpack uses its owning character's
 faction. Same faction/lawless holder (faction `fundamental type` 8 or `not real`) is not stolen (**Verified**, `FUN_14079e550`; it is tested before the state checks, whatever the strictness); strict1 can use set/nonmatching original-owner
 handle even if unresolved, strict0 also requires resolution. Dropping ownerless items can set
-dropper as owner. The save's `ownedby` is item+0x140 (**Observed**, `Item` vfunc 75/76); preserve handles, not a boolean only. A mark naming only a faction (goods of a building
+dropper as owner. The save's `ownedby` is item+0x140 (**Observed**, `Item` vfunc 75/76); preserve handles, not a boolean only. A mark naming only a faction (a loose item of a building
 nobody lives in) or a robbed character the save does not hold has no handle; Meitou keeps the faction in `meitou stolen from` ([save.md](../formats/save.md#zone-files)).
 
 A take from the inventory window (right click `RClickAutoTrade` `FUN_140713d20`, drag `FUN_140715560`) books its Theft/Looting, rolls
@@ -214,7 +214,8 @@ The mark does not ask `isItOkForMeToLoot` (that only picks the crime), so a band
 The hand `notifyTheftFrom` writes (`FUN_140792780`, `FUN_140792680`, **Verified** by decompile and disassembly): a character source's own hand, so each robbed
 body gives its own owner; for a BUILDING source a hand kept on the building (`+0xd0`, of the building it is mounted on or inside when it has one,
 `FUN_1400d5fa0`), the null hand when that one's type is 0; a `ShopTraderClass` (0x5b) hand gives the null hand. With a null hand the item stays ownerless
-(`FUN_140792800` writes only onto an ownerless item). **Verified** (harness, 1.0.65, Stack): the building's hand names a character (item `+0x148` type 1 after
+(`FUN_140792800` writes only onto an ownerless item): goods out of a building nobody lives in (a town mine, well or outdoor farm, an empty house's chest)
+are not stolen and no shop asks to fence them. Meitou: `CrimeSystem.GoodsMark` (the resident squad's leader, whatever its faction; none without residents). **Verified** (harness, 1.0.65, Stack): the building's hand names a character (item `+0x148` type 1 after
 the take): a clothes shop's goods read "Stolen from: Clothing trader holy", a home's chest "Stolen from: Holy Citizen", a knocked-out guard's kit
 "Stolen from: Holy Sentinel"; the player's own clean item put into such a container shows no owner there and is marked the same way when taken back.
 How the marks stack: [stack test](ui-screens.md#6-inventory-trade-dialogue-build).
