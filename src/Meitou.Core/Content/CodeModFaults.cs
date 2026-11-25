@@ -24,7 +24,8 @@ public static class CodeModFaults
     /// Whether <paramref name="e"/> (or the exception it wraps: a reflection call's, a static constructor's, a parallel loop's) is a binding failure:
     /// a member that is missing or no longer accessible (<see cref="MemberAccessException"/>, which <see cref="MissingMemberException"/> is), a type
     /// that cannot load (<see cref="TypeLoadException"/>, <see cref="TypeAccessException"/> among them; not a native library's), or an assembly whose
-    /// types cannot load (<see cref="ReflectionTypeLoadException"/>, judged by its loader exceptions).
+    /// types cannot load (<see cref="ReflectionTypeLoadException"/>, judged by its loader exceptions), or a Harmony patch that cannot bind
+    /// (<see cref="HarmonyCannotBind"/>).
     /// </summary>
     public static bool BuiltForAnother(Exception e)
     {
@@ -33,7 +34,7 @@ public static class CodeModFaults
         if (inner is ReflectionTypeLoadException types) return Array.Exists(types.LoaderExceptions, l => l is not null && BuiltForAnother(l));
         if (inner is DllNotFoundException or EntryPointNotFoundException) return false;
 
-        return inner is MemberAccessException or TypeLoadException;
+        return inner is MemberAccessException or TypeLoadException || HarmonyCannotBind(inner);
     }
 
     /// <summary>
@@ -69,5 +70,23 @@ public static class CodeModFaults
         while (e is TargetInvocationException or TypeInitializationException && e.InnerException is { } inner) e = inner;
 
         return e;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="e"/>, or the fault a <c>HarmonyLib.HarmonyException</c> wraps, is Harmony's own refusal of a patch whose target method,
+    /// injected parameter or injected <c>___field</c> the game no longer has (docs/modding.md "Versioning"). Harmony throws these as plain
+    /// <see cref="Exception"/> and <see cref="ArgumentException"/>, so they are told by their source and message; a fault of the mod's own
+    /// <c>Prepare</c>, <c>TargetMethod</c> or transpiler, which Harmony wraps too, comes from the mod and does not count.
+    /// </summary>
+    static bool HarmonyCannotBind(Exception e)
+    {
+        if (e.GetType().FullName == "HarmonyLib.HarmonyException" && e.InnerException is { } wrapped) e = wrapped;
+        if (e.Source != "0Harmony") return false;
+
+        string message = e.Message;
+        if (message.StartsWith("Undefined target method for patch method ", StringComparison.Ordinal)) return true;
+        if (message.StartsWith("Parameter \"", StringComparison.Ordinal) && message.Contains("\" not found in ", StringComparison.Ordinal)) return true;
+
+        return message.StartsWith("No field ", StringComparison.Ordinal) && message.Contains(" found on ", StringComparison.Ordinal);
     }
 }

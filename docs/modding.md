@@ -2004,6 +2004,14 @@ come back. Last, it runs the game without mods: if that differs too, the fault i
   game and needs an update; it is stopped and the rest of the game goes on.` (`CodeModFaults.Tell`), in place of the fault's own notice; what
   faulted is refused, stopped, dropped or skipped by its own rule, and the game runs on (**Observed**, by reading `CodeModFaults.Tell` and its
   callers).
+- A Harmony patch on an internal the game renamed, removed or re-signed counts the same (`CodeModFaults.HarmonyCannotBind`). **Observed**
+  (2026-11-25, scratch app, net11.0, Lib.Harmony 3.0.0-rc.7; `PatchAll`, a class processor and `Harmony.Patch`): Harmony throws them itself
+  (`Source` `0Harmony`), bare from `Patch`, else wrapped in a `HarmonyException` ("Patching exception in method ..."), with these messages: a
+  missing target `ArgumentException` "Undefined target method for patch method ...", a missing injected parameter `Exception` "Parameter
+  "<name>" not found in <method>", a missing `___field` `ArgumentException` "No field <name> found on <type>". The rule matches that text, so a
+  Harmony update that rewords it needs the rule checked. A throwing `Prepare`, `TargetMethod` or transpiler is wrapped the same way but comes
+  from the mod (a `TargetInvocationException` over the mod's fault) and keeps its own notice; so does a parameter of a changed type ("The
+  boxed value cannot have the requested type").
 - The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (3); otherwise the mod is refused at load with a
   message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
   `IModDependents`. 3 added the chooser surface ("Chooser goals and jobs", `World.GiveOrder`) and removed `CharacterCold.Engaged`,
