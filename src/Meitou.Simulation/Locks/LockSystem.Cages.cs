@@ -149,7 +149,7 @@ public sealed partial class LockSystem
                 continue;
             }
 
-            if (!AtWorkSpot(world, cage, next[s].Position, out var at, out float reach))
+            if (!AtWorkSpot(world, cage, next[s], out var at, out float reach))
             {
                 // Still walking; another order (a new goal) or a failed path ends it.
                 if (Redirected(next[s], at, reach))

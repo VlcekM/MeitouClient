@@ -104,6 +104,11 @@ Save sample (autosave of the owner's game, 51 zone files): `lock lvl` values spa
   floating label (`FUN_14073faf0`, font 0 small) 15 units over it: "Pick success!" (0.4, 0.8, 0.4, alpha 0.9) or "Pick failed"
   (0.7, 0.4, 0.4, alpha 0.7), the stealth KO's colours; no name, no log line. Success also plays `Character_Unlock_Success`.
   Meitou: `LockSystem.PickFloater`, shown whatever the floaters option. Wwise events: [audio](../audio.md#characters-footsteps-combat-voices).
+- **At the door** (picking, cutting, breaking, locking, opening; **Verified**, `AI::isWithinChoppingRange`, [work distance](buildings-production.md#work-distance)):
+  within the door's reach on the ground and within 130 of its height, so not from the floor under a door up a ramp. Meitou: the walk to
+  `LockSystem.WorkSpot` aims at the leaf's foot, not the door's position (its host building's origin: 210 under the ramp door of `40579-Newwworld.mod`,
+  **Observed** #1405), `AtWorkSpot` holds the 130 against that foot, and keeps a walker's work spot on the side its walk aims at (a ramp round the
+  building passes nearer the inner side).
 - **Target** (`Task_PickLock` slot 5): a building handle (a door resolves to its lock-owning object) or a **character**, meaning
   that character's cage (only when they are in a building prison). Shackles: the item handle, or a character, meaning their
   worn shackles. Self-targets are allowed: the caged character picks its own cage, a shackled one its own shackles (both

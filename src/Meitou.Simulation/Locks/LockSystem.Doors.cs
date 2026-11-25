@@ -166,18 +166,36 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// Whether one standing at <paramref name="position"/> is at its work on <paramref name="f"/>: within the reach of its <see cref="WorkSpot"/>
-    /// (<paramref name="at"/>, <paramref name="reach"/>), and at a cage on its floor. The cage rows (107 Get in, 110 Set Free, the lock work) reach
-    /// it through <c>isAtLocation</c>, <c>AI::isWithinChoppingRange</c> (<c>FUN_14059c6d0</c>, <b>Verified</b>: the flat distance and the same
-    /// floor, <see cref="FixtureRegistry.WorkHeight"/> here), so one standing under a cage on an upper storey is not at it (#1397). Doors and
-    /// containers keep the flat test: a container's walk floor lies up to 17 off its origin (docs/game/locks.md, #292).
+    /// Whether the character <paramref name="n"/> is at its work on <paramref name="f"/>: within the reach of its <see cref="WorkSpot"/>
+    /// (<paramref name="at"/>, <paramref name="reach"/>; while it walks, the side its walk aims at, as a walk up a ramp round a building passes nearer
+    /// the door's inner side, #1405), at a cage on its floor and at a door within <see cref="DoorPlan.DoorHeight"/> of the leaf's foot. The rows
+    /// reach it through <c>isAtLocation</c>, <c>AI::isWithinChoppingRange</c> (<c>FUN_14059c6d0</c>, <b>Verified</b>: the flat distance and the
+    /// same floor, <see cref="FixtureRegistry.WorkHeight"/> for a cage, 130 for a door), so one standing under an upper-storey cage (#1397) or under
+    /// a door up a ramp (#1405) is not at it. Containers keep the flat test: a container's walk floor lies up to 17 off its origin
+    /// (docs/game/locks.md, #292).
     /// </summary>
-    static bool AtWorkSpot(World world, Fixture f, Vector3 position, out Vector2 at, out float reach)
+    static bool AtWorkSpot(World world, Fixture f, in CharacterHot n, out Vector2 at, out float reach)
     {
-        (at, reach) = WorkSpot(world, f, Flat(position));
-        bool level = f.Kind != FixtureKind.Cage || MathF.Abs(position.Y - f.Position.Y) < FixtureRegistry.WorkHeight;
+        var position = n.Position;
+        (at, reach) = WorkSpot(world, f, n.Task == (byte)CharacterTask.GoTo ? n.Goal : Flat(position));
+        bool level = f.Kind switch
+        {
+            FixtureKind.Cage => MathF.Abs(position.Y - f.Position.Y) < FixtureRegistry.WorkHeight,
+            FixtureKind.Door => world.Fixtures.DoorSpotOf(f) is not { } spot || MathF.Abs(position.Y - spot.Foot) <= DoorPlan.DoorHeight,
+            _ => true,
+        };
 
         return level && Vector2.Distance(Flat(position), at) <= reach;
+    }
+
+    /// <summary>
+    /// A work spot <paramref name="at"/> of <paramref name="f"/> (<see cref="WorkSpot"/>) at the height its walk aims for: a door's leaf foot, anything
+    /// else its own height. A door's position is its host building's origin, which can lie far under the door (a door up a ramp, #1405).
+    /// </summary>
+    static Vector3 WorkPoint(World world, Fixture f, Vector2 at)
+    {
+        float y = world.Fixtures.DoorSpotOf(f) is { } spot ? spot.Foot : f.Position.Y;
+        return new Vector3(at.X, y, at.Y);
     }
 
     /// <summary>
@@ -271,7 +289,7 @@ public sealed partial class LockSystem
                 continue;
             }
 
-            if (!AtWorkSpot(world, door, n.Position, out var at, out float reach))
+            if (!AtWorkSpot(world, door, n, out var at, out float reach))
             {
                 // Still walking; another order (a new goal) or a failed path ends it, and so does being led away from the work.
                 if (job.Work > 0 || Redirected(n, at, reach)) c.DoorJob = null;
@@ -345,7 +363,7 @@ public sealed partial class LockSystem
         }
 
         ref var n = ref table.Next[s];
-        if (!AtWorkSpot(world, door, n.Position, out var at, out float reach))
+        if (!AtWorkSpot(world, door, n, out var at, out float reach))
         {
             if (Redirected(n, at, reach)) c.DoorWalk = null;
             return;

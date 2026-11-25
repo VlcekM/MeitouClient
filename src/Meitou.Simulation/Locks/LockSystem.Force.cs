@@ -150,7 +150,7 @@ public sealed partial class LockSystem
     static bool AtForcedLock(World world, int s, CharacterCold c, Fixture f)
     {
         var next = world.Characters.Next;
-        if (!AtWorkSpot(world, f, next[s].Position, out var at, out float reach))
+        if (!AtWorkSpot(world, f, next[s], out var at, out float reach))
         {
             if (Redirected(next[s], at, reach)) c.ForcingLock = null;
             return false;
