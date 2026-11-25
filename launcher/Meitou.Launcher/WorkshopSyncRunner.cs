@@ -67,12 +67,14 @@ sealed class WorkshopSyncRunner
     {
         (int Installed, int Total) last = (0, 0);
         WorkshopSyncResult? final = null;
+        List<ulong> unsubscribed = [];
         while (await child.StandardOutput.ReadLineAsync() is { } line)
         {
             if (!line.StartsWith(WorkshopSyncChild.Prefix, StringComparison.Ordinal)) continue;
 
             string[] parts = line[WorkshopSyncChild.Prefix.Length..].Split(' ', 4);
-            if (parts is ["progress", var installed, var total] && int.TryParse(installed, out int i) && int.TryParse(total, out int t))
+            if (parts is ["unsubscribed", ..]) unsubscribed = Ids(line[WorkshopSyncChild.Prefix.Length..]);
+            else if (parts is ["progress", var installed, var total] && int.TryParse(installed, out int i) && int.TryParse(total, out int t))
             {
                 last = (i, t);
                 report(i, t);
@@ -82,11 +84,11 @@ sealed class WorkshopSyncRunner
 
         await child.WaitForExitAsync();
 
-        if (final is not null) return final;
+        if (final is not null) return final with { Unsubscribed = unsubscribed };
 
         // No result line: the window stopped it, or it died.
         return child.ExitCode is 0 or -1 or 137
-            ? new WorkshopSyncResult(null, last.Total, last.Installed, 0, true)
+            ? new WorkshopSyncResult(null, last.Total, last.Installed, 0, true, [])
             : Failed($"The Workshop sync ended unexpectedly (exit code {child.ExitCode}).");
     }
 
@@ -99,14 +101,23 @@ sealed class WorkshopSyncRunner
         if (parts is ["result", var total, var installed, var refused] && int.TryParse(total, out int t) && int.TryParse(installed, out int i)
             && int.TryParse(refused, out int r))
         {
-            return new WorkshopSyncResult(null, t, i, r, false);
+            return new WorkshopSyncResult(null, t, i, r, false, []);
         }
 
         return null;
     }
 
     /// <summary>
+    /// The item ids of an <c>unsubscribed</c> line.
+    /// </summary>
+    static List<ulong> Ids(string line) =>
+        [.. line.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Skip(1)
+            .Select(p => ulong.TryParse(p, out ulong id) ? id : 0)
+            .Where(id => id != 0)];
+
+    /// <summary>
     /// A sync that could not run.
     /// </summary>
-    static WorkshopSyncResult Failed(string problem) => new(problem, 0, 0, 0, false);
+    static WorkshopSyncResult Failed(string problem) => new(problem, 0, 0, 0, false, []);
 }

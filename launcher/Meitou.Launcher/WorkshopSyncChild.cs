@@ -20,12 +20,14 @@ static class WorkshopSyncChild
     public const string Prefix = "meitou-sync:";
 
     /// <summary>
-    /// Runs the sync and prints <c>progress &lt;installed&gt; &lt;total&gt;</c> lines, then one <c>result &lt;total&gt; &lt;installed&gt; &lt;refused&gt;</c>
-    /// or <c>problem &lt;text&gt;</c> line. It ends when the runner kills it (a stop) or when every item is installed.
+    /// Runs the sync and prints <c>progress &lt;installed&gt; &lt;total&gt;</c> lines, then an <c>unsubscribed &lt;id&gt;...</c> line (the folders
+    /// of items no longer subscribed) and one <c>result &lt;total&gt; &lt;installed&gt; &lt;refused&gt;</c> line, or one <c>problem &lt;text&gt;</c>
+    /// line. It ends when the runner kills it (a stop) or when every item is installed.
     /// </summary>
     public static void Run()
     {
         var result = WorkshopSync.Run((installed, total) => Console.WriteLine($"{Prefix}progress {installed} {total}"), CancellationToken.None);
+        if (result.Problem is null) Console.WriteLine($"{Prefix}unsubscribed {string.Join(' ', result.Unsubscribed)}");
         Console.WriteLine(result.Problem is { } problem
             ? $"{Prefix}problem {problem.ReplaceLineEndings(" ")}"
             : $"{Prefix}result {result.Total} {result.Installed} {result.Refused}");

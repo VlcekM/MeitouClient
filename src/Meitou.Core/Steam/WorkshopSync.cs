@@ -13,13 +13,9 @@ public static class WorkshopSync
     const string NotRunning = "Steam is not running. Start Steam and sign in first, then synchronise again.";
 
     /// <summary>
-    /// How often the item states are read.
-    /// </summary>
-    const int PollMilliseconds = 500;
-
-    /// <summary>
-    /// Syncs, calling <paramref name="report"/> with the installed and the total item count whenever the installed count changes, until every item
-    /// is installed or <paramref name="stop"/> is cancelled (the client then goes on downloading by itself). Blocks: run it off the UI thread.
+    /// Syncs, calling <paramref name="report"/> with the installed and the total item count whenever either changes, until every item is installed
+    /// and the subscriptions have settled (<see cref="WorkshopSyncWatch"/>) or <paramref name="stop"/> is cancelled (the client then goes on
+    /// downloading by itself). Blocks: run it off the UI thread.
     /// </summary>
     public static WorkshopSyncResult Run(Action<int, int> report, CancellationToken stop)
     {
@@ -29,45 +25,13 @@ public static class WorkshopSync
         using var ugc = SteamUgc.TryOpen(MacSteam.LibraryPath, out string? problem);
         if (ugc is null) return Failed(problem!);
 
-        ulong[] subscribed = ugc.SubscribedItems();
-        var refused = RequestDownloads(ugc, subscribed);
-        ulong[] wanted = [.. subscribed.Except(refused)];
-        var (installed, stopped) = Wait(ugc, wanted, report, stop);
-        return new WorkshopSyncResult(null, subscribed.Length, installed, refused.Count, stopped);
+        return new WorkshopSyncWatch(ugc).Run(report, stop);
     }
 
     /// <summary>
     /// A sync that could not run.
     /// </summary>
-    static WorkshopSyncResult Failed(string problem) => new(problem, 0, 0, 0, false);
-
-    /// <summary>
-    /// Asks for every item that is not installed and current; the ids the client refuses.
-    /// </summary>
-    static List<ulong> RequestDownloads(SteamUgc ugc, ulong[] items)
-    {
-        var refused = new List<ulong>();
-        foreach (ulong id in items)
-            if (!IsCurrent(ugc.State(id)) && !ugc.Download(id)) refused.Add(id);
-        return refused;
-    }
-
-    /// <summary>
-    /// Polls until every item is current or the sync is stopped; how many are current then, and whether it was stopped.
-    /// </summary>
-    static (int Installed, bool Stopped) Wait(SteamUgc ugc, ulong[] items, Action<int, int> report, CancellationToken stop)
-    {
-        int reported = -1;
-        while (true)
-        {
-            ugc.RunCallbacks();
-            int installed = items.Count(id => IsCurrent(ugc.State(id)));
-            if (installed != reported) report(reported = installed, items.Length);
-
-            if (installed == items.Length) return (installed, false);
-            if (stop.WaitHandle.WaitOne(PollMilliseconds)) return (installed, true);
-        }
-    }
+    static WorkshopSyncResult Failed(string problem) => new(problem, 0, 0, 0, false, []);
 
     /// <summary>
     /// True for an item that is installed and has nothing left to download.

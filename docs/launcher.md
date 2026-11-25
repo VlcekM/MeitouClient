@@ -376,9 +376,19 @@ or update the subscribed items and waits until they are installed; unsubscribing
   "Kenshi" when quitting (**Observed**: `gameprocess_log.txt` tracked the launcher's PID from the sync until Steam itself quit, while the spike's
   short-lived processes were untracked at exit).
 - The child sets `SteamAppId`/`SteamGameId` (233860) in the real process environment (`setenv`; .NET's own copy is not seen by native code),
-  calls `SteamAPI_InitFlat`, lists `GetSubscribedItems`, calls `DownloadItem` for each item not installed and current, polls `GetItemState`
-  (current = Installed without NeedsUpdate, Downloading or DownloadPending) every 0.5 s and prints `installed of total`; then `SteamAPI_Shutdown`
-  and it exits. The mod list is read again at the end.
+  calls `SteamAPI_InitFlat`, then every 0.5 s (`WorkshopSyncWatch`) runs the callbacks, reads `GetSubscribedItems` and each item's
+  `GetItemState` (current = Installed without NeedsUpdate, Downloading or DownloadPending), calls `DownloadItem` for an item that is not current,
+  and prints `installed of total` when either changes. It ends once every item is current and neither the subscriptions nor a state has
+  changed for 5 s (an engine choice); then `SteamAPI_Shutdown` and it exits. The mod list is read again at the end. A process that has just
+  started as Kenshi gets the client's cached answers: **Observed** (Steam restarted, 3 items subscribed on the Workshop since): the first
+  `GetSubscribedItems` listed the 10 old items, the next poll 0.5 s later 13, the new ones `Subscribed|NeedsUpdate`, and the client began
+  downloading them without a `DownloadItem` (installed after 3.5, 14.6 and 16.2 s). **Observed** (the owner, with updates pending): a sync
+  that read the subscriptions and states once reported every item current, and a second one seconds later found the updates.
+- An item unsubscribed keeps its folder while a process runs as Kenshi: **Observed** (one item unsubscribed on the Workshop): its folder was
+  still there after a sync had run 60 s, and gone right after the next sync started. So the child also prints the item folders that are not
+  subscribed (`unsubscribed <id>...`); the launcher keeps them in `launcher.json` (`WorkshopUnsubscribed`, replaced by each finished sync, an
+  item dropped when the Subscribe button subscribes to it) and the Mods page leaves them out (`ModList.Discover`), as the original game, which
+  asks Steam for the subscribed items, does.
 - While it runs, Steam shows the account as playing Kenshi. The button reads **Stop syncing** meanwhile; stopping (or closing the launcher) kills
   the child, Steam keeps downloading by itself.
 - Items land in the client's `steamapps/workshop/content/233860/<id>/` (one `.mod` each). `GameInstall.WorkshopDirectory` falls back to that

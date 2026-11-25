@@ -1022,12 +1022,13 @@ public sealed partial class MainWindow : Window
         ModsEmpty.IsVisible = false;
         SyncWorkshopButton.IsVisible = MacSteam.CanSync;
         var gameInstall = _install;
+        var unsubscribed = _config.WorkshopUnsubscribed.ToHashSet();
         List<ModRow> rows;
 
         try
         {
             rows = gameInstall is null ? [] : await Task.Run(() =>
-                ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall))
+                ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall, unsubscribed))
                     .Select(ReadModRow)
                     .ToList());
         }
@@ -1252,6 +1253,7 @@ public sealed partial class MainWindow : Window
         Status(Tr("Asking Steam to subscribe..."));
         var result = await WorkshopSubscribeRunner.RunAsync(library, [.. ports.Select(p => p.PortWorkshopId)]);
         _subscribing = false;
+        KeepSubscribed(result);
 
         var failed = ports
             .Where(p => result.Items.FirstOrDefault(i => i.Id == p.PortWorkshopId) is not { Problem: null })
@@ -1260,6 +1262,15 @@ public sealed partial class MainWindow : Window
         if (failed.Count > 0) await OfferPagesOfFailed(result, failed);
 
         if (failed.Count < ports.Count) LoadMods();
+    }
+
+    /// <summary>
+    /// Shows again the items just subscribed to that the last sync found unsubscribed.
+    /// </summary>
+    void KeepSubscribed(WorkshopSubscribeResult result)
+    {
+        int removed = _config.WorkshopUnsubscribed.RemoveAll(id => result.Items.Any(i => i.Id == id && i.Problem is null));
+        if (removed > 0) _config.Save();
     }
 
     /// <summary>
@@ -1517,6 +1528,11 @@ public sealed partial class MainWindow : Window
 
         SetText(SyncWorkshopText, "Sync workshop");
         Status(SyncSummary(result));
+        if (result is { Problem: null, Stopped: false })
+        {
+            _config.WorkshopUnsubscribed = [.. result.Unsubscribed];
+            _config.Save();
+        }
         LoadMods();
     }
 

@@ -159,6 +159,12 @@ public sealed class LauncherConfig
     public List<ModPreset> Presets { get; set; } = [];
 
     /// <summary>
+    /// macOS: the Workshop items whose folders the last sync found though they are no longer subscribed; the Mods page leaves them out until the
+    /// client deletes them, which it does not while a process runs as Kenshi (docs/launcher.md "Workshop sync").
+    /// </summary>
+    public List<ulong> WorkshopUnsubscribed { get; set; } = [];
+
+    /// <summary>
     /// The RE_Kenshi mods (by name) whose endorsed ports the Mods page has offered once (<see cref="Meitou.Content.CoveredMods.Endorsed"/>).
     /// </summary>
     public List<string> OfferedPorts { get; set; } = [];
