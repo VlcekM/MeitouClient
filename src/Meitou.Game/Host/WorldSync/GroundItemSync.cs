@@ -284,8 +284,9 @@ sealed class GroundItemSync(GameHost host)
 
     /// <summary>
     /// After the interior view each frame: which ground items are above their building's shown floor (as <see
-    /// cref="InteriorView.AboveViewedFloor"/>). An item's floor is worked out again only when it is drawn somewhere else or found in another
-    /// building: a still item stays on its floor, only the shown floor changes.
+    /// cref="InteriorView.AboveViewedFloor"/>, the building the one <see cref="InteriorView.ViewedUnder"/> finds: on furniture on an open deck an item
+    /// lies above the hull). An item's floor is worked out again only when it is drawn somewhere else or found in another building: a still item stays
+    /// on its floor, only the shown floor changes.
     /// </summary>
     internal void UpdateGroundVisibility()
     {
@@ -293,7 +294,7 @@ sealed class GroundItemSync(GameHost host)
         HiddenGroundKeys.Clear();
         foreach (var (id, pose) in _groundPoses)
         {
-            if (host.Interiors.ViewedAt(pose.At) is not { } inView) continue;
+            if (host.Interiors.ViewedUnder(pose.At) is not { } inView) continue;
             int shown = host.Interiors.InteriorFloors[inView.PlacementId];
             if (shown >= 3) continue;
             if (!_groundFloors.TryGetValue(id, out var known) || !ReferenceEquals(known.Building, inView) || known.At != pose.At)

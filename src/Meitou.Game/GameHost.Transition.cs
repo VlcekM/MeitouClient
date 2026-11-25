@@ -400,6 +400,7 @@ sealed partial class GameHost
     {
         _sentFocus = false;
         SendFocus();
+        SendView();
         Session.World.GameHours = Session.Clock.TotalHours;
         Session.World.Daytime = Session.Clock.IsDaytime;
         Session.World.RunTick();

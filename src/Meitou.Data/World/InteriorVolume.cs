@@ -259,6 +259,11 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public int FloorAt(Vector3 feet) => _floors?.Value.FloorAt(feet) ?? 0;
 
     /// <summary>
+    /// What <see cref="FloorAt"/>'s ray meets of the building's floor collision: the floor and the hit's height; null when it meets none.
+    /// </summary>
+    public (int Floor, float Y)? SurfaceUnder(Vector3 feet) => _floors?.Value.SurfaceUnder(feet);
+
+    /// <summary>
     /// The interior mask collision's triangles in world space (three corners each): the indoor space itself, concave where the building is.
     /// </summary>
     Vector3[] _maskCorners = [];
@@ -715,7 +720,12 @@ public sealed partial class FloorSurfaces
     /// floor; stairs give the floor above theirs when the hit is in their top <see cref="StairsTop"/>, else their own (game: hits on stairs lower
     /// down give nothing and the character keeps its floor; here, without a kept floor, their own). Nothing hit: 0.
     /// </summary>
-    public int FloorAt(Vector3 feet)
+    public int FloorAt(Vector3 feet) => SurfaceUnder(feet)?.Floor ?? 0;
+
+    /// <summary>
+    /// What <see cref="FloorAt"/>'s ray meets: the floor it gives and the height of the hit; null when it meets no floor part.
+    /// </summary>
+    public (int Floor, float Y)? SurfaceUnder(Vector3 feet)
     {
         float top = feet.Y + RayStart, best = float.NegativeInfinity;
         int floor = 0;
@@ -731,7 +741,8 @@ public sealed partial class FloorSurfaces
                     : Math.Min(3, s.Floor + (s.YMax - s.YMin > 1e-3f && (s.YMax - y) <= StairsTop * (s.YMax - s.YMin) ? 1 : 0));
             }
         }
-        return floor;
+
+        return best > float.NegativeInfinity ? (floor, best) : null;
     }
 
     /// <summary>

@@ -1168,19 +1168,20 @@ public class ProductionTests
     [Fact]
     public void Operators_haul_a_full_output_to_a_storage_that_takes_it_and_fetch_an_empty_input()
     {
-        using var rig = new Rig(Database(), Constants, [Well, Farm, Tank]);
+        // The tank stands nearer the well than the farm does: the well's output goes to the nearest building whose slot 0x4a0 takes it.
+        using var rig = new Rig(Database(), Constants, [Well, Tank, Farm]);
         var taker = rig.Add(0, StatsEnumerated.Labouring, Unit);
         var labourer = rig.Add(0, StatsEnumerated.Labouring, Unit);
-        var farmer = rig.Add(1, StatsEnumerated.Farming, Unit, (Crop, 1));
+        var farmer = rig.Add(2, StatsEnumerated.Farming, Unit, (Crop, 1));
         rig.World.RunTick();
-        var (well, farm, tank) = (rig.Machine(0), rig.Machine(1), rig.Machine(2).Storage!);
+        var (well, farm, tank) = (rig.Machine(0), rig.Machine(2), rig.Machine(1).Storage!);
         well.Output!.Count = 3;
         rig.World.Commands.Enqueue(new TakeFromMachine(taker, rig.Sites[0], -2) { Tick = rig.World.Tick });
         rig.World.RunTick();
 
         Assert.Equal((0, 3), (well.Output.Count, rig.Count(taker, Water)));
 
-        rig.Put(farmer, Crop, 2, -1);
+        rig.Put(farmer, Crop, 1, -1);
         rig.World.RunTick();
 
         Assert.Equal((1, 0), (rig.Count(farmer, Crop), tank.Items.Count));
@@ -1190,7 +1191,7 @@ public class ProductionTests
         well.Output.Count = 10;
         well.Yield = 0;
         rig.World.Commands.Enqueue(new OperateOrder([labourer], rig.Sites[0]) { Tick = rig.World.Tick });
-        rig.World.Commands.Enqueue(new OperateOrder([farmer], rig.Sites[1]) { Tick = rig.World.Tick });
+        rig.World.Commands.Enqueue(new OperateOrder([farmer], rig.Sites[2]) { Tick = rig.World.Tick });
         int TotalWater() => well.Output.Count + farm.Inputs[0].Count + tank.Items.Where(i => i.Record == Water)
                 .Sum(i => i.Quantity) + rig.Count(labourer, Water) + rig.Count(farmer, Water) + rig.Count(taker, Water);
         bool stored = false;
@@ -1573,7 +1574,8 @@ public class ProductionTests
         for (int t = 0; t < 30000 && farm.Inputs[0].Count == 0; t++)
         {
             rig.World.RunTick();
-            pumped |= cold.OperateSite == rig.Sites[1] && well.Full;
+            // The full output goes to the farm's input the tick it fills (the farm takes water), so a full well or its water carried off counts.
+            pumped |= cold.OperateSite == rig.Sites[1] && (well.Full || rig.Count(farmer, Water) > 0);
         }
 
         Assert.True(pumped && farm.Inputs[0].Count == 10, $"well {well.Count}, farm {farm.Inputs[0].Count}, carried {rig.Count(farmer, Water)}");

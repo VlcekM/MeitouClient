@@ -94,6 +94,13 @@ public sealed record PlacedMesh(
     public string? ContainerId { get; init; }
 
     /// <summary>
+    /// For a player building placed in or on another: the floor it stores (the save's <c>floornum</c>, the floor of the surface the build cursor met, a
+    /// ceiling lamp's the room's under it), which the interior view tests against the viewed floor instead of where it hangs (docs/render-objects.md
+    /// "Closed interiors"); null for any other.
+    /// </summary>
+    public int? OwnFloor { get; init; }
+
+    /// <summary>
     /// A destroyed building's upper-floor part with no destroyed mesh: kept for its collision, never drawn.
     /// </summary>
     public bool RenderHidden { get; init; }

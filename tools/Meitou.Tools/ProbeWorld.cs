@@ -103,6 +103,7 @@ sealed class ProbeWorld : IDisposable
             lock (gate) return map.HeightAt(x, z);
         };
         var layouts = new BuildingLayouts(db, levels.Interiors);
+        levels.ApplyBuildingSwaps(db, layouts);   // the factions' building swaps, as the game's scene applies them
         ResidentRuins.Apply(db, levels, layouts);   // the homes' ruins and layouts before anything reads the levels, as the game's boot
         var data = PopulationData(install, db, levels, layouts, height);
         data.ResourceNodes = ResourceNodes(install, db, levels);

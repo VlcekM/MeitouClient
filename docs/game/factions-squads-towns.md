@@ -897,7 +897,10 @@ turret finder uses it so far (the others read the squad's home, which a player s
   `IsPublic`, `OwnerOf`) and, for an animal, the animal terms (`AdmitsAnimal`: both `Locks.AnimalEntry.MayEnter` and `AnimalEntry.Allows`); the walk
   goes to the drawn point. **Observed** (headless, #803 save, Sho-Battai): before, a Merchant Nomad on
   goal 36 walked into Lord Nagata's private Bughouse, the noble's guards shooed it and the noble house fought it as a trespasser; after, no
-  patroller enters it.
+  patroller enters it. The player's term is the building's faction (vfunc `0x58`) having `+0x250` set, an alternative to `isPublic`, so
+  a building of the player's faction with an open door takes anyone's patrol draws whatever its Open to public toggle; only a closed door keeps
+  patrols out (**Verified**, `FUN_14065eaa0`). **Observed** (#1400 save, the Hub's bought Old Storm House `20.32:34-Newwworld-INGAME`, Private,
+  its door opened by the purchase; headless, 18,000 ticks): a Vagrants Bar Thug Drunk on goal 36 walked in.
   A loaded patrol draws again when the task's update finds the move ended (`FUN_1405c6b30` mode 1 returns unless the mover reports
   idle, reached or failed), so the squad walks up to 200 outside the gate, stops, and turns to the next sector or town. Off screen a new
   point is picked within 500 of the last (`FUN_1407ee790`).

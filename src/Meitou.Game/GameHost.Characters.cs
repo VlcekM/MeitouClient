@@ -40,12 +40,15 @@ sealed partial class GameHost
     float NpcRange => ActiveCharacters?.DrawDistance ?? (_npcRange ??= GameplaySettings.NpcRange(Install));
 
     /// <summary>
-    /// Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/>
-    /// and the sensing hooks, <see cref="Meitou.Simulation.Bodies.MedicalClock"/>).
+    /// Tells the world the camera it is looked at through, every frame once the frame has placed the drawn camera (the update flag of
+    /// <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/>, the off-screen time and the sensing hooks,
+    /// <see cref="Meitou.Simulation.Bodies.MedicalClock"/>): the follow camera's target on the character and the eye's ground clearance come after
+    /// the rig's camera, whose pivot sits on the terrain, so a character on a bridge high above it fell outside the rig's view while drawn mid-screen
+    /// and moved on twice the time (#1384).
     /// </summary>
-    void SendView()
+    internal void SendView()
     {
-        if (Battle.IsBattle) return;
+        if (Battle.IsBattle || Duel.IsDuel) return;
         var (fieldOfView, aspect) = Camera.CullCone(ViewAspect);
         Session.World.Commands.Enqueue(new Simulation.Bodies.CameraViewCommand(Camera.Eye, Camera.Forward, fieldOfView, aspect,
             NpcRange) { Tick = Session.World.Tick });
@@ -57,7 +60,6 @@ sealed partial class GameHost
     internal void SendFocus(Vector3? at = null)
     {
         if (Duel.IsDuel) return;   // the duel's worlds keep the focus on its spot (DuelSetup), wherever the camera flies
-        SendView();
         var current = Session.Camera.Current;
         if (at is null && _sentFocus && current.IsFree && current.Eye.Y - Session.Camera.EyeGroundAt(current.Eye.X, current.Eye.Z, current.Eye.Y) > FocusCeiling)
             return;

@@ -1365,7 +1365,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
 
         if (UseSpecial(world, i, ref n, cold, site, m, dt)) return;
-        if (Settings.AutoHaul && StartHaul(world, cold, site, m)) return;
+        if (Settings.AutoHaul && StartHaul(world, cold, n.Position, site, m)) return;
         if (FarmNeedsNoWork(m))
         {
             End(world, i);
@@ -1443,7 +1443,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
 
         bool autoHaul = cold.Running is { Row: TaskType.OperateAutomaticMachinery };
-        if (!StartHaul(world, cold, site, m, autoHaul) && n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = FacingTo(n, site);
+        if (!StartHaul(world, cold, n.Position, site, m, autoHaul) && n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = FacingTo(n, site);
     }
 
     /// <summary>

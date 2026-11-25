@@ -53,8 +53,9 @@ sealed class InteriorView(GameHost host)
     /// </summary>
     const double KeepOpenSeconds = 10;
     /// <summary>
-    /// The characters not drawn: those above the viewed floor of a building in the view (game: FUN_1409fb540 hides objects above their building's
-    /// floor), and those inside a building seen from outside, whose interior is not drawn (a construction site is open, so its builders stay).
+    /// The characters not drawn: those above the shown floor of a building in the view (game: <c>FUN_1409fb540</c> hides objects above their
+    /// building's floor). One inside a building seen from outside stays drawn, as in the game: that sweep shows every floor of a building not in the
+    /// view (<c>FUN_14092bf70</c> gives 4), and closing an interior hides only its furniture, buildings and item slots, never a character.
     /// </summary>
     internal readonly HashSet<CharacterId> HiddenIndoors = [];
     /// <summary>
@@ -69,11 +70,6 @@ sealed class InteriorView(GameHost host)
     /// The floor <see cref="_floorFollow"/> was last seen on (game: PI+0x290); -1 without one.
     /// </summary>
     int _followedFloor = -1;
-    /// <summary>
-    /// By character slot, the last answer of the strictly-inside test in <see cref="UpdateInteriorView"/> (asked again once the character moves; a
-    /// slot's new character only inherits a place's answer).
-    /// </summary>
-    Rendering.Objects.WorldObjectRenderer.InteriorMemo[] _interiorMemos = [];
     /// <summary>
     /// The floor shown per building for <see cref="CameraFloor"/> (0 for a building not in the view); made once.
     /// </summary>
@@ -110,8 +106,8 @@ sealed class InteriorView(GameHost host)
     /// <summary>
     /// Every frame: each non-destroyed building that holds a player character (its indoor hull contains the character) is put in the interior view at
     /// the viewed floor; one left within the last 10 s of game time stays in it with every floor shown; every other building shows its outside. Game:
-    /// the player interface's per-frame interior driver over the player's characters. Then the characters in those buildings above their shown floor,
-    /// and those inside the other buildings, are marked to be left out of the draw list.
+    /// the player interface's per-frame interior driver over the player's characters. Then the characters in those buildings above their shown floor
+    /// are marked to be left out of the draw list.
     /// </summary>
     internal void UpdateInteriorView()
     {
@@ -140,15 +136,10 @@ sealed class InteriorView(GameHost host)
         foreach (var c in characters)
         {
             var at = host.TrackedPosition(c);
-            if (ViewedAt(at) is { } inView)
-            {
-                int shown = InteriorFloors[inView.PlacementId];
-                if (shown < 3 && inView.FloorAt(at) > shown) HiddenIndoors.Add(c.Id);
-            }
-            // Strictly inside (no margin): one on the doorstep stays drawn.
-            else if (objects.InteriorAt(at, ref InteriorMemo(c.Id.Slot)) is { } closed
-                    && objects.Construction?.ContainsKey(closed.PlacementId) != true)
-                HiddenIndoors.Add(c.Id);
+            if (ViewedAt(at) is not { } inView) continue;
+
+            int shown = InteriorFloors[inView.PlacementId];
+            if (shown < 3 && inView.FloorAt(at) > shown) HiddenIndoors.Add(c.Id);
         }
         host.GroundItemSync.UpdateGroundVisibility();
     }
@@ -236,19 +227,16 @@ sealed class InteriorView(GameHost host)
     static float FlatLengthSquared(Vector3 v) => v.X * v.X + v.Z * v.Z;
 
     /// <summary>
-    /// A character slot's interior memo, the array grown to fit it.
-    /// </summary>
-    ref Rendering.Objects.WorldObjectRenderer.InteriorMemo InteriorMemo(int slot)
-    {
-        if (slot >= _interiorMemos.Length) Array.Resize(ref _interiorMemos, Math.Max(slot + 1, _interiorMemos.Length * 2));
-        return ref _interiorMemos[slot];
-    }
-
-    /// <summary>
     /// Whether a place is above the shown floor of a building in the interior view, so what stands there is not drawn (as a character there).
     /// </summary>
-    internal bool AboveViewedFloor(System.Numerics.Vector3 at) => ViewedAt(at) is { } inView && InteriorFloors[inView.PlacementId] is var shown
-        && shown < 3 && inView.FloorAt(at) > shown;
+    internal bool AboveViewedFloor(System.Numerics.Vector3 at) => FloorAboveViewed(at, null);
+
+    /// <summary>
+    /// <see cref="AboveViewedFloor"/> for an object on <paramref name="floor"/> when it is known (a player building placed in another stores it, as
+    /// the game tests it), else on the floor of where it stands.
+    /// </summary>
+    internal bool FloorAboveViewed(System.Numerics.Vector3 at, int? floor) => ViewedAt(at) is { } inView
+        && InteriorFloors[inView.PlacementId] is var shown && shown < 3 && (floor ?? inView.FloorAt(at)) > shown;
 
     /// <summary>
     /// Whether a layout object on <paramref name="floor"/> of <paramref name="building"/> (its placement id) is not drawn, as the object renderer
@@ -267,6 +255,38 @@ sealed class InteriorView(GameHost host)
         foreach (var b in _furnished) if (b.Contains(at, InsideMargin)) return b;
         foreach (var b in _held) if (b.Contains(at, InsideMargin)) return b;
         return null;
+    }
+
+    /// <summary>
+    /// The viewed or held-open building a loose item at <paramref name="at"/> lies in or on: the one whose hull holds it (<see cref="ViewedAt"/>), else
+    /// the one whose floor collision the downward ray from the item meets highest, so an item on a table on an open deck above the hull is on that
+    /// building's floor (game: the sweep <c>FUN_1409fb540</c> takes the item's building handle and its floor from that ray, <c>FUN_1409b6dd0</c>,
+    /// never a hull).
+    /// </summary>
+    internal InteriorVolume? ViewedUnder(System.Numerics.Vector3 at)
+    {
+        if (ViewedAt(at) is { } inside) return inside;
+
+        InteriorVolume? best = null;
+        float bestY = float.NegativeInfinity;
+        HighestUnder(_viewed, at, ref best, ref bestY);
+        HighestUnder(_furnished, at, ref best, ref bestY);
+        HighestUnder(_held, at, ref best, ref bestY);
+        return best;
+    }
+
+    /// <summary>
+    /// <see cref="ViewedUnder"/>'s step over one list: a building of <paramref name="list"/> whose floor collision under <paramref name="at"/> is
+    /// higher than <paramref name="bestY"/> becomes <paramref name="best"/>.
+    /// </summary>
+    static void HighestUnder(List<InteriorVolume> list, System.Numerics.Vector3 at, ref InteriorVolume? best, ref float bestY)
+    {
+        foreach (var b in list)
+        {
+            if (b.SurfaceUnder(at) is not { } hit || hit.Y <= bestY) continue;
+            best = b;
+            bestY = hit.Y;
+        }
     }
 
     /// <summary>

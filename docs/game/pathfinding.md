@@ -1054,7 +1054,16 @@ The figures below were measured without the cap. **Observed** (`meitou-tools nav
 (Hub 20.32 10,183 to about 6,200; the original's tile has 5,857 faces); a zone builds in about twice the time. Over 2,352 random pairs in 20.32
 (radius 4) polygons expanded per search fell 965 to 560 and search time 20..30 %, paths 1 % longer. The original's ground ours lacks stayed within 0.1
 point of its area (`orig%`) but in 18.39, 1.4 to 1.7 %: a walkable AshlandsRibs top (y ~293, -61200,35000) has no link to the ground and is pruned. Interiors cover the original's interior faces as before. DotRecast refuses some watershed contours Recast
-only warns about (two outlines round a hole; "Bad outline", in a town zone of `--survey-interiors towns`): such a tile is built monotone. A walker shut out of its goal whose own polygon is the reachable one
+only warns about (two outlines round a hole; "Bad outline", in a town zone of `--survey-interiors towns`): such a tile is built monotone.
+<a id="uncovered-contours"></a>**Uncovered contours** (engine choice, `NavUncoveredArea`): Recast's polygon step ear-clips each contour in plan and, finding no ear left,
+keeps the triangles made so far and only warns ("Bad triangulation"), so the rest of the region gets no polygon. A watershed tile whose polygons
+cover less area in plan than its contours is built monotone too, and the monotone mesh kept when it leaves less uncovered. **Observed** (#1393, zone
+23.22, Stephouse `560-Newwworld-INGAME`, Blister Hill's Weapon Shop, `navmesh --probe`/`--path`): the ground region climbing its west door stair took a
+2..4-unit strip of the wall top beside the stair's head (712, original face 921), which folds back over the stair's side in plan; the outline
+crossed itself and the upper stair (x -37170..-37157, original face 2694 at 699..708) had no polygon, so no path led in or out. Over 10 zones
+(23.22, 20.32, 14.23, 18.35, 19.29, 27.22, 42.22, 21.42, 18.39, 28.60) three tiles change (23.22 two, 21.42 one), each then covered whole; three
+others leave the same area uncovered either way (4.5..296 square cells) and stay watershed. `--compare`: 23.22's
+original-only area 985 → 718, ours-only unchanged; 21.42 within 7; the Hub pins unchanged. A walker shut out of its goal whose own polygon is the reachable one
 nearest the goal walks across it to the point nearest the goal; before, it got no path (`NavigationTests`: a gate's closed door, the polygon up to the wall).
 
 ## Gate codes

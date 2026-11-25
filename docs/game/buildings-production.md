@@ -401,7 +401,7 @@ shows the first failing message in this order (**Verified** unless marked):
   is valid with all node points in one player-owned building; otherwise only if it is `is exterior furniture` or
   `is node` (**Verified** by code). So interior-only furniture must be inside, while interior+exterior items (Campfire,
   Camp Bed, storage boxes, fish racks) go either way. Without `is interior furniture`
-  the check passes. `ceiling placement` uses the ceiling ghost: `PreviewBuilding_Ceiling` (vtable `1416e1b68`) overrides slots 4 (`FUN_1404fe0b0`, returns 1), 21 and 27. Slot 21 `FUN_1404d28a0` (**Verified**) is the position update: a ray from 5 above the cursor point (`DAT_141685340`) pointing UP, collision mask `0x8071c00` (groups 10, 11, 12, 16, 17, 18, 27: upper floors, their stairs, unwalkable roofs), result initialised to -99; on a hit the ghost's y = hit y - 1 (`DAT_14167c308`) and the hit object is kept (+0x130); on a miss y += 20 (`DAT_141683188`) and the valid-surface byte (+0x8a) is cleared. Slot 27 `FUN_1404fe0a0` compares an object with the kept hit. Meitou hangs the ghost 1 below the ceiling the room model finds (`Room.CeilingAbove`, `CeilingHang`), which approximates the ray (it does not apply the collision mask).
+  the check passes. `ceiling placement` uses the ceiling ghost: `PreviewBuilding_Ceiling` (vtable `1416e1b68`) overrides slots 4 (`FUN_1404fe0b0`, returns 1), 21 and 27. Slot 21 `FUN_1404d28a0` (**Verified**) is the position update: a ray from 5 above the cursor point (`DAT_141685340`) pointing UP, collision mask `0x8071c00` (groups 10, 11, 12, 16, 17, 18, 27: upper floors, their stairs, unwalkable roofs), result initialised to -99; on a hit the ghost's y = hit y - 1 (`DAT_14167c308`) and the hit object is kept (+0x130); on a miss y += 20 (`DAT_141683188`) and the valid-surface byte (+0x8a) is cleared. Slot 27 `FUN_1404fe0a0` compares an object with the kept hit. The ghost's floor (+0x98, which the made building stores as `floornum`) is not changed by slot 21: when not snapped to a node it is the floor of the collision group the cursor ray met (slot 10 `FUN_1404d5420` keeps the hit's group at +0x128; `FUN_1404d5130` / `FUN_1404d4240` give groups 10, 16, 20, 29 floor 1, 11, 17, 21, 30 floor 2, 12, 18, 22, 31 floor 3, any other 0, and pass it to slot 30, `FUN_1404d2770`), so a ceiling lamp is on the floor of the room it lights, not of the slab it hangs from (**Verified**, decompile). Meitou hangs the ghost 1 below the ceiling the room model finds (`Room.CeilingAbove`, `CeilingHang`), which approximates the ray (it does not apply the collision mask).
 - **Resources** (`FUN_1404d9ea0`): `world resource mining` STONE/WATER/GROUND from a noise field; IRON/COPPER/CARBON
   need the biome's `resources` and a resource node within 1500, falling off from the node radius (>= 25) to 1500.
   Farms: fertility `1 - (1 - v) x fertility effect` (0 at or below `minimum fertility`), yield = biome
@@ -1392,10 +1392,17 @@ inputs in list order as the finder does, takes storages before producers and ski
   [order pops](ai-tasks.md#finished-tests)): the plain order leaves at once and the 152 job is always skipped; with Shift the 124 companion fetches
   Fuel from a storage into the tank.
 - **Auto-Haul order** (152 without Shift, **Verified**, [order pops](ai-tasks.md#finished-tests)): leaves once the machine's output holds nothing
-  a storage takes (Meitou's hauler carries it there first).
+  a storage or machine takes ([storage pick](#hauling); Meitou's hauler carries it there first).
 - **Storage pick** (**Verified**, `FUN_14059acd0`, also called by the 242 ditch finder `FUN_1405a59a0`): the candidates are the current town's
-  buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, whose slot `0x4a0`
-  takes the item; the nearest to the character by squared 3D distance wins, within the AI's range-mode bound (ROAM_FAR 4.246733e7).
+  buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, other than the served
+  machine (the third argument; the ditch finder passes its target's) and of another record (vfunc `0x18`), whose slot `0x4a0`
+  takes the item; the nearest to the character by squared 3D distance wins, within the AI's range-mode bound (ROAM_FAR 4.246733e7). Slot `0x4a0`
+  by class (**Verified**, decompile): a storage `FUN_1402988c0` (type limit and `limit inventory`, the AI rule under **Storage**); a production building
+  `FUN_1402989b0` (`ProductionBuilding::canHaveSomeOfThese`): its first input entry (`+0x480` list, the one `FUN_140299d00` walks) of the item holds
+  fewer than its max (`+0x8` above 0; else the input section's room test); a crafting bench `FUN_140298a80` the same, only while its vfunc `0x5d8`
+  holds (KenshiLib name `hasCraftingQueued`, **Observed**). So refineries, generators and benches whose input takes the item are candidates as
+  storages are, and a miner's output goes to the nearest of a storage and, say, a stone processor with room. Meitou: `ProductionSystem.StorageFor`
+  (`TakesOutput`), the operator's haul and the 152 finder; a machine target gets the carried output in its inputs (#1406).
 - **Observed** (the original 1.0.68, no mods, 2026-11-23): an operator's job 87 at an empty machine fetches nothing. A Copper Alloy Bench with
   its Copper input emptied by hand and a General Storage Chest in the same room holding Iron Plates (listed first) and 11 Copper: the operator,
   with jobs on and nothing else to do, stayed Aimless beside the bench for two game hours and never went to the chest.

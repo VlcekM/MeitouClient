@@ -900,6 +900,7 @@ sealed partial class GameHost(
         Player.StealthView.HiddenInWorld = Interiors.HiddenIndoors.Contains;
         Player.StealthView.DrawnHead = id => Gpu.Characters?.BonePosition(DrawKey(id), "Bip01 Head");
         Player.Furniture.AboveViewedFloor = Interiors.AboveViewedFloor;
+        Player.Furniture.FloorAboveViewed = Interiors.FloorAboveViewed;
         Player.Furniture.FloorHidden = Interiors.FloorHidden;
         Player.Furniture.DoorShape = (record, door) => Nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
 
@@ -1036,6 +1037,7 @@ sealed partial class GameHost(
         SendFocus();
         ApplyCamera(Session.Camera.Current);
         if (TitleScreen.TitleVisible) TitleScreen.ApplyTitleCamera();
+        SendView();
     }
 
     /// <summary>

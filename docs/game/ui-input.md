@@ -287,7 +287,7 @@ and the Esc menu hidden), 1 `med`, 2 `search`, 3 `lift`, 4 `pick_item`, 5 `attk`
 0xc `door`, 0xd `door_escape`, 0xe `lock`, 0xf `lockpick`, 0x10 `house`, 0x11 `green`, 0x12 `mine`, 0x13 `spanner`, 0x14 `light`,
 0x15 `steal`, 0x16 `hand`, 0x17 `invalidmove`, 0x18 `scavenge`, 0x19 `knockout`; 6 has no case. It is called through thunk `140053acb`.
 The modes a building hover sets are in [building picking](#building-picking-and-selection) (`house` 0x10 is returned by none of them); a ground
-hit with no walkable point sets `invalidmove` (`FUN_140800250`). Callers of the setter (exe scan 2026-11-04): `FUN_1407fb410` characters ([table](#quick-right-click-on-a-character)), `FUN_1407fc6e0` buildings, `FUN_1407fc440` a ground item (`pick_item` 4, or `steal` 0x15 when its owner is a character of a real faction other than the player's; a right click on a stolen item without Alt shows "Hold down the ALT key to steal items" and only walks to it, order 29; **Verified**), `FUN_14048be80` / `FUN_14049ac90` the Overview map pan (`hand` 0x16), `FUN_140800250` no walkable ground (`invalidmove`), and `arrow` from the loading / UI paths (`FUN_1406eb3a0`, `FUN_140800f10`, `FUN_140801630`). The building-hover modes are in the building picking section; `light` and `door_escape` have no setter call in the scanned callers.
+hit with no walkable point sets `invalidmove` (`FUN_140800250`). Callers of the setter (exe scan 2026-11-04): `FUN_1407fb410` characters ([table](#quick-right-click-on-a-character)), `FUN_1407fc6e0` buildings, `FUN_1407fc440` a ground item (`pick_item` 4, or `steal` 0x15 when its owner is a character of a real faction other than the player's; a right click on a stolen item without Alt shows "Hold down the ALT key to steal items" and only walks to it, order 29; **Verified**), `FUN_14048be80` / `FUN_14049ac90` the Overview map pan (`hand` 0x16), `FUN_140800250` no walkable ground (`invalidmove`), and `arrow` from the loading / UI paths (`FUN_1406eb3a0`, `FUN_140800f10`, `FUN_140801630`). The building-hover modes are in the building picking section; `light` and `door_escape` are set by no constant of the scanned callers: they come from the building hover's slot 130 (`door_escape` a cage's, [building picking](#building-picking-and-selection)).
 
 Meitou (`PointerView`, engine choices): the window's own cursor is hidden and the pointer drawn last in the frame (not in
 screenshots or cinema takes). It follows the quick right-click order, so it never disagrees with the click: with a selection, over a
@@ -457,13 +457,18 @@ interior-mask hulls); the hits are sorted nearest first (**Verified**, comparato
   taken though not visible. The shown floor (`FUN_1407f7230`) is the current floor for a building a player character is in, back to 4
   for one left; the flag of an interior's furniture follows the current floor itself (`FUN_14054a8f0`, +0xa4 against the viewed floor, PlayerInterface +0x1e4). Meitou
   (containers, beds and seats): one above the viewed floor of a building in the interior view is skipped, its floor from its height
-  (`InteriorVolume.FloorAt`); other layout furniture (`TownBuilding.Pieces`) above it by its layout floor and, while the building shows its
+  (`InteriorVolume.FloorAt`); a player's building placed in or on another by the floor it stores (`FurnitureUse.SiteAboveViewedFloor`: a ceiling
+  lamp's is its room's, [build placement](buildings-production.md)); other layout furniture (`TownBuilding.Pieces`) above it by its layout floor and, while the building shows its
   outside, unless the layout marks it outside, as drawn; not modelled:
   the flag's own test against the current floor in a building left within 10 s (Meitou shows every floor then) and the player's whole-shown interior exception.
 - Characters and ground items on a hidden floor are not visible either (**Verified**, decompile): a character in a building above the floor it shows (`FUN_1405c9f60`); a ground
-  item above floor 0 above the floor its building shows, or above the current floor outside one (`FUN_1409fb540`, after each floor change in `FUN_1407f7230`). Meitou: neither
-  drawn nor picked above the viewed floor of a building in the interior view (characters `GameHost.hiddenIndoors`; items `GameHost.hiddenGround`, which the renderer takes as its `HiddenItems`), a
-  ground item's floor from where it is drawn.
+  item above floor 0 above the floor its building shows, or above the current floor outside one (`FUN_1409fb540`, after each floor change in `FUN_1407f7230`). An item's
+  building is its handle (item `+0x80`, the save's `insideBuilding`; a slot item's is the slot's building, `FUN_140784d50`), its floor (`+0xa4`) what a ray from 1 unit above
+  it (a slot item: above its box's top) straight down through the groups `0x8079e00` meets first (`FUN_1409b6dd0`: a roof, group 27, of a building with an interior gives its
+  top floor, another hit its group's floor, nothing 0), set when the item is laid (`FUN_140763fa0`) or put in a slot; no hull is tested. Meitou: neither drawn nor picked above
+  the viewed floor of a building in the interior view (characters `InteriorView.HiddenIndoors`; items `GroundItemSync.HiddenGround`, which the renderer takes as its
+  `HiddenItems`), a ground item's floor from where it is drawn and its building the one whose hull holds it, else the one whose floor collision its downward ray meets
+  highest (`InteriorView.ViewedUnder`), so an item on furniture on an open deck above the hull is on the deck's floor (#1395).
 - Parts of a building with an interior (`FUN_140291650`) count only when their floor is not above the floor that building shows; the floor of a
   hit comes from its group (`FUN_1409b1850`: 10/16/20/24/29 → 1, 11/17/21/25/30 → 2, 12/18/22/26/31 → 3, 27 roof → 4, else 0). So with a
   floor cut the ray passes the hidden roof and floors and reaches what is shown. When the viewed floor (PlayerInterface+0x1e4, PgUp/PgDn) is
@@ -504,7 +509,7 @@ that activation menu-only; once the ruin becomes an unfinished construction site
 | FurnaceBuilding | as Farm | 26 LOOT_TARGET |
 | ResearchBuilding | as Storage | 87 |
 | TurretBuilding | as Storage | 146 USE_TURRET |
-| StorageBuilding | `arrow` for function 16; own `use`; no inventory: cage `lockpick` if locked else `door_escape`, other `use`; inventory: `lockpick` if locked else `scavenge` | 26 |
+| StorageBuilding | `arrow` for function 16; a player faction's (owner `+0x250`) `use`; no inventory: cage `lockpick` if locked else `door_escape`, other `use`; inventory: `lockpick` if locked else `scavenge` (**Verified**, `FUN_1405476c0`, slot 130 of StorageBuilding and UseableStuff) | 26 |
 | LightBuilding | `light` | as UseableStuff |
 | UseableStuff | as Storage | another faction's with an inventory: 26, or when locked 76 PICK_LOCK (owner faction flag +0x1d0) else 29; by function: 2, 9, 13 → 26; 7 → 97 USE_TRAINING_DUMMY; 6, 25 → 258 USE_BED_ORDER; 8 → 76 when another faction's and locked, else 108 PUT_IN_CAGE; 11 → 136 FEED_CORPSE_INTO_MACHINE; 16 → 29; else 87 / 152 |
 
@@ -515,7 +520,9 @@ that activation menu-only; once the ruin becomes an unfinished construction site
   left click selects the occupant. Meitou: cages (`PlayerInterface.PickWhereAt`, where the ray meets the cage before any other character); engine choices: a player's occupant's right
   click goes to it as well; the press opens the cage's menu and the occupant's beside it, as the original (`ContextMenuWindow.CharacterMenu`, below); beds not modelled.
 - A cage (its quick click is reached only when the context menu does not open at once, last point): `use` while the lead selected character
-  (+0xf0) carries someone (+0x348). Another faction's empty cage: 108 PUT_IN_CAGE when carrying, else 107 USE_CAGE; the player's own cage:
+  (+0xf0) carries someone (+0x348) and the hover did not reach the occupant first, else the cage's slot 130 (the table: another faction's
+  `lockpick` while locked, `door_escape` when not, the player's `use`), set by the plain setter, so no chance label (**Verified**, `FUN_1407fc6e0`).
+  Meitou: `FurnitureUse.CagePointer`, for an empty cage and for a player's occupant with no pointer of its own (`PointerView.OwnOccupiedCage`). Another faction's empty cage: 108 PUT_IN_CAGE when carrying, else 107 USE_CAGE; the player's own cage:
   108 (slot 131). In another faction's cage holding one of yours, Alt + right click gives 76 PICK_LOCK when its lock is locked or
   207 GET_OUT_OF_CAGE_ESCAPE when not; without Alt the bar shows "Hold down the ALT key to pick the lock." / "...to escape the cage.". **Verified**
   (`FUN_1407fc6e0`): this runs only when the occupant's own quick click (`FUN_1407fb410`) set no pointer (the pointer kind that `FUN_1406e3d60`
@@ -588,7 +595,7 @@ menu also ends with the rows of the mods' job offers (modding, Mod jobs): an off
 Meitou only, unavailable rows (`ContextMenuWindow.Available`; Interface setting "Unavailable menu rows", Greyed by default, Faithful turns it
 off): a row the selection cannot carry out now is drawn greyed, a plain click on it does nothing and a Shift click gives it (a medic verb then
 adds its job, Medic, Robotics or Splint Rigging). First Aid and Repairs are unavailable when no selected character has a first aid or robot kit
-at hand (its own, else a squad mate's within the kit reach: what the order's start refuses with "I don't have a medkit."), Splint Injuries
+of its own (what the order's start refuses with "I don't have a medkit."), Splint Injuries
 when none holds its own splint kit; a mod row when it says so (`UiMenuVerb.Unavailable`). The original draws and gives every row alike.
 
 - **Rows**: the verbs are a set of order numbers, so each shows once, **in ascending order number**; an empty label drops it. An animals-only selection

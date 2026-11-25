@@ -232,7 +232,7 @@ public class FirstAidTests
     {
         using var rig = new Rig(settings: new FirstAidSettings { AutoNpcs = false });
         var medic = rig.Add(1000, 2000, medic: 50, kits: "74-t");
-        var bare = rig.Add(1000, 2200, medic: 50);           // beyond the kit reach of its squad mate's kit
+        var bare = rig.Add(1000, 2200, medic: 50);           // no splint kit of its own
         var patient = rig.Add(1060, 2000, squad: 1);
         var leg = rig.Body(patient).Parts[RLeg];
         leg.Flesh = -10;

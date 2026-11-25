@@ -201,7 +201,7 @@ sealed class WorldPicking(PlayerInterface player)
         foreach (var site in player.Session.CurrentSnapshot.Buildings)
         {
             // Not drawn above the viewed floor of an opened house: no face there.
-            if (HasRooms?.Invoke(site.Id) == true || player.Furniture.AboveViewedFloor?.Invoke(site.Position) == true) continue;
+            if (HasRooms?.Invoke(site.Id) == true || player.Furniture.SiteAboveViewedFloor(site)) continue;
             if (host.Placement.Footprint(site.Record) is not { } footprint) continue;
 
             var mesh = ClosedMeshOf(site.Record, site.Id, site.Destroyed);
