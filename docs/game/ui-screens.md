@@ -747,7 +747,8 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   inventory (+0x430) holding no items (its count +0x18 is 0, `FUN_14004a0cf`) `[EMPTY]` in Title `#492620` (the uppercased translation of "Empty" in brackets, empty value; **Observed** decompile), `Training:` (function 7, any `stat used`: the
   label `Training:` with the editor stat name `FUN_140888440` of +0x3f8 appended, no separator, as the label of an empty-valued line; **Verified**
   decompile; Meitou puts a space between), `Cost to use:`
-  `Private` or `Pay c.{1,num}` (beds), `Lock state:` Locked / Unlocked, `Lock complexity:` `Level {1,num}`; 6 `Healing bonus:`
+  `Private` (slot 152 rent below 0) or `(Pay c.{1,num})`, 0 included, for function 6 (BF_BED) or 25 (BF_SKELETON_BED) whose owner faction (+0x10) is not the
+  player's (+0x250 null) (**Verified**, disassembly 0x140305333..0x140305395: no zero test; [rent](locks.md#beds); Meitou `BedDetail.Cost`), `Lock state:` Locked / Unlocked, `Lock complexity:` `Level {1,num}`; 6 `Healing bonus:`
   `x{1,num}` (beds), `Max Skill Level:` (training); 0xf `Money:`. Turrets, machines, generators and batteries have their own lines
   (`FUN_14030d620`, `FUN_140300090`, `FUN_140307bf0` ...: Working / No power / Out of resource / Output full, power, workers, fuel).
   A town bed (**Observed**, original-game screenshot of a Squin bar): a left click selects the bed itself, not the bar; panel:

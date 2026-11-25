@@ -464,13 +464,15 @@ sealed class BuildingSelection(PlayerInterface player)
         if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance)
             AddHeightLines(turret, state);
 
-        // A skeleton bed's section 6 is the machine lines, not the Healing bonus (UseableStuff slot 40 FUN_140304e90 shows it for BF_BED alone).
-        if (detail?.Bed is { } bed && !Useable.IsSkeletonBed(site?.Record ?? focus.Record))
+        if (detail?.Bed is { } bed)
         {
-            if (bed.Cost != 0)
+            // UseableStuff slot 40 (FUN_140304e90) section 3: any bed or skeleton bed of a faction not the player's, a free one included.
+            if (!detail.Owned)
                 state.Add(new("Cost to use:", bed.Cost < 0 ? Loc.Tr("Private") : $"({Loc.Tr("Pay c.{1,num}", bed.Cost)})"));
 
-            stats.Add(new("Healing bonus:", Loc.Tr("x{1,num}", bed.HealingBonus), PlayerInterface.MainColour));
+            // A skeleton bed's section 6 is the machine lines, not the Healing bonus (section 6 shows it for BF_BED alone).
+            if (!Useable.IsSkeletonBed(site?.Record ?? focus.Record))
+                stats.Add(new("Healing bonus:", Loc.Tr("x{1,num}", bed.HealingBonus), PlayerInterface.MainColour));
         }
 
         if (playerSite && site is { LevelPlacement: null }) AddUpgradeLines(site, state);
