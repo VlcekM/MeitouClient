@@ -594,7 +594,7 @@ menu also ends with the rows of the mods' job offers (modding, Mod jobs): an off
 Meitou only, unavailable rows (`ContextMenuWindow.Available`; Interface setting "Unavailable menu rows", Greyed by default, Faithful turns it
 off): a row the selection cannot carry out now is drawn greyed, a plain click on it does nothing and a Shift click gives it (a medic verb then
 adds its job, Medic, Robotics or Splint Rigging). First Aid and Repairs are unavailable when no selected character has a first aid or robot kit
-at hand (its own, else a squad mate's within the kit reach: what the order's start refuses with "I don't have a medkit."), Splint Injuries
+of its own (what the order's start refuses with "I don't have a medkit."), Splint Injuries
 when none holds its own splint kit; a mod row when it says so (`UiMenuVerb.Unavailable`). The original draws and gives every row alike.
 
 - **Rows**: the verbs are a set of order numbers, so each shows once, **in ascending order number**; an empty label drops it. An animals-only selection

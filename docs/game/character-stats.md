@@ -322,7 +322,7 @@ the HUD's yellow layer shows the treated damage awaiting passive recovery.
 **Observed** (play, 2026-10-21): a first-aid order (self included) given to a character without a medkit is refused before
 any movement or animation, with the bubble "I don't have a medkit." Whether a squad mate's kit nearby or a robot repair kit
 avoids the refusal: the kit search ([below](#first-aid-update)) reads only the medic's own inventory and backpack, so a squad
-mate's kit should not (**Observed**: the same vtable slot). Meitou's first-aid `FindKit` takes the medic's own kit by this search (`OwnKit`), and still accepts a mate's within `KitReach`, found by the same rule (engine choice).
+mate's kit should not (**Observed**: the same vtable slot). Meitou: the order's check (`FirstAidSystem.CanRun`) and the running treatment (`KitOf`) use this search alone (`OwnKit`), so a medic whose kit runs out stops with the empty-kit line even when the patient or a mate carries one (#1407).
 
 **Verified** carried person adds CONSTANTS weight30, independent of body/race/inventory.
 **Verified** in game (1.0.65, scripted harness, issue #45; strength -20..45, W 15/16.4/46.4 kg, torso wounds, hunger):

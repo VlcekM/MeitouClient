@@ -51,10 +51,6 @@ public sealed class FirstAidSettings
     /// </summary>
     public float StillSpeed { get; init; } = 1;
     /// <summary>
-    /// A kit in a squad mate's inventory is used when this close (the same reach as sharing food).
-    /// </summary>
-    public float KitReach { get; init; } = 60;
-    /// <summary>
     /// Ticks between looks for a patient by NPCs that treat by themselves (the retaliation system's rhythm); a player character's medic jobs are the
     /// decision step's.
     /// </summary>

@@ -647,7 +647,7 @@ public sealed partial class World
         s.ShacklesLocked = shown && Locks.LockSystem.WornShackles(cold) is not null;
         s.CanBeShackled = shown && cold is { IsPlayer: false } && Locks.LockSystem.CanBeShackled(cold, true);
         s.CarriesShackles = selected && Locks.LockSystem.CarriedShackles(cold) is not null;
-        s.HasMedkit = selected && cold is not null && SystemOf<FirstAid.FirstAidSystem>()?.MedkitAtHand(this, i, cold) == true;
+        s.HasMedkit = selected && cold is not null && FirstAid.FirstAidSystem.MedkitAtHand(cold);
         s.HasSplintKit = selected && cold is not null && FirstAid.FirstAidSystem.SplintKitAtHand(cold);
         s.Orders = cold?.Orders ?? CharacterOrders.None;
         s.RunSpeed = cold?.RunSpeed ?? SpeedMode.Free;
