@@ -64,6 +64,10 @@ Bounds/range/frustum, Hi-Z occlusion, fog culls and projected-size LOD are disti
 `VramGuard` scales demand under device-local pressure; textures, meshes, scratch and atlases
 must cooperate. Resident mip and mesh detail track projected demand; avoid refine/unload churn.
 FrameScratch overflow must leave the affected view safely rather than writing past allocations.
+Under its pressure zones within 3000 of the eye (`VramGuard.NearReach`) are still laid out, their meshes (the resource rocks and mines among them)
+decoded again and grass pages made while the use stays under 94.5% (`StreamsNear`, `FoliageRenderer.StreamsAt`), as for the objects. Before this, nothing
+round the eye was laid out or reloaded while the use stayed over 80% (#1424: vegetation, Iron Resources and mines gone until a reload). **Observed**
+(guard held in pressure, 3.6 GB budget, a teleport to Stack): before, no plant near the eye and 6 layouts waiting; after, plants near the eye, 2 waiting.
 Mesh textures stream mips as the objects' do (`MipStreaming`): the once-a-second residency pass offers each group's nearest box distance over
 the mesh's texel size (`MeshTexelScale` of its most stretched part over the material tile) at the group's largest scale, before reading the keys.
 Triplanar and TERRAIN materials and grass sprites keep every mip. **Observed** (VRAM dump, 2026-11-01): 808 MB of foliage textures, all at full

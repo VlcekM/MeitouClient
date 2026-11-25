@@ -809,7 +809,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             GatherCandidates(eye, farReach + ahead.Length(), arrival, arrivalReach, keptPoints);
             RankWanted(eye, predicted, arrival, arrivalReach, keptPoints, (nearReach, farReach, wholeReach));
         }
-        StartLayouts(layouts);
+        StartLayouts(layouts, eye);
         NearestMissingMesh = float.PositiveInfinity;
 
         UpdateGrass(eye, keptPoints, settling);
@@ -983,15 +983,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     /// <summary>
-    /// Starts the wanted layouts, most urgent first, while fewer than <paramref name="layouts"/> of a kind run; counts those left waiting.
+    /// Starts the wanted layouts, most urgent first, while fewer than <paramref name="layouts"/> of a kind run; counts those left waiting. Under memory
+    /// pressure only the zones near <paramref name="eye"/> are started (<see cref="StreamsAt"/>).
     /// </summary>
-    void StartLayouts(int layouts)
+    void StartLayouts(int layouts, Vector3 eye)
     {
         int started = 0, keptWaiting = 0;
         foreach (var w in _wanted) if (w.ForKept) keptWaiting++;
         foreach (var (zone, tier, _, forKept) in _wanted)
         {
-            if (_guard is { Streaming: false }) break;   // memory pressure: no new layout is started
+            if (_guard is { StreamsNear: false }) break;   // memory pressure past the guard's priority ceiling: no new layout is started
+            if (!StreamsAt(ZoneDistance(zone, eye))) continue;
 
             bool whole = tier != FoliageZoneTier.Far;   // a Meshes layout is a whole one whose far-away groups are left out (Accept)
             if (whole ? _runningWhole >= layouts : _runningFar >= layouts) continue;
@@ -1344,7 +1346,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     bool _grassStalled;
 
     /// <summary>
-    /// What the last page walk was made from: the eye, the ground under it, the grass range, whether streaming was allowed, and the store's version.
+    /// What the last page walk was made from: the eye, the ground under it, the grass range, whether near streaming was allowed (<see
+    /// cref="VramGuard.StreamsNear"/>), and the store's version.
     /// </summary>
     (Vector3 Eye, float Ground, float Range, bool Streaming, int Version) _grassWalk;
     /// <summary>
@@ -1384,7 +1387,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     bool GrassWalkCurrent(Vector3 eye, IReadOnlyList<Vector3> kept)
     {
         var w = _grassWalk;
-        if (w.Version != _grass.Version || w.Range != GrassRangeSetting * Scale || w.Streaming != _guard is not { Streaming: false })
+        if (w.Version != _grass.Version || w.Range != GrassRangeSetting * Scale || w.Streaming != _guard is not { StreamsNear: false })
             return false;
         if (Vector3.DistanceSquared(eye, w.Eye) > GrassWalkSlack * GrassWalkSlack) return false;
         if (GroundUnderEye != w.Ground && !(MathF.Abs(GroundUnderEye - w.Ground) <= GrassWalkSlack)) return false;
@@ -1634,7 +1637,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     int StartGrassPages(int inFlight, int waitingPages)
     {
         _grassWaiting = _grassWanted.Count;
-        int free = _guard is { Streaming: false } ? 0 : Math.Max(0, (Covered ? CoveredGrassJobs : MaxGrassJobs) - inFlight), picked = 0;
+        int free = _guard is { StreamsNear: false } ? 0 : Math.Max(0, (Covered ? CoveredGrassJobs : MaxGrassJobs) - inFlight), picked = 0;
 
         // With a full store and pages of the eye's waiting, only a page nearer than they are is worth making: the others would only hold their
         // blades in memory. The store then holds what it can: a loading screen does not wait for pages it has no room for.
@@ -1673,7 +1676,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     void RememberGrassWalk(Vector3 eye, IReadOnlyList<Vector3> kept)
     {
-        _grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, _guard is not { Streaming: false }, _grass.Version);
+        _grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, _guard is not { StreamsNear: false }, _grass.Version);
         if (_grassWalkKept.Length != kept.Count) _grassWalkKept = new Vector3[kept.Count];
         for (int i = 0; i < kept.Count; i++) _grassWalkKept[i] = kept[i];
     }
@@ -1962,7 +1965,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (zoneDistance > RangeOf(g).Range + WorldLayout.ZoneSize * 0.5f) continue;
                 var a = g.Asset;
                 a.LastUsed = now;
-                if (!a.Resident) Reload(a);   // in range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks
+
+                // In range but unloaded (or never loaded after an unload): decode it again, wherever the camera looks.
+                if (!a.Resident) Reload(a, eyeZone);
                 if (!a.HasBounds) continue;
                 float near = g.BoundsReady ? BoxDistance(g.BoundMin, g.BoundMax, eye) : eyeZone, scale = Math.Max(g.MaxScale, 1e-6f);
                 if (float.IsFinite(keptZone))
@@ -2036,11 +2041,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     /// <summary>
-    /// Decodes an unloaded mesh again (from <see cref="Draw"/>, when something in range needs it).
+    /// Decodes an unloaded mesh again (from <see cref="Draw"/>, when something in range needs it), its nearest user <paramref name="zoneDistance"/>
+    /// from the eye; under memory pressure only a near one (<see cref="StreamsAt"/>).
     /// </summary>
-    void Reload(FoliageMeshAsset a)
+    void Reload(FoliageMeshAsset a, float zoneDistance)
     {
-        if (a.Resident || a.Failed || a.Job is not null || a.Uploading || _guard is { Streaming: false }) return;
+        if (a.Resident || a.Failed || a.Job is not null || a.Uploading || !StreamsAt(zoneDistance)) return;
         string main = a.Mesh.MeshPath, leaves = a.Mesh.LeavesMesh ?? "";
         a.LastUsed = Environment.TickCount64;
         bool weld = a.Weld = MeshWeld.Enabled;
@@ -2049,6 +2055,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         _decoding.Add(a);
         _meshReloads++;
     }
+
+    /// <summary>
+    /// Whether work for a zone <paramref name="zoneDistance"/> from the eye may start: always without memory pressure, under it within <see
+    /// cref="VramGuard.NearReach"/> while the use stays under the guard's priority ceiling (<see cref="VramGuard.StreamsNear"/>), as for the objects'
+    /// zones and meshes. Holding the near ones back too left the vegetation round the camera unloaded for as long as the use stayed over 80% (#1424).
+    /// </summary>
+    bool StreamsAt(float zoneDistance) => _guard is not { Streaming: false } || _guard.StreamsNear && zoneDistance <= VramGuard.NearReach;
 
     /// <summary>
     /// The attributes at locations 0 to 4 (position, normal, texture coordinates, tangent, colour) of the object layout (<see cref="GpuVertex"/>).
@@ -2517,7 +2530,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (zoneDistance > range) continue;
                 if (!g.Asset.Resident)
                 {
-                    Reload(g.Asset);
+                    Reload(g.Asset, zoneDistance);
                     if (!g.Asset.Failed) NearestMissingMesh = Math.Min(NearestMissingMesh, zoneDistance);
                     continue;
                 }
