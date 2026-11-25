@@ -103,11 +103,10 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
     </header>
 
     <section id="charts-sec">
-      <h2>Over builds</h2>
+      <h2>Results</h2>
       <div id="toolbar" class="toolbar" hidden>
         <div id="controls" class="tb-controls"></div>
         <p id="group-desc" class="tb-desc muted small" hidden></p>
-        <div id="filter-bar" class="tb-filter"></div>
       </div>
       <div id="caveat"></div>
       <div id="status" class="box is-loading" role="status" aria-label="Loading benchmark results"><span class="spinner" aria-hidden="true"></span></div>
@@ -174,11 +173,12 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
           ))}
         </tbody>
       </table>
-      <h3>Benchmark versions</h3>
-      <p>The benchmark version changes whenever the workload does (tiers, settings, segments, save, metric definitions); numbers of
-      different versions are never compared. Each build also records a fingerprint of each scenario's workload, and the page warns
-      when one version of a scenario has more than one. <strong>Legacy kit</strong> (version 0) is the earlier Python kit: the play benchmark (idle, orbit,
-      zoom, pan) and the base switch, at the old baseline settings and each machine's own resolution, over commits.</p>
+      <h3>Version ranges</h3>
+      <p>The builds of one version range perform alike, so the chart shows them together: a dot per machine, platform and build,
+      spread along the X axis only so they don't overlap (each keeps its place). A new range starts when a build makes the game faster
+      or slower, or when the benchmark's workload changes (tiers, settings, segments, save, metric definitions); numbers of different
+      ranges are never compared. <strong>Legacy kit</strong> is the earlier Python kit: the play benchmark (idle, orbit, zoom, pan) and
+      the base switch, at the old baseline settings and each machine's own resolution, all its commits together.</p>
     </details>
 
     <p class="muted small">Raw data: <a href={`${service}/bench/data`}>/bench/data</a></p>
@@ -253,8 +253,14 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .setup dd{margin:0}
   summary{cursor:pointer;font-weight:600}
   select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
-  .msearch{display:block;width:min(260px,100%);margin:0;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 65%,transparent);color:var(--text);font:inherit;font-size:.88rem;flex:0 0 auto}
+  .mbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 8px}
+  .msearch{display:block;width:min(320px,100%);margin:0;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 65%,transparent);color:var(--text);font:inherit;font-size:.88rem;flex:0 1 auto}
   .msearch::placeholder{color:var(--muted)}
+  .mcount{font-size:.84rem}
+  .mclear,.pager button{font:inherit;font-size:.84rem;color:var(--text);background:color-mix(in srgb,var(--bg) 55%,transparent);border:1px solid var(--line);border-radius:999px;padding:3px 12px;cursor:pointer}
+  .mclear[hidden]{display:none}
+  .pager{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 0;font-size:.86rem}
+  .pager button:disabled{opacity:.4;cursor:default}
   .chart-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 16px;padding:2px 6px 6px}
   .legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin:0}
   .legend svg{vertical-align:-3px}
@@ -268,8 +274,6 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .chart .p1{stroke:var(--panel);stroke-width:1.5;opacity:.35}
   .chart .p1.only{opacity:1}
   .chart .p2{fill:var(--panel);stroke-width:2}
-  .chart .guide{stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3;opacity:0;pointer-events:none}
-  .chart .guide.on{opacity:.7}
   .chart .hit:focus-visible{outline:none;fill:color-mix(in srgb,var(--accent) 25%,transparent);stroke:var(--accent);stroke-width:2.5}
   table{border-collapse:collapse;width:100%;font-size:.92rem}
   th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
@@ -277,8 +281,20 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   th{color:var(--muted);font-weight:600;font-size:.8rem}
   td.l,th.l{text-align:left}
   .tablewrap{overflow-x:auto;overflow-y:hidden}
-  .mtable td:first-child{min-width:12rem}
+  .mtable{font-size:.86rem}
+  .mtable :is(th,td){padding:2px 6px;line-height:1.35}
+  .mtable th.ck,.mtable td.ck{width:1.6rem;padding-right:0;text-align:center}
+  .mtable td.ck input{margin:0;vertical-align:middle;accent-color:var(--accent);cursor:pointer}
+  .mtable tbody tr{cursor:pointer}
+  .mtable tbody tr.is-checked>*{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+  .mtable td:nth-child(2){text-align:left;white-space:normal;min-width:12rem}
   .mtable td.l{white-space:normal}
+  .msub{display:none}
+  @media (max-width:700px){
+    .mtable .wide{display:none}
+    .mtable td:nth-child(2){min-width:0}
+    .msub{display:block;color:var(--muted);font-size:.8rem}
+  }
   .sort-btn{display:inline-flex;align-items:center;gap:4px;font:inherit;color:inherit;background:none;border:0;padding:2px 0;cursor:pointer;white-space:nowrap}
   .sort-btn:hover,.sort-btn.is-active{color:var(--text)}
   .sort-ind{display:inline-block;width:1em;text-align:center;font-size:.7rem;opacity:.32}
@@ -298,7 +314,6 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .tb-row{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
   .tb-metric{margin-left:auto}
   .tb-desc{margin:0;font-size:.85rem}
-  .tb-filter{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding-top:10px;border-top:1px solid var(--line)}
   .ctl{display:inline-flex;align-items:center;gap:8px;font-size:.86rem;color:var(--muted)}
   .caveat{border:1px solid var(--bad);border-radius:20px;padding:8px 14px;background:var(--panel);margin:8px 0}
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--bg) 55%,transparent)}
@@ -307,11 +322,13 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .seg .seg-n{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;font-size:.72rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;background:color-mix(in srgb,var(--line) 85%,transparent);color:var(--text)}
   .seg button[aria-pressed="true"] .seg-n{background:rgba(28,22,19,.24);color:var(--bg)}
   .seg .seg-n.is-zero{opacity:.42}
-  .mpick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:1 1 auto;min-width:0}
-  .mchip{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:.82rem;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,transparent);color:var(--text);user-select:none}
-  .mchip input{position:absolute;opacity:0;pointer-events:none;width:0;height:0}
-  .mchip.is-off{opacity:.45;color:var(--muted);text-decoration:line-through}
-  @media (max-width:700px){.tb-metric{margin-left:0}}
+  .seg button{white-space:nowrap}
+  @media (max-width:700px){
+    .tb-metric{margin-left:0}
+    .ctl{flex-wrap:wrap;max-width:100%}
+    .ctl select{max-width:100%}
+    .seg{flex-wrap:wrap;border-radius:14px;max-width:100%}
+  }
   .method h3{margin:1.2rem 0 .3rem}
   .method > summary{font-size:1.05rem;padding:2px 0}
   .plain{margin:18px 0;padding:8px 0 0;border-top:1px solid var(--line)}
@@ -329,13 +346,12 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
     tbody tr:hover>*{background:color-mix(in srgb,var(--accent) 20%,transparent)}
     summary:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px}
     .seg button[aria-pressed="false"]:hover{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--text)}
-    .mchip:hover{border-color:var(--accent)}
+    .mclear:hover,.pager button:not(:disabled):hover{border-color:var(--accent)}
     .chart .hit:hover{fill:color-mix(in srgb,var(--accent) 25%,transparent);stroke:var(--accent);stroke-width:2.5}
   }
   @media (prefers-reduced-motion:no-preference){
-    tbody tr>*,summary,.seg button,.seg .seg-n,.mchip{transition:background-color .14s cubic-bezier(.22,1,.36,1),border-color .14s ease,color .14s ease,opacity .14s ease,transform .14s cubic-bezier(.22,1,.36,1)}
+    tbody tr>*,summary,.seg button,.seg .seg-n{transition:background-color .14s cubic-bezier(.22,1,.36,1),border-color .14s ease,color .14s ease,opacity .14s ease,transform .14s cubic-bezier(.22,1,.36,1)}
     .seg button:active{transform:scale(.97)}
-    .chart .guide{transition:opacity .1s ease}
     .chart,.caveat{animation:bn-pop .24s cubic-bezier(.22,1,.36,1) both}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

@@ -1,5 +1,5 @@
 // Benchmarks page: fetches the launcher's benchmark sessions from the Reports service (GET /bench/data, GET /bench/targets) at
-// runtime and draws one metric over the targets, one line per machine and platform, plus a table of the machines. Every text in
+// runtime and draws one metric for one version range, a dot per machine, platform and build, plus a table of the machines. Every text in
 // the data is submitted by players, so it only ever reaches the page through textContent or esc().
 (function () {
   "use strict";
@@ -30,7 +30,7 @@
   };
 
   /** What the legacy view shows, under the controls. */
-  const LEGACY_NOTE = "Legacy kit: the earlier Python kit at its baseline settings and each machine's own resolution, over commits; " +
+  const LEGACY_NOTE = "Legacy kit: the earlier Python kit at its baseline settings and each machine's own resolution, all its commits together; " +
     "not comparable with the launcher's versions.";
 
   /** Metrics: key in result.json, column of the old kit's results.csv, label, unit; higher = a rise is good. */
@@ -47,6 +47,19 @@
     { key: "sysmemPeakMb", legacy: "sysmem_peak_mb", label: "Peak system memory (MB)", unit: " MB" }
   ];
 
+  /**
+   * Version ranges of launcher benchmarks (benchmark version bench), newest first, kept by hand: every build from since (a target's version)
+   * up to the next newer range of the same benchmark version performs alike, so the page compares them as one. A performance regression or
+   * optimisation (or a new benchmark version) starts a new range: add an item with its first build on top. since "" is every older build.
+   * The legacy kit (benchmark version 0) is always the last item.
+   */
+  const RANGES = [
+    { bench: 1, since: "" }
+  ];
+
+  /** Machines the table shows per page. */
+  const PAGE = 20;
+
   /** Platforms the launcher submits. */
   const PLAT = { native: "Linux", proton: "Linux (Proton)", windows: "Windows", macos: "macOS" };
 
@@ -56,7 +69,10 @@
 
   /** Everything drawn comes from these: the loaded data and the current selection. */
   let D = null;
-  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "all", metric: "avgFps", hidden: {}, search: "", offTarget: false, sort: { col: null, dir: 1 } };
+  const state = {
+    range: 0, scenario: "", tier: "", group: "all", metric: "avgFps", checked: Object.create(null), search: "", page: 0, offTarget: false,
+    sort: { col: "metric", dir: 0 }
+  };
 
   // #endregion
 
@@ -178,14 +194,16 @@
         console.warn("Benchmark session " + s.id + " skipped:", e);
       }
     });
-    return { entries: entries, targets: orderTargets(entries, targets), lines: lineList(entries), haveTargets: targets.length > 0 };
+    const known = knownTargets(targets), ordered = orderTargets(entries, known);
+    const ranges = rangeList(entries, known, ordered);
+    return { entries: entries, targets: ordered, lines: lineList(entries), ranges: ranges, haveTargets: targets.length > 0 };
   }
 
   function entry(s, scenario, group, scen) {
     const m = s.machine && typeof s.machine === "object" ? s.machine : {}, platform = str(s.platform);
     return {
       id: s.id, at: str(s.at), handle: str(s.handle), machine: m, platform: platform, target: str(s.target).replace(/^v/, ""),
-      tier: str(s.tier), version: num(s.version) || 0, fingerprint: str(s.fingerprint), scenario: scenario, group: group,
+      tier: str(s.tier), version: num(s.version) || 0, scenario: scenario, group: group, range: -1,
       line: str(m.id || m.name) + "|" + platform, runs: scen.runs, info: scen.info, when: str(scen.when || scen.info.when || s.at)
     };
   }
@@ -237,15 +255,21 @@
     return m;
   }
 
-  /** Targets oldest first: those of /bench/targets by publish date, any other by its first benchmark (legacy commits). */
-  function orderTargets(entries, targets) {
-    const known = dict(), first = dict();
+  /** The targets of /bench/targets by version and by tag (both without the v). */
+  function knownTargets(targets) {
+    const known = dict();
     targets.forEach((t) => {
       if (!t || typeof t !== "object") return;
       const v = str(t.version || t.tag).replace(/^v/, "");
       known[v] = { id: v, kind: str(t.kind), time: str(t.publishedAt), label: v };
       known[str(t.tag).replace(/^v/, "")] = known[v];
     });
+    return known;
+  }
+
+  /** Targets oldest first: the known ones by publish date, any other by its first benchmark (legacy commits). */
+  function orderTargets(entries, known) {
+    const first = dict();
     entries.forEach((e) => {
       if (!first[e.target] || e.when < first[e.target]) first[e.target] = e.when;
     });
@@ -253,6 +277,26 @@
       ? Object.assign({}, known[id], { id: id })
       : { id: id, kind: "", time: first[id], label: id });
     return out.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+  }
+
+  /**
+   * The ranges that hold a session, newest first, each with its benchmark version and its builds oldest first; every entry gets its range's
+   * index. A range's start is compared by publish time, as versions don't sort by text (a nightly of 0.22.2 is older than 0.23.0).
+   */
+  function rangeList(entries, known, ordered) {
+    const defs = RANGES.map((r) => ({ bench: r.bench, start: r.since && known[r.since] ? known[r.since].time : "" }))
+      .concat([{ bench: 0, start: "" }]);
+    const time = dict();
+    ordered.forEach((t) => { time[t.id] = t.time; });
+    const used = defs.map(() => []);
+    entries.forEach((e) => {
+      const i = defs.findIndex((d) => d.bench === e.version && time[e.target] >= d.start);
+      if (i < 0) return;
+      e.range = i;
+      if (used[i].indexOf(e.target) < 0) used[i].push(e.target);
+    });
+    return defs.map((d, i) => ({ index: i, bench: d.bench, builds: ordered.filter((t) => used[i].indexOf(t.id) >= 0) }))
+      .filter((r) => r.builds.length);
   }
 
   /** Every machine+platform line, in order of first appearance, so its colour stays the same whatever is selected. */
@@ -266,35 +310,18 @@
     return out;
   }
 
-  function versions() {
-    const vs = dict();
-    D.entries.forEach((e) => { vs[e.version] = 1; });
-    return Object.keys(vs).map(Number).sort((a, b) => b - a);
-  }
+  function range() { return D.ranges.filter((r) => r.index === state.range)[0]; }
 
-  /** Fingerprints of <scenario> in the selected version, newest session's first; legacy data has none. */
-  function fingerprintsOf(scenario) {
-    const out = [];
-    D.entries.forEach((e) => {
-      if (e.version !== state.version || e.scenario !== scenario) return;
-      if (e.fingerprint && out.indexOf(e.fingerprint) < 0) out.push(e.fingerprint);
-    });
-    return out;
-  }
+  function legacy() { return range().bench === 0; }
 
-  /** Fingerprints of the selected version and scenario, newest session's first; legacy data has none. */
-  function fingerprints() { return fingerprintsOf(state.scenario); }
+  function inScenarioOf(scenario) { return D.entries.filter((e) => e.range === state.range && e.scenario === scenario); }
 
-  function inScenarioOf(scenario, fp) {
-    return D.entries.filter((e) => e.version === state.version && e.scenario === scenario && (!fp || e.fingerprint === fp));
-  }
+  function inScenario() { return inScenarioOf(state.scenario); }
 
-  function inScenario() { return inScenarioOf(state.scenario, state.fingerprint); }
-
-  /** The newest session per (machine, platform, target) for a given scenario, fingerprint, tier and group. */
-  function selectedFor(scenario, fp, tier, group) {
+  /** The newest session per (machine, platform, target) for a given scenario, tier and group. */
+  function selectedFor(scenario, tier, group) {
     const seen = dict();
-    return inScenarioOf(scenario, fp).filter((e) => {
+    return inScenarioOf(scenario).filter((e) => {
       if (e.tier !== tier || e.group !== group) return false;
       if (!state.offTarget && !onTarget(e)) return false;
       const k = e.line + "|" + e.target;
@@ -314,22 +341,21 @@
     return !!(t && t.kind);
   }
 
-  /** Whether the selected version, scenario and fingerprint have a session on a build that is not a target. */
+  /** Whether the selected range and scenario have a session on a build that is not a target. */
   function hasOffTarget() { return inScenario().some((e) => !onTarget(e)); }
 
-  /** The newest session per (machine, platform, target) of the selected version, scenario, fingerprint, tier and group. */
-  function selected() { return selectedFor(state.scenario, state.fingerprint, state.tier, state.group); }
+  /** The newest session per (machine, platform, target) of the selected range, scenario, tier and group. */
+  function selected() { return selectedFor(state.scenario, state.tier, state.group); }
 
-  /** How many plotted results would show for a hypothetical (scenario, fp, tier, group) under the active metric and machine filter. */
-  function countFor(scenario, fp, tier, group) {
-    return selectedFor(scenario, fp, tier, group)
-      .filter((e) => !state.hidden[e.line] && matches(e.line) && shownRun(e, state.metric) >= 0).length;
+  /** How many plotted results would show for a hypothetical (scenario, tier, group) under the active metric and machine selection. */
+  function countFor(scenario, tier, group) {
+    return selectedFor(scenario, tier, group)
+      .filter((e) => plotted(e.line) && shownRun(e, state.metric) >= 0).length;
   }
 
-  /** How many plotted results would show if <scenario> were selected (resolving its default fingerprint, tier and group the same way). */
+  /** How many plotted results would show if <scenario> were selected (resolving its default tier and group the same way). */
   function countForScenario(scenario) {
-    const fp = scenario === state.scenario ? state.fingerprint : (fingerprintsOf(scenario)[0] || "");
-    const entries = inScenarioOf(scenario, fp);
+    const entries = inScenarioOf(scenario);
     const haveTiers = dict(), haveGroups = dict();
     entries.forEach((e) => { haveTiers[e.tier] = 1; haveGroups[e.group] = 1; });
     const tiers = TIERS.filter((t) => haveTiers[t]).concat(Object.keys(haveTiers).filter((t) => TIERS.indexOf(t) < 0).sort());
@@ -337,7 +363,24 @@
       .concat(Object.keys(GROUPS).filter((g) => haveGroups[g] && g !== "all"), Object.keys(haveGroups).filter((g) => !own(GROUPS, g)).sort());
     const tier = tiers.indexOf(state.tier) >= 0 ? state.tier : (tiers.indexOf("medium") >= 0 ? "medium" : tiers[0] || "");
     const group = groups.indexOf(state.group) >= 0 ? state.group : (groups.indexOf("all") >= 0 ? "all" : groups[0] || "");
-    return countFor(scenario, fp, tier, group);
+    return countFor(scenario, tier, group);
+  }
+
+  /** Whether line <key> is drawn: the checked machines when any are, else every one matching the table's filter. */
+  function plotted(key) {
+    if (anyChecked()) return !!state.checked[key];
+    return matches(key);
+  }
+
+  function anyChecked() { return Object.keys(state.checked).some((k) => state.checked[k]); }
+
+  /** Whether machine+platform line <key> matches the filter text (machine id, platform, handle, CPU, GPU or OS). */
+  function matches(key) {
+    const q = state.search.trim().toLowerCase();
+    if (!q) return true;
+    const line = lineOf(key), m = line.machine || {};
+    const text = [lname(line), line.handle, m.cpu, m.gpu, m.os].join(" ").toLowerCase();
+    return text.indexOf(q) >= 0;
   }
 
   /** Run 2 when it has the value, else run 1 (some old kit sessions have one run). */
@@ -364,14 +407,8 @@
 
   function targetOf(id) { return D.targets.filter((t) => t.id === id)[0]; }
 
-  /** Axis label, two lines: v<version> or "daily" (a hash for legacy commits), then the date. */
-  function axisLabel(t) {
-    const top = t.kind === "release" ? "v" + t.label : t.kind === "daily" ? "daily" : t.label.slice(0, 8);
-    return [top, t.time.slice(5, 10)];
-  }
-
   function targetTitle(t) {
-    const kind = t.kind === "release" ? "release " : t.kind === "daily" ? "daily build " : state.version === 0 ? "commit " : "";
+    const kind = t.kind === "release" ? "release " : t.kind === "daily" ? "daily build " : legacy() ? "commit " : "";
     return kind + t.label + (t.time ? " (" + t.time.slice(0, 10) + ")" : "");
   }
 
@@ -392,7 +429,7 @@
       return;
     }
     setStatus("");
-    selectVersion(versions()[0]);
+    selectRange(D.ranges[0].index);
     window.addEventListener("resize", debounce(renderChart, 150));
   }
 
@@ -404,28 +441,27 @@
     };
   }
 
-  /** A version change picks a scenario the version has (bases when it has it). */
-  function selectVersion(v) {
-    state.version = v;
+  /** A range change picks a scenario the range has (bases when it has it). */
+  function selectRange(i) {
+    state.range = i;
     const ids = scenariosOf();
     selectScenario(ids.indexOf("bases") >= 0 ? "bases" : ids[0] || "");
   }
 
-  /** A scenario change resets the fingerprint, tier and group to ones the scenario has. */
+  /** A scenario change resets the tier and group to ones the scenario has. */
   function selectScenario(id) {
     state.scenario = id;
-    state.fingerprint = fingerprints()[0] || "";
     resetTierAndGroup();
     render();
   }
 
   function scenariosOf() {
     const have = dict(), names = scenarioNames();
-    D.entries.forEach((e) => { if (e.version === state.version) have[e.scenario] = 1; });
+    D.entries.forEach((e) => { if (e.range === state.range) have[e.scenario] = 1; });
     return Object.keys(names).filter((id) => have[id]).concat(Object.keys(have).filter((id) => !own(names, id)).sort());
   }
 
-  function scenarioNames() { return state.version === 0 ? LEGACY_SCENARIOS : SCENARIOS; }
+  function scenarioNames() { return legacy() ? LEGACY_SCENARIOS : SCENARIOS; }
 
   function scenarioName(id) { return own(scenarioNames(), id) ? scenarioNames()[id] : id; }
 
@@ -457,7 +493,6 @@
     document.getElementById("toolbar").hidden = false;
     renderControls();
     renderGroupDesc();
-    renderFilterBar();
     renderCaveat();
     renderChart();
     renderMachines();
@@ -471,10 +506,9 @@
     const row1 = el("div", { class: "tb-row" });
     row1.appendChild(control("Scenario", segmented(scenariosOf(), state.scenario, scenarioName, selectScenario, null, countForScenario)));
     row1.appendChild(control("Tier", segmented(tiersOf(), state.tier, tierName, pickTier, null,
-      (t) => countFor(state.scenario, state.fingerprint, t, state.group))));
-    row1.appendChild(control("Benchmark", versionSelect()));
+      (t) => countFor(state.scenario, t, state.group))));
+    row1.appendChild(control("Versions", rangeSelect()));
     if (hasOffTarget()) row1.appendChild(control("Builds", buildsToggle()));
-    if (fingerprints().length > 1) row1.appendChild(control("Fingerprint", fingerprintSelect()));
     const metric = control("Metric", metricSelect());
     metric.classList.add("tb-metric");
     row1.appendChild(metric);
@@ -483,7 +517,7 @@
     if (groups.length > 1) {
       const row2 = el("div", { class: "tb-row" });
       row2.appendChild(control("Segments", segmented(groups, state.group, groupName, pickGroup, groupDesc,
-        (g) => countFor(state.scenario, state.fingerprint, state.tier, g))));
+        (g) => countFor(state.scenario, state.tier, g))));
       host.appendChild(row2);
     }
   }
@@ -516,9 +550,17 @@
     return l;
   }
 
-  function versionSelect() {
-    const opts = versions().map((v) => [String(v), v === 0 ? "Legacy kit" : "Version " + v]);
-    return select(opts, String(state.version), (v) => selectVersion(Number(v)));
+  function rangeSelect() {
+    const opts = D.ranges.map((r) => [String(r.index), rangeName(r)]);
+    return select(opts, String(state.range), (i) => selectRange(Number(i)));
+  }
+
+  /** v<first build> to v<last build> of a range (with its benchmark version past 1), or the legacy kit. */
+  function rangeName(r) {
+    if (r.bench === 0) return "Legacy kit (commits)";
+    const first = r.builds[0].label, last = r.builds[r.builds.length - 1].label;
+    const span = first === last ? "v" + first : "v" + first + " \u2013 v" + last;
+    return r.bench > 1 ? span + " (benchmark " + r.bench + ")" : span;
   }
 
   /** Off-target builds (neither a full release nor a daily nightly) are hidden until "All builds" is picked. */
@@ -530,18 +572,10 @@
     }, (k) => (k === "targets" ? "Full releases and daily nightlies only" : "Also the other nightlies"));
   }
 
-  function fingerprintSelect() {
-    const opts = fingerprints().map((f, i) => [f, f.slice(0, 12) + (i === 0 ? " (newest)" : "")]).concat([["", "all"]]);
-    return select(opts, state.fingerprint, (f) => {
-      state.fingerprint = f;
-      resetTierAndGroup();
-      render();
-    });
-  }
-
   function metricSelect() {
     return select(METRICS.map((m) => [m.key, m.label]), state.metric, (k) => {
       state.metric = k;
+      state.page = 0;
       renderControls();
       renderChart();
       renderMachines();
@@ -573,16 +607,10 @@
     return seg;
   }
 
-  /** One benchmark version should have one workload: more than one fingerprint means builds disagree on what it measures. */
   function renderCaveat() {
-    const host = document.getElementById("caveat"), fps = fingerprints();
+    const host = document.getElementById("caveat");
     host.innerHTML = "";
-    if (state.version === 0) host.appendChild(el("p", { class: "muted small" }, LEGACY_NOTE));
-    if (fps.length < 2) return;
-    const what = "Benchmark version " + state.version + " of scenario " + scenarioName(state.scenario);
-    host.appendChild(el("p", { class: "caveat" }, what + " has " + fps.length +
-      " different fingerprints: builds that claim this version measure a different workload, so their numbers may not be comparable." +
-      (state.fingerprint ? " The newest fingerprint is shown; pick another or \"all\" above." : " All of them are shown.")));
+    if (legacy()) host.appendChild(el("p", { class: "muted small" }, LEGACY_NOTE));
   }
 
   // #endregion
@@ -593,66 +621,12 @@
     const host = document.getElementById("chart");
     host.innerHTML = "";
     if (!D) return;
-    const rows = selected().filter((e) => !state.hidden[e.line] && matches(e.line));
-    const targets = D.targets.filter((t) => rows.some((e) => e.target === t.id));
+    const rows = selected().filter((e) => plotted(e.line));
     if (!rows.some((e) => shownRun(e, state.metric) >= 0)) {
       host.appendChild(el("p", { class: "box muted" }, "No results for this selection."));
       return;
     }
-    chart(host, rows, targets);
-  }
-
-  /** Persistent search box + machine toggle chips inside the toolbar; typing never replaces the input or drops focus. */
-  function renderFilterBar() {
-    const host = document.getElementById("filter-bar");
-    let box = host.querySelector(".msearch");
-    if (!box) {
-      box = el("input", { type: "search", class: "msearch", placeholder: "Filter machines (GPU, CPU, user)…", "aria-label": "Filter machines" });
-      box.addEventListener("input", () => {
-        state.search = box.value;
-        renderControls();
-        renderFilterChips();
-        renderChart();
-        renderMachines();
-      });
-      host.appendChild(box);
-      host.appendChild(el("div", { class: "mpick", role: "group", "aria-label": "Machines shown" }));
-    }
-    if (box.value !== state.search) box.value = state.search;
-    renderFilterChips();
-  }
-
-  /** Clickable machine toggle chips matching the current search. */
-  function renderFilterChips() {
-    const box = document.querySelector("#filter-bar .mpick");
-    if (!box) return;
-    box.innerHTML = "";
-    const keys = dict();
-    selected().forEach((e) => { keys[e.line] = 1; });
-    D.lines.filter((l) => keys[l.key] && matches(l.key)).forEach((l) => {
-      const off = !!state.hidden[l.key];
-      const lab = el("label", { class: off ? "mchip is-off" : "mchip" }), cb = el("input", { type: "checkbox" });
-      cb.checked = !off;
-      cb.addEventListener("change", () => {
-        state.hidden[l.key] = !cb.checked;
-        lab.classList.toggle("is-off", !cb.checked);
-        renderControls();
-        renderChart();
-        renderMachines();
-      });
-      lab.appendChild(cb);
-      lab.insertAdjacentHTML("beforeend", ldot(l.key) + esc(lname(l)));
-      box.appendChild(lab);
-    });
-  }
-
-  /** Whether machine+platform line <key> matches the search text (machine id, platform, handle, CPU, GPU or OS). */
-  function matches(key) {
-    const q = state.search.trim().toLowerCase();
-    if (!q) return true;
-    const line = lineOf(key), m = line.machine || {};
-    const text = [lname(line), line.handle, m.cpu, m.gpu, m.os].join(" ").toLowerCase();
-    return text.indexOf(q) >= 0;
+    chart(host, rows);
   }
 
   function legend() {
@@ -664,20 +638,18 @@
     return d;
   }
 
-  function chart(host, rows, targets) {
+  /** One dot per machine, platform and build: the builds of a range perform alike, so X only spreads the dots apart. */
+  function chart(host, rows) {
     const metric = metricDef(), box = el("div", { class: "chart" });
     const head = el("div", { class: "chart-head" });
     head.appendChild(el("h3", {}, metric.label + " - " + chartTitle()));
     head.appendChild(legend());
     box.appendChild(head);
     host.appendChild(box);
-    const g = geometry(box, targets.length, maxOf(rows, metric.key));
-    const svg = sv("svg", { width: g.W, height: g.H, viewBox: "0 0 " + g.W + " " + g.H, role: "img", "aria-label": metric.label + " per build" });
+    const g = geometry(box, maxOf(rows, metric.key));
+    const svg = sv("svg", { width: g.W, height: g.H, viewBox: "0 0 " + g.W + " " + g.H, role: "img", "aria-label": metric.label + " per machine" });
     drawGrid(svg, g);
-    drawAxis(svg, g, targets);
-    const pts = points(rows, targets, metric.key);
-    drawLines(svg, g, pts);
-    drawMarkers(svg, g, pts, metric);
+    drawMarkers(svg, g, points(rows, metric.key), metric);
     box.appendChild(svg);
   }
 
@@ -692,12 +664,12 @@
     return max;
   }
 
-  function geometry(box, n, max) {
-    const W = Math.max(280, Math.floor(box.clientWidth - 20)), H = 320, m = { l: 50, r: 26, t: 14, b: 48 };
+  function geometry(box, max) {
+    const W = Math.max(280, Math.floor(box.clientWidth - 20)), H = 320, m = { l: 50, r: 16, t: 14, b: 14 };
     const ticks = niceTicks(max), top = ticks[ticks.length - 1] || 1, pw = W - m.l - m.r, ph = H - m.t - m.b;
     return {
-      W: W, H: H, m: m, pw: pw, ph: ph, n: n, ticks: ticks,
-      X: (i) => m.l + (n === 1 ? pw / 2 : (pw * i) / (n - 1)),
+      W: W, H: H, m: m, pw: pw, ph: ph, ticks: ticks,
+      X: (f) => m.l + pw * (0.03 + 0.94 * f),
       Y: (v) => m.t + ph - (v / top) * ph
     };
   }
@@ -712,49 +684,35 @@
     });
   }
 
-  function drawAxis(svg, g, targets) {
-    const step = Math.max(1, Math.ceil(g.n / Math.max(1, Math.floor(g.pw / 70))));
-    targets.forEach((t, i) => {
-      if (i % step && i !== g.n - 1) return;
-      const lab = axisLabel(t);
-      [lab[0], lab[1]].forEach((s, k) => {
-        const a = sv("text", { x: g.X(i), y: g.H - 24 + 13 * k, "text-anchor": "middle" });
-        a.textContent = s;
-        svg.appendChild(a);
-      });
-    });
-  }
-
-  /** Points per line: the target's index and both runs of the newest session there. */
-  function points(rows, targets, key) {
-    const byLine = dict();
+  /** Each plotted session's both runs and its place along X, from its id and line so it never moves with the selection. */
+  function points(rows, key) {
+    const out = [];
     rows.forEach((e) => {
-      const i = targets.findIndex((t) => t.id === e.target), shown = shownRun(e, key);
+      const shown = shownRun(e, key);
       if (shown < 0) return;
       const v1 = shown === 1 && e.runs[0] ? e.runs[0][key] : null;
-      (byLine[e.line] = byLine[e.line] || []).push({ i: i, e: e, shown: shown, v: e.runs[shown][key], v1: v1 });
+      out.push({ x: spread(e.id + "|" + e.line), e: e, shown: shown, v: e.runs[shown][key], v1: v1 });
     });
-    Object.keys(byLine).forEach((k) => byLine[k].sort((a, b) => a.i - b.i));
-    return byLine;
+    return out;
   }
 
-  function drawLines(svg, g, pts) {
-    Object.keys(pts).forEach((k) => {
-      if (pts[k].length < 2) return;
-      svg.appendChild(sv("polyline", { class: "ml", style: "stroke:" + lcolor(k), points: pts[k].map((p) => g.X(p.i) + "," + g.Y(p.v)).join(" ") }));
-    });
+  /** A fraction in [0, 1) from text: FNV-1a, then a final mix, so close ids land far apart. */
+  function spread(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h ^= h >>> 13;
+    return (h >>> 0) / 4294967296;
   }
 
   function drawMarkers(svg, g, pts, metric) {
-    const guide = sv("line", { class: "guide", x1: 0, x2: 0, y1: g.m.t, y2: g.m.t + g.ph });
-    svg.appendChild(guide);
-    Object.keys(pts).forEach((k) => pts[k].forEach((p) => {
-      const x = g.X(p.i), col = lcolor(k);
+    pts.forEach((p) => {
+      const x = g.X(p.x), col = lcolor(p.e.line);
       if (p.v1 != null) svg.appendChild(sv("circle", { class: "p1", cx: x, cy: g.Y(p.v1), r: 5, style: "fill:" + col }));
       const y = g.Y(p.v);
       svg.appendChild(p.shown === 1 ? diamond(x, y, col) : sv("circle", { class: "p1 only", cx: x, cy: y, r: 5, style: "fill:" + col }));
-      svg.appendChild(hitTarget(x, y, guide, p, metric));
-    }));
+      svg.appendChild(hitTarget(x, y, p, metric));
+    });
   }
 
   function diamond(x, y, col) {
@@ -763,26 +721,15 @@
     return sv("rect", attrs);
   }
 
-  function hitTarget(x, y, guide, p, metric) {
+  function hitTarget(x, y, p, metric) {
     const hit = sv("circle", { class: "hit", cx: x, cy: y, r: 11, tabindex: 0 }), html = tipHtml(p, metric);
-    const on = () => {
-      guide.setAttribute("x1", x);
-      guide.setAttribute("x2", x);
-      guide.classList.add("on");
-    };
-    const off = () => {
-      hideTip();
-      guide.classList.remove("on");
-    };
-    hit.addEventListener("mouseenter", on);
     hit.addEventListener("mousemove", (ev) => showTip(html, ev));
-    hit.addEventListener("mouseleave", off);
+    hit.addEventListener("mouseleave", hideTip);
     hit.addEventListener("focus", () => {
-      on();
       const b = hit.getBoundingClientRect();
       showTip(html, { clientX: b.left, clientY: b.top });
     });
-    hit.addEventListener("blur", off);
+    hit.addEventListener("blur", hideTip);
     const ti = sv("title");
     ti.textContent = lname(lineOf(p.e.line)) + " " + p.e.target + ": " + fmt(p.v) + metric.unit;
     hit.appendChild(ti);
@@ -794,7 +741,7 @@
     const runs = p.shown === 1
       ? "run 2: <b>" + fmt(p.v) + "</b>" + metric.unit + (p.v1 != null ? ", run 1: " + fmt(p.v1) + metric.unit : "")
       : "run 1: <b>" + fmt(p.v) + "</b>" + metric.unit + " (no run 2)";
-    const commit = game.commit && state.version !== 0 ? ' <span class="muted">' + esc(str(game.commit).slice(0, 8)) + "</span>" : "";
+    const commit = game.commit && !legacy() ? ' <span class="muted">' + esc(str(game.commit).slice(0, 8)) + "</span>" : "";
     return "<b>" + esc(t ? targetTitle(t) : e.target) + "</b>" + commit +
       "<br>" + ldot(e.line) + esc(lname(lineOf(e.line))) + (e.handle ? " by " + esc(e.handle) : "") +
       "<br>" + esc(metric.label) + "<br>" + runs +
@@ -805,85 +752,161 @@
 
   // #region Machines
 
-  /** One row per machine+platform of the selected version matching the active filter, sortable by any column. */
+  /**
+   * The machines of the selection, one row per machine+platform: filtered by the text box, sorted by any column (the metric, best first, by
+   * default), PAGE at a time. Checked rows are the only ones the chart draws; none checked draws every row the filter keeps.
+   */
   function renderMachines() {
     const host = document.getElementById("machines");
-    host.innerHTML = "";
     if (!D) return;
-    const rows = selected(), metric = metricDef(), lines = dict();
-    rows.forEach((e) => { (lines[e.line] = lines[e.line] || []).push(e); });
-    const keys = D.lines.map((l) => l.key).filter((k) => lines[k] && !state.hidden[k] && matches(k));
-    if (!keys.length) {
-      if (rows.length) host.appendChild(el("p", { class: "muted small" }, "No machines match this filter."));
+    const bar = machineBar(host), body = host.querySelector(".mbody");
+    body.innerHTML = "";
+
+    const metric = metricDef(), items = machineItems(metric);
+    updateMachineBar(bar, items.length);
+    if (!items.length) {
+      body.appendChild(el("p", { class: "muted small" }, selected().length ? "No machines match this filter." : "No machines."));
       return;
     }
 
-    const items = keys.map((k) => machineData(k, lines[k], metric));
-    sortMachines(items);
+    sortMachines(items, metric);
+    const pages = Math.ceil(items.length / PAGE);
+    state.page = Math.min(state.page, pages - 1);
+    body.appendChild(machineTable(items.slice(state.page * PAGE, (state.page + 1) * PAGE), metric));
+    if (pages > 1) body.appendChild(pager(pages, items.length));
+    const note = "Values: run 2 (run 1 in brackets), at the machine's newest build in this range for this scenario and tier. " +
+      "Launcher benchmarks always render at 1080p (1920×1080 windowed).";
+    body.appendChild(el("p", { class: "muted small" }, note));
+  }
 
-    const showRes = state.version === 0;
-    const cols = [
+  /** Every machine+platform line of the selection that matches the filter, with its sessions. */
+  function machineItems(metric) {
+    const lines = dict();
+    selected().forEach((e) => { (lines[e.line] = lines[e.line] || []).push(e); });
+    return D.lines.map((l) => l.key)
+      .filter((k) => lines[k] && matches(k))
+      .map((k) => machineData(k, lines[k], metric));
+  }
+
+  /** The filter box and the selection's count and clear button, made once so typing never loses focus. */
+  function machineBar(host) {
+    const have = host.querySelector(".mbar");
+    if (have) return have;
+    const bar = el("div", { class: "mbar" });
+    const box = el("input", { type: "search", class: "msearch", placeholder: "Filter machines (GPU, CPU, OS, user)", "aria-label": "Filter machines" });
+    box.addEventListener("input", () => {
+      state.search = box.value;
+      state.page = 0;
+      refresh();
+    });
+    const clear = el("button", { type: "button", class: "mclear" });
+    clear.addEventListener("click", () => {
+      state.checked = dict();
+      refresh();
+    });
+    bar.appendChild(box);
+    bar.appendChild(el("span", { class: "mcount muted" }));
+    bar.appendChild(clear);
+    host.appendChild(bar);
+    host.appendChild(el("div", { class: "mbody" }));
+    return bar;
+  }
+
+  function updateMachineBar(bar, shown) {
+    bar.dataset.shown = shown;
+    const n = Object.keys(state.checked).filter((k) => state.checked[k]).length;
+    const clear = bar.querySelector(".mclear");
+    bar.querySelector(".mcount").textContent = shown + (shown === 1 ? " machine" : " machines") +
+      (n ? ", " + n + " checked: only those are drawn" : ", check some to draw only those");
+    clear.textContent = "Clear checks";
+    clear.hidden = !n;
+  }
+
+  /** What depends on the machine selection: the counts in the controls, the chart and the table. */
+  function refresh() {
+    renderControls();
+    renderChart();
+    renderMachines();
+  }
+
+  function machineColumns(metric) {
+    const showRes = legacy();
+    if (!showRes && state.sort.col === "res") state.sort = { col: "metric", dir: 0 };
+    return [
       { id: "machine", label: "Machine", cls: "", num: false },
-      { id: "platform", label: "Platform", cls: "l", num: false },
-      { id: "cpu", label: "CPU", cls: "l", num: false },
-      { id: "gpu", label: "GPU", cls: "l", num: false },
-      { id: "ram", label: "RAM", cls: "", num: true },
-      { id: "os", label: "OS", cls: "l", num: false },
-      ...(showRes ? [{ id: "res", label: "Resolution", cls: "", num: true }] : []),
-      { id: "builds", label: "Builds", cls: "", num: true },
-      { id: "newest", label: "Newest", cls: "l", num: true },
+      { id: "platform", label: "Platform", cls: "l wide", num: false },
+      { id: "cpu", label: "CPU", cls: "l wide", num: false },
+      { id: "gpu", label: "GPU", cls: "l wide", num: false },
+      { id: "ram", label: "RAM", cls: "wide", num: true },
+      { id: "os", label: "OS", cls: "l wide", num: false },
+      ...(showRes ? [{ id: "res", label: "Resolution", cls: "wide", num: true }] : []),
+      { id: "builds", label: "Builds", cls: "wide", num: true },
+      { id: "newest", label: "Newest", cls: "l wide", num: true },
       { id: "metric", label: metric.label, cls: "", num: true }
     ];
-    if (!showRes && state.sort.col === "res") state.sort = { col: null, dir: 1 };
+  }
 
+  function machineTable(items, metric) {
+    const cols = machineColumns(metric);
     const wrap = el("div", { class: "tablewrap" }), table = el("table", { class: "mtable" });
-    const thead = el("thead"), headRow = el("tr"), body = el("tbody");
-    const headerCells = [];
-
-    function syncRows() {
-      sortMachines(items);
-      body.replaceChildren(...items.map((item) => machineRow(item, metric, showRes)));
-      headerCells.forEach(({ col, th, btn, ind }) => {
-        const active = state.sort.col === col.id;
-        th.setAttribute("aria-sort", active ? (state.sort.dir > 0 ? "ascending" : "descending") : "none");
-        btn.classList.toggle("is-active", active);
-        ind.textContent = active ? (state.sort.dir > 0 ? "▲" : "▼") : "⇅";
-      });
-    }
-
-    cols.forEach((c) => {
-      const th = el("th", c.cls ? { class: c.cls } : {});
-      const btn = el("button", { type: "button", class: "sort-btn" });
-      btn.appendChild(document.createTextNode(c.label));
-      const ind = el("span", { class: "sort-ind", "aria-hidden": "true" }, "⇅");
-      btn.appendChild(ind);
-      btn.addEventListener("click", () => {
-        if (state.sort.col === c.id) state.sort.dir = -state.sort.dir;
-        else {
-          state.sort.col = c.id;
-          state.sort.dir = c.id === "metric" ? (metric.higher ? -1 : 1) : (c.num ? -1 : 1);
-        }
-        syncRows();
-      });
-      th.appendChild(btn);
-      headRow.appendChild(th);
-      headerCells.push({ col: c, th: th, btn: btn, ind: ind });
-    });
-    thead.appendChild(headRow);
+    const head = el("tr"), body = el("tbody");
+    head.appendChild(el("th", { class: "ck" }, ""));
+    cols.forEach((c) => head.appendChild(sortHeader(c, metric)));
+    items.forEach((item) => body.appendChild(machineRow(item, metric, legacy())));
+    const thead = el("thead");
+    thead.appendChild(head);
     table.appendChild(thead);
     table.appendChild(body);
-    syncRows();
     wrap.appendChild(table);
-    host.appendChild(wrap);
-    const note = "Values: run 2 (run 1 in brackets), at the machine's newest build for this scenario and tier. Launcher benchmarks always render at 1080p (1920×1080 windowed).";
-    host.appendChild(el("p", { class: "muted small" }, note));
+    return wrap;
+  }
+
+  function sortHeader(c, metric) {
+    const active = state.sort.col === c.id, dir = sortDir(metric);
+    const th = el("th", c.cls ? { class: c.cls } : {});
+    th.setAttribute("aria-sort", active ? (dir > 0 ? "ascending" : "descending") : "none");
+    const btn = el("button", { type: "button", class: active ? "sort-btn is-active" : "sort-btn" }, c.label);
+    btn.appendChild(el("span", { class: "sort-ind", "aria-hidden": "true" }, active ? (dir > 0 ? "▲" : "▼") : "⇅"));
+    btn.addEventListener("click", () => {
+      if (active) state.sort = { col: c.id, dir: -dir };
+      else state.sort = { col: c.id, dir: c.id === "metric" ? 0 : (c.num ? -1 : 1) };
+      state.page = 0;
+      renderMachines();
+    });
+    th.appendChild(btn);
+    return th;
+  }
+
+  /** The sort direction; 0 is the metric's best first. */
+  function sortDir(metric) {
+    if (state.sort.dir) return state.sort.dir;
+    return metric.higher ? -1 : 1;
+  }
+
+  function pager(pages, total) {
+    const nav = el("div", { class: "pager", role: "navigation", "aria-label": "Machine pages" });
+    const from = state.page * PAGE + 1, to = Math.min(total, (state.page + 1) * PAGE);
+    nav.appendChild(pageButton("‹ Previous", state.page - 1, state.page === 0));
+    nav.appendChild(el("span", { class: "muted" }, from + "–" + to + " of " + total));
+    nav.appendChild(pageButton("Next ›", state.page + 1, state.page >= pages - 1));
+    return nav;
+  }
+
+  function pageButton(label, page, disabled) {
+    const b = el("button", { type: "button" }, label);
+    b.disabled = disabled;
+    b.addEventListener("click", () => {
+      state.page = page;
+      renderMachines();
+    });
+    return b;
   }
 
   function machineData(key, entries, metric) {
     const newest = entries.slice().sort((a, b) => D.targets.findIndex((t) => t.id === b.target) - D.targets.findIndex((t) => t.id === a.target))[0];
     const m = newest.machine, hw = newest.info.hardware || {}, t = targetOf(newest.target);
     const ram = num(m.ramGb != null ? m.ramGb : hw.ramGb);
-    const res = state.version !== 0 ? str(newest.info.resolution || "1920x1080") : str(m.resolution || newest.info.resolution);
+    const res = !legacy() ? str(newest.info.resolution || "1920x1080") : str(m.resolution || newest.info.resolution);
     const resMatch = res.match(/^(\d+)\s*[x×]\s*(\d+)$/i);
     const resPixels = resMatch ? Number(resMatch[1]) * Number(resMatch[2]) : null;
     const shown = shownRun(newest, metric.key);
@@ -912,9 +935,8 @@
     };
   }
 
-  function sortMachines(items) {
-    const col = state.sort.col, dir = state.sort.dir;
-    if (!col) return;
+  function sortMachines(items, metric) {
+    const col = state.sort.col, dir = sortDir(metric);
     items.sort((a, b) => {
       const av = a.sort[col], bv = b.sort[col];
       const aEmpty = av == null || av === "", bEmpty = bv == null || bv === "";
@@ -926,26 +948,54 @@
     });
   }
 
+  /** A row checks its machine when clicked anywhere; narrow screens show the platform and GPU under the name instead of their columns. */
   function machineRow(item, metric, showRes) {
     const key = item.key, entries = item.entries, newest = item.newest, m = item.m, hw = item.hw, t = item.t, ram = item.ram;
-    const tr = el("tr");
-    const name = el("td");
-    const by = newest.handle ? ' <span class="muted">by ' + esc(newest.handle) + "</span>" : "";
-    name.innerHTML = ldot(key) + "<b>" + esc(str(m.name || m.id) || "unnamed") + "</b>" + by;
-    if (m.notes) name.title = str(m.notes);
-    tr.appendChild(name);
+    const tr = el("tr", { class: state.checked[key] ? "is-checked" : "" });
+    tr.appendChild(checkCell(key, tr));
+    tr.appendChild(nameCell(item));
     [
-      [PLAT[newest.platform] || newest.platform, "l"],
-      [str(m.cpu || hw.cpu), "l"],
-      [str(m.gpu || hw.gpu), "l", hw.driver ? "Driver " + str(hw.driver) : ""],
-      [ram != null ? ram + " GB" : "", ""],
-      [str(m.os || hw.os), "l", hw.kernel ? "Kernel " + str(hw.kernel) : ""],
-      ...(showRes ? [[item.res, ""]] : []),
-      [String(entries.length), ""],
-      [t ? t.label : newest.target, "l", t ? targetTitle(t) : ""],
+      [PLAT[newest.platform] || newest.platform, "l wide"],
+      [str(m.cpu || hw.cpu), "l wide"],
+      [str(m.gpu || hw.gpu), "l wide", hw.driver ? "Driver " + str(hw.driver) : ""],
+      [ram != null ? ram + " GB" : "", "wide"],
+      [str(m.os || hw.os), "l wide", hw.kernel ? "Kernel " + str(hw.kernel) : ""],
+      ...(showRes ? [[item.res, "wide"]] : []),
+      [String(entries.length), "wide"],
+      [t ? t.label : newest.target, "l wide", t ? targetTitle(t) : ""],
       [valueText(newest, metric), ""]
     ].forEach((c) => tr.appendChild(cell(c[0], c[1], c[2])));
+    tr.addEventListener("click", (ev) => {
+      if (ev.target.closest("input")) return;
+      const cb = tr.querySelector("input");
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event("change"));
+    });
     return tr;
+  }
+
+  function checkCell(key, tr) {
+    const td = el("td", { class: "ck" }), cb = el("input", { type: "checkbox", "aria-label": "Draw only the checked machines" });
+    cb.checked = !!state.checked[key];
+    cb.addEventListener("change", () => {
+      state.checked[key] = cb.checked;
+      tr.classList.toggle("is-checked", cb.checked);
+      renderControls();
+      renderChart();
+      const bar = document.querySelector("#machines .mbar");
+      updateMachineBar(bar, Number(bar.dataset.shown));
+    });
+    td.appendChild(cb);
+    return td;
+  }
+
+  function nameCell(item) {
+    const m = item.m, newest = item.newest, td = el("td");
+    const by = newest.handle ? ' <span class="muted">by ' + esc(newest.handle) + "</span>" : "";
+    const sub = [PLAT[newest.platform] || newest.platform, str(m.gpu || item.hw.gpu)].filter(Boolean).map(esc).join(" · ");
+    td.innerHTML = ldot(item.key) + "<b>" + esc(str(m.name || m.id) || "unnamed") + "</b>" + by + '<span class="msub">' + sub + "</span>";
+    if (m.notes) td.title = str(m.notes);
+    return td;
   }
 
   function cell(text, cls, title) {
