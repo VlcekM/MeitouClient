@@ -84,7 +84,8 @@ sealed class Bench(Store store, Releases releases, Reporters reporters)
         string data = $"{{\"runs\":[{b.Runs![0].GetRawText()},{b.Runs[1].GetRawText()}]}}";
         string machineJson = JsonSerializer.Serialize(machine, ReportsJson.Default.BenchMachine);
         string sender = reporters.Hash($"install:{installId}");
-        var row = new BenchRow(null, sender, handle, machineJson, platform, key.Scenario, key.Game, key.Tier, key.Version, key.Fingerprint,
+        string fingerprint = BenchFingerprints.Current(key.Fingerprint);
+        var row = new BenchRow(null, sender, handle, machineJson, platform, key.Scenario, key.Game, key.Tier, key.Version, fingerprint,
             Legacy: false, data, b.Summary);
         return (row, null);
     }

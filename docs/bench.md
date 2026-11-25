@@ -259,8 +259,11 @@ keys with `_` for `-` and no `_ms`). Read back from frames.csv: percentile = sor
 Version and fingerprint: `BenchmarkSpec.Version` is bumped by hand when the workload changes (tiers, fixed settings, default settings,
 a scenario's start, segments, groups or save, metrics), never for faster code. The fingerprint is SHA-256 of `BenchmarkSpec.CanonicalText`:
 the version, metric text, the scenario (start, save and hash, segments with seconds,
-groups), fixed settings, the default `UserConfig` as compact JSON and each tier's table values and switches; nothing from the machine.
-So it is per scenario, and a version with two fingerprints is a missed bump. `applied` is SHA-256 of the settings panel's sliders and
+groups), fixed settings, the benchmark's `UserConfig` as compact JSON without the `[BenchmarkNeutral]` settings (ones the benchmark overrides,
+Metal's, and ones no run reads: file bookkeeping, menus the script never opens, key bindings) and each tier's table values and switches;
+nothing from the machine. So it is per scenario, and a version with two fingerprints is a missed bump. A fingerprint that changed without the
+workload is retired in the service's `BenchFingerprints`, which maps submissions and stored sessions to its replacement: version 1 builds up to
+0.23.1 hashed every setting, so each release that added one had its own (**Verified**: all six recomputed from the 0.23.1 text minus the added keys). `applied` is SHA-256 of the settings panel's sliders and
 switches after the tier (`key=value\n`, sorted), which differs by device (ray queries, DLSS).
 
 Detailed logs/screenshots belong outside the repository. Evidence for original-game claims
