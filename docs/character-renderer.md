@@ -14,7 +14,7 @@ characters, and keep the serial order within each batch. Portraits, icons, hover
 The shadow cascades drawn in a frame are gathered together before the first (`PrepareDepth`, from `ShadowPass`'s `CasterPrepare`): one
 parallel walk over the chunks tests each character and part against every cascade, then each cascade's batches and instance rows are
 filled in parallel; each cascade's draw only records. Every view has its own batches, named by an id per (mesh part, level, sidedness).
-Whether a character is indoors (the GI's interior flag; the host's hidden-indoors test too) is asked again only once it has moved farther
+Whether a character is indoors (the GI's interior flag) is asked again only once it has moved farther
 than the nearest interior box was when last asked (at most 50 units) or the loaded interiors changed (`WorldObjectRenderer.InteriorMemo`).
 Each `PartMaterial` keeps its last record and is written again only in a new epoch (texture cache `Version`: an image loaded, swapped
 or unloaded; LOD bias, stand-in, sampler generation, skin settings) or after its own fields changed (blend, body build). The records live

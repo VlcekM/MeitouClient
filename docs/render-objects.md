@@ -281,7 +281,7 @@ Motion vectors (temporal upscalers): an instance with a door, turret joint or ro
 **Original** (**Verified** by code, Ghidra, unless marked):
 - A building with an `interior` list owns an interior object, open or closed.
 - **Opening.** `FUN_1407f7230` runs every frame. Each player character whose location is a non-destroyed building sets that interior's keep-open timer to 10. The timer falls by the game-time step (`FUN_14054a790`) only while the building is complete (its vtable slot 69 returns the building's is-complete byte `+0x160`, **Verified**; Meitou: a construction site is held open), and the interior closes below 0 (`FUN_14054b690`). A building just left shows every floor (floor 4) until then. The same pass also opens, while build mode's ghost (`DAT_14212de48` `+0x18`) has `is interior furniture` (its slot 6, `FUN_14042df90`, which reads `is node` too), the buildings the player's faction owns in the town nearest the cursor's ground point (`FUN_140928890`, within each town's radius; the town's list `vfunc 0x2d8`), and an object at PlayerInterface `+0x298` whose flags `+0xa1` and `+0xa2` are set; this branch writes no keep-open timer, and while `+0x298` is set or a ghost without `is interior furniture` is held, the characters' buildings are emptied from the set (**Verified**, decompile of `FUN_1407f7230`).
-- **Closing** (`FUN_14054b130`) hides the interior's contained objects in every pass, except those flagged outside (`RootObject+0x240`). Their entities are destroyed and the lights go off.
+- **Closing** (`FUN_14054b130`) hides the interior's contained objects in every pass, except those flagged outside (`RootObject+0x240`), and every member of its second set (`+0x128`, added by `FUN_14054f450`: the item slots, `FUN_1405534f0`, and a serialised interior's ITEM_PLACEMENT_GROUP entries, `FUN_140552320`). Their entities are destroyed and the lights go off.
 - **Contained objects** are registered by `FUN_14054f3d0`. They are interior-layout furniture and buildings with a parent building: a saved `isInsideBuilding`, or player ghosts placed inside.
 - **The outside flag:**
   - Loaded from a state's `flags` bit 0, or the older `is outside` (`FUN_140552b70`).
@@ -289,11 +289,15 @@ Motion vectors (temporal upscalers): an instance with a door, turret joint or ro
   - Interior-layout objects spawn without it (`FUN_140583400`).
   - A player's building placed in or on another (a ghost with a parent) gets it when the ghost is made real (`FUN_1404d72a0`): set when a ray cast straight up from the ghost's position, without end, hits nothing in the collision groups `0x8079e00` (`FUN_1409b7430`, `FUN_1409b6a90`), or when the parent building is destroyed (Building slot `0x330`, `+0x1a1`); the object factory (`FUN_14057cc70`) takes it as its last argument. So furniture on a roof, with open sky over it, is outside and stays drawn while the building is closed.
 - `is interior furniture` / `is exterior furniture` only pick collision groups and the build label (`FUN_14055f6e0`, `FUN_1404df450`).
-- Ground items and characters have no closed-interior rule, only the floor sweep `FUN_1409fb540` (**Observed**; the items' building and floor:
-  [ui-input](game/ui-input.md#building-picking-and-selection)).
+- Ground items and characters have no closed-interior rule, only the floor sweep `FUN_1409fb540`, which shows an object on floor 1 or higher when its
+  floor is at most its building's shown floor, and a building not in the view shows floor 4 (`FUN_14092bf70`; **Verified**, decompile; the items'
+  building and floor: [ui-input](game/ui-input.md#building-picking-and-selection)). So a character inside a closed building stays drawn (**Observed**,
+  decompile: the interior's lists are written by `FUN_14054f3d0`, from the object factory, and `FUN_14054f450`, whose direct callers add item slots
+  and items, no character).
 - **Unknown:** what makes the doorway black. There is no occluder object; the mask is destroyed on close.
 
 **Meitou:**
+- Characters are hidden only above the shown floor of a building in the view (`InteriorView.HiddenIndoors`); those inside a closed building are drawn (#1392).
 - Opening is `GameHost.UpdateInteriorView`, which holds a left building open with all floors for 10 s of simulation time, or until it is unloaded, removed or destroyed. While an interior-furniture or node ghost is out, `InteriorView.OpenForFurniture` adds, at the viewed floor and with no keep-open, the player's buildings in the town nearest the ghost within its radius (the level's towns by `TownData.Radius`, the player's outposts by theirs): its complete sites there and the town houses it owns (#1225). Not modelled: in the original, while `+0x298` is set or a ghost without `is interior furniture` is held, the buildings opened for the player's characters are left out of the set.
 - An interior layout's object is hidden while its building is closed unless its `interiors.level` state has the outside flag (`LayoutItem.Outside`). The flag set at the editor is taken as the runtime setters' result (**Observed**).
   - In the install's interior layouts, 10 170 objects without the flag are `is exterior furniture` (barrels, cages, camp beds, Stack's rooftop awnings); these are now hidden while closed.
