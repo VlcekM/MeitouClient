@@ -89,15 +89,19 @@ public sealed unsafe class VulkanDisplay : IDisposable
 
         // Both vendors' frame generation are made ready where they can be, whatever the setting says now, so that it is followed without a
         // restart (ApplyFrameGeneration). DLSS's goes through Streamline (Windows, a window): its feature is loaded with DLSS, and unloaded until
-        // asked for. FSR 3's needs AMD's library and queues of its own, after Streamline's; its swapchain is made when asked for. Not with HDR
-        // output, which keeps the plain swapchain.
+        // asked for. FSR 3's needs AMD's library and queues of its own, after Streamline's (a compute family's where the graphics family lacks
+        // them); its swapchain is made when asked for. Not with HDR output, which keeps the plain swapchain.
         bool ready = options is not null && !hdr;
         string? layerWhy = OperatingSystem.IsMacOS() ? "the FFX library is not available for Metal" : null;
         _layerLoads = ready && layerWhy is null && FfxSwapchain.LibraryLoads(out _, out layerWhy);
         _layerWhy = layerWhy;
         (Ngx, Streamline) = LoadDlss(dlss, dlss && ready && OperatingSystem.IsWindows(), deviceOptions);
         _layerFirstQueue = deviceOptions.ExtraGraphicsQueues;
-        if (_layerLoads) deviceOptions.ExtraGraphicsQueues += FfxSwapchain.WantedExtraQueues;
+        if (_layerLoads)
+        {
+            deviceOptions.ExtraGraphicsQueues += FfxSwapchain.WantedExtraQueues;
+            deviceOptions.ExtraComputeQueues += FfxSwapchain.WantedExtraQueues;
+        }
         if (options is not null) Window = OpenWindow(options.Value, deviceOptions, hdr);
         Device = VulkanDevice.Create(deviceOptions);
         ReportDevice();

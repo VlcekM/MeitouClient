@@ -95,10 +95,15 @@ swapchain code needs Vulkan headers 1.3.237+, so the script uses Khronos' 1.3.29
   samples (**Observed**: validation VUID-vkCmdDraw-None-09600 otherwise).
 - **Teardown:** the frame-generation context is destroyed before the swapchain context, also when a failed swapchain remake falls
   back to the plain swapchain.
-- **Queues:** AMD's swapchain takes four queues (game, present, image acquire, async compute); we take them all from the graphics
-  family and need at least 3. **Observed** (Iris Xe, Windows, 2026-10-30): the family has 1 queue, so frame generation stays off
-  with a log line. Typical AMD and Intel drivers also expose one graphics queue; AMD's samples take
-  present and async compute from other families.
+- **Queues:** AMD's swapchain takes four roles (game, present, image acquire, async compute), each on its own queue: it rejects any two on one
+  (FFX 1.1.4 `FrameInterpolationSwapchainVK.cpp`), and async compute may be left empty, as it is used only for asynchronous work, which we never
+  allow. The game is the graphics queue; the others come from the graphics family's further queues, then from a compute family without graphics
+  (`VulkanDevice.ComputeQueues`, made only for what the graphics family lacks); present takes the first whose family can present to the
+  window. RADV has one graphics queue, and its compute family has several that can present (Mesa `radv_physical_device.c`, `wsi_common.c`: any
+  family with graphics, compute or transfer). `MEITOU_GRAPHICS_QUEUES=<n>` caps the graphics family's queues. **Observed** (RTX 4070, Linux,
+  gamescope, 2026-11-25): capped at 2, image acquire and async compute on compute family 2, frame generation active, no errors; capped at 1 it
+  stays off with a log line, as NVIDIA's compute family cannot present. Present on a compute queue (RADV) is untested.
+  **Observed** (Iris Xe, Windows, 2026-10-30, before compute queues were taken): one graphics queue, frame generation stayed off.
 - **DLSS:** on Windows DLSS goes through Streamline whichever frame generation runs (NGX, `meitou_ngx.dll`, only where Streamline does not
   load). Under AMD's swapchain Streamline does not see the presents: it logs once "presentCommon() was not observed", and DLSS goes on
   working (**Observed**, 2026-11-17: the picture at the same-state floor, no growth over 96 s). Before the runtime switch, FSR 3 took NGX and

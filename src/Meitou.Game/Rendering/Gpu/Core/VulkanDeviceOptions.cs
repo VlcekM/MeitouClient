@@ -46,6 +46,12 @@ public sealed class VulkanDeviceOptions
     public int ExtraGraphicsQueues { get; set; }
 
     /// <summary>
+    /// At most this many of the <see cref="ExtraGraphicsQueues"/> the graphics family cannot give are made in a compute family without graphics
+    /// instead (<see cref="VulkanDevice.ComputeQueues"/>), where the device has one.
+    /// </summary>
+    public int ExtraComputeQueues { get; set; }
+
+    /// <summary>
     /// Prefer a discrete GPU over an integrated one.
     /// </summary>
     public bool PreferDiscrete { get; set; } = true;

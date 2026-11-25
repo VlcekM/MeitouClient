@@ -174,6 +174,15 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public Queue[] ExtraQueues { get; private set; } = [];
     /// <summary>
+    /// Queues of <see cref="ComputeFamily"/> made for the extra graphics queues the graphics family could not give
+    /// (<see cref="VulkanDeviceOptions.ExtraComputeQueues"/>); empty by default. As with <see cref="ExtraQueues"/>, only their users submit on them.
+    /// </summary>
+    public Queue[] ComputeQueues { get; private set; } = [];
+    /// <summary>
+    /// The queue family of <see cref="ComputeQueues"/>: the first with compute and without graphics (-1: the device has none).
+    /// </summary>
+    public int ComputeFamily { get; private set; } = -1;
+    /// <summary>
     /// The transfer queue: a dedicated transfer family's when the device has one (<see cref="HasDedicatedTransfer"/>).
     /// </summary>
     public Queue TransferQueue { get; private set; }
@@ -834,8 +843,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         var v = Properties.ApiVersion;
         sb.AppendLine($"Device: {DeviceName}, Vulkan {v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}, type {Properties.DeviceType}, " +
             $"validation {(ValidationEnabled ? SyncValidationEnabled ? "on (sync)" : _options.GpuValidation ? "on (gpu)" : "on" : "off")}");
-        sb.AppendLine($"Queues: graphics family {GraphicsFamily}, transfer family {TransferFamily}" +
-            $"{(HasDedicatedTransfer ? " (dedicated)" : " (shared with graphics)")}");
+        sb.AppendLine($"Queues: graphics family {GraphicsFamily} ({1 + ExtraQueues.Length}), " +
+            $"compute family {ComputeFamily} ({ComputeQueues.Length}), transfer family {TransferFamily}{(HasDedicatedTransfer ? " (dedicated)" : " (shared with graphics)")}");
         sb.AppendLine($"dynamicRendering={HasDynamicRendering} synchronization2={HasSynchronization2} timelineSemaphore={HasTimelineSemaphore} " +
             $"extendedDynamicState={HasExtendedDynamicState}");
         sb.AppendLine($"extendedDynamicState2={HasExtendedDynamicState2} (logicOp={HasExtendedDynamicState2LogicOp}, " +
@@ -1545,31 +1554,41 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (HasFullScreenExclusive) names.Add("VK_EXT_full_screen_exclusive");
         var fams = PickQueueFamilies(pd);
         f2.PNext = chain;
-        uint graphicsQueues = CreateDevice(pd, &f2, names, fams);
-        GetQueues(graphicsQueues);
+        var (graphicsQueues, computeQueues) = CreateDevice(pd, &f2, names, fams);
+        GetQueues(graphicsQueues, computeQueues);
         QueryDeviceProperties(pd, extVrs);
         if (ValidationEnabled) NameDeviceObjects();
     }
 
     /// <summary>
     /// Creates <see cref="Device"/> with the enabled features <paramref name="f2"/> (its chain still on the caller's stack), the extensions
-    /// <paramref name="names"/>, the graphics queues and the dedicated transfer queue; returns the graphics queue count.
+    /// <paramref name="names"/>, the graphics queues, the compute queues and the dedicated transfer queue; returns the graphics and compute queue
+    /// counts.
     /// </summary>
-    uint CreateDevice(PhysicalDevice pd, PhysicalDeviceFeatures2* f2, List<string> names, QueueFamilyProperties[] fams)
+    (uint Graphics, uint Compute) CreateDevice(PhysicalDevice pd, PhysicalDeviceFeatures2* f2, List<string> names, QueueFamilyProperties[] fams)
     {
         float prio = 1f;
+        var (graphicsQueues, computeQueues) = QueueCounts(fams);
+        var prios = stackalloc float[(int)Math.Max(graphicsQueues, computeQueues)];
+        for (int i = 0; i < Math.Max(graphicsQueues, computeQueues); i++) prios[i] = 1f;
 
-        // 1 + the extra queues the family offers (priorities all 1).
-        uint graphicsQueues = 1 + (uint)Math.Min(Math.Max(_options.ExtraGraphicsQueues, 0), (int)fams[GraphicsFamily].QueueCount - 1);
-        var prios = stackalloc float[(int)graphicsQueues];
-        for (int i = 0; i < graphicsQueues; i++) prios[i] = 1f;
-
-        var qcis = stackalloc DeviceQueueCreateInfo[2];
+        var qcis = stackalloc DeviceQueueCreateInfo[3];
         uint qn = 0;
         qcis[qn++] = new DeviceQueueCreateInfo
         {
             SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = GraphicsFamily, QueueCount = graphicsQueues, PQueuePriorities = prios,
         };
+
+        if (computeQueues > 0)
+        {
+            qcis[qn++] = new DeviceQueueCreateInfo
+            {
+                SType = StructureType.DeviceQueueCreateInfo,
+                QueueFamilyIndex = (uint)ComputeFamily,
+                QueueCount = computeQueues,
+                PQueuePriorities = prios,
+            };
+        }
 
         if (HasDedicatedTransfer)
         {
@@ -1600,7 +1619,25 @@ public sealed unsafe class VulkanDevice : IDisposable
             SilkMarshal.Free((nint)extPtrs);
         }
 
-        return graphicsQueues;
+        return (graphicsQueues, computeQueues);
+    }
+
+    /// <summary>
+    /// How many queues of the graphics family (1 + the extra ones it offers) and of the compute family (for the extra ones it lacked, as many as
+    /// <see cref="VulkanDeviceOptions.ExtraComputeQueues"/> allows and the family offers) to create. <c>MEITOU_GRAPHICS_QUEUES</c> caps the
+    /// graphics family's count, to try a device with fewer (one on RADV, Intel).
+    /// </summary>
+    (uint Graphics, uint Compute) QueueCounts(QueueFamilyProperties[] fams)
+    {
+        int offered = (int)fams[GraphicsFamily].QueueCount;
+        if (int.TryParse(Environment.GetEnvironmentVariable("MEITOU_GRAPHICS_QUEUES"), out int cap) && cap >= 1) offered = Math.Min(offered, cap);
+
+        int wanted = Math.Max(_options.ExtraGraphicsQueues, 0);
+        int extra = Math.Min(wanted, offered - 1);
+        if (ComputeFamily < 0) return ((uint)(1 + extra), 0);
+
+        int compute = Math.Min(Math.Min(wanted - extra, Math.Max(_options.ExtraComputeQueues, 0)), (int)fams[ComputeFamily].QueueCount);
+        return ((uint)(1 + extra), (uint)compute);
     }
 
     /// <summary>
@@ -1862,13 +1899,15 @@ public sealed unsafe class VulkanDevice : IDisposable
     }
 
     /// <summary>
-    /// The graphics family and a transfer-only family when the device has one (else transfers share the graphics family); returns the families.
+    /// The graphics family, the first compute family without graphics, and a transfer-only family when the device has one (else transfers share
+    /// the graphics family); returns the families.
     /// </summary>
     QueueFamilyProperties[] PickQueueFamilies(PhysicalDevice pd)
     {
         var fams = QueueFamilies(pd);
         GraphicsFamily = (uint)FindGraphicsFamily(pd);
         TransferFamily = GraphicsFamily;
+        ComputeFamily = Array.FindIndex(fams, f => (f.QueueFlags & (QueueFlags.ComputeBit | QueueFlags.GraphicsBit)) == QueueFlags.ComputeBit);
 
         for (int i = 0; i < fams.Length; i++)
         {
@@ -1886,9 +1925,10 @@ public sealed unsafe class VulkanDevice : IDisposable
     }
 
     /// <summary>
-    /// The device's queues: the graphics queue, the extra graphics queues and the transfer queue (the graphics queue without a family of its own).
+    /// The device's queues: the graphics queue, the extra graphics queues, the compute queues and the transfer queue (the graphics queue without a
+    /// family of its own).
     /// </summary>
-    void GetQueues(uint graphicsQueues)
+    void GetQueues(uint graphicsQueues, uint computeQueues)
     {
         Vk.GetDeviceQueue(Device, GraphicsFamily, 0, out var gq);
         GraphicsQueue = gq;
@@ -1903,6 +1943,9 @@ public sealed unsafe class VulkanDevice : IDisposable
                 ExtraQueues[i - 1] = eq;
             }
         }
+
+        ComputeQueues = new Queue[computeQueues];
+        for (uint i = 0; i < computeQueues; i++) Vk.GetDeviceQueue(Device, (uint)ComputeFamily, i, out ComputeQueues[i]);
 
         if (HasDedicatedTransfer)
         {

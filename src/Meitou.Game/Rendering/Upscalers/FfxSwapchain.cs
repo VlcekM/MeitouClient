@@ -137,14 +137,21 @@ public sealed unsafe class FfxSwapchain : IDisposable
     #region Queues
 
     /// <summary>
-    /// Graphics-family queues beyond the first that this wants: present, image acquire and (when the family has it) async compute.
+    /// Queues beyond the game's that this wants: present, image acquire and async compute. They come from the graphics family, else from a compute
+    /// family (<see cref="VulkanDevice.ComputeQueues"/>; RADV's graphics family has one queue).
     /// </summary>
     public const int WantedExtraQueues = 3;
 
     /// <summary>
-    /// The fewest extra queues it works with: present and image acquire; the async compute role then shares the present queue.
+    /// The fewest extra queues it works with: present and image acquire. The async compute role is then left empty, which the layer allows: it
+    /// takes the queue only for asynchronous work, which <see cref="FrameGeneration"/> never allows (it rejects any two roles on one queue).
     /// </summary>
     public const int MinimumExtraQueues = 2;
+
+    /// <summary>
+    /// A queue handed to the layer and its family.
+    /// </summary>
+    readonly record struct LayerQueue(Queue Queue, uint Family);
 
     /// <summary>
     /// The device of the layer that exists: <c>submitFunc</c> has no queue argument, so each role has a function of its own; one layer at a time per
@@ -153,10 +160,10 @@ public sealed unsafe class FfxSwapchain : IDisposable
     static VulkanDevice? s_submitDevice;
 
     /// <summary>
-    /// The queues of the four roles: the device's graphics queue for the game, then its extra queues for present, image acquire and async compute
-    /// (the present queue when there are only two).
+    /// The queues of the four roles: the device's graphics queue for the game, then its extra and compute queues for present (the first that can
+    /// present), image acquire and async compute (none when there are only two).
     /// </summary>
-    static Queue s_gameQueue, s_computeQueue, s_presentQueue, s_acquireQueue;
+    static LayerQueue s_gameQueue, s_computeQueue, s_presentQueue, s_acquireQueue;
 
     /// <summary>
     /// The locks of the queues only the layer submits on.
@@ -200,13 +207,13 @@ public sealed unsafe class FfxSwapchain : IDisposable
     /// Submits on <paramref name="queue"/> under <paramref name="gate"/>; an exception becomes <see cref="Result.ErrorDeviceLost"/>, since nothing
     /// may escape into the library.
     /// </summary>
-    static Result Submit(Queue queue, object gate, uint count, SubmitInfo* submits, Fence fence)
+    static Result Submit(LayerQueue queue, object gate, uint count, SubmitInfo* submits, Fence fence)
     {
         try
         {
             lock (gate)
             {
-                return s_submitDevice!.Vk.QueueSubmit(queue, count, submits, fence);
+                return s_submitDevice!.Vk.QueueSubmit(queue.Queue, count, submits, fence);
             }
         }
         catch (Exception)
@@ -217,14 +224,49 @@ public sealed unsafe class FfxSwapchain : IDisposable
     }
 
     /// <summary>
-    /// A queue as the layer is handed it, with its submit function.
+    /// A queue as the layer is handed it, with its family and submit function (an empty role: no queue, no function, the game's family).
     /// </summary>
-    static QueueInfo Info(Queue queue, nint submit) => new() { Queue = queue.Handle, FamilyIndex = SubmitFamily, SubmitFunc = submit };
+    static QueueInfo Info(LayerQueue queue, nint submit) => queue.Queue.Handle == 0
+        ? new QueueInfo { FamilyIndex = s_gameQueue.Family }
+        : new QueueInfo { Queue = queue.Queue.Handle, FamilyIndex = queue.Family, SubmitFunc = submit };
 
     /// <summary>
-    /// The family of every queue handed over: the device's graphics family.
+    /// The queues the layer may take, in order of preference: the device's extra graphics queues from <paramref name="firstQueue"/> on (those
+    /// before are Streamline's), then its compute queues.
     /// </summary>
-    static uint SubmitFamily => s_submitDevice!.GraphicsFamily;
+    static List<LayerQueue> OfferedQueues(VulkanDevice device, int firstQueue)
+    {
+        var offered = new List<LayerQueue>();
+        foreach (var q in device.ExtraQueues.AsSpan(Math.Min(firstQueue, device.ExtraQueues.Length))) offered.Add(new(q, device.GraphicsFamily));
+        foreach (var q in device.ComputeQueues) offered.Add(new(q, (uint)device.ComputeFamily));
+        return offered;
+    }
+
+    /// <summary>
+    /// Takes the present queue out of <paramref name="offered"/>: the first whose family can present to the window's surface (the graphics family
+    /// always can); false when none can.
+    /// </summary>
+    static bool TakePresentQueue(VulkanDevice device, List<LayerQueue> offered, out LayerQueue present)
+    {
+        int i = offered.FindIndex(q => CanPresent(device, q.Family));
+        present = i >= 0 ? offered[i] : default;
+        if (i < 0) return false;
+
+        offered.RemoveAt(i);
+        return true;
+    }
+
+    /// <summary>
+    /// Whether queues of <paramref name="family"/> can present to the device's surface.
+    /// </summary>
+    static bool CanPresent(VulkanDevice device, uint family)
+    {
+        if (family == device.GraphicsFamily) return true;
+        if (device.SurfaceExtension is null) return false;
+
+        device.SurfaceExtension.GetPhysicalDeviceSurfaceSupport(device.PhysicalDevice, family, device.Surface, out var ok);
+        return ok;
+    }
 
     #endregion
 
@@ -319,20 +361,26 @@ public sealed unsafe class FfxSwapchain : IDisposable
     /// <summary>
     /// One line on the queues handed over, for the log.
     /// </summary>
-    /// <summary>
-    /// The first of the device's extra queues the layer took (those before are Streamline's), for <see cref="QueueLayout"/>.
-    /// </summary>
-    static int s_firstQueue;
-
     public string QueueLayout
     {
         get
         {
-            int first = s_firstQueue + 1;
-            string async = s_computeQueue.Handle == s_presentQueue.Handle ? "the present queue" : $"queue {first + 2}";
-            string queues = $"game = graphics queue 0, present = queue {first}, image acquire = queue {first + 1}";
-            return $"{queues}, async compute = {async} (family {_device.GraphicsFamily})";
+            string async = s_computeQueue.Queue.Handle == 0 ? "none" : Describe(s_computeQueue);
+            string roles = $"game = {Describe(s_gameQueue)}, present = {Describe(s_presentQueue)}, image acquire = {Describe(s_acquireQueue)}";
+            return $"{roles}, async compute = {async}";
         }
+    }
+
+    /// <summary>
+    /// A queue for <see cref="QueueLayout"/>: its family and its index there.
+    /// </summary>
+    string Describe(LayerQueue queue)
+    {
+        if (queue.Queue.Handle == _device.GraphicsQueue.Handle) return $"family {queue.Family} queue 0";
+
+        int extra = Array.IndexOf(_device.ExtraQueues, queue.Queue);
+        int index = extra >= 0 ? extra + 1 : Array.IndexOf(_device.ComputeQueues, queue.Queue);
+        return $"family {queue.Family} queue {index}";
     }
 
     /// <summary>
@@ -373,10 +421,16 @@ public sealed unsafe class FfxSwapchain : IDisposable
     {
         if (!LibraryLoads(out var library, out reason)) return null;
 
-        int offered = Math.Max(device.ExtraQueues.Length - firstQueue, 0);
-        if (offered < MinimumExtraQueues)
+        var offered = OfferedQueues(device, firstQueue);
+        if (offered.Count < MinimumExtraQueues)
         {
-            reason = $"the graphics queue family leaves {offered} queues for the layer, it needs {MinimumExtraQueues}";
+            reason = $"the graphics and compute queue families leave {offered.Count} queues for the layer, it needs {MinimumExtraQueues}";
+            return null;
+        }
+
+        if (!TakePresentQueue(device, offered, out var present))
+        {
+            reason = "none of the queues left for the layer can present to the window";
             return null;
         }
 
@@ -391,12 +445,10 @@ public sealed unsafe class FfxSwapchain : IDisposable
             s_submitDevice = device;
         }
 
-        var extra = device.ExtraQueues.AsSpan(firstQueue);
-        s_firstQueue = firstQueue;
-        s_gameQueue = device.GraphicsQueue;
-        s_presentQueue = extra[0];
-        s_acquireQueue = extra[1];
-        s_computeQueue = extra.Length > 2 ? extra[2] : extra[0];
+        s_gameQueue = new(device.GraphicsQueue, device.GraphicsFamily);
+        s_presentQueue = present;
+        s_acquireQueue = offered[0];
+        s_computeQueue = offered.Count > 1 ? offered[1] : default;
         return new FfxSwapchain(device, library);
     }
 
