@@ -782,10 +782,16 @@ default.
   (`MEITOU_METAL_GI=1`): a save load with it enabled froze the test M1 Pro, so normal launches leave it off.
 - **Volumetric clouds and fog**: parity shots use `--faithful clouds,cloudshadows`; the Meitou cloud/fog path is
   step 6.
-- **Upscaler**: the **Use Metal upscaling** switch (`metalUseUpscaling`, default on) splits the Display settings into two trees: on, the
-  upscaler (preset row and render scale); off, no upscaler (below). MetalFX Balanced at render scale 0.50 is the default; the switch turns
-  itself off when MetalFX is unavailable; the choice is saved in `meitou.user.json` (`metalUpscaler` keeps the upscaler while the switch is
-  off). A file of layout 2 or older with `metalUpscaler` 0 (the released Native) migrates to the switch off, without `metalUpscaler` and
+- **Upscaler**: the **Use Metal upscaling** switch (`metalUseUpscaling`) splits the Display settings into two trees: on, the
+  upscaler (preset row and render scale); off, no upscaler (below). Until the player sets it (the key absent from `meitou.user.json`) the
+  screen decides at each start (`UserConfig.DefaultMetalUpscaling`, logged as `upscaling not chosen`): off on a Retina screen (two pixels per
+  point; `MetalUpscaling.Retina`), which in full screen then renders at half the screen's size (`metalRenderDivisor` 2); off on a screen up
+  to 1200 pixels tall (1080p class), which renders at its own size; on elsewhere (a larger one-pixel-per-point screen, or a screen AppKit does
+  not name: `MetalDisplay.ScreenPixels`, the window's `NSScreen` frame times its backing scale). MetalFX costs too much for a Retina screen's
+  output: upscaling 1080p to 4K took 30-40% of the GPU time (**Observed**, M6). With the switch on, MetalFX temporal at render scale
+  0.50 is the default. The switch turns itself off when MetalFX is unavailable; a choice in the game or the launcher is saved (`metalUpscaler`
+  keeps the upscaler while the switch is off), a start never saves it. Layout 6 drops `metalUseUpscaling` and `metalRenderDivisor` from a
+  file that has all four display keys at the earlier defaults (on, MetalFX temporal, 0.50, division 1), which every game-written file had. A file of layout 2 or older with `metalUpscaler` 0 (the released Native) migrates to the switch off, without `metalUpscaler` and
   `metalRenderScale`. TAA remains available for comparison; MEP-1
   fixed its Metal depth convention and sun-motion term, but it is still labelled experimental. The **F10 settings
   panel** exposes the presets Super Quality 0.77, Quality 0.67, Balanced 0.59,
@@ -807,7 +813,8 @@ other composite passes stay as the options set them. Where the picture is as lar
   off, in a window only) its virtual Retina pixels, one per point (`MetalRenderFraction`, the framebuffer's width over the window's),
   stretched as below. Where the window has one pixel per point the switch changes nothing. The render scale and render resolution rows are not
   shown.
-- In full screen the scene renders at the screen's size divided by `metalRenderDivisor` (1 to 4, whole numbers, default 1; the rows read
+- In full screen the scene renders at the screen's size divided by `metalRenderDivisor` (1 to 4, whole numbers; unset, 2 on a Retina screen
+  and 1 elsewhere; the rows read
   "WxH (screen / n)") and is stretched to the screen with the **nearest** pixel, sharp blocks of pixels, no filtering. Nearest is used for
   every division: it is exact whenever the render size divides the screen's, and off by at most one pixel when it does not.
   `metalRetinaResolution` is not used there.

@@ -233,8 +233,16 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - Detect (when `presets.detect` names the game's option, `--recommend-preset <file>`) runs the played version's game, which makes a
   headless Vulkan device (the GPU it would pick), reads the memory and the cores, and writes `{ preset, summary, gpu, integrated,
   videoMemoryMb, memoryMb, cores, problem }`; the launcher saves `preset` as above and shows `summary`. Without Vulkan (a Metal-only
-  Mac, a driver that fails `vkCreateInstance`) the memory and cores decide alone; off macOS the summary names the failure
-  (`no Vulkan device: <problem>`). A GeForce goes by its model against the classes the tiers are meant for (`GeForceTier`: RTX 3060
+  Mac, a driver that fails `vkCreateInstance`) Apple silicon takes the GPU's name from Metal (`Apple M6`) and other machines go by memory
+  and cores alone; off macOS the summary names the failure (`no Vulkan device: <problem>`).
+  Apple silicon goes by its GPU (`AppleGpuTiers`, an engine choice): the chip's Geekbench 7 Metal score (Geekbench Browser, M1 to M6: the
+  base chips 28,496 / 43,540 / 48,180 / 54,230 / 72,805 / 89,357; Pro, Max and Ultra in the class) predicts its frame rate in proportion,
+  against an M6 that ran the launcher benchmark's bases scenario at 164 fps Low, 136 Medium and 113 High (**Observed** 2026-11-25, two runs
+  each, 1920x1080 without an upscaler; GPU time 93-103% of the frame time in every group, so GPU-bound). The tier is the highest predicted at
+  60 fps or more: from a score of 39.4k Medium, from 47.6k High, never above High (Ultra and Extreme are not measured on Metal, which has no
+  ray tracing): M1 Low, M2 Medium, M3 and later and every Pro, Max and Ultra High. A chip not in the table: a later generation counts as the
+  newest, a missing variant is that variant's newest score scaled by the base chips (M6 Pro: M5 Pro x M6 / M5). Under 12 GB of memory Medium at
+  most, under 8 GB Low; a GPU name that is not an Apple chip's goes by memory (Medium from 16 GB, else Low). A GeForce goes by its model against the classes the tiers are meant for (`GeForceTier`: RTX 3060
   Medium, 3070 to 4070 High, 4070 Ti to 4080 Ultra, 4080 Super and 4090 Extreme, other series by their place among these, a laptop
   GPU a class lower); any other card by video memory (under 6 GB Medium, under 12 GB High, under 24 GB Ultra, else Extreme); under
   12 GB memory or 6 threads Medium at most. Observed: Intel Iris Xe (integrated) is Low, in 2.5 s.
@@ -248,7 +256,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   at any other value, and with `and` another condition must hold too (older launchers ignore both). A setting with `renderer` (`vulkan`
   or `metal`) is shown only while Play would start the game with that renderer (`GraphicsRenderer`, as `SetUpRenderer` picks it; no
   `renderer`: always): the Vulkan anti-aliasing and upscaling rows are Vulkan's, and on macOS the schema adds Metal's Display rows
-  after the world tick: the switch `metalUseUpscaling` (default on) and two trees under it. On: `metalUpscaler` (MetalFX temporal, MetalFX
+  after the world tick: the switch `metalUseUpscaling` and two trees under it. The switch and `metalRenderDivisor` show a Retina screen's
+  defaults (off, screen / 2), every Apple-silicon Mac's own screen's; unsaved, the game takes its screen's ([metal-backend](metal-backend.md)). On: `metalUpscaler` (MetalFX temporal, MetalFX
   spatial, TAA) and `metalRenderScale` (modes). Off: `metalRetinaResolution` (while `fullScreen` is off), `metalRenderDivisor` (while it is on) and `metalUiAtScreenResolution` (always;
   [metal-backend](metal-backend.md)). A look setting that differs from the look's
   value has its name in brass and a Reset link that writes it, and so does its feature's header (for all of them, as in the game); quality and display settings are never marked (the Quality row reads Custom),

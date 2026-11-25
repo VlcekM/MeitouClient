@@ -2,6 +2,10 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using Meitou.Game.Rendering.Gpu.Core;
 using Meitou.Game.Settings;
+#if MEITOU_METAL
+using SharpMetal.Metal;
+using SharpMetal.ObjectiveCCore;
+#endif
 
 namespace Meitou.Game.Host;
 
@@ -19,14 +23,14 @@ static class HardwareProbe
 
     /// <summary>
     /// The preset for the hardware. A judgement, not measured, but for the classes the tiers are meant for (<see cref="QualityTiers.LowPreset"/>):
-    /// an integrated GPU (but Apple's with 16 GB or more), under 3 GB of video memory, under 8 GB of memory or under 4 cores is Low; a GeForce by
-    /// its model (<see cref="GeForceTier"/>); any other card by its video memory (under 6 GB Medium, under 12 GB High, under 24 GB Ultra, else
-    /// Extreme); under 12 GB of memory or 6 cores is Medium at most.
+    /// Apple silicon by its GPU (<see cref="AppleTier"/>); an integrated GPU, under 3 GB of video memory, under 8 GB of memory or under 4 cores is
+    /// Low; a GeForce by its model (<see cref="GeForceTier"/>); any other card by its video memory (under 6 GB Medium, under 12 GB High, under
+    /// 24 GB Ultra, else Extreme); under 12 GB of memory or 6 cores is Medium at most.
     /// </summary>
     public static string Recommend(bool integrated, bool apple, long videoMemoryMb, long memoryMb, int cores, string gpu = "")
     {
         var names = QualityTiers.PresetChoices;   // Low, Medium, High, Ultra, Extreme
-        if (apple) return names[memoryMb >= 16 * 1024 ? 1 : 0];
+        if (apple) return names[AppleTier(gpu, memoryMb)];
         if (integrated || videoMemoryMb < 3 * 1024 || memoryMb < 8 * 1024 || cores < 4) return names[QualityTiers.LowPreset];
 
         int tier = GeForceTier(gpu) ?? (videoMemoryMb < 6 * 1024 ? QualityTiers.MediumPreset
@@ -35,6 +39,20 @@ static class HardwareProbe
             : QualityTiers.ExtremePreset);
         if (memoryMb < 12 * 1024 || cores < 6) tier = Math.Min(tier, QualityTiers.MediumPreset);
         return names[tier];
+    }
+
+    /// <summary>
+    /// An Apple-silicon Mac's tier: its GPU's (<see cref="AppleGpuTiers"/>), under 12 GB of memory Medium at most, under 8 GB Low; a GPU name
+    /// Metal did not give (or not an Apple chip's) goes by the memory alone: Medium from 16 GB, else Low.
+    /// </summary>
+    static int AppleTier(string gpu, long memoryMb)
+    {
+        if (memoryMb < 8 * 1024) return QualityTiers.LowPreset;
+        if (AppleGpuTiers.Score(gpu) is not { } score)
+            return memoryMb >= 16 * 1024 ? QualityTiers.MediumPreset : QualityTiers.LowPreset;
+
+        int tier = AppleGpuTiers.Tier(score);
+        return memoryMb < 12 * 1024 ? Math.Min(tier, QualityTiers.MediumPreset) : tier;
     }
 
     /// <summary>
@@ -103,9 +121,10 @@ static class HardwareProbe
         }
         catch (Exception e)
         {
-            // No Vulkan (Metal-only Mac, a missing driver): the memory and the cores decide alone.
+            // No Vulkan (Metal-only Mac, a missing driver): the memory and the cores decide alone, but on Apple silicon Metal names the GPU.
             problem = e.Message;
         }
+        if (gpu.Length == 0 && appleSilicon) gpu = MetalGpuName();
         bool apple = appleSilicon || gpu.StartsWith("Apple", StringComparison.Ordinal);
         string preset = Recommend(integrated, apple, videoMemoryMb, memoryMb, cores, gpu);
         // An integrated GPU's device-local heap is a share of the system's memory, not memory of its own.
@@ -114,6 +133,29 @@ static class HardwareProbe
             : $"{gpu} ({videoMemoryMb / 1024.0:0.#} GB video memory)";
         string summary = $"{what}, {memoryMb / 1024.0:0.#} GB memory, {cores} threads: {preset}";
         return new(preset, summary, gpu, integrated, videoMemoryMb, memoryMb, cores, problem);
+    }
+
+    /// <summary>
+    /// The Mac's default Metal device's name ("Apple M6"); empty where Metal is not built in or gives no device.
+    /// </summary>
+    static string MetalGpuName()
+    {
+#if MEITOU_METAL
+#pragma warning disable CA1416
+        try
+        {
+            ObjectiveC.LinkMetal();
+            var device = MTLDevice.CreateSystemDefaultDevice();
+            return device.NativePtr == IntPtr.Zero ? "" : device.Name.ToString() ?? "";
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return "";
+        }
+#pragma warning restore CA1416
+#else
+        return "";
+#endif
     }
 
     /// <summary>

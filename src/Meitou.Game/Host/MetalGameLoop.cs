@@ -347,10 +347,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // MetalFX temporal is the default at every preset scale; spatial is an explicit alternative.
         _metalFx = MetalFxUpscaler.TryCreate(_ctx);
         _metalFxSpatial = MetalFxSpatialUpscaler.TryCreate(_ctx);
-        MetalUpscalerMode mode = ChooseUpscalerMode();
-
-        _upscaling = new MetalUpscaling(host.Config, _ctx, _taa, _metalFx, _metalFxSpatial, () => _display.FullScreen, BackingScale);
-        _upscaling.ApplyMode(mode);
+        _upscaling = new MetalUpscaling(host.Config, _ctx, _taa, _metalFx, _metalFxSpatial, () => _display.FullScreen, BackingScale,
+            () => _display.ScreenPixels);
+        _upscaling.Start(ChooseUpscalerMode());
         if (host.GameOptions.Benchmark is not null) MetalBenchmark.UseFixedResolution(_upscaling, host.Config);
         if (_upscaling.NoTaa) Console.WriteLine("metal     no TAA/upscaler: no jitter, no temporal resolve");
         // The seam's post chain for the shared WorldFrame.Draw: the scene effects and the composite are the same calls the local
@@ -361,6 +360,18 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             jitter: (frame, sceneWidth, displayWidth) => _upscaling.NoTaa || _upscaling.Spatial
                 ? Vector2.Zero
                 : PostTaa.Offset(frame, sceneWidth, displayWidth));
+    }
+
+    /// <summary>
+    /// Says what the screen chose while the player has not set the Use Metal upscaling switch (<see cref="UserConfig.DefaultMetalUpscaling"/>).
+    /// </summary>
+    void LogScreenDefault()
+    {
+        var screen = _display.ScreenPixels;
+        string size = screen is var (w, h) ? $"{w}x{h}" : "of unknown size";
+        string kind = _upscaling.Retina ? "Retina screen" : "screen";
+        string choice = _upscaling.SavedEnabled ? "MetalFX" : $"no upscaler, full screen at screen / {_upscaling.Divisor}";
+        Console.WriteLine($"metal     upscaling not chosen: {choice} for this {kind} {size}");
     }
 
     /// <summary>
@@ -375,7 +386,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             return MetalUpscalerMode.Disabled;
         }
 
-        MetalUpscalerMode mode = host.Config.MetalUseUpscaling ? host.Config.MetalUpscaler : MetalUpscalerMode.Disabled;
+        MetalUpscalerMode mode = _upscaling.SavedEnabled ? host.Config.MetalUpscaler : MetalUpscalerMode.Disabled;
+        if (host.Config.MetalUseUpscaling is null) LogScreenDefault();
         float scale = Math.Clamp(host.Config.MetalRenderScale, 0.33f, 1f);
         if (_noTaaRequested)
         {
@@ -1491,7 +1503,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             Text: RenderScaleText, Step: 0.01f));
         sliders.Add(new Slider(SettingsMenu.MetalRetinaResolutionSlider, 0, 1, () => host.Config.MetalRetinaResolution ? 1 : 0,
             v => _upscaling.SetRetinaResolution(v >= 0.5f), "0"));
-        sliders.Add(new Slider(SettingsMenu.MetalRenderResolutionSlider, 1, UserConfig.MetalRenderDivisorMax, () => host.Config.MetalRenderDivisor,
+        sliders.Add(new Slider(SettingsMenu.MetalRenderResolutionSlider, 1, UserConfig.MetalRenderDivisorMax, () => _upscaling.Divisor,
             v => _upscaling.SetDivisor((int)MathF.Round(v)), "0"));
         sliders.Add(new Slider(SettingsMenu.MetalUiResolutionSlider, 0, 1, () => host.Config.MetalUiAtScreenResolution ? 1 : 0,
             v => _upscaling.SetUiAtScreen(v >= 0.5f), "0"));

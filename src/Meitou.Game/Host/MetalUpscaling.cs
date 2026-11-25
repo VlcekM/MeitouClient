@@ -11,10 +11,10 @@ namespace Meitou.Game.Host;
 /// TAA at the render scale the Display page's preset row sets, with it off (<see cref="MetalUpscalerMode.Disabled"/>) a render at the window's
 /// real pixels, or at its virtual Retina pixels (Full Retina resolution off), and in full screen at a whole division of the screen's, which the
 /// present stretches with the nearest pixel (<see cref="Stretched"/>). <paramref name="backingScale"/> is the window's pixels per point (2 on
-/// Retina).
+/// Retina), <paramref name="screenPixels"/> its screen's size in pixels (null when unknown).
 /// </summary>
 sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, MetalFxUpscaler? metalFx, MetalFxSpatialUpscaler? metalFxSpatial,
-    Func<bool> fullScreen, Func<float> backingScale)
+    Func<bool> fullScreen, Func<float> backingScale, Func<(int Width, int Height)?> screenPixels)
 {
     /// <summary>
     /// The upscaler mode now: <see cref="MetalUpscalerMode.Disabled"/> while the switch is off.
@@ -37,10 +37,41 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     internal bool Spatial;
 
     /// <summary>
-    /// Selects the mode: the TAA pass's external upscaler, no jitter for Disabled and Spatial; the switch and the upscaler are kept in the config
-    /// (the upscaler stays while the switch is off, so turning it on returns to it).
+    /// The screen has two pixels per point (Retina): the window's backing scale, read at 1.5 for its rounding.
+    /// </summary>
+    internal bool Retina => backingScale() >= 1.5f;
+
+    /// <summary>
+    /// The Use Metal upscaling switch as saved, or the screen's default until the player chooses (<see cref="UserConfig.DefaultMetalUpscaling"/>).
+    /// </summary>
+    internal bool SavedEnabled => config.MetalUseUpscaling ?? UserConfig.DefaultMetalUpscaling(Retina, screenPixels()?.Height);
+
+    /// <summary>
+    /// The full-screen division as saved, or the screen's default until the player chooses (<see cref="UserConfig.DefaultMetalRenderDivisor"/>).
+    /// </summary>
+    internal int Divisor => config.MetalRenderDivisor ?? UserConfig.DefaultMetalRenderDivisor(Retina);
+
+    /// <summary>
+    /// Starts in <paramref name="mode"/> (the settings, the command line and the device decided it) without saving it: an unchosen switch stays
+    /// unchosen, for the screen to decide at the next start.
+    /// </summary>
+    internal void Start(MetalUpscalerMode mode) => SelectMode(mode);
+
+    /// <summary>
+    /// The player's choice of mode: selected, and the switch and the upscaler kept in the config (the upscaler stays while the switch is off, so
+    /// turning it on returns to it).
     /// </summary>
     internal void ApplyMode(MetalUpscalerMode next)
+    {
+        SelectMode(next);
+        config.MetalUseUpscaling = Enabled;
+        if (Enabled) config.MetalUpscaler = Mode;
+    }
+
+    /// <summary>
+    /// Selects the mode: the TAA pass's external upscaler, no jitter for Disabled and Spatial.
+    /// </summary>
+    void SelectMode(MetalUpscalerMode next)
     {
         Mode = next;
         NoTaa = Mode == MetalUpscalerMode.Disabled;
@@ -51,8 +82,6 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
             MetalUpscalerMode.Spatial => metalFxSpatial,
             _ => null,
         };
-        config.MetalUseUpscaling = Enabled;
-        if (Enabled) config.MetalUpscaler = Mode;
         Update();
     }
 
@@ -89,7 +118,7 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     /// <summary>
     /// The share of the screen's pixels the scene renders at without the upscaler (<see cref="MetalRenderFraction.Of"/>).
     /// </summary>
-    float RenderFraction => MetalRenderFraction.Of(fullScreen(), config.MetalRenderDivisor, config.MetalRetinaResolution, backingScale());
+    float RenderFraction => MetalRenderFraction.Of(fullScreen(), Divisor, config.MetalRetinaResolution, backingScale());
 
     /// <summary>
     /// Whether the interface is drawn at the render size with the picture (the screen's is the default), which the present then stretches.
