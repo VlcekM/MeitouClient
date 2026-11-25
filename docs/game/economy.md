@@ -820,7 +820,7 @@ Roll convention: a `rand()` draw in [0, 1) against the chance p; the thief gets 
   theft (`CarrySystem`, `HeldItems`). A theft of a building's goods (an item of its container, a loose item of its slot) names the building's owner too: the original's
   `ownedby` is the bar's barman, the first member of the squad living there (**Observed**, plain game, The Hub's bar: the barrel's item had a null `ownedby` before the theft and the barman's
   handle after it, "Stolen from: Barman"; the bar's loose items name him before any theft). The hand is the residents hand of the building the goods
-  stand in, so goods out of a building nobody lives in (a town mine, well or outdoor farm) stay ownerless and are never fenced ([carry-loot](carry-loot.md#stolen-ownership)). Meitou
+  stand in, so goods out of a building nobody lives in (**Observed**: a town mine) stay ownerless and are never fenced ([carry-loot](carry-loot.md#stolen-ownership)). Meitou
   (`CrimeSystem.GoodsMark`) names the leader of that building's resident squad, unmarked with none; a loose item of a building's slot (`CrimeSystem.OwnerMark`) the leader of its
   resident squad of the owning faction, else the faction alone, which no owner early-out applies to and the home-town test reads as another town. The trader's town is `AiSystem.TownAt`, the owner's home town its squad's `Town`. Saved as the robbed character's handle in
   `ownedby` (the null handle when that character is not saved) and the robbed faction's id in Meitou's `meitou stolen from` (any mark; the only trace of a faction-only one or of

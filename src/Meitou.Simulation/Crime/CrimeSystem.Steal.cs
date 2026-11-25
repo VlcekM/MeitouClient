@@ -88,7 +88,7 @@ public sealed partial class CrimeSystem
     /// The stolen mark goods taken out of <paramref name="goods"/>' window get (<c>Item::notifyTheftFrom</c>, <c>FUN_140792780</c> ->
     /// <c>FUN_140792680</c>, <b>Verified</b> decompile): the residents hand of the building they stand in (<see cref="StealSource.StandsIn"/>, else
     /// the holder itself), here its resident squad's (<see cref="ResidentSquad"/>) leader, whatever its faction; none when nobody lives there (a null
-    /// hand leaves the item ownerless, so goods of a town mine, well or outdoor farm are never stolen and no shop asks to fence them).
+    /// hand leaves the item ownerless, so goods of a town mine are never stolen and no shop asks to fence them).
     /// </summary>
     public static StolenMark GoodsMark(World world, StealSource goods)
     {

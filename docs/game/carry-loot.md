@@ -214,8 +214,8 @@ The mark does not ask `isItOkForMeToLoot` (that only picks the crime), so a band
 The hand `notifyTheftFrom` writes (`FUN_140792780`, `FUN_140792680`, **Verified** by decompile and disassembly): a character source's own hand, so each robbed
 body gives its own owner; for a BUILDING source a hand kept on the building (`+0xd0`, of the building it is mounted on or inside when it has one,
 `FUN_1400d5fa0`), the null hand when that one's type is 0; a `ShopTraderClass` (0x5b) hand gives the null hand. With a null hand the item stays ownerless
-(`FUN_140792800` writes only onto an ownerless item): goods out of a building nobody lives in (a town mine, well or outdoor farm, an empty house's chest)
-are not stolen and no shop asks to fence them. Meitou: `CrimeSystem.GoodsMark` (the resident squad's leader, whatever its faction; none without residents). **Verified** (harness, 1.0.65, Stack): the building's hand names a character (item `+0x148` type 1 after
+(`FUN_140792800` writes only onto an ownerless item): goods out of a building nobody lives in are not stolen and no shop asks to fence them
+(**Observed**, plain game: a town mine's ore has no fencing chance). Meitou: `CrimeSystem.GoodsMark` (the resident squad's leader, whatever its faction; none without residents). **Verified** (harness, 1.0.65, Stack): the building's hand names a character (item `+0x148` type 1 after
 the take): a clothes shop's goods read "Stolen from: Clothing trader holy", a home's chest "Stolen from: Holy Citizen", a knocked-out guard's kit
 "Stolen from: Holy Sentinel"; the player's own clean item put into such a container shows no owner there and is marked the same way when taken back.
 How the marks stack: [stack test](ui-screens.md#6-inventory-trade-dialogue-build).
