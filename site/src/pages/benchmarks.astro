@@ -243,8 +243,8 @@ const sharkGroups: [string, string, string, [string, string][]][] = [
   .muted{color:var(--muted)}
   .small{font-size:.9rem;margin:.4rem 0 .2rem}
   .box{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:14px 18px;margin:16px 0}
-  #charts-sec{min-height:660px}
-  #machines{min-height:220px}
+  #charts-sec:has(.is-loading){min-height:660px}
+  #machines:empty{min-height:220px}
   .box.is-loading{display:flex;align-items:center;justify-content:center;min-height:600px;margin:12px 0 0}
   .spinner{width:36px;height:36px;border-radius:50%;border:3px solid color-mix(in srgb,var(--line) 85%,transparent);border-top-color:var(--accent);animation:bn-spin .75s cubic-bezier(.5,.15,.5,.85) infinite}
   & > section > h2{margin-top:2rem}
