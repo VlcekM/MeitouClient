@@ -265,7 +265,7 @@ static partial class WorldFrame
     static bool PrepareGiResolve(WorldGpu gpu, IWorldPostChain post)
     {
         // The GI resolve while the probes light the world: the scene targets carry the albedo target, the lit fragments write it.
-        bool probesShade = gpu.GiActive && gpu.Probes is { Enabled: true, Shade: true };
+        bool probesShade = gpu.GiActive && (gpu.Probes is { Enabled: true, Shade: true } || gpu.ProbeGi is { Enabled: true, Shade: true });
         bool giResolve = gpu.GiResolve > 0 && probesShade;
 
         // The reflections subtract the sky's reflection as the surfaces stored it: lit by the probes they need the resolve, whose fragments leave
@@ -277,6 +277,14 @@ static partial class WorldFrame
             giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
             giPost.SsrSurfaces = reflections;
             giPost.GiCache = giResolve && post.Options.GiCaching ? gpu.GiCache : null;
+        }
+
+        // Metal's probes: the resolve and its relocation (no reflections there yet).
+        if (gpu.ProbeGi is { } probeGi)
+        {
+            post.GiResolve = giResolve ? gpu.GiResolve : 0;
+            probeGi.Resolve = giResolve;
+            probeGi.Relocate = giResolve && post.Options.GiRelocating;
         }
 
         if (gpu.Probes is { } giProbes)
@@ -622,9 +630,12 @@ static partial class WorldFrame
         if (gpu.ProbeGi is { } probeGi)
         {
             probeGi.Active = gpu.GiActive;
+            probeGi.Rays = f.Post.Options.GiMoreRays ? GiProbes.MaxRays : GiProbes.DefaultRays;
+            probeGi.CloudShadows = f.Post.Options.GiCloudShadowing;
             if (gpu.GiActive)
             {
-                probeGi.Update(f.Eye, gpu.Terrain.Snapshot(), objects, gpu.Lamps, gpu.FogVolumes);
+                var foliage = gpu.Foliage is { Enabled: true } shown ? shown : null;
+                probeGi.Update(f.Eye, gpu.Terrain.Snapshot(), objects, foliage, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
                 StageClock.Sub("gi metal");
             }
         }

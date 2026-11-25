@@ -201,9 +201,19 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// </summary>
     public bool InstantAdaptation { get; set; } = true;
     /// <summary>
-    /// The GI resolve divisor; unused (no GI resolve on Metal).
+    /// The GI resolve divisor of the render size (0: off, the lit fragments read the probes themselves). Set before <see cref="Begin"/>.
     /// </summary>
     public int GiResolve { get; set; }
+
+    /// <summary>
+    /// The GI resolve's passes (made on first use) and whether it ran this frame.
+    /// </summary>
+    Gi.MetalGiResolve? _giResolve;
+
+    /// <summary>
+    /// See <see cref="_giResolve"/>.
+    /// </summary>
+    bool _giResolved;
     /// <summary>
     /// The sky's exposure band; cleared at each <see cref="Begin"/>.
     /// </summary>
@@ -290,6 +300,8 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _ctx.LodBias = Temporal ? MathF.Log2(sceneWidth / (float)_displayWidth) - 0.5f : 0f;
         AutoExposure = null;
         WaterHeight = null;
+        _ctx.StoreSurface = GiResolve > 0;
+        _giResolved = false;
         CharactersDrawn = true;
         _haveScene = false;
     }
@@ -328,9 +340,18 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public OcclusionView OcclusionFor(Vector3 eye) => default;
 
     /// <summary>
-    /// Nothing: Metal has no GI resolve.
+    /// Swaps the sky's ambient for the probes' light on the surfaces that wrote their surface (docs/render-gi.md "Resolve"), once a frame: after the
+    /// scene, or over the opaque scene before the water copies it (<paramref name="early"/>).
     /// </summary>
-    public void RunGiResolve(bool early = false) { }
+    public void RunGiResolve(bool early = false)
+    {
+        if (_giResolved || GiResolve <= 0 || _sceneColour is null || !_haveScene) return;
+
+        _giResolved = true;
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        _giResolve.Run(_sceneColour, _ctx.Depth, _ctx.Albedo, view, GiResolve, Options.GiRelocating);
+    }
 
     /// <summary>
     /// Darkens the haze where the sun is shadowed along the view (the composite's light shafts).
@@ -538,6 +559,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public void Dispose()
     {
         _depthOfField?.Dispose();
+        _giResolve?.Dispose();
         _sceneColour?.Dispose();
         foreach (var low in _lowTargets)
         {

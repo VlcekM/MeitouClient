@@ -44,10 +44,12 @@ public static unsafe class MslTranslator
 
     /// <summary>
     /// The MSL for one SPIR-V module, with its entry point renamed (the MSL entry point names have to be unique per stage:
-    /// spirv-cross names the stages' entry points the same).
+    /// spirv-cross names the stages' entry points the same). With <paramref name="discreteSet"/> that set stays plain bindings (the stage's
+    /// buffer, texture and sampler indices are the set's binding numbers) while the others are argument buffers: this spirv-cross refuses a
+    /// combined image sampler in a compute stage's argument buffer, and the ray-traced passes bind theirs one by one.
     /// </summary>
     public static string Translate(byte[] spirv, string entryPoint, ExecutionModel stage, uint mslVersion = MslVersion,
-        uint? argumentBufferSet = null)
+        uint? argumentBufferSet = null, uint? discreteSet = null)
     {
         ArgumentNullException.ThrowIfNull(spirv);
         var cross = Cross.GetApi();
@@ -87,6 +89,7 @@ public static unsafe class MslTranslator
                 cross.CompilerOptionsSetUint(options, CompilerOption.MslArgumentBuffers, 1);
                 cross.CompilerOptionsSetUint(options, CompilerOption.MslArgumentBuffersTier, 2);
                 cross.CompilerInstallCompilerOptions(compiler, options);
+                if (discreteSet is { } plain) cross.CompilerMslAddDiscreteDescriptorSet(compiler, plain);
             }
             else
                 cross.CompilerInstallCompilerOptions(compiler, options);
@@ -116,9 +119,39 @@ public static unsafe class MslTranslator
             // This spirv-cross has no binding option for push constants: the block comes out at [[buffer(0)]] — the stage's
             // low indices belong to the flattened resources and the vertex buffers (MetalShaders's numbers), the top index
             // to the push constants. The block is identifiable by the engine's name for it (NativeShaders.PushBlock's "Push").
-            return PushBlock.Replace(msl, $"constant Push& $1 [[buffer({PushConstantBinding})]]");
+            msl = PushBlock.Replace(msl, $"constant Push& $1 [[buffer({PushConstantBinding})]]");
+
+            // A ray query's ray is spirv-cross's bare `ray(...)`, which a GLSL local of that name (the probe trace's ray index) hides.
+            return RayConstructor.Replace(msl, "raytracing::ray(");
         }
     }
+
+    /// <summary>
+    /// A bare <c>ray(</c> constructor in the generated MSL (not a member or an already qualified one).
+    /// </summary>
+    static readonly System.Text.RegularExpressions.Regex RayConstructor =
+        new(@"(?<![\w:.])ray\(", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// The sampler indices of a discrete set's MSL (<c>[[sampler(n)]]</c>, n the binding) made dense from 0 in the bindings' order: Metal's sampler
+    /// table ends at 15, the bindings go higher. <paramref name="slots"/> gets each binding's index (-1: no sampler).
+    /// </summary>
+    public static string DenseSamplers(string msl, out int[] slots)
+    {
+        var bindings = SamplerIndex.Matches(msl).Select(m => int.Parse(m.Groups[1].Value)).Distinct().Order().ToArray();
+        var map = new int[bindings.Length == 0 ? 0 : bindings[^1] + 1];
+        Array.Fill(map, -1);
+        for (int i = 0; i < bindings.Length; i++) map[bindings[i]] = i;
+
+        slots = map;
+        return SamplerIndex.Replace(msl, m => $"[[sampler({map[int.Parse(m.Groups[1].Value)]})]]");
+    }
+
+    /// <summary>
+    /// A sampler's index attribute in the generated MSL.
+    /// </summary>
+    static readonly System.Text.RegularExpressions.Regex SamplerIndex =
+        new(@"\[\[sampler\((\d+)\)\]\]", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
     /// The cross-compiler's last error message ("no message" when it has none).

@@ -1,393 +1,455 @@
 using System.Numerics;
-using System.Reflection;
 using System.Runtime.InteropServices;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gi;
 using Meitou.Game.Rendering.Gpu;
-using SharpMetal.Foundation;
-using SharpMetal.Metal;
-using SharpMetal.ObjectiveCCore;
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
+using SharpMetal.Foundation;
+using SharpMetal.Metal;
 
 namespace Meitou.Game.Rendering.Metal.Gi;
 
 /// <summary>
-/// Native Metal probe GI: terrain plus the nearby world objects traced as a small TLAS, one probe
-/// group per threadgroup, into the same octahedral atlas the world shaders already read. This is
-/// deliberately a first slice: objects use a constant albedo, foliage and lamps are not traced, and
-/// probe updates overwrite rather than blend (so the first frames pop into place).
+/// The probe GI on Metal (docs/render-gi.md "Metal"): Vulkan's probes (<see cref="GiProbes"/>) over the Metal traced scene
+/// (<see cref="MetalGiScene"/>), with the same shaders (<see cref="GiShaders.ProbeTrace(int, bool, bool)"/>, <see cref="GiShaders.ProbeBlend"/>,
+/// <see cref="GiShaders.ProbeInvalidate"/>) translated with their set 0 as plain bindings (<see cref="MetalShaders.ComputeDiscrete"/>): the further
+/// bounces, the lamps, the textures and the foliage at the hits, the interior grid, the sleeping and fog-hidden probes' slower updates. Render
+/// thread only.
 /// </summary>
 internal sealed unsafe class MetalProbeGi : IProbeGi
 {
-    #region Probe update
+    #region Constants and state
 
     /// <summary>
-    /// The probe grid of each cascade: <c>Columns</c>² columns of <c>Layers</c> probes; each probe's octahedral irradiance tile is
-    /// <c>IrradianceTexels</c>² and its distance tile <c>DistanceTexels</c>² texels (plus a one-texel border on each side).
+    /// The probe grid (<see cref="GiProbes"/>'): columns, layers, the octahedral tiles' texels, the cascades and all probes.
     /// </summary>
-    const int Columns = 32, Layers = 8, IrradianceTexels = 8, DistanceTexels = 16, Cascades = 2;
-    /// <summary>
-    /// Rays per probe (one threadgroup's threads), and the update phases: outside a full update a frame updates one probe in <c>Phases</c>.
-    /// </summary>
-    const int Rays = 32, Phases = 4;
-    /// <summary>
-    /// All probes of all cascades.
-    /// </summary>
-    const int Probes = Columns * Columns * Layers * Cascades;
+    const int Columns = GiProbes.Columns, Layers = GiProbes.Layers, IrradianceTexels = GiProbes.IrradianceTexels,
+        DistanceTexels = GiProbes.DistanceTexels, Cascades = GiProbes.Cascades, Probes = GiProbes.Probes;
 
     /// <summary>
-    /// Each cascade's probe spacing, horizontal and vertical, and its rays' length (world units; GiProbes' grid).
+    /// Per cascade: the spacing across, the spacing up, the rays' length (<see cref="GiProbes"/>' grid).
     /// </summary>
-    static readonly (float Spacing, float SpacingY, float RayLength)[] Layout = [(128, 96, 4000), (512, 384, 16000)];
-    /// <summary>
-    /// The per-frame hysteresis of 64 rays (GiProbes.Hysteresis); <see cref="UpdateHysteresis"/> turns it into one update's of <see cref="Rays"/>.
-    /// </summary>
-    const float Hysteresis = 0.97f;
-    /// <summary>
-    /// The objects' albedo at a hit (GiProbes.ObjectAlbedo: their textures are not read).
-    /// </summary>
-    static readonly Vector3 ObjectAlbedo = new(0.35f, 0.32f, 0.28f);
+    static readonly (float Spacing, float SpacingY, float RayLength)[] Grid = [(128, 96, 4000), (512, 384, 16000)];
 
     /// <summary>
-    /// The Metal backend everything is made on and recorded into.
+    /// The backend.
     /// </summary>
     readonly MetalContext _ctx;
+
     /// <summary>
-    /// The probe update compute pipeline (<c>probe_gi</c>).
+    /// The traced scene.
     /// </summary>
-    readonly MTLComputePipelineState _pipeline;
+    readonly MetalGiScene _scene;
+
     /// <summary>
-    /// The compiled probe shader library (the embedded <c>ProbeGi.metal</c>).
+    /// The trace and blend programs and their pipelines by rays per probe and cloud shadows, made on first use.
     /// </summary>
-    readonly MTLLibrary _library;
+    readonly Dictionary<(int Rays, bool Relocate, bool Clouds), (MetalProgram Trace, GpuComputePipeline TracePipeline, MetalProgram Blend,
+        GpuComputePipeline BlendPipeline)> _variants = [];
+
     /// <summary>
-    /// The probe update function of <see cref="_library"/>.
+    /// The invalidation's pipeline and program.
     /// </summary>
-    readonly MTLFunction _function;
+    readonly GpuComputePipeline _invalidate;
+
     /// <summary>
-    /// The irradiance and distance atlases and the per-column base heights, as the world shaders read them (<c>uGiIrradiance</c>, <c>uGiDistance</c>,
-    /// <c>uGiBase</c>).
+    /// See <see cref="_invalidate"/>.
     /// </summary>
-    readonly GpuTexture _irradiance, _distance, _bases;
+    readonly MetalProgram _invalidateProgram;
+
     /// <summary>
-    /// The Metal textures of the atlases and base heights, bound to the probe update.
+    /// The octahedral irradiance and distance atlases (both RGBA16F), one bordered tile per probe.
     /// </summary>
-    readonly MTLTexture _irradianceImage, _distanceImage, _baseImage;
+    readonly GpuTexture _irradiance, _distance;
+
     /// <summary>
-    /// The bilinear and nearest clamped samplers the world shaders read the atlases with.
+    /// The columns' base heights per frame slot (R32F, a row of columns per cascade; the rows below for relocated offsets).
+    /// </summary>
+    readonly GpuTexture[] _bases;
+
+    /// <summary>
+    /// The rays' results (16 bytes a ray, 64 a probe) and each probe's state (16 bytes; w 0: unplaced).
+    /// </summary>
+    readonly MTLBuffer _rays, _state;
+
+    /// <summary>
+    /// Per frame slot: the probes this frame traces and the constants.
+    /// </summary>
+    readonly MTLBuffer[] _lists, _constants;
+
+    /// <summary>
+    /// The linear and the nearest clamped samplers the atlases and the bases are read with.
     /// </summary>
     readonly GpuSampler _linear, _nearest;
+
     /// <summary>
-    /// The probe constants, one shared buffer per frame ring slot.
+    /// Per cascade two vectors (<c>uGiGrid</c>): the grid's world origin x and z, its spacing across and up; its toroidal offsets and twice its
+    /// spacing.
     /// </summary>
-    readonly MTLBuffer[] _constantsBuffers = new MTLBuffer[MetalContext.FrameRingDepth];
+    readonly Vector4[] _grid = new Vector4[Cascades * 2];
+
     /// <summary>
-    /// The sampler the probe update reads the sky irradiance with (bilinear, clamped).
+    /// The columns' base heights by cascade and toroidal row and column.
     /// </summary>
-    readonly MTLSamplerState _skySampler;
+    readonly float[] _baseHeights = new float[Columns * Columns * Cascades];
+
     /// <summary>
-    /// Each cascade's grid origin and spacing, two vectors a cascade (<c>uGiGrid</c>).
+    /// The grid origin each cascade was last placed at, in columns, and whether its bases were sampled.
     /// </summary>
-    readonly Vector4[] _grid = new Vector4[4];
+    readonly (int X, int Z)[] _placed = new (int, int)[Cascades];
+
     /// <summary>
-    /// The source of each update's random rotation of the ray directions.
+    /// See <see cref="_placed"/>.
+    /// </summary>
+    readonly bool[] _basesPlaced = new bool[Cascades];
+
+    /// <summary>
+    /// The layers the fog hides per probe column.
+    /// </summary>
+    readonly ProbeFogCache _fogCache = new();
+
+    /// <summary>
+    /// The source of each update's random ray rotation (seeded, so runs repeat).
     /// </summary>
     readonly Random _random = new(1);
 
     /// <summary>
-    /// Each cascade's per-column probe base height: the lowest terrain height at the column and four points 0.4 spacing around it.
+    /// The terrain's fine window the bases were sampled from.
     /// </summary>
-    readonly float[] _baseHeights = new float[Columns * Columns * Cascades];
-    /// <summary>
-    /// Each cascade's grid origin in cells.
-    /// </summary>
-    readonly (int X, int Z)[] _placed = new (int, int)[Cascades];
-    /// <summary>
-    /// Whether each cascade's grid has been placed yet.
-    /// </summary>
-    readonly bool[] _placed_ = new bool[Cascades];
+    object? _placedHeights;
 
     /// <summary>
-    /// The update count, and the update the top level was last built at (far in the past forces a rebuild).
+    /// Whether the first cascade is the interior grid (32 across, 24 up round the interior's focus), and the focus's storey.
     /// </summary>
-    long _frame, _lastTlasFrame = -1000;
+    bool _interiorGrid;
+
     /// <summary>
-    /// The probes have been updated since the grid last moved (the world shaders read GI only then).
+    /// See <see cref="_interiorGrid"/>.
+    /// </summary>
+    int _interiorLevel;
+
+    /// <summary>
+    /// The frame slot of the last update, and whether the probes were updated (the shaders read them only then).
+    /// </summary>
+    int _slot;
+
+    /// <summary>
+    /// See <see cref="_slot"/>.
     /// </summary>
     bool _updated;
-    /// <summary>
-    /// The next dispatch updates every probe at once (set when the grid moves).
-    /// </summary>
-    bool _fullUpdate = true;
-    /// <summary>
-    /// The eye of the last update (a jump of over 2000 units clears the object cache).
-    /// </summary>
-    Vector3 _lastEye;
 
     /// <summary>
-    /// Makes the atlases, samplers, constant buffers and the probe pipeline, and publishes the GI uniforms and textures to the frame globals.
+    /// Makes the scene, the programs, the atlases, the bases, the buffers, clears every probe to invalid and unplaced and publishes the probes' globals.
     /// </summary>
     public MetalProbeGi(MetalContext ctx)
     {
-        this._ctx = ctx;
-        var irrRows = Cascades * Columns * Layers * (IrradianceTexels + 2);
-        var distRows = Cascades * Columns * Layers * (DistanceTexels + 2);
-        _irradiance = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, Columns * (IrradianceTexels + 2), irrRows,
-            Use: TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst, Name: "metal gi irradiance"));
-        _distance = ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, Columns * (DistanceTexels + 2), distRows,
-            Use: TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst, Name: "metal gi distance"));
-        _bases = ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, Columns, Cascades * Columns,
-            Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "metal gi bases"));
-        _irradianceImage = ctx.TextureAt(_irradiance);
-        _distanceImage = ctx.TextureAt(_distance);
-        _baseImage = ctx.TextureAt(_bases);
+        _ctx = ctx;
+        _scene = new MetalGiScene(ctx);
+        var shaders = (MetalShaders)ctx.Shaders;
+        var invalidate = shaders.ComputeDiscrete(GiShaders.ProbeInvalidate, "metal gi probe invalidate");
+        _invalidate = ctx.Pipelines.Get(new ComputePipelineDesc(invalidate, "metal gi probe invalidate"));
+        _invalidateProgram = shaders.Backend(invalidate);
+
+        int rows = Cascades * Columns * Layers;
+        var use = TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst;
+        _irradiance = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, Columns * (IrradianceTexels + 2), rows * (IrradianceTexels + 2),
+            Use: use, Name: "metal gi irradiance"));
+        // RGBA16F, not Vulkan's RG16F: the blend reads and writes the atlas, and Metal has no read-write access to two-channel formats.
+        _distance = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, Columns * (DistanceTexels + 2), rows * (DistanceTexels + 2), Use: use,
+            Name: "metal gi distance"));
+        _bases = new GpuTexture[MetalContext.FrameRingDepth];
+        for (int i = 0; i < _bases.Length; i++)
+            _bases[i] = ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, Columns, Columns * Cascades * (1 + Layers), Use: use, Name: "metal gi bases"));
+
+        _rays = ctx.Device.NewBuffer((ulong)Probes * GiProbes.MaxRays * 16, MTLResourceOptions.ResourceStorageModePrivate);
+        _state = ctx.Device.NewBuffer((ulong)Probes * 16, MTLResourceOptions.ResourceStorageModeShared);
+        new Span<byte>((void*)_state.Contents, Probes * 16).Clear();
+        _lists = NewBuffers((ulong)Probes * 4, "metal gi probe list");
+        _constants = NewBuffers((ulong)sizeof(GiProbes.Constants), "metal gi constants");
+        ClearAtlases(rows);
+
         _linear = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear));
         _nearest = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
-        for (int i = 0; i < _constantsBuffers.Length; i++)
-            _constantsBuffers[i] = ctx.Device.NewBuffer((ulong)Marshal.SizeOf<ProbeConstants>(), MTLResourceOptions.ResourceStorageModeShared);
-
-        var skyDescriptor = new MTLSamplerDescriptor(
-            new ObjectiveCClass(ObjectiveC.objc_getClass("MTLSamplerDescriptor")).AllocInit());
-        skyDescriptor.MinFilter = MTLSamplerMinMagFilter.Linear;
-        skyDescriptor.MagFilter = MTLSamplerMinMagFilter.Linear;
-        skyDescriptor.SAddressMode = MTLSamplerAddressMode.ClampToEdge;
-        skyDescriptor.TAddressMode = MTLSamplerAddressMode.ClampToEdge;
-        _skySampler = ctx.Device.NewSamplerState(skyDescriptor);
-
-        var source = ReadResource("Meitou.Metal.Gi.ProbeGi.metal");
-        var options = new MTLCompileOptions { LanguageVersion = MTLLanguageVersion.Version30, FastMathEnabled = true };
-        NSError error = default;
-        _library = ctx.Device.NewLibrary((NSString)source, options, ref error);
-        if (error.NativePtr != IntPtr.Zero)
-            throw new InvalidOperationException($"metal GI shader: {error.LocalizedDescription}");
-
-        _function = _library.NewFunction((NSString)"probe_gi");
-        _pipeline = ctx.Device.NewComputePipelineState(_function, ref error);
-        if (error.NativePtr != IntPtr.Zero)
-            throw new InvalidOperationException($"metal GI pipeline: {error.LocalizedDescription}");
-
         var g = ctx.Globals;
         g.PublishUniform("uGiParams", () => Params);
         g.PublishUniformArray("uGiGrid", _grid, () => _grid.Length);
         g.Publish("uGiIrradiance", () => new SampledTexture(_linear, _irradiance.View()));
         g.Publish("uGiDistance", () => new SampledTexture(_linear, _distance.View()));
-        g.Publish("uGiBase", () => new SampledTexture(_nearest, _bases.View()));
+        g.Publish("uGiBase", () => new SampledTexture(_nearest, _bases[_slot].View()));
     }
 
     /// <summary>
-    /// False: GI is off (no dispatch and the world shaders read no GI).
+    /// One shared buffer per frame slot.
+    /// </summary>
+    MTLBuffer[] NewBuffers(ulong size, string label)
+    {
+        var buffers = new MTLBuffer[MetalContext.FrameRingDepth];
+        for (int i = 0; i < buffers.Length; i++)
+        {
+            buffers[i] = _ctx.Device.NewBuffer(size, MTLResourceOptions.ResourceStorageModeShared);
+            buffers[i].Label = (NSString)label;
+        }
+
+        return buffers;
+    }
+
+    /// <summary>
+    /// Every probe starts invalid (alpha 0: no surface reads it, no bounce sees it).
+    /// </summary>
+    void ClearAtlases(int rows)
+    {
+        using var batch = _ctx.Uploads.Begin();
+        uint irrWidth = (uint)(Columns * (IrradianceTexels + 2)), irrHeight = (uint)(rows * (IrradianceTexels + 2));
+        uint distWidth = (uint)(Columns * (DistanceTexels + 2)), distHeight = (uint)(rows * (DistanceTexels + 2));
+        batch.Write(_irradiance, 0, 0, new PixelRect(0, 0, irrWidth, irrHeight), new byte[irrWidth * irrHeight * 8]);
+        batch.Write(_distance, 0, 0, new PixelRect(0, 0, distWidth, distHeight), new byte[distWidth * distHeight * 8]);
+    }
+
+    #endregion
+
+    #region Settings
+
+    /// <summary>
+    /// Whether the world shaders take their ambient from the probes (the <c>gi</c> switch).
     /// </summary>
     public bool Enabled { get; set; } = true;
+
     /// <summary>
     /// False: indoor surfaces keep the original ambient (<c>uGiParams.w</c> 0).
     /// </summary>
     public bool InteriorEnabled { get; set; } = true;
+
     /// <summary>
-    /// False: the probes are neither updated nor read.
+    /// False while the frame does not update the probes: the shaders then do not read them.
     /// </summary>
     public bool Active { get; set; } = true;
+
     /// <summary>
-    /// False: no probe update is dispatched and the world's shading does not read the probes.
+    /// False: the probes are updated but the world's shading does not read them.
     /// </summary>
     public bool Shade { get; set; } = true;
-    /// <summary>
-    /// The GI strength the world shaders apply (<c>uGiParams.y</c>).
-    /// </summary>
-    public float Strength { get; set; } = 0.8f;
-    /// <summary>
-    /// Indoor surface indirect-light gain (<c>uGiParams.w</c>, at least 1 when <see cref="InteriorEnabled"/>).
-    /// </summary>
-    public float InteriorGain { get; set; } = 1;
-    /// <summary>
-    /// The instances in the last top level, terrain included.
-    /// </summary>
-    public int InstanceCount { get; private set; }
-    /// <summary>
-    /// The object bottom levels in the cache.
-    /// </summary>
-    public int MeshCount => _blasCache.Count;
 
     /// <summary>
-    /// <c>uGiParams</c>: x 1 when the probes are read, y the strength, w the interior gain (0 with the interior off).
+    /// How much the probes replace the sky's light (<see cref="GiProbes.Strength"/>).
     /// </summary>
-    Vector4 Params => new(Enabled && Active && Shade && _updated ? 1 : 0, Strength, 0, InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
+    public float Strength { get; set; } = 1;
 
     /// <summary>
-    /// A one-line status for the debug overlay: probes, instances, meshes and the terrain grid.
+    /// 1 + the share of the game's ambient indoor surfaces get at least (<see cref="GiProbes.InteriorGain"/>).
     /// </summary>
-    public string Describe() => $"metal probes {Probes}, {InstanceCount} instances ({MeshCount} meshes), {_terrain?.Description ?? "no terrain"}, coarse {_coarse?.Description ?? "none"}";
+    public float InteriorGain { get; set; } = 1.25f;
 
     /// <summary>
-    /// One frame's GI: re-centres the terrain, builds at most one new object bottom level, rebuilds the top level when anything changed or 30 updates
-    /// have passed, moves the grid, writes the constants and dispatches the probe update.
+    /// True: the lit fragments write their surface and the post chain adds the probes' light (<c>uGiParams.z</c> bit 1).
     /// </summary>
-    public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, WorldLamps? lamps, FogVolumes? fog)
+    public bool Resolve { get; set; }
+
+    /// <summary>
+    /// True: the probes move out of geometry (docs/render-gi.md "Probe relocation"); with <see cref="Resolve"/>.
+    /// </summary>
+    public bool Relocate { get; set; }
+
+    /// <summary>
+    /// Rays each probe traces per update (32 or 64, the "GI 64 probe rays" row).
+    /// </summary>
+    public int Rays { get; set; } = GiProbes.DefaultRays;
+
+    /// <summary>
+    /// The cloud transmission dims the sun at the probes' hits (the "GI cloud shadows" row).
+    /// </summary>
+    public bool CloudShadows { get; set; }
+
+    /// <summary>
+    /// The per-frame hysteresis of 64 rays, the update phases, the far cascade's period, the sleepers' and the hidden probes' periods
+    /// (<see cref="GiProbes"/>' defaults).
+    /// </summary>
+    const float Hysteresis = 0.97f;
+
+    /// <summary>
+    /// See <see cref="Hysteresis"/>.
+    /// </summary>
+    const int Phases = 4, FarPeriod = 2, SleepPeriod = 8, HiddenPeriod = 16;
+
+    /// <summary>
+    /// The objects' albedo where a hit has no texture.
+    /// </summary>
+    static readonly Vector3 ObjectAlbedo = new(0.35f, 0.32f, 0.28f);
+
+    /// <summary>
+    /// The probe updates run so far; their count picks each frame's phase.
+    /// </summary>
+    public long Updates { get; private set; }
+
+    /// <summary>
+    /// Probes this frame's list holds.
+    /// </summary>
+    public int Listed { get; private set; }
+
+    /// <summary>
+    /// <c>uGiParams</c>: x on and filled, y the strength, z bit 1 the resolve, w the indoor gain (0 bypasses indoor GI).
+    /// </summary>
+    Vector4 Params => new(Enabled && Active && Shade && _updated ? 1 : 0, Strength, Resolve ? 1 : 0, InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
+
+    /// <summary>
+    /// Cascade <paramref name="cascade"/>'s spacing across, up and rays' length: the interior grid's for the first while it is placed.
+    /// </summary>
+    (float Spacing, float SpacingY, float RayLength) Layout(int cascade) =>
+        cascade == 0 && _interiorGrid ? (32, 24, Grid[0].RayLength) : Grid[cascade];
+
+    /// <summary>
+    /// A line for the log: the probes and the scene.
+    /// </summary>
+    public string Describe() => $"metal probes {Probes} ({Rays} rays, {Listed} listed), scene {_scene.Describe()}";
+
+    #endregion
+
+    #region Update
+
+    /// <summary>
+    /// This frame's scene, the grids placed round the eye (the first round <paramref name="interiorFocus"/> when set), the list, the constants and
+    /// the probe passes.
+    /// </summary>
+    public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, FoliageRenderer? foliage, WorldLamps? lamps,
+        FogVolumes? fog, Vector3? interiorFocus)
     {
-        _frame++;
-        Log("begin");
+        _scene.Update(eye, heights, objects, foliage, lamps);
+        if (_scene.Top is null || !(Enabled && Active && Shade)) return;
 
-        // A teleport (return to the character, fly-to) leaves every cached object structure behind and can otherwise
-        // accumulate old mesh memory for the rest of the session.
-        if (_frame > 1 && Vector3.DistanceSquared(eye, _lastEye) > 2000f * 2000f) ClearObjectCache();
+        _slot = _ctx.Frame.Slot;
+        int phase = (int)(Updates % Phases);
+        bool moved = PlaceGrids(eye, heights, interiorFocus);
+        BuildList(phase, fog, eye, moved);
+        using (var batch = _ctx.Uploads.Begin())
+            batch.Write(_bases[_slot], 0, 0, new PixelRect(0, 0, Columns, Columns * Cascades), MemoryMarshal.AsBytes(_baseHeights.AsSpan()));
+        WriteConstants(phase, lamps);
 
-        _lastEye = eye;
-
-        // Close upload/compute encoders before the acceleration-structure encoders.
-        ((MetalCommandList)_ctx.Frame.Commands).Finish();
-        bool terrainChanged = UpdateTerrain(eye, heights);
-        Log($"terrain {terrainChanged}");
-        bool builtMesh = CollectObjects(eye, objects);
-        Log($"objects {builtMesh} ({_blasCache.Count})");
-        if (terrainChanged || builtMesh || _tlas is null || _frame - _lastTlasFrame >= 30) RebuildTlas(eye, objects);
-
-        Log($"tlas {_tlas?.Count ?? 0}");
-        if (_tlas is null) return;
-
-        UpdateGrid(eye, heights);
-        Log($"grid full={_fullUpdate}");
-        WriteConstants();
-        Log("constants");
-
-        if (Enabled && Active && Shade)
-        {
-            DispatchProbes();
-            Log("dispatch");
-            _updated = true;
-            _fullUpdate = false;
-        }
+        Dispatch(moved, lamps);
+        _updated = true;
+        Updates++;
+        if (Updates % 600 == 1 && Environment.GetEnvironmentVariable("MEITOU_METAL_GI_LOG") == "1") Console.WriteLine($"gi        {Describe()}");
     }
 
     /// <summary>
-    /// Releases the acceleration structures, atlases, constant buffers and the shader objects.
+    /// Places each cascade's grid round <paramref name="eye"/> and samples the bases of the columns that scrolled in (<see cref="GiProbes"/>'
+    /// placement); true when any grid moved or took new bases.
     /// </summary>
-    public void Dispose()
-    {
-        foreach (var e in _blasCache) e.Blas.Dispose();
-
-        _blasCache.Clear();
-        _tlas?.Dispose();
-        _terrain?.Dispose();
-        _coarse?.Dispose();
-        _irradiance.Dispose();
-        _distance.Dispose();
-        _bases.Dispose();
-        foreach (var b in _constantsBuffers) b.Dispose();
-
-        _function.Dispose();
-        _library.Dispose();
-        _pipeline.Dispose();
-    }
-
-    /// <summary>
-    /// Writes a trace line when <c>MEITOU_METAL_GI_LOG=1</c>.
-    /// </summary>
-    static void Log(string message)
-    {
-        if (Environment.GetEnvironmentVariable("MEITOU_METAL_GI_LOG") == "1") Console.WriteLine($"gi metal {message}");
-    }
-
-    /// <summary>
-    /// The text of an embedded resource; throws when it is missing.
-    /// </summary>
-    static string ReadResource(string name)
-    {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
-            ?? throw new InvalidOperationException($"missing embedded resource {name}");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
-    }
-
-    /// <summary>
-    /// Moves each cascade's grid when the eye is 8 or more cells from where it was placed; a move re-samples the base heights and asks for a full
-    /// update.
-    /// </summary>
-    void UpdateGrid(Vector3 eye, HeightSnapshot heights)
+    bool PlaceGrids(Vector3 eye, HeightSnapshot heights, Vector3? interiorFocus)
     {
         bool moved = false;
+        int level = interiorFocus is { } focus ? (int)MathF.Floor(focus.Y / 96) : 0;
+        bool layoutChanged = _interiorGrid != interiorFocus.HasValue || _interiorLevel != level;
+        (_interiorGrid, _interiorLevel) = (interiorFocus.HasValue, level);
 
         for (int c = 0; c < Cascades; c++)
         {
-            var (s, _, _) = Layout[c];
-            int ox = (int)MathF.Floor(eye.X / s) - Columns / 2;
-            int oz = (int)MathF.Floor(eye.Z / s) - Columns / 2;
+            var (s, sy, _) = Layout(c);
+            var centre = c == 0 ? interiorFocus ?? eye : eye;
+            int ox = (int)MathF.Floor(centre.X / s) - Columns / 2, oz = (int)MathF.Floor(centre.Z / s) - Columns / 2;
+            _grid[c * 2] = new Vector4(ox * s, oz * s, s, sy);
+            _grid[c * 2 + 1] = new Vector4(Mod(ox, Columns), Mod(oz, Columns), 2 * s, Relocate ? 1 : 0);
 
-            // Keep the grid fixed for several cells: moving it every cell (near: 128 units) cleared the atlas and made
-            // the world flicker between probe light and the flat ambient while walking.
-            if (_placed_[c] && Math.Abs(ox - _placed[c].X) < 8 && Math.Abs(oz - _placed[c].Z) < 8) continue;
+            bool sameHeights = ReferenceEquals(_placedHeights, heights.Fine) && (c != 0 || !layoutChanged);
+            if (_placed[c] == (ox, oz) && sameHeights) continue;
 
+            var (oldX, oldZ) = _placed[c];
+            bool keep = sameHeights && _basesPlaced[c];
             _placed[c] = (ox, oz);
-            _placed_[c] = true;
+            _basesPlaced[c] = true;
             moved = true;
+            SampleBases(heights, c, s, ox, oz, keep, oldX, oldZ);
         }
 
-        if (!moved) return;
+        _placedHeights = heights.Fine;
+        return moved;
+    }
 
-        for (int c = 0; c < Cascades; c++)
+    /// <summary>
+    /// The bases of cascade <paramref name="c"/>'s columns: the lowest ground under each column's cell (raised to the storey below the interior's
+    /// focus on the interior grid); with <paramref name="keep"/> the columns also in the old window keep theirs.
+    /// </summary>
+    void SampleBases(HeightSnapshot heights, int c, float s, int ox, int oz, bool keep, int oldX, int oldZ)
+    {
+        for (int k = 0; k < Columns; k++)
         {
-            var (s, sy, _) = Layout[c];
-            var (ox, oz) = _placed[c];
-            _grid[c * 2] = new Vector4(ox * s, oz * s, s, sy);
-            _grid[c * 2 + 1] = new Vector4(0, 0, 2 * s, 0);
-
-            for (int k = 0; k < Columns; k++)
             for (int i = 0; i < Columns; i++)
             {
+                if (keep && (uint)(ox + i - oldX) < Columns && (uint)(oz + k - oldZ) < Columns) continue;
+
                 float x = (ox + i) * s, z = (oz + k) * s;
                 float h = heights.HeightAt(x, z);
                 h = MathF.Min(h, MathF.Min(heights.HeightAt(x + s * 0.4f, z), heights.HeightAt(x - s * 0.4f, z)));
                 h = MathF.Min(h, MathF.Min(heights.HeightAt(x, z + s * 0.4f), heights.HeightAt(x, z - s * 0.4f)));
-                _baseHeights[(c * Columns + k) * Columns + i] = h;
+                if (c == 0 && _interiorGrid) h = MathF.Max(h, (_interiorLevel - 1) * 96);
+
+                _baseHeights[(c * Columns + Mod(oz + k, Columns)) * Columns + Mod(ox + i, Columns)] = h;
             }
         }
-
-        // The full update that follows writes every texel without the old values (hysteresis 0); only the base heights are uploaded.
-        using (var batch = _ctx.Uploads.Begin())
-        {
-            batch.Write(_bases, 0, 0, new PixelRect(0, 0, Columns, (uint)(Cascades * Columns)), MemoryMarshal.AsBytes(_baseHeights.AsSpan()));
-        }
-
-        _updated = false;
-        _fullUpdate = true;
     }
 
     /// <summary>
-    /// Writes this frame's probe constants (the rays' rotation, grid, sun and sky light, albedo, atmosphere maps, update phase and hysteresis, ray
-    /// lengths) into the slot's buffer.
+    /// <paramref name="a"/> modulo <paramref name="n"/>, never negative.
     /// </summary>
-    void WriteConstants()
+    static int Mod(int a, int n) => (a % n + n) % n;
+
+    /// <summary>
+    /// This frame's share of the probes into the slot's list; a probe the fog hides is listed only on every <see cref="HiddenPeriod"/>-th round.
+    /// </summary>
+    void BuildList(int phase, FogVolumes? fog, Vector3 eye, bool scrolled)
     {
-        var g = _ctx.Globals;
-        bool ground = g.Texture("uWeatherGround")?.Invoke() is { IsNull: false };
-        int phases = _fullUpdate ? 1 : Phases;
-        var c = new ProbeConstants
-        {
-            Rotation = RandomRotation(),
-            Grid0 = _grid[0], Grid1 = _grid[1], Grid2 = _grid[2], Grid3 = _grid[3],
-            SunLight = new Vector4(Read<Vector3>(g, "uAtmoSunLight"), 0),
-            LightDir = Read<Vector4>(g, "uAtmoLight"),
-            Albedo = new Vector4(ObjectAlbedo, ground ? 1 : 0),
-            Maps = Read<Vector4>(g, "uAtmoMaps"),
-            Timing = new Vector4(_frame % phases, phases, _fullUpdate ? 0 : UpdateHysteresis(phases), 0),
-            RayLength = new Vector4(Layout[0].RayLength, Layout[1].RayLength, 0, 0),
-        };
-        Marshal.StructureToPtr(c, _constantsBuffers[_ctx.Frame.Slot].Contents, false);
+        bool hide = fog is { CullActive: true };
+        if (hide) _fogCache.Update(fog!, eye, scrolled, _grid, _baseHeights, c => (Layout(c).Spacing, Layout(c).SpacingY));
+        else _fogCache.Invalidate();
+
+        var list = new Span<uint>((void*)_lists[_slot].Contents, Probes);
+        ReadOnlySpan<float> offsets = [_grid[1].X, _grid[1].Y, _grid[3].X, _grid[3].Y];
+        Listed = GiFogHide.List(list, Phases, phase, (uint)(Updates / Phases), hide ? HiddenPeriod : 0, FarPeriod, _fogCache.HiddenLayers, offsets);
     }
 
     /// <summary>
-    /// The hysteresis of one update of <see cref="Rays"/> rays over <paramref name="phases"/> frames, as GiProbes' (docs/render-gi.md "Probes"): an
-    /// exponential average's variance is (1 - h) / (1 + h) of one sample's, scaled by the rays against 64.
+    /// The hysteresis of one update (<see cref="GiProbes"/>' rule: the memory of 32 rays whatever the count).
     /// </summary>
     static float UpdateHysteresis(int phases)
     {
         float h = MathF.Pow(Hysteresis, phases);
-        float k = (1 - h) / (1 + h) * Rays / 64;
+        float k = (1 - h) / (1 + h) * GiProbes.DefaultRays / GiProbes.MaxRays;
         return (1 - k) / (1 + k);
     }
 
     /// <summary>
-    /// A uniformly random rotation (a random axis and angle), so successive updates sample new directions.
+    /// This update's constants into the slot's buffer (<see cref="GiProbes.Constants"/>, the shaders' <c>Params</c>).
+    /// </summary>
+    void WriteConstants(int phase, WorldLamps? lamps)
+    {
+        var g = _ctx.Globals;
+        bool ground = g.Texture("uWeatherGround")?.Invoke() is { IsNull: false };
+        var constants = new GiProbes.Constants
+        {
+            Params = new Vector4(1, phase, Phases, UpdateHysteresis(Phases)),
+            Grid0 = _grid[0],
+            Grid1 = _grid[1],
+            Grid2 = _grid[2],
+            Grid3 = _grid[3],
+            Rotation = RandomRotation(),
+            Origin = new Vector4(_scene.Origin, Updates),
+            SunLight = new Vector4(Read<Vector3>(g, "uAtmoSunLight"), 0),
+            LightDir = Read<Vector4>(g, "uAtmoLight"),
+            Maps = Read<Vector4>(g, "uAtmoMaps"),
+            Albedo = new Vector4(ObjectAlbedo, ground ? 1 : 0),
+            RayLength = new Vector4(Grid[0].RayLength, Grid[1].RayLength, SleepPeriod, HiddenPeriod),
+            LightGrid = lamps?.Grid ?? default,
+            Extra = new Vector4(_interiorGrid ? 1 : 0, FarPeriod, 0, 0),
+            Cloud = Read<Vector4>(g, "uAtmoCloud"),
+            CloudWind = Read<Vector4>(g, "uAtmoCloudWind"),
+            Sun = Read<Vector4>(g, "uAtmoSun"),
+        };
+        *(GiProbes.Constants*)_constants[_slot].Contents = constants;
+    }
+
+    /// <summary>
+    /// A uniformly random rotation, so successive updates sample new directions.
     /// </summary>
     Matrix4x4 RandomRotation()
     {
@@ -397,718 +459,253 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// Dispatches the probe update as a native segment: one threadgroup of <see cref="Rays"/> threads per probe updated this frame.
-    /// </summary>
-    void DispatchProbes()
-    {
-        var cmd = (MetalCommandList)_ctx.BeginNative("gi metal");
-        var encoder = cmd.ComputeEncoder();
-        encoder.SetComputePipelineState(_pipeline);
-        encoder.SetBuffer(_constantsBuffers[_ctx.Frame.Slot], 0, 0);
-        encoder.SetBuffer(_tlas!.FirstRecords, 0, 1);
-        encoder.SetAccelerationStructure(_tlas.Acceleration, 2);
-
-        // The top level reaches its bottom levels, and the records their vertices and indices, by address only: Metal does not make them resident
-        // unless the encoder is told, and a trace or fetch into one that is not faults the GPU.
-        cmd.UseResources(_tlas.Resident, _tlas.Resident.Length);
-        encoder.SetBuffer(_tlas.Records, 0, 3);
-        encoder.SetTexture(_irradianceImage, 0);
-        encoder.SetTexture(_irradianceImage, 1);
-        encoder.SetTexture(_distanceImage, 2);
-        encoder.SetTexture(_distanceImage, 3);
-        encoder.SetTexture(_baseImage, 4);
-        encoder.SetTexture(GlobalTexture("uAtmoIrradiance", cube: true), 5);
-        encoder.SetTexture(GlobalTexture("uWeatherGround", cube: false), 6);
-        encoder.SetTexture(GlobalTexture("uAtmoAmbientMap", cube: false), 7);
-        encoder.SetSamplerState(_skySampler, 0);
-        encoder.SetSamplerState(_skySampler, 1);
-        int phases = _fullUpdate ? 1 : Phases;
-
-        encoder.DispatchThreadgroups(new MTLSize { width = (ulong)(Probes / phases), height = 1, depth = 1 },
-            new MTLSize { width = Rays, height = 1, depth = 1 });
-        cmd.EndCompute();
-        _ctx.EndNative(cmd);
-    }
-
-    /// <summary>
-    /// The Metal texture of a published global texture, a stand-in when none is published.
-    /// </summary>
-    MTLTexture GlobalTexture(string name, bool cube)
-    {
-        var texture = _ctx.Globals.Texture(name)?.Invoke() ?? default;
-        if (texture.IsNull) texture = _ctx.Dummy(FrameGlobals.Sampler2D(name, cube));
-
-        return _ctx.Sampled(texture).Item1;
-    }
-
-    /// <summary>
-    /// A published uniform's value as <typeparamref name="T"/>; default when it is missing or does not fit.
+    /// A published uniform's value as <typeparamref name="T"/>; default when it is missing.
     /// </summary>
     static T Read<T>(FrameGlobals g, string name) where T : unmanaged
     {
         var u = g.UniformValue(name);
         if (u is null) return default;
 
-        Span<byte> bytes = stackalloc byte[System.Runtime.CompilerServices.Unsafe.SizeOf<T>()];
+        Span<byte> bytes = stackalloc byte[sizeof(T)];
         return u.TryRead(bytes) ? MemoryMarshal.Read<T>(bytes) : default;
-    }
-
-    /// <summary>
-    /// The probe update's constants, laid out as the shader's.
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
-    struct ProbeConstants
-    {
-        /// <summary>
-        /// The ray rotation (identity).
-        /// </summary>
-        public Matrix4x4 Rotation;
-        /// <summary>
-        /// The grid vectors of <see cref="_grid"/>.
-        /// </summary>
-        public Vector4 Grid0, Grid1, Grid2, Grid3;
-        /// <summary>
-        /// The sun light, the lighting direction (w the environment light's factor), the objects' albedo (w 1 with the ground colour map), the
-        /// atmosphere maps, the update (x the phase, y the phase count, z the hysteresis) and the cascades' ray lengths.
-        /// </summary>
-        public Vector4 SunLight, LightDir, Albedo, Maps, Timing, RayLength;
     }
 
     #endregion
 
-    #region Acceleration structures
+    #region Passes
 
     /// <summary>
-    /// The most object instances in the top level (the terrain comes on top).
+    /// The invalidation (after a move), the trace and the blend, in one compute encoder (its dispatches run in order).
     /// </summary>
-    const int MaxObjects = 64;
-    /// <summary>
-    /// The most object bottom levels kept in the cache; the least recently used goes first.
-    /// </summary>
-    const int MaxCachedMeshes = 64;
-    /// <summary>
-    /// How far from the eye objects are traced (world units).
-    /// </summary>
-    const float ObjectRange = 2500;
-    /// <summary>
-    /// The terrain bottom levels' cells on a side.
-    /// </summary>
-    const int TerrainCells = 256;
-    /// <summary>
-    /// The fine terrain's cell size and the step it re-centres by; the coarse terrain's (40960 wide, GiScene's coarse grid), which the far cascade's
-    /// rays reach (world units).
-    /// </summary>
-    const float FineSpacing = 32, FineStep = 512, CoarseSpacing = 160, CoarseStep = 2560;
-    /// <summary>
-    /// The instance options: the terrain's triangles are counter-clockwise from above and culled from below (opaque); an object's are not culled, so
-    /// a ray inside one finds its back (<c>MTLAccelerationStructureInstanceOptions</c>: 1 no culling, 2 counter-clockwise front faces, 4 opaque).
-    /// </summary>
-    const uint TerrainOptions = 2 | 4, ObjectOptions = 1 | 2 | 4;
-    /// <summary>
-    /// <see cref="GeometryRecord.Kind"/>: the terrain (the ground colour map's albedo) or an object.
-    /// </summary>
-    const uint TerrainKind = 0, ObjectKind = 1;
-
-    /// <summary>
-    /// The object bottom levels built so far (at most <see cref="MaxCachedMeshes"/>).
-    /// </summary>
-    readonly List<BlasEntry> _blasCache = [];
-    /// <summary>
-    /// The top level's instance descriptors, 64 bytes each (<c>MTLAccelerationStructureInstanceDescriptor</c>), the terrains first.
-    /// </summary>
-    readonly byte[] _instanceBytes = new byte[64 * (MaxObjects + 2)];
-
-    /// <summary>
-    /// The fine terrain bottom level around the eye; null before the first update.
-    /// </summary>
-    TerrainBlas? _terrain;
-    /// <summary>
-    /// The coarse terrain bottom level around the eye; null before the first update.
-    /// </summary>
-    TerrainBlas? _coarse;
-    /// <summary>
-    /// The top level over the terrains and the nearest objects; null before the first build.
-    /// </summary>
-    Tlas? _tlas;
-
-    /// <summary>
-    /// Drops every object bottom level and the top level (released after the frames in flight) and forces a rebuild.
-    /// </summary>
-    void ClearObjectCache()
+    void Dispatch(bool moved, WorldLamps? lamps)
     {
-        foreach (var e in _blasCache) _ctx.DeferDelete(e.Blas.Dispose);
-
-        _blasCache.Clear();
-
-        if (_tlas is not null)
+        var variant = Variant(Rays, Relocate, CloudShadows);
+        var cmd = (MetalCommandList)_ctx.BeginNative("gi metal");
+        if (moved) Invalidate(cmd);
+        if (Relocate) PublishOffsets(cmd);
+        if (Listed > 0)
         {
-            _ctx.DeferDelete(_tlas.Dispose);
-            _tlas = null;
+            Trace(cmd, variant.Trace, variant.TracePipeline, lamps);
+            if (Relocate) RelocateListed(cmd);
+            Blend(cmd, variant.Blend, variant.BlendPipeline);
         }
 
-        _lastTlasFrame = -1000;
+        cmd.EndCompute();
+        _ctx.EndNative(cmd);
     }
 
     /// <summary>
-    /// Re-centres the fine and the coarse terrain bottom levels on the eye's cell of their step where it moved; true when one was rebuilt.
+    /// The trace and blend for <paramref name="rays"/> rays a probe, with the cloud shadows, made on first use.
     /// </summary>
-    bool UpdateTerrain(Vector3 eye, HeightSnapshot heights)
+    (MetalProgram Trace, GpuComputePipeline TracePipeline, MetalProgram Blend, GpuComputePipeline BlendPipeline) Variant(int rays, bool relocate,
+        bool clouds)
     {
-        bool fine = Recentre(ref _terrain, eye, heights, FineSpacing, FineStep, "metal gi terrain");
-        bool coarse = Recentre(ref _coarse, eye, heights, CoarseSpacing, CoarseStep, "metal gi coarse terrain");
-        return fine || coarse;
+        if (_variants.TryGetValue((rays, relocate, clouds), out var made)) return made;
+
+        var shaders = (MetalShaders)_ctx.Shaders;
+        string name = $"metal gi probe trace {rays}{(relocate ? " relocated" : "")}{(clouds ? " clouds" : "")}";
+        var trace = shaders.ComputeDiscrete(GiShaders.ProbeTrace(rays, relocate, clouds), name);
+        var blend = shaders.ComputeDiscrete(GiShaders.ProbeBlend(rays), "metal gi probe blend " + rays);
+        return _variants[(rays, relocate, clouds)] = (shaders.Backend(trace), _ctx.Pipelines.Get(new ComputePipelineDesc(trace, name)),
+            shaders.Backend(blend), _ctx.Pipelines.Get(new ComputePipelineDesc(blend, "metal gi probe blend " + rays)));
     }
 
     /// <summary>
-    /// Rebuilds <paramref name="terrain"/> around the eye's <paramref name="step"/> cell when it is not there yet (the old one released after the
-    /// frames in flight); true when it was rebuilt.
+    /// Hides the tiles whose probe moved until their update (<see cref="GiShaders.ProbeInvalidate"/>).
     /// </summary>
-    bool Recentre(ref TerrainBlas? terrain, Vector3 eye, HeightSnapshot heights, float spacing, float step, string name)
+    void Invalidate(MetalCommandList cmd)
     {
-        var centre = new Vector3(MathF.Round(eye.X / step) * step, 0, MathF.Round(eye.Z / step) * step);
-        if (terrain is not null && Vector3.DistanceSquared(terrain.Centre, centre) < 1) return false;
-
-        var old = terrain;
-        terrain = BuildTerrain(centre, heights, spacing, name);
-        if (old is not null) _ctx.DeferDelete(old.Dispose);
-
-        return true;
+        cmd.BindPipeline(_invalidate);
+        var e = cmd.ComputeEncoder();
+        e.SetBuffer(_state, 0, 0);
+        e.SetBuffer(_constants[_slot], 0, 1);
+        e.SetTexture(_ctx.TextureAt(_irradiance), 2);
+        BindSampled(e, _invalidateProgram, 3, new SampledTexture(_nearest, _bases[_slot].View()));
+        cmd.Dispatch(Probes / 64);
     }
 
     /// <summary>
-    /// A <see cref="TerrainCells"/>² triangle grid of the heights around <paramref name="centre"/>, <paramref name="spacing"/> apart, built into a
-    /// bottom level.
+    /// The listed probes' rays against the scene: the probes, the sky's maps, the ground, the lamps (and the clouds), the objects' maps through the
+    /// bindless table; the scene's structures and buffers made resident.
     /// </summary>
-    TerrainBlas BuildTerrain(Vector3 centre, HeightSnapshot heights, float spacing, string name)
+    void Trace(MetalCommandList cmd, MetalProgram program, GpuComputePipeline pipeline, WorldLamps? lamps)
     {
-        var vertices = TerrainVertices(centre, heights, spacing);
-        var indices = TerrainIndices();
-        var vertexBuffer = _ctx.Device.NewBuffer((ulong)(vertices.Length * 4), MTLResourceOptions.ResourceStorageModeShared);
-        var indexBuffer = _ctx.Device.NewBuffer((ulong)(indices.Length * 4), MTLResourceOptions.ResourceStorageModeShared);
-        vertexBuffer.Label = (NSString)(name + " vertices");
-        indexBuffer.Label = (NSString)(name + " indices");
-        Marshal.Copy(vertices, 0, vertexBuffer.Contents, vertices.Length);
-        Marshal.Copy(indices, 0, indexBuffer.Contents, indices.Length);
+        cmd.BindPipeline(pipeline);
+        var e = cmd.ComputeEncoder();
+        e.SetAccelerationStructure(_scene.Top!.Value, 0);
+        e.SetBuffer(_scene.Records, 0, 1);
+        e.SetBuffer(_rays, 0, 2);
+        e.SetBuffer(_constants[_slot], 0, 3);
+        e.SetBuffer(_state, 0, 13);
+        e.SetBuffer(_lists[_slot], 0, 14);
+        BindHitImages(e, program, lamps);
+        cmd.BindBindlessTable(new GpuProgram(program.Info.Index, program.Info), Frame.NativeShaders.BindlessSet, GpuBindPoint.Compute);
+        cmd.UseResources(_scene.Resident, _scene.Resident.Length);
+        cmd.Dispatch((uint)Listed);
+    }
 
-        var geometry = new MTLAccelerationStructureTriangleGeometryDescriptor
+    /// <summary>
+    /// The samplers a hit reads (bindings 4 to 12, 15 and 16, 18): the probes, the sky, the ground, the lamps and their tiles, the clouds.
+    /// </summary>
+    void BindHitImages(MTLComputeCommandEncoder e, MetalProgram program, WorldLamps? lamps)
+    {
+        var bases = new SampledTexture(_nearest, _bases[_slot].View());
+        BindSampled(e, program, 4, new SampledTexture(_linear, _irradiance.View()));
+        BindSampled(e, program, 5, new SampledTexture(_linear, _distance.View()));
+        BindSampled(e, program, 6, bases);
+        BindSampled(e, program, 7, Global("uAtmoIrradiance", cube: true));
+        BindSampled(e, program, 8, Global("uAtmoAmbientMap", cube: false));
+        var ground = _ctx.Globals.Texture("uWeatherGround")?.Invoke() ?? default;
+        BindSampled(e, program, 9, ground.IsNull ? bases : ground);
+        BindSampled(e, program, 15, Global("uAtmoClouds", cube: false));
+        BindSampled(e, program, 16, Global("uAtmoCloudsTile", cube: false));
+
+        if (lamps is null)
         {
-            VertexBuffer = vertexBuffer,
-            VertexStride = 12,
-            VertexFormat = MTLAttributeFormat.Float3,
-            IndexBuffer = indexBuffer,
-            IndexType = MTLIndexType.UInt32,
-            TriangleCount = (ulong)(indices.Length / 3),
-            Opaque = true,
-        };
-        var descriptor = new MTLPrimitiveAccelerationStructureDescriptor
-        {
-            GeometryDescriptors = NSArray.Array(new NSObject(geometry.NativePtr)),
-            Usage = MTLAccelerationStructureUsage.PreferFastIntersection,
-        };
-        Build(name, descriptor, out var acceleration, out var scratch);
-        _ctx.DeferDelete(scratch.Dispose);
-
-        var record = new GeometryRecord(vertexBuffer.GpuAddress, indexBuffer.GpuAddress, 12, TerrainKind);
-        return new TerrainBlas(acceleration, vertexBuffer, indexBuffer, record, centre, spacing);
-    }
-
-    /// <summary>
-    /// The terrain grid's positions: (<see cref="TerrainCells"/> + 1)² samples of the heights, <paramref name="spacing"/> apart round
-    /// <paramref name="centre"/>.
-    /// </summary>
-    static float[] TerrainVertices(Vector3 centre, HeightSnapshot heights, float spacing)
-    {
-        int side = TerrainCells + 1;
-        var vertices = new float[side * side * 3];
-
-        for (int z = 0; z < side; z++)
-        for (int x = 0; x < side; x++)
-        {
-            int i = (z * side + x) * 3;
-            float wx = centre.X + (x - TerrainCells * 0.5f) * spacing;
-            float wz = centre.Z + (z - TerrainCells * 0.5f) * spacing;
-            vertices[i] = wx;
-            vertices[i + 1] = heights.HeightAt(wx, wz);
-            vertices[i + 2] = wz;
+            foreach (int b in (ReadOnlySpan<int>)[10, 11, 12, 18]) BindSampled(e, program, b, bases);
+            return;
         }
 
-        return vertices;
+        var (cells, index, data) = lamps.Current;
+        BindSampled(e, program, 10, new SampledTexture(lamps.NearestSampler, cells.View()));
+        BindSampled(e, program, 11, new SampledTexture(lamps.NearestSampler, index.View()));
+        BindSampled(e, program, 12, new SampledTexture(lamps.NearestSampler, data.View()));
+        BindSampled(e, program, 18, new SampledTexture(lamps.NearestSampler, lamps.TilesTexture.View()));
     }
 
     /// <summary>
-    /// The terrain grid's triangles, two a cell, counter-clockwise seen from above (their cross product points up).
+    /// The blend of the listed probes' rays into their tiles (<see cref="GiShaders.ProbeBlend"/>).
     /// </summary>
-    static int[] TerrainIndices()
+    void Blend(MetalCommandList cmd, MetalProgram program, GpuComputePipeline pipeline)
     {
-        int side = TerrainCells + 1;
-        var indices = new int[TerrainCells * TerrainCells * 6];
-        int n = 0;
-
-        for (int z = 0; z < TerrainCells; z++)
-        for (int x = 0; x < TerrainCells; x++)
-        {
-            int i0 = z * side + x, i1 = i0 + 1, i2 = i0 + side, i3 = i2 + 1;
-            indices[n++] = i0;
-            indices[n++] = i2;
-            indices[n++] = i1;
-            indices[n++] = i1;
-            indices[n++] = i2;
-            indices[n++] = i3;
-        }
-
-        return indices;
+        cmd.BindPipeline(pipeline);
+        var e = cmd.ComputeEncoder();
+        e.SetBuffer(_rays, 0, 0);
+        e.SetBuffer(_state, 0, 1);
+        e.SetBuffer(_constants[_slot], 0, 2);
+        e.SetTexture(_ctx.TextureAt(_irradiance), 3);
+        e.SetTexture(_ctx.TextureAt(_distance), 4);
+        BindSampled(e, program, 5, new SampledTexture(_nearest, _bases[_slot].View()));
+        e.SetBuffer(_lists[_slot], 0, 6);
+        cmd.Dispatch((uint)Listed);
     }
 
     /// <summary>
-    /// Builds a bottom-level descriptor into a new acceleration structure with a private scratch buffer, recording the build on the frame's command
-    /// buffer (the caller releases the scratch).
+    /// A sampled texture at texture and sampler index <paramref name="binding"/> (a combined sampler's two halves in the discrete set).
     /// </summary>
-    void Build(string name, MTLPrimitiveAccelerationStructureDescriptor descriptor, out MTLAccelerationStructure acceleration, out MTLBuffer scratch)
+    void BindSampled(MTLComputeCommandEncoder e, MetalProgram program, int binding, SampledTexture sampled)
     {
-        var sizes = _ctx.Device.AccelerationStructureSizes(descriptor);
-        acceleration = _ctx.Device.NewAccelerationStructure(sizes.accelerationStructureSize);
-        acceleration.Label = (NSString)name;
-        scratch = _ctx.Device.NewBuffer(Math.Max(sizes.buildScratchBufferSize, 1), MTLResourceOptions.ResourceStorageModePrivate);
-        var encoder = _ctx.Frame.Command.AccelerationStructureCommandEncoder();
-        encoder.BuildAccelerationStructure(acceleration, descriptor, scratch, 0);
-        encoder.EndEncoding();
+        var (texture, sampler) = _ctx.Sampled(sampled);
+        e.SetTexture(texture, (ulong)binding);
+
+        int slot = program.SamplerSlot(binding);
+        if (slot >= 0) e.SetSamplerState(sampler, (ulong)slot);
     }
 
     /// <summary>
-    /// Builds a top-level descriptor into a new acceleration structure with a private scratch buffer, recording the build on the frame's command
-    /// buffer.
+    /// A published global texture, a stand-in when none is published.
     /// </summary>
-    void Build(string name, MTLInstanceAccelerationStructureDescriptor descriptor, out MTLAccelerationStructure acceleration, out MTLBuffer scratch)
+    SampledTexture Global(string name, bool cube)
     {
-        var sizes = _ctx.Device.AccelerationStructureSizes(descriptor);
-        acceleration = _ctx.Device.NewAccelerationStructure(sizes.accelerationStructureSize);
-        acceleration.Label = (NSString)name;
-        scratch = _ctx.Device.NewBuffer(Math.Max(sizes.buildScratchBufferSize, 1), MTLResourceOptions.ResourceStorageModePrivate);
-        var encoder = _ctx.Frame.Command.AccelerationStructureCommandEncoder();
-        encoder.BuildAccelerationStructure(acceleration, descriptor, scratch, 0);
-        encoder.EndEncoding();
+        var texture = _ctx.Globals.Texture(name)?.Invoke() ?? default;
+        return texture.IsNull ? _ctx.Dummy(FrameGlobals.Sampler2D(name, cube)) : texture;
+    }
+
+    #endregion
+
+    #region Relocation
+
+    /// <summary>
+    /// The probes' offsets from their grid places by tile (docs/render-gi.md "Probe relocation"), made on first use with the passes that publish
+    /// and move them.
+    /// </summary>
+    MTLBuffer _offsets;
+
+    /// <summary>
+    /// The offsets' publish (<see cref="GiShaders.ProbeOffsetPublish"/>) and the relocation (<see cref="GiShaders.ProbeRelocate"/>) by rays.
+    /// </summary>
+    (MetalProgram Program, GpuComputePipeline Pipeline) _publish;
+
+    /// <summary>
+    /// See <see cref="_publish"/>.
+    /// </summary>
+    readonly Dictionary<int, (MetalProgram Program, GpuComputePipeline Pipeline)> _relocators = [];
+
+    /// <summary>
+    /// The offsets (zero: every probe at its grid place) and the publish pass, on the first frame relocation runs.
+    /// </summary>
+    void EnsureRelocation()
+    {
+        if (_offsets.NativePtr != IntPtr.Zero) return;
+
+        _offsets = _ctx.Device.NewBuffer((ulong)Probes * 16, MTLResourceOptions.ResourceStorageModeShared);
+        _offsets.Label = (NSString)"metal gi probe offsets";
+        new Span<byte>((void*)_offsets.Contents, Probes * 16).Clear();
+        _publish = Compute(GiShaders.ProbeOffsetPublish, "metal gi probe offset publish");
     }
 
     /// <summary>
-    /// Builds the bottom level of at most one not yet cached mesh among the nearest <see cref="MaxObjects"/> objects (evicting the least recently
-    /// used when the cache is full); true when one was built.
+    /// A discrete-set compute program and its pipeline.
     /// </summary>
-    bool CollectObjects(Vector3 eye, WorldObjectRenderer? objects)
+    (MetalProgram Program, GpuComputePipeline Pipeline) Compute(string glsl, string name)
     {
-        if (objects is null) return false;
-
-        var candidates = NearestObjects(eye, objects);
-
-        foreach (var (inst, _) in candidates)
-        {
-            var mesh = inst.Gpu!;
-            if (FindBlas(mesh) is not null) continue;
-
-            EvictIfFull();
-            if (BuildObjectBlas(mesh) is null) continue;
-
-            _lastTlasFrame = long.MinValue / 2;
-            return true;
-        }
-
-        return false;
+        var shaders = (MetalShaders)_ctx.Shaders;
+        var program = shaders.ComputeDiscrete(glsl, name);
+        return (shaders.Backend(program), _ctx.Pipelines.Get(new ComputePipelineDesc(program, name)));
     }
 
     /// <summary>
-    /// The object instances within <see cref="ObjectRange"/> of the eye that have a mesh on the GPU, nearest first, at most
-    /// <see cref="MaxObjects"/>.
+    /// This frame's offsets into the slot's <c>uGiBase</c> rows below the column bases, before anything reads them.
     /// </summary>
-    static List<(ObjectStreamer.Instance Instance, float Distance)> NearestObjects(Vector3 eye, WorldObjectRenderer objects)
+    void PublishOffsets(MetalCommandList cmd)
     {
-        var candidates = new List<(ObjectStreamer.Instance Instance, float Distance)>();
-        foreach (var inst in objects.RayInstances(eye, ObjectRange))
-            if (inst.Gpu is not null) candidates.Add((inst, Vector3.Distance(inst.Centre, eye)));
-
-        candidates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-        if (candidates.Count > MaxObjects) candidates.RemoveRange(MaxObjects, candidates.Count - MaxObjects);
-
-        return candidates;
+        EnsureRelocation();
+        cmd.BindPipeline(_publish.Pipeline);
+        var e = cmd.ComputeEncoder();
+        e.SetBuffer(_state, 0, 0);
+        e.SetBuffer(_constants[_slot], 0, 1);
+        e.SetTexture(_ctx.TextureAt(_bases[_slot]), 2);
+        e.SetBuffer(_offsets, 0, 3);
+        cmd.Dispatch(Probes / 64);
     }
 
     /// <summary>
-    /// Drops the least recently used bottom level when the cache is full (released after the frames in flight) and forces a top level rebuild.
+    /// This frame's rays move this frame's probes for the next frame's places; before the blend (it reads the states the trace read).
     /// </summary>
-    void EvictIfFull()
+    void RelocateListed(MetalCommandList cmd)
     {
-        if (_blasCache.Count < MaxCachedMeshes) return;
+        if (!_relocators.TryGetValue(Rays, out var relocator))
+            _relocators[Rays] = relocator = Compute(GiShaders.ProbeRelocate(Rays), "metal gi probe relocate " + Rays);
 
-        var oldest = _blasCache.MinBy(e => e.LastUsed);
-        if (oldest is null) return;
-
-        _blasCache.Remove(oldest);
-        _ctx.DeferDelete(oldest.Blas.Dispose);
-        _lastTlasFrame = long.MinValue / 2;
+        cmd.BindPipeline(relocator.Pipeline);
+        var e = cmd.ComputeEncoder();
+        e.SetBuffer(_rays, 0, 0);
+        e.SetBuffer(_state, 0, 1);
+        e.SetBuffer(_constants[_slot], 0, 2);
+        BindSampled(e, relocator.Program, 3, new SampledTexture(_nearest, _bases[_slot].View()));
+        e.SetBuffer(_lists[_slot], 0, 4);
+        e.SetBuffer(_offsets, 0, 5);
+        cmd.Dispatch((uint)Listed);
     }
 
+    #endregion
+
+    #region Disposal
+
     /// <summary>
-    /// The cached bottom level of a mesh at its current level, marked used; null when there is none or the cached one is out of date (which is
-    /// dropped).
+    /// Releases the scene, the atlases, the bases and the buffers.
     /// </summary>
-    BlasEntry? FindBlas(GpuObjectMesh mesh)
+    public void Dispose()
     {
-        int level = Math.Clamp(mesh.MinLevel, 0, Math.Max(mesh.LevelCount - 1, 0));
-
-        for (int i = 0; i < _blasCache.Count; i++)
-        {
-            var e = _blasCache[i];
-            if (!ReferenceEquals(e.Mesh, mesh)) continue;
-
-            if (e.Level == level && Same(e.Sources, mesh))
-            {
-                e.LastUsed = _frame;
-                return e;
-            }
-
-            _blasCache.RemoveAt(i);
-            _ctx.DeferDelete(e.Blas.Dispose);
-            return null;
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Builds a mesh's bottom level from its parts at its current level (or its manual mesh), with a geometry record per part, caches it and returns
-    /// it; null when no part has a triangle.
-    /// </summary>
-    BlasEntry? BuildObjectBlas(GpuObjectMesh mesh)
-    {
-        int level = Math.Clamp(mesh.MinLevel, 0, Math.Max(mesh.LevelCount - 1, 0));
-        var source = mesh.Manual.Length > level && mesh.Manual[level] is { } manual ? manual : mesh;
-        int sourceLevel = ReferenceEquals(source, mesh) ? level : 0;
-        var geometries = new List<MTLAccelerationStructureTriangleGeometryDescriptor>();
-        var records = new List<GeometryRecord>();
-        var buffers = new List<nint>();
-        var sources = new List<object> { source };
-
-        foreach (var part in source.Parts)
-        {
-            if (part.Count.Length <= sourceLevel) continue;
-
-            int count = part.Count[sourceLevel];
-            if (count < 3) continue;
-
-            var vertices = _ctx.BufferAt(part.Vertices.Handle);
-            var indices = _ctx.BufferAt(part.Indices.Handle);
-            ulong indexOffset = (ulong)part.Offset[sourceLevel] * 4;
-            geometries.Add(new MTLAccelerationStructureTriangleGeometryDescriptor
-            {
-                VertexBuffer = vertices,
-                VertexStride = (ulong)part.Stride,
-                VertexFormat = MTLAttributeFormat.Float3,
-                IndexBuffer = indices,
-                IndexBufferOffset = indexOffset,
-                IndexType = MTLIndexType.UInt32,
-                TriangleCount = (ulong)(count / 3),
-                Opaque = true,
-            });
-            records.Add(new GeometryRecord(vertices.GpuAddress, indices.GpuAddress + indexOffset, (uint)part.Stride, ObjectKind));
-            buffers.Add(vertices.NativePtr);
-            buffers.Add(indices.NativePtr);
-            sources.Add(part.Vertices);
-        }
-
-        if (geometries.Count == 0) return null;
-
-        var descriptor = new MTLPrimitiveAccelerationStructureDescriptor
-        {
-            GeometryDescriptors = ArrayOf(geometries.Select(g => g.NativePtr)),
-            Usage = MTLAccelerationStructureUsage.PreferFastIntersection,
-        };
-        Build("metal gi object", descriptor, out var accel, out var scratch);
-        _ctx.DeferDelete(scratch.Dispose);
-        var entry = new BlasEntry
-        {
-            Mesh = mesh, Level = level, Sources = [.. sources], Blas = accel, Records = [.. records], Buffers = [.. buffers], LastUsed = _frame,
-        };
-        _blasCache.Add(entry);
-        return entry;
-    }
-
-    /// <summary>
-    /// Whether a cache entry's sources are still the mesh and its parts' vertex buffers.
-    /// </summary>
-    static bool Same(object[] sources, GpuObjectMesh mesh)
-    {
-        if (sources.Length != mesh.Parts.Count + 1) return false;
-        if (!ReferenceEquals(sources[0], mesh)) return false;
-        for (int i = 0; i < mesh.Parts.Count; i++)
-            if (!ReferenceEquals(sources[i + 1], mesh.Parts[i].Vertices)) return false;
-
-        return true;
-    }
-
-    /// <summary>
-    /// Rebuilds the top level: the two terrains, then the nearest objects whose bottom levels are built.
-    /// </summary>
-    void RebuildTlas(Vector3 eye, WorldObjectRenderer? objects)
-    {
-        var scene = new SceneLists();
-        AddTerrain(scene, _terrain!);
-        AddTerrain(scene, _coarse!);
-        if (objects is not null) AddObjectInstances(eye, objects, scene);
-
-        BuildTlas(scene);
-    }
-
-    /// <summary>
-    /// Adds a terrain's instance (untransformed) with its bottom level, record and buffers.
-    /// </summary>
-    void AddTerrain(SceneLists scene, TerrainBlas terrain)
-    {
-        WriteInstance(scene.FirstRecords.Count, Matrix4x4.Identity, TerrainOptions, scene.Bottoms.Count);
-        scene.FirstRecords.Add((uint)scene.Records.Count);
-        scene.Records.Add(terrain.Record);
-        scene.Bottoms.Add(terrain.Blas);
-        scene.Resident.AddRange([terrain.Blas.NativePtr, terrain.Vertices.NativePtr, terrain.Indices.NativePtr]);
-    }
-
-    /// <summary>
-    /// Adds the nearest object instances whose bottom levels are built: each instance after those so far, each bottom level with its records and
-    /// buffers once.
-    /// </summary>
-    void AddObjectInstances(Vector3 eye, WorldObjectRenderer objects, SceneLists scene)
-    {
-        var added = new Dictionary<nint, (int Bottom, uint FirstRecord)>();
-
-        foreach (var (inst, _) in NearestObjects(eye, objects))
-        {
-            var entry = FindBlas(inst.Gpu!);
-            if (entry is null) continue;
-
-            if (!added.TryGetValue(entry.Blas.NativePtr, out var at))
-            {
-                at = (scene.Bottoms.Count, (uint)scene.Records.Count);
-                added[entry.Blas.NativePtr] = at;
-                scene.Bottoms.Add(entry.Blas);
-                scene.Records.AddRange(entry.Records);
-                scene.Resident.Add(entry.Blas.NativePtr);
-                scene.Resident.AddRange(entry.Buffers);
-            }
-
-            WriteInstance(scene.FirstRecords.Count, inst.Transform, ObjectOptions, at.Bottom);
-            scene.FirstRecords.Add(at.FirstRecord);
-        }
-    }
-
-    /// <summary>
-    /// The top level over the instances written, with their first records and the geometry records; the old one goes after the frames in flight.
-    /// </summary>
-    void BuildTlas(SceneLists scene)
-    {
-        int count = scene.FirstRecords.Count;
-        var instBuffer = _ctx.Device.NewBuffer((ulong)(64 * count), MTLResourceOptions.ResourceStorageModeShared);
-        Marshal.Copy(_instanceBytes, 0, instBuffer.Contents, count * 64);
-        var firstBuffer = SharedBuffer<uint>(CollectionsMarshal.AsSpan(scene.FirstRecords));
-        var recordBuffer = SharedBuffer<GeometryRecord>(CollectionsMarshal.AsSpan(scene.Records));
-
-        var descriptor = new MTLInstanceAccelerationStructureDescriptor
-        {
-            InstanceCount = (ulong)count,
-            InstanceDescriptorBuffer = instBuffer,
-            InstanceDescriptorStride = 64,
-            InstancedAccelerationStructures = ArrayOf(scene.Bottoms.Select(a => a.NativePtr)),
-            InstanceDescriptorType = MTLAccelerationStructureInstanceDescriptorType.Default,
-            InstanceTransformationMatrixLayout = MTLMatrixLayout.ColumnMajor,
-            Usage = MTLAccelerationStructureUsage.PreferFastIntersection,
-        };
-        Build("metal gi top", descriptor, out var acceleration, out var scratch);
-        _ctx.DeferDelete(scratch.Dispose);
-
-        var old = _tlas;
-        _tlas = new Tlas(acceleration, instBuffer, firstBuffer, recordBuffer, count, [.. scene.Resident.Distinct()]);
-        InstanceCount = count;
-        _lastTlasFrame = _frame;
-        if (old is not null) _ctx.DeferDelete(old.Dispose);
-    }
-
-    /// <summary>
-    /// A new shared buffer holding <paramref name="items"/> (at least 16 bytes).
-    /// </summary>
-    MTLBuffer SharedBuffer<T>(ReadOnlySpan<T> items) where T : unmanaged
-    {
-        var bytes = MemoryMarshal.AsBytes(items);
-        var buffer = _ctx.Device.NewBuffer((ulong)Math.Max(bytes.Length, 16), MTLResourceOptions.ResourceStorageModeShared);
-        bytes.CopyTo(new Span<byte>((void*)buffer.Contents, bytes.Length));
-        return buffer;
-    }
-
-    /// <summary>
-    /// Writes the instance descriptor at <paramref name="index"/>: the transform, options, mask 0xFF and the bottom level's index.
-    /// </summary>
-    void WriteInstance(int index, Matrix4x4 m, uint options, int blas)
-    {
-        var span = _instanceBytes.AsSpan(index * 64, 64);
-
-        // MTLPackedFloat4x3: four columns of three floats (column-major); a System.Numerics row-vector matrix's rows are those columns.
-        ReadOnlySpan<float> transform = [m.M11, m.M12, m.M13, m.M21, m.M22, m.M23, m.M31, m.M32, m.M33, m.M41, m.M42, m.M43];
-        MemoryMarshal.AsBytes(transform).CopyTo(span);
-        ReadOnlySpan<uint> fields = [options, 0xFF, 0, (uint)blas];
-        MemoryMarshal.AsBytes(fields).CopyTo(span[48..]);
-    }
-
-    /// <summary>
-    /// An NSArray of Objective-C objects.
-    /// </summary>
-    static NSArray ArrayOf(IEnumerable<IntPtr> objects)
-    {
-        var mutable = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSMutableArray"), "array");
-        foreach (var p in objects) ObjectiveC.objc_msgSend(mutable, "addObject:", p);
-
-        return new NSArray(mutable);
-    }
-
-    /// <summary>
-    /// A bottom level's geometry as the probe shader reads it (<c>GeometryRecord</c>): its positions' and indices' GPU addresses (the indices at the
-    /// part's first), the vertex stride and <see cref="TerrainKind"/> or <see cref="ObjectKind"/>.
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
-    readonly record struct GeometryRecord(ulong Vertices, ulong Indices, uint Stride, uint Kind);
-
-    /// <summary>
-    /// What a top level is built from: per instance its first geometry record, the records, the bottom levels and every resource the trace reaches
-    /// by address.
-    /// </summary>
-    sealed class SceneLists
-    {
-        /// <summary>
-        /// Per instance, the index of its bottom level's first record in <see cref="Records"/>.
-        /// </summary>
-        public readonly List<uint> FirstRecords = [];
-        /// <summary>
-        /// The bottom levels' geometry records, each bottom level's together.
-        /// </summary>
-        public readonly List<GeometryRecord> Records = [];
-        /// <summary>
-        /// The bottom levels the instances refer to by index.
-        /// </summary>
-        public readonly List<MTLAccelerationStructure> Bottoms = [];
-        /// <summary>
-        /// The bottom levels and the vertex and index buffers of the records, as native pointers.
-        /// </summary>
-        public readonly List<nint> Resident = [];
-    }
-
-    /// <summary>
-    /// A cached object bottom level: the mesh, its level, the sources it was built from and its parts' records.
-    /// </summary>
-    sealed class BlasEntry
-    {
-        /// <summary>
-        /// The mesh the bottom level is of.
-        /// </summary>
-        public required GpuObjectMesh Mesh;
-        /// <summary>
-        /// The mesh level it was built at.
-        /// </summary>
-        public required int Level;
-        /// <summary>
-        /// The mesh (or its manual mesh) and its parts' vertex buffers when built, checked by <see cref="Same"/>.
-        /// </summary>
-        public required object[] Sources;
-        /// <summary>
-        /// The bottom level.
-        /// </summary>
-        public required MTLAccelerationStructure Blas;
-        /// <summary>
-        /// One record per geometry, in the bottom level's geometry order.
-        /// </summary>
-        public required GeometryRecord[] Records;
-        /// <summary>
-        /// The records' vertex and index buffers, as native pointers (made resident with the top level).
-        /// </summary>
-        public required nint[] Buffers;
-        /// <summary>
-        /// The update it was last used at (<see cref="MaxCachedMeshes"/> evicts the oldest).
-        /// </summary>
-        public long LastUsed;
-    }
-
-    /// <summary>
-    /// A terrain bottom level with its vertex and index buffers and its record.
-    /// </summary>
-    sealed class TerrainBlas(MTLAccelerationStructure blas, MTLBuffer vertices, MTLBuffer indices, GeometryRecord record, Vector3 centre,
-        float spacing) : IDisposable
-    {
-        /// <summary>
-        /// The bottom level.
-        /// </summary>
-        public MTLAccelerationStructure Blas => blas;
-        /// <summary>
-        /// The grid's positions.
-        /// </summary>
-        public MTLBuffer Vertices => vertices;
-        /// <summary>
-        /// The grid's triangles.
-        /// </summary>
-        public MTLBuffer Indices => indices;
-        /// <summary>
-        /// The grid's geometry record.
-        /// </summary>
-        public GeometryRecord Record => record;
-        /// <summary>
-        /// The centre of the grid.
-        /// </summary>
-        public Vector3 Centre => centre;
-        /// <summary>
-        /// The grid's size, spacing and centre, for <see cref="Describe"/>.
-        /// </summary>
-        public string Description => $"{TerrainCells}² grid {spacing:0} apart at {centre.X:0},{centre.Z:0}";
-
-        /// <summary>
-        /// Releases the bottom level and its buffers.
-        /// </summary>
-        public void Dispose()
-        {
-            blas.Dispose();
-            vertices.Dispose();
-            indices.Dispose();
-        }
-    }
-
-    /// <summary>
-    /// A top level with its instance descriptors, the instances' first records, the geometry records and what the trace needs resident.
-    /// </summary>
-    sealed class Tlas(MTLAccelerationStructure acceleration, MTLBuffer instances, MTLBuffer firstRecords, MTLBuffer records, int count,
-        nint[] resident) : IDisposable
-    {
-        /// <summary>
-        /// The acceleration structure.
-        /// </summary>
-        public MTLAccelerationStructure Acceleration => acceleration;
-        /// <summary>
-        /// Per instance, its first geometry record (the probe update's <c>firstRecord</c>).
-        /// </summary>
-        public MTLBuffer FirstRecords => firstRecords;
-        /// <summary>
-        /// The geometry records (the probe update's <c>records</c>).
-        /// </summary>
-        public MTLBuffer Records => records;
-        /// <summary>
-        /// The instances in it.
-        /// </summary>
-        public int Count => count;
-        /// <summary>
-        /// The native pointers of the bottom levels and the records' buffers, which a trace needs resident
-        /// (<see cref="MetalCommandList.UseResources"/>).
-        /// </summary>
-        public nint[] Resident => resident;
-
-        /// <summary>
-        /// Releases the acceleration structure and its buffers.
-        /// </summary>
-        public void Dispose()
-        {
-            acceleration.Dispose();
-            instances.Dispose();
-            firstRecords.Dispose();
-            records.Dispose();
-        }
+        _scene.Dispose();
+        _ctx.ReleaseTexture(_irradiance);
+        _ctx.ReleaseTexture(_distance);
+        foreach (var b in _bases) _ctx.ReleaseTexture(b);
+        _rays.Dispose();
+        _state.Dispose();
+        foreach (var b in _lists) b.Dispose();
+        foreach (var b in _constants) b.Dispose();
+        if (_offsets.NativePtr != IntPtr.Zero) _offsets.Dispose();
     }
 
     #endregion

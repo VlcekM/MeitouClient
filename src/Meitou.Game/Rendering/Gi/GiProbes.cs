@@ -51,11 +51,6 @@ internal sealed unsafe class GiProbes : IDisposable
     static readonly (float Spacing, float SpacingY, float RayLength)[] Grid = [(128, 96, 4000), (512, 384, 16000)];
 
     /// <summary>
-    /// How far the eye may move before the hidden layers are worked out again (the reach boxes are widened by twice that).
-    /// </summary>
-    const float HiddenSlack = 96;
-
-    /// <summary>
     /// Whether the first cascade's grid is the interior one (32 apart across, 24 up, around the interior's focus).
     /// </summary>
     bool _interiorGrid;
@@ -111,24 +106,9 @@ internal sealed unsafe class GiProbes : IDisposable
     readonly BufferAllocation[] _lists;
 
     /// <summary>
-    /// Per tile (cascade, toroidal row, toroidal column): the layers the fog hides.
+    /// The layers the fog hides per probe column.
     /// </summary>
-    readonly byte[] _hiddenLayers = new byte[Cascades * Columns * Columns];
-
-    /// <summary>
-    /// The fog's cull state the hidden layers were worked out for: its block, hide radius and weather.
-    /// </summary>
-    (object? Block, float Radius, float Weather) _hiddenState;
-
-    /// <summary>
-    /// The eye the hidden layers were worked out at.
-    /// </summary>
-    Vector3 _hiddenEye;
-
-    /// <summary>
-    /// Whether <see cref="_hiddenLayers"/> holds an answer (the fog culls).
-    /// </summary>
-    bool _hiddenValid;
+    readonly ProbeFogCache _fogCache = new();
 
     /// <summary>
     /// The linear and the nearest sampler the atlases and the bases are read with.
@@ -342,17 +322,17 @@ internal sealed unsafe class GiProbes : IDisposable
     /// <summary>
     /// The probes the fog hides per cascade (all of them, not only the share of this frame) at the last list.
     /// </summary>
-    public int[] Hidden { get; } = new int[Cascades];
+    public int[] Hidden => _fogCache.Hidden;
 
     /// <summary>
     /// How many times the hidden layers were worked out (statistics).
     /// </summary>
-    public int Solves { get; private set; }
+    public int Solves => _fogCache.Solves;
 
     /// <summary>
     /// The ms spent working the hidden layers out, in total.
     /// </summary>
-    public double SolveMs { get; private set; }
+    public double SolveMs => _fogCache.SolveMs;
 
     /// <summary>
     /// False: the probes are updated but the world's shading does not read them (the bench's gi-shade switch, the reads' cost).
@@ -433,63 +413,11 @@ internal sealed unsafe class GiProbes : IDisposable
     void BuildList(int phases, int phase, FogVolumes? fog, Vector3 eye, bool scrolled)
     {
         bool hide = HiddenPeriod > 0 && fog is { CullActive: true };
-        if (hide)
-        {
-            var now = fog!.CullState;
+        if (hide) _fogCache.Update(fog!, eye, scrolled, _grid, _baseHeights, c => (Layout(c).Spacing, Layout(c).SpacingY));
+        else _fogCache.Invalidate();
 
-            // The cached answer holds while the eye has moved less than HiddenSlack and the hide distances have grown by no more than the margin left
-            // of the boxes' widening (twice the slack, less the move): the nearest point of a hidden box was at least cached + widening from the old
-            // eye.
-            float moved = Vector3.Distance(eye, _hiddenEye), margin = 2 * HiddenSlack - moved;
-            static bool Holds(float now, float cached, float margin) =>
-                now == 0 ? cached == 0 : cached > 0 && now <= cached + margin && now >= cached - 100;
-            bool same = _hiddenValid && !scrolled && now.Block == _hiddenState.Block && moved <= HiddenSlack && Holds(now.Radius, _hiddenState.Radius,
-                margin) && Holds(now.Weather, _hiddenState.Weather, margin);
-            if (!same)
-            {
-                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-                Array.Clear(Hidden);
-
-                // The boxes are widened by twice the slack (see Holds above).
-                float nearest = MathF.Min(now.Radius > 0 ? now.Radius : float.MaxValue, now.Weather > 0 ? now.Weather : float.MaxValue);
-                for (int c = 0; c < Cascades; c++)
-                {
-                    var (s, sy, _) = Layout(c);
-                    float across = s + GiFogHide.LookupOffset * MathF.Min(s, sy) + 2 * HiddenSlack;
-                    float x0 = _grid[c * 2].X, z0 = _grid[c * 2].Y;
-                    int offX = (int)_grid[c * 2 + 1].X, offZ = (int)_grid[c * 2 + 1].Y;
-                    for (int k = 0; k < Columns; k++)
-                    {
-                        for (int i = 0; i < Columns; i++)
-                        {
-                            int column = (c * Columns + (offZ + k) % Columns) * Columns + (offX + i) % Columns;
-
-                            // Nearer than the nearest hide distance (in x, z alone, a lower bound of the box's distance): nothing there can be
-                            // hidden.
-                            float dx = MathF.Max(MathF.Abs(x0 + i * s - eye.X) - across, 0), dz = MathF.Max(MathF.Abs(z0 + k * s - eye.Z) - across,
-                                0);
-                            if (dx * dx + dz * dz < nearest * nearest)
-                            {
-                                _hiddenLayers[column] = 0;
-                                continue;
-                            }
-
-                            int layers = GiFogHide.HiddenLayers(fog.Covers, x0 + i * s, z0 + k * s, _baseHeights[column], s, sy, Layers,
-                                fog.CullFloor, 2 * HiddenSlack);
-                            _hiddenLayers[column] = (byte)layers;
-                            Hidden[c] += layers;
-                        }
-                    }
-                }
-                Solves++; SolveMs += System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
-                _hiddenState = now;
-                _hiddenEye = eye;
-                _hiddenValid = true;
-            }
-        }
-        else _hiddenValid = false;
         var list = new Span<uint>((void*)_lists[_slot].Mapped, Probes);
-        Listed = GiFogHide.List(list, phases, phase, (uint)(Updates / phases), hide ? HiddenPeriod : 0, FarPeriod, _hiddenLayers, [_grid[1].X,
+        Listed = GiFogHide.List(list, phases, phase, (uint)(Updates / phases), hide ? HiddenPeriod : 0, FarPeriod, _fogCache.HiddenLayers, [_grid[1].X,
             _grid[1].Y, _grid[3].X, _grid[3].Y]);
     }
 
@@ -1335,7 +1263,7 @@ internal sealed unsafe class GiProbes : IDisposable
     {
         string state = $"{Cascades} cascades of {Columns}×{Layers}×{Columns} probes ({Layout(0).Spacing:0} and {Grid[1].Spacing:0} apart), "
             + $"{Rays} rays each, 1/{Phases} a frame, {(Enabled ? "lighting" : "not lighting")}";
-        string hidden = _hiddenValid
+        string hidden = _fogCache.Valid
             ? $"; fog hides {Hidden[0]} + {Hidden[1]} probes (each updated every {HiddenPeriod}th round; "
                 + $"solved {Solves} times, {SolveMs / Math.Max(Solves, 1):0.00} ms each), {Listed} listed this frame"
             : "";

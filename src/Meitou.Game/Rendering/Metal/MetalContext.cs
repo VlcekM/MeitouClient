@@ -621,14 +621,14 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     }
 
     /// <summary>
-    /// The store action of a render pass attachment. Always <see cref="MTLStoreAction.Store"/> but where nothing reads the result: the GI albedo
-    /// (the lit programs write it, but the GI resolve is not on Metal) and a multisampled depth (the reflection's: cleared by its one pass and never
-    /// resolved). Those stay in tile memory.
+    /// The store action of a render pass attachment. Always <see cref="MTLStoreAction.Store"/> but where nothing reads the result: the GI surface
+    /// target while the GI resolve is off (<see cref="StoreSurface"/>; the lit programs write it all the same) and a multisampled depth (the
+    /// reflection's: cleared by its one pass and never resolved). Those stay in tile memory.
     /// </summary>
     internal MTLStoreAction StoreActionFor(GpuView view, bool depth)
     {
         var of = _views[view.Index]!.Of;
-        bool albedo = _albedo is { } a && ReferenceEquals(of, _textures[a.Index]);
+        bool albedo = !StoreSurface && _albedo is { } a && ReferenceEquals(of, _textures[a.Index]);
         bool unresolvedDepth = depth && of.Desc.Samples > 1;
         return albedo || unresolvedDepth ? MTLStoreAction.DontCare : MTLStoreAction.Store;
     }
@@ -1247,7 +1247,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             _depth = CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, SceneWidth, SceneHeight,
                 Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "depth"));
             _albedo?.Dispose();
-            _albedo = CreateTexture(new TextureDesc(InternalFormat.Rgba8Ui, SceneWidth, SceneHeight, Use: TextureUse.ColourTarget, Name: "gi albedo"));
+            // The lit fragments' surface (normal, albedo, flags; GiResolveShaders.WithAlbedo): four 32-bit words, as Vulkan's.
+            _albedo = CreateTexture(new TextureDesc(InternalFormat.Rgba32Ui, SceneWidth, SceneHeight, Use: TextureUse.ColourTarget | TextureUse.Sampled,
+                Name: "gi albedo"));
         }
 
         EnsurePicture(width, height);
@@ -1340,10 +1342,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     public GpuTexture Depth => _depth ?? throw new InvalidOperationException("no frame is open");
 
     /// <summary>
-    /// The scene's second colour target (the lit fragments' GI albedo; the GI resolve is not on Metal yet, but the lit programs write it, so the pass
+    /// The scene's second colour target: the lit fragments' GI surface, which the GI resolve reads (the lit programs write it either way, so the pass
     /// has the attachment they expect).
     /// </summary>
     public GpuTexture Albedo => _albedo ?? throw new InvalidOperationException("no frame is open");
+
+    /// <summary>
+    /// Whether the scene's surface target (<see cref="Albedo"/>) is kept after its passes: the GI resolve reads it (set by the post chain each frame).
+    /// </summary>
+    internal bool StoreSurface { get; set; }
 
     /// <summary>
     /// The scene's render scale (the Vulkan path's TAA/upscaler scale): 1 = native, 0.67 = the Vulkan path's Meitou default.

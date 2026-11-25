@@ -104,7 +104,7 @@ A metal's specular colour (sqrt, 8 bits a channel) goes beside its gloss on a re
 ## Hybrid GI
 
 `gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate,clouds,cache>` turns it on with
-the listed parts only. Each part is also a plain on / off row under Graphics > Lighting > Indirect light ("GI probes out of walls", "GI cloud shadows", "GI radiance cache"), read each frame. Vulkan only. the radiance cache: below.
+the listed parts only. Each part is also a plain on / off row under Graphics > Lighting > Indirect light ("GI probes out of walls", "GI cloud shadows", "GI radiance cache"), read each frame. Relocation and cloud shadows also on Metal ([Metal](#metal)); the radiance cache Vulkan only: below.
 
 **Probe relocation** (`relocate`; RTXGI's rule, `GiShaders.ProbeRelocate`, needs the resolve). Offsets stay in world units per atlas
 tile, in `offsets`; relocation reads the frame's rays before the blend. Over a quarter back faces: through the closest back face, half the
@@ -195,28 +195,38 @@ A character's light from the probes alone is the probes' at its place, metres ap
 
 ## Metal
 
-`Metal/Gi/MetalProbeGi.cs` and `ProbeGi.metal`: the probes on Metal ray tracing, a narrower path than Vulkan's beside it (the world shaders
-read the same atlases and globals, `IProbeGi`).
+`Metal/Gi/MetalProbeGi.cs`, `MetalGiScene.cs`, `MetalTerrainGrid.cs`, `MetalBuilds.cs`, `MetalGiResolve.cs`: Vulkan's probes, resolve and relocation over
+a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`ProbeBlend`/`ProbeInvalidate`/`ProbeRelocate`/`ProbeOffsetPublish`,
+`GiResolveShaders`); only the host code is Metal's.
 
 - **Gate.** Hardware ray tracing only: Metal's Apple9 family, M3 and later (`MetalContext.TracesInHardware`, its `HasRayQuery`, the
   benchmark record's `rayQueries`). An M1 or M2 reports ray tracing in software; a save load with the probes on froze an M1 Pro
   (**Observed**), so they count as having none: no probes, no Indirect light switches, Ultra and Extreme refused (exit 5). On by default
   elsewhere; `--no-gi` turns it off.
-- **Scene.** A fine terrain (256² cells 32 apart, re-centred in 512 steps) and a coarse one (256² cells 160 apart, 2560 steps) from
-  `HeightSnapshot.HeightAt`, both back-face culled; the nearest 64 objects within 2500 (their finest resident level, one bottom level built a
-  frame, 64 cached), not culled. The top level is rebuilt when either changes or every 30 updates. A geometry record per bottom-level geometry
-  (positions and indices by GPU address) gives the hit's normal; the top level's bottom levels and those buffers are declared resident on the
-  dispatch (`useResources`): an instance structure reaches them by address only.
-- **Update.** One kernel traces and blends: 32 rays a probe, a random rotation each update, 1 of 4 probes a frame (all at once with
-  hysteresis 0 after the grid moved, 8 or more cells). What a ray sees and the blend are the Vulkan [probe](#probes) trace's and blend's
-  (`ProbeTrace`, `ProbeBlend`, `UpdateHysteresis` from 0.97): a miss the sky's ambient, a hit the sun through a shadow ray plus the sky's
-  ambient on the object albedo or the ground colour map, an object's back face dark at -0.2 its distance.
-- **Not on Metal** (Vulkan has them): the further bounces at hits (the probes' own light), lamps, object and foliage textures, foliage and
-  characters in the scene, probe relocation, sleep and the interior grid, fog hiding; Hybrid GI, the traced sun, lamp shadows, GI traced on
-  characters and traced grass. The panel offers only Indirect light and Indoor GI there, so the tiers' other traced switches do nothing.
-- **Observed** (Apple M6, macOS 27.2, the play bench's settle and orbit on `bench-bases-2026-10-27`, 1920x1080 scene, one run each): orbit
-  59 fps, frame p50 15.4 ms, GPU 15.7 ms against 68, 12.9 and 13.5 with `--no-gi`. A still of the same save at night matches the
-  no-GI picture's tones; the round building's roof shows darker patches from probes inside it (no relocation).
+- **Shaders.** `MetalShaders.ComputeDiscrete`: set 0 as plain bindings (MSL buffer, texture and acceleration-structure indices = binding numbers;
+  spirv-cross fails on a combined sampler inside a compute argument buffer), the bindless table as the argument buffer at 28. Metal's sampler
+  table ends at 15, so sampler indices are made dense in binding order (`MslTranslator.DenseSamplers`, `MetalProgram.SamplerSlot`). spirv-cross's
+  bare `ray(...)` is qualified `raytracing::ray(`: the trace's GLSL local `ray` hid the type. Ray queries, buffer references and
+  `get_committed_user_instance_id` translate as they are. The distance atlas is RGBA16F (Vulkan RG16F): the blend reads and writes it, and Metal has
+  no read-write access to two-channel formats.
+- **Scene** (`MetalGiScene`, as `GiScene`): terrain 512² quads 8 apart along `SmoothHeightAt` and 256² 160 apart, sampled on a worker, rebuilt when
+  the eye leaves the middle eighth; objects within `GiScene.ProbeRange` (eye snapped to 128), 32 bottom levels built a frame, dropped after 600
+  unused; the foliage block (radius >= 150, range 4000, rebuilt every 120 updates or 250 units); records with this frame's textures, emitters and
+  interior bits; `TracedSunShaders` masks; instances relative to an origin following the eye in 64-unit steps past 1024. Top level per frame slot,
+  user-ID instances (user ID = first record), built again when its instance bytes change or every 300 updates; bottom levels and records' buffers
+  made resident on the dispatch. Winding: with no winding option Metal takes a mesh's outward side and the grid's top as the front, as Vulkan; with
+  the counter-clockwise option (the earlier Metal path) the grid was culled from above and every object's outside was a back face (**Verified**, the
+  trace's ray results on `bench-bases-2026-10-27`: hits 2,400 -> 31,000 of 65,500, back faces 2,660 -> 40). Indirect instances (bottom levels by
+  resource ID) missed the terrain; not used.
+- **Probes and resolve.** Constants, list (`GiFogHide`, `ProbeFogCache` shared with Vulkan), sleep, far period, interior grid, hysteresis and
+  defaults (strength 1, indoor gain 1.25) as `GiProbes`. The resolve (`MetalPostChain.RunGiResolve`) draws `GiResolveShaders`' two passes; the
+  surface target is RGBA32UI, stored only while the resolve runs (`MetalContext.StoreSurface`); Metal's targets keep row 0 at the top, so the
+  reconstruction's NDC y is turned round. Relocation runs with the resolve and the Hybrid GI's relocation row, as on Vulkan.
+- **Not on Metal** (Vulkan has them): the radiance cache, characters and grass in the scene, the traced sun, lamp shadows, GI traced on characters,
+  reflections' rays.
+- **Observed** (Apple M6, macOS 27.2, play bench settle and orbit on `bench-bases-2026-10-27`, 1920x1080 scene, probes + resolve + relocation, one run
+  each): orbit 58 fps, frame p50 15.1 ms, GPU 15.5 ms against 70, 12.7 and 13.4 with `--no-gi`. Against the same branch on Vulkan (Windows, Radeon
+  8060S, 21:33 in game) the cut-away buildings' insides are dark on both and the walls' and ground's tones match.
 
 ## Performance and verification
 
