@@ -1076,7 +1076,14 @@ cover less area in plan than its contours is built monotone too, and the monoton
 crossed itself and the upper stair (x -37170..-37157, original face 2694 at 699..708) had no polygon, so no path led in or out. Over 10 zones
 (23.22, 20.32, 14.23, 18.35, 19.29, 27.22, 42.22, 21.42, 18.39, 28.60) three tiles change (23.22 two, 21.42 one), each then covered whole; three
 others leave the same area uncovered either way (4.5..296 square cells) and stay watershed. `--compare`: 23.22's
-original-only area 985 → 718, ours-only unchanged; 21.42 within 7; the Hub pins unchanged. A walker shut out of its goal whose own polygon is the reachable one
+original-only area 985 → 718, ours-only unchanged; 21.42 within 7; the Hub pins unchanged. A polygon that is not convex (a corner turning against
+the winding) counts as uncovered whole, since the mesh's point test (`ZoneNavMesh.Contains`) takes every polygon as convex. **Observed** (#1430, zone
+19.33, `navmesh --base --probe -57694,8085,60,6`, the reporter's save in `probe --nav walk`): a watershed region's outline touched itself at
+two points on the tile line x -57600; the triangle across the pinch came out inverted and merged into a 6-corner polygon with one reflex corner,
+whose signed area summed whole. Its half-plane test left a band of ground (z 8062..8108, 143 samples the original's tile has) off the mesh. The
+path search still crossed it and every step into it was refused, so the player's squad walked back and forth below the band. Built monotone, the tile
+covers the band (417 samples both) and the walk goes on up the slope. Over the 10 zones above and 19.33 (base data), 4 watershed tiles held a non-convex
+polygon (19.33 one, 27.22 one, 18.39 two) and their monotone builds none, so each is built monotone. A walker shut out of its goal whose own polygon is the reachable one
 nearest the goal walks across it to the point nearest the goal; before, it got no path (`NavigationTests`: a gate's closed door, the polygon up to the wall).
 
 ## Gate codes
