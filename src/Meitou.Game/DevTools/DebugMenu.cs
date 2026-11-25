@@ -333,10 +333,14 @@ sealed class DebugMenu(GameHost host)
     int _debugPart;
 
     /// <summary>
-    /// The overlays the menu's tool rows switch, also on their own keys (F11, Shift+F9, F12). The frame statistics (F11) and the fps counter
-    /// (Shift+F9).
+    /// The frame statistics (F11), an overlay the menu's tool rows switch, also on its own key.
     /// </summary>
-    internal bool StatsVisible, FpsVisible;
+    internal bool StatsVisible;
+
+    /// <summary>
+    /// The fps counter (Shift+F9), an overlay the menu's tool rows switch, also on its own key; shown from the start in a launcher benchmark run.
+    /// </summary>
+    internal bool FpsVisible = host.GameOptions.Benchmark is not null;
 
     /// <summary>
     /// The frame profiler (F12) the Profiler and VRAM pie rows switch; null without one.
