@@ -36,7 +36,8 @@ internal sealed class SkeletonRigCache(Func<string, string?> find)
     {
         var path = find(name);
         if (path is null) return null;
-        return _rigs.GetOrAdd(path, p => new Lazy<SkeletonRig>(() => new SkeletonRig(OgreSkeletonReader.ReadFile(p)))).Value;
+        return _rigs.GetOrAdd(path, p => new Lazy<SkeletonRig>(() => new SkeletonRig(OgreSkeletonReader.ReadFile(p), linkSource: LinkedSkeleton)))
+            .Value;
     }
 
     /// <summary>
@@ -49,8 +50,14 @@ internal sealed class SkeletonRigCache(Func<string, string?> find)
         var found = animationFiles.Select(f => find(AnimationFiles.BareName(f))).OfType<string>().ToList();
         if (found.Count == 0) return own;
         return _linkedRigs.GetOrAdd(find(name) + "|" + string.Join("|", found),
-            _ => new Lazy<SkeletonRig>(() => new SkeletonRig(own.Skeleton, [.. found.Select(Source)]))).Value;
+            _ => new Lazy<SkeletonRig>(() => new SkeletonRig(own.Skeleton, [.. found.Select(Source)], LinkedSkeleton))).Value;
     }
+
+    /// <summary>
+    /// The skeleton a skeleton file's animation link names, found by its name as the body's own skeleton is; null when it is not in the install or
+    /// cannot be read.
+    /// </summary>
+    OgreSkeleton? LinkedSkeleton(string name) => find(name) is { } path ? Source(path).Value : null;
 
     /// <summary>
     /// A linked skeleton, read once per file whichever rigs link it; null when it cannot be read (the game logs and plays without it).
