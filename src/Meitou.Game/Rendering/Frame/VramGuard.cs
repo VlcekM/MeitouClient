@@ -11,7 +11,10 @@ namespace Meitou.Game.Rendering.Frame;
 /// <see cref="Pressure"/>: <see cref="Streaming"/> goes false (no new zone layouts, grass pages, textures or mesh uploads are started, but for the
 /// zones and meshes within <see cref="NearReach"/> of the camera), the caches evict what has been idle for a couple of seconds instead of a minute,
 /// and <see cref="RangeScale"/> falls by about 12% every 0.75 s (down to <see cref="MinScale"/>) while the use stays high: every renderer multiplies
-/// the ranges it draws and streams to by it. The farthest things leave first because the ranges they were in end first.</item>
+/// the ranges it draws and streams to by it. The farthest things leave first because the ranges they were in end first. A step waits while the
+/// held use (<see cref="HeldFraction"/>) fell by <see cref="SheddingFall"/> since the last one (the evictions lag the cut by a couple of seconds)
+/// or is under <see cref="Low"/> (evictions leave holes in our blocks, so the driver's figure that ends the pressure falls later): stepping on
+/// through either took every range to the floor where a few steps would have done (#1429).</item>
 /// <item>Pressure ends under <see cref="Low"/> (80%); streaming resumes. The ranges come back, 4% a second, while the use less the room free
 /// in our own blocks (<see cref="HeldFraction"/>: holes the evictions left, empty blocks, spares; new allocations fill them before the driver's
 /// figure grows) has stayed under <see cref="Recover"/> (80%) for four seconds, up to a step below the scale the pressure began at, and to 1
@@ -74,6 +77,12 @@ public sealed class VramGuard
     public const float StepDown = 0.88f, StepUp = 1.04f, MinScale = 0.15f;
 
     /// <summary>
+    /// The fall of the held use (a fraction of the budget) since the last step down under which the next one waits: the shorter ranges are
+    /// already being shed.
+    /// </summary>
+    public const double SheddingFall = 0.01;
+
+    /// <summary>
     /// How far round the camera zones are still laid out and object meshes still decoded under <see cref="Pressure"/> (world units): a card that
     /// never gets back under <see cref="Low"/> would otherwise never load the town the player stands in (#336). The range clamp's floor
     /// (<see cref="MinScale"/> of the default object distance) is about this.
@@ -109,6 +118,11 @@ public sealed class VramGuard
     /// When the last sample and the last range step were taken, and since when the use has stayed under <see cref="Recover"/> (seconds).
     /// </summary>
     double _lastSample = double.NegativeInfinity, _lastStep, _calmSince;
+
+    /// <summary>
+    /// The held use (<see cref="HeldFraction"/>) at the last step down, or at the last one that waited (negative infinity: none since the pressure began).
+    /// </summary>
+    double _heldAtStep = double.NegativeInfinity;
 
     /// <summary>
     /// Whether the guard is under pressure (<see cref="Pressure"/>); read from the job threads.
@@ -405,6 +419,7 @@ public sealed class VramGuard
     {
         if (!_pressure || now - _lastSqueeze < SqueezeSeconds) return;
         _lastSqueeze = _lastStep = now;
+        _heldAtStep = HeldFraction;
         _scale = Math.Max(MinScale, _scale * StepDown);
         LowestScale = Math.Min(LowestScale, _scale);
         Squeezes++;
@@ -425,6 +440,7 @@ public sealed class VramGuard
         Activations++;
         if (Allocator is { } a) a.Lean = true;
         _lastStep = now - StepDownSeconds;   // the first step at once
+        _heldAtStep = double.NegativeInfinity;
         if (_logged) return;
         _logged = true;
         _log?.Invoke(string.Create(CultureInfo.InvariantCulture,
@@ -461,15 +477,21 @@ public sealed class VramGuard
     }
 
     /// <summary>
-    /// Under pressure: the ranges a step shorter every <see cref="StepDownSeconds"/>, down to <see cref="MinScale"/>.
+    /// Under pressure: the ranges a step shorter every <see cref="StepDownSeconds"/>, down to <see cref="MinScale"/>, but not while the held use
+    /// is falling (<see cref="SheddingFall"/>) or already under <see cref="Low"/> (the rest of the driver's figure is room in our own blocks).
     /// </summary>
     void StepDownRanges(double now)
     {
         if (now - _lastStep < StepDownSeconds) return;
 
+        double held = HeldFraction;
+        bool shedding = held <= _heldAtStep - SheddingFall;
+        _heldAtStep = held;
+        _lastStep = now;
+        if (shedding || held < Low) return;
+
         _scale = Math.Max(MinScale, _scale * StepDown);
         LowestScale = Math.Min(LowestScale, _scale);
-        _lastStep = now;
     }
 
     /// <summary>
