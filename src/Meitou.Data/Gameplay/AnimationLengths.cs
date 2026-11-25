@@ -6,14 +6,14 @@ using Meitou.Data.Ogre;
 namespace Meitou.Data.Gameplay;
 
 /// <summary>
-/// The length in seconds of every clip of the humanoid skeletons (what a synched movement clip needs to turn a phase into a time), and, per animal
-/// race, the clips of that race's own skeleton (<see cref="For"/>: an animal's clips are in the skeleton its body mesh links, and their names repeat
-/// across species with other lengths).
+/// The length in seconds of every clip of the humanoid skeletons (what a synched movement clip needs to turn a phase into a time); per person, the
+/// clips its body plays with its linked animation files (<see cref="ForPerson"/>); and, per animal race, the clips of that race's own skeleton
+/// (<see cref="For"/>: an animal's clips are in the skeleton its body mesh links, and their names repeat across species with other lengths).
 /// </summary>
 public sealed class AnimationLengths
 {
     /// <summary>
-    /// Clip lengths in seconds by name (ignoring case); the first skeleton to name a clip wins, the linked animation files being read first.
+    /// Clip lengths in seconds by name (ignoring case); the first skeleton to name a clip wins, the base skeletons being read first.
     /// </summary>
     readonly Dictionary<string, float> _lengths = new(StringComparer.OrdinalIgnoreCase);
 
@@ -28,29 +28,37 @@ public sealed class AnimationLengths
     readonly Dictionary<string, AnimationLengths> _species = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The clips of each ANIMATION_FILE skeleton read, by full path, one table per file (<see cref="ForPerson"/> layers them).
+    /// </summary>
+    readonly Dictionary<string, AnimationLengths> _files = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The tables of the people's bodies, by race, CHARACTER record and sex: their linked files' clips, then this table's (<see cref="ForPerson"/>).
+    /// </summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<(string Race, string? Record, bool Female), AnimationLengths> _people = new();
+
+    /// <summary>
+    /// The data the people's animation files are read from, and the bare file name to full path lookup; null without linked files.
+    /// </summary>
+    (GameDatabase Db, Func<string, string?> Find)? _linking;
+
+    /// <summary>
     /// A table with no clips.
     /// </summary>
     public static readonly AnimationLengths Empty = new();
 
     /// <summary>
     /// The clips of every <c>*_skeleton.skeleton</c> under <c>data/character/meshes</c> (the first file to name a clip wins); with
-    /// <paramref name="db"/> also the clips of the skeleton each ANIMAL_CHARACTER's race's body mesh links (<see cref="For"/>), read in parallel, one
-    /// table per skeleton file. With <paramref name="find"/> (a bare file name to its full path, as the game's resource groups find it) the clips of
-    /// the ANIMATION_FILE skeletons come before them, in link order (<see cref="AnimationFiles"/>): a body plays a linked file's clip in place of
-    /// its skeleton's own of that name (docs/animation.md, "Animation files"). A base skeleton an ANIMATION_FILE names (the base game's
-    /// <c>base animations</c>, which no race links) keeps its place among the base skeletons.
+    /// <paramref name="db"/> also the clips of the skeleton each ANIMAL_CHARACTER's race's body mesh links (<see cref="For"/>), read in
+    /// parallel, one table per skeleton file. With <paramref name="find"/> (a bare file name to its full path, as the game's resource groups find it)
+    /// the clips of the ANIMATION_FILE skeletons follow, in link order (<see cref="AnimationFiles"/>), for the clips no base skeleton has; a person
+    /// takes its own linked files' clips first (<see cref="ForPerson"/>).
     /// </summary>
     public static AnimationLengths Load(string installRoot, GameDatabase? db = null, Func<string, string?>? find = null)
     {
         var result = new AnimationLengths();
-        var own = BaseSkeletons(installRoot);
-        if (db is not null && find is not null)
-        {
-            var names = own.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            result.AddLinked([.. AnimationFiles.All(db).Where(f => !names.Contains(AnimationFiles.BareName(f)))], find);
-        }
-
-        foreach (var file in own) result.AddSkeleton(file);
+        foreach (var file in BaseSkeletons(installRoot)) result.AddSkeleton(file);
+        if (db is not null && find is not null) result.LoadLinked(db, find);
         if (db is not null) result.LoadAnimals(installRoot, db, find);
         return result;
     }
@@ -67,13 +75,27 @@ public sealed class AnimationLengths
     }
 
     /// <summary>
-    /// Adds the clips of linked skeleton files (FCS paths, in link order), read in parallel; a file not found is left out, as the game links only the
-    /// ones it finds.
+    /// Reads every ANIMATION_FILE's skeleton (<see cref="AnimationFiles.All"/>) into a table of its own, in parallel, and adds their clips the base
+    /// skeletons lack, in link order; a file not found or not readable is left out, as the game links only the ones it finds.
     /// </summary>
-    void AddLinked(IReadOnlyList<string> files, Func<string, string?> find)
+    void LoadLinked(GameDatabase db, Func<string, string?> find)
     {
-        var found = files.Select(f => find(AnimationFiles.BareName(f)));
-        AddFiles([.. found.OfType<string>()]);
+        var found = AnimationFiles.All(db).Select(f => find(AnimationFiles.BareName(f)));
+        var paths = found.OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var read = new OgreSkeleton?[paths.Count];
+        Parallel.For(0, paths.Count, i => read[i] = TryRead(paths[i]));
+
+        for (int i = 0; i < paths.Count; i++)
+        {
+            if (read[i] is not { } skeleton) continue;
+
+            var table = new AnimationLengths();
+            table.AddSkeleton(skeleton);
+            _files[paths[i]] = table;
+            AddTable(table);
+        }
+
+        _linking = (db, find);
     }
 
     /// <summary>
@@ -128,6 +150,15 @@ public sealed class AnimationLengths
             var positions = track.KeyFrames.Select(k => new System.Numerics.Vector2(k.Translation.X, k.Translation.Z));
             _roots[a.Name] = ([.. times], [.. positions]);
         }
+    }
+
+    /// <summary>
+    /// Adds the clips of <paramref name="other"/> this table does not know yet, with their <c>Bip01</c> tracks.
+    /// </summary>
+    void AddTable(AnimationLengths other)
+    {
+        foreach (var (clip, length) in other._lengths)
+            if (_lengths.TryAdd(clip, length) && other._roots.TryGetValue(clip, out var root)) _roots[clip] = root;
     }
 
     /// <summary>
@@ -195,6 +226,39 @@ public sealed class AnimationLengths
     /// not loaded).
     /// </summary>
     public AnimationLengths For(string? raceId) => raceId is not null && _species.TryGetValue(raceId, out var table) ? table : this;
+
+    /// <summary>
+    /// The clips a person's body plays (<paramref name="look"/> its appearance): those of the animation files its race and record link, first file
+    /// first, then this table's, as its rig looks a clip up (docs/animation.md, "Animation files"); this table when it links none (null: no
+    /// appearance). Made once per race, record and sex; read on every worker.
+    /// </summary>
+    public AnimationLengths ForPerson(CharacterAppearance? look)
+    {
+        if (look is null || _linking is null) return this;
+
+        var key = (look.Race.StringId, (look.Character ?? look.Animal)?.StringId, look.Female);
+        return _people.GetOrAdd(key, static (_, s) => s.Self.Linking(s.Look), (Self: this, Look: look));
+    }
+
+    /// <summary>
+    /// The table of a body linking <paramref name="look"/>'s animation files: their clips in link order, then this table's; this table when none of
+    /// them was read.
+    /// </summary>
+    AnimationLengths Linking(CharacterAppearance look)
+    {
+        var (db, find) = _linking!.Value;
+        var files = AnimationFiles.Of(db, look.Race, look.Character ?? look.Animal, look.Female);
+        var tables = new List<AnimationLengths>();
+        foreach (var file in files)
+            if (find(AnimationFiles.BareName(file)) is { } path && _files.TryGetValue(path, out var table)) tables.Add(table);
+
+        if (tables.Count == 0) return this;
+
+        var result = new AnimationLengths();
+        foreach (var table in tables) result.AddTable(table);
+        result.AddTable(this);
+        return result;
+    }
 
     /// <summary>
     /// Whether <see cref="For"/> has a table of its own for the race (an animal race whose skeleton was read).

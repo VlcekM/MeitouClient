@@ -488,7 +488,9 @@ sealed class SandboxScenario(GameHost host)
             var library = host.AnimationLibrary;
             string clip = library is { } lib && lib.IndexOfAny(layer.Name) is var at and >= 0 && (!animal || lib.Definitions[at].Technique)
                 ? lib.Definitions[at].Clip : layer.Name;
-            float length = host.AnimationLengths?.For(animal ? cold.Race?.StringId : null).Of(clip) ?? 1;
+            var lengths = host.AnimationLengths;
+            var body = animal ? lengths?.For(cold.Race?.StringId) : lengths?.ForPerson(cold.Appearance);
+            float length = body?.Of(clip) ?? 1;
             add($"  {layer.Name,-28} t {layer.Time,5:0.00}/{length,5:0.00}  w {layer.Weight:0.00}", null);
         }
     }

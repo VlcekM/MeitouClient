@@ -154,10 +154,11 @@ replaces the body skeleton's clip of the same name (Immersive non-combat animati
 `sleeponfloor`). Tracks apply by bone handle, and a name already linked is not linked again.
 The base game uses none (one ANIMATION_FILE, `base animations`, that no race names); mods add theirs to every race: in a
 large modded install 355 of 573 ANIMATION clips exist only in linked files (**Observed**). Meitou: `AnimationFiles`,
-`CharacterRigs.Rig(name, appearance)` (`SkeletonRig.Clip`: linked files, then the own skeleton); `AnimationLengths` reads every
-ANIMATION_FILE's clips before the base skeletons in the same order (it knows clips by name only, so a race linking another file of
-that clip name gets the first file's length). Tie order: list order (engine choice). With `preprocess` set, the startup preprocessing
-(below) also runs over the file's skeletons (`@ 140871f00`).
+`CharacterRigs.Rig(name, appearance)` (`SkeletonRig.Clip`: linked files, then the own skeleton); `AnimationLengths.ForPerson` gives a
+body's clip lengths and root tracks the same way (its race's and record's found files, then the base skeletons), so a synched clip wraps
+where the drawn clip ends; the name-only table (`Of` on the loaded table) keeps the base skeletons' clips and adds the files' others.
+Tie order: list order (engine choice). With `preprocess` set, the startup preprocessing (below) also runs over the file's skeletons
+(`@ 140871f00`).
 
 **Observed** (workshop items 3148075501 `Many_Races_Animation_Patch.mod` and 3380056396 `CBT Many Animations to Multiple Species.mod`,
 read with `FcsReader`): multi-race animation patches hold stub records under other mods' string ids, flagged new, every field at the

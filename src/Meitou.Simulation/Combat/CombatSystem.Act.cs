@@ -110,11 +110,13 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// The ticks a technique's clip takes at <c>anim speed mult</c> x <paramref name="rate"/> clip seconds per second; the clip's length is from the
-    /// fighter's skeleton (an animal's own, <see cref="AnimationLengths.For"/>: <c>attack1</c> is 0.77 s on a bonedog and 5 s on a beak thing).
+    /// fighter's skeleton (an animal's own, <see cref="AnimationLengths.For"/>: <c>attack1</c> is 0.77 s on a bonedog and 5 s on a beak thing; a
+    /// person's with its linked animation files, <see cref="AnimationLengths.ForPerson"/>).
     /// </summary>
     int Ticks(CombatTechnique t, float rate, float dt, CharacterCold cold)
     {
-        float clip = _lengths.For(cold.Fighter is { IsAnimal: true } ? cold.Race?.StringId : null).Of(t.AnimName);
+        var lengths = cold.Fighter is { IsAnimal: true } ? _lengths.For(cold.Race?.StringId) : _lengths.ForPerson(cold.Appearance);
+        float clip = lengths.Of(t.AnimName);
         if (clip <= 0) clip = CombatTuning.DefaultClipSeconds;
         return Math.Max(2, (int)MathF.Ceiling(clip / (MathF.Max(t.AnimSpeedMult, 0.1f) * MathF.Max(rate, 0.05f)) / dt));
     }

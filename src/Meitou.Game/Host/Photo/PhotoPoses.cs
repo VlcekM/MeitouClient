@@ -610,10 +610,14 @@ sealed class PhotoPoses(GameHost host)
     string[]? _poseNames;
 
     /// <summary>
-    /// The skeleton clip lengths of <paramref name="c"/>'s kind: an animal's species' own, the people's otherwise.
+    /// The skeleton clip lengths of <paramref name="c"/>'s body: an animal's species' own, a person's with its linked animation files.
     /// </summary>
-    AnimationLengths? Lengths(CharacterSnapshot? c) =>
-        host.AnimationLengths is not { } lengths ? null : lengths.For(c is { Animal: true } ? c.Appearance?.Race.StringId : null);
+    AnimationLengths? Lengths(CharacterSnapshot? c)
+    {
+        if (host.AnimationLengths is not { } lengths) return null;
+
+        return c is { Animal: true } ? lengths.For(c.Appearance?.Race.StringId) : lengths.ForPerson(c?.Appearance);
+    }
 
     /// <summary>
     /// The animation records the chosen character can be posed in, by name: the animals' for an animal and the people's for a person, those whose clip

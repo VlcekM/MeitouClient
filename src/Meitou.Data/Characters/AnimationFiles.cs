@@ -17,8 +17,7 @@ public static class AnimationFiles
         Linked(db, Records(db, race).Concat(character is null ? [] : Records(db, character)), female ? "female animation" : "male animation");
 
     /// <summary>
-    /// Every ANIMATION_FILE's male and female file, in the order <see cref="Of"/> would link them: for the tables that know clips by name alone, a
-    /// clip's first file here is the one a character linking every file would play.
+    /// Every ANIMATION_FILE's male and female file, in the order <see cref="Of"/> would link them: every file some body may link, each once.
     /// </summary>
     public static IReadOnlyList<string> All(GameDatabase db)
     {
