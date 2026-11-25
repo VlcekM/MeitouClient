@@ -344,7 +344,8 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// The clip lengths of a person's body: its linked animation files' clips before the base skeletons' (<see cref="AnimationLengths.ForPerson"/>),
-    /// as its rig plays them, so a synched clip's time wraps where the drawn clip ends. Kept per appearance.
+    /// as its rig plays them, so a looping clip's time wraps where the drawn clip ends. Kept per appearance. The one-shot ends (an action, a lift)
+    /// stay on <see cref="Lengths"/>, the table their timers in the combat and carry systems read.
     /// </summary>
     AnimationLengths LengthsOf(CharacterAnimation a, CharacterCold cold)
     {
@@ -1174,7 +1175,7 @@ public sealed class AnimationSystem(
             var d = Library.Definitions[a.Action];
             a.ActionTime += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : 1);
             bool fallWithoutLying = down && a.Action == _fall && LyingClip < 0;
-            if (a.ActionTime >= LengthsOf(a, cold).Of(d.Clip) * (a.Action == _getUp ? GetUpEnd : 1) && !fallWithoutLying) a.Action = -1;
+            if (a.ActionTime >= Lengths.Of(d.Clip) * (a.Action == _getUp ? GetUpEnd : 1) && !fallWithoutLying) a.Action = -1;
         }
 
         return technique;
@@ -1406,7 +1407,7 @@ public sealed class AnimationSystem(
         if (!down && !carried && LiftClip >= 0 && cold.LiftTime >= 0 && task is CharacterTask.PickUp or CharacterTask.PutDown)
         {
             var liftDefinition = Library.Definitions[LiftClip];
-            float length = LengthsOf(a, cold).Of(liftDefinition.Clip);
+            float length = Lengths.Of(liftDefinition.Clip);
             lift = LiftClip;
             float playSpeed = liftDefinition.PlaySpeed > 0 ? liftDefinition.PlaySpeed : 1;
             float played = cold.LiftTime * playSpeed;   // the record's play speed (2)
@@ -1421,8 +1422,7 @@ public sealed class AnimationSystem(
         else if (!down && !carried && KnockoutClip >= 0 && cold.LiftTime >= 0 && task == CharacterTask.StealthKo)
         {
             lift = KnockoutClip;
-            float knockoutLength = LengthsOf(a, cold).Of(Library.Definitions[KnockoutClip].Clip);
-            liftTime = MathF.Min(cold.LiftTime * Carrying.CarrySystem.KnockoutPlaySpeed, knockoutLength);
+            liftTime = MathF.Min(cold.LiftTime * Carrying.CarrySystem.KnockoutPlaySpeed, Lengths.Of(Library.Definitions[KnockoutClip].Clip));
             wanted.Clear();
             wanted.Add((lift, 1));
             legs = 0;   // the lift is the whole body: no walking clips left to synch
@@ -2111,7 +2111,7 @@ public sealed class AnimationSystem(
 
         // The stumble state lasts until the clip, at its record's play speed, is past StumbleEnd of its length (Verified, FUN_140435570 ->
         // FUN_1405b3a40); no stat scales it.
-        float seconds = StumbleEnd * lengths.ForPerson(cold.Appearance).Of(d.Clip) / (d.PlaySpeed > 0 ? d.PlaySpeed : 1);
+        float seconds = StumbleEnd * lengths.Of(d.Clip) / (d.PlaySpeed > 0 ? d.PlaySpeed : 1);
         return seconds > 0 ? (chosen, seconds) : null;
     }
 

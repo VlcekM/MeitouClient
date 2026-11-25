@@ -38,6 +38,11 @@ public sealed class AnimationLengths
     readonly System.Collections.Concurrent.ConcurrentDictionary<(string Race, string? Record, bool Female), AnimationLengths> _people = new();
 
     /// <summary>
+    /// The people's tables by the found files they layer (full paths joined in link order), shared by every body linking the same ones.
+    /// </summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, AnimationLengths> _linkSets = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The data the people's animation files are read from, and the bare file name to full path lookup; null without linked files.
     /// </summary>
     (GameDatabase Db, Func<string, string?> Find)? _linking;
@@ -248,14 +253,22 @@ public sealed class AnimationLengths
     {
         var (db, find) = _linking!.Value;
         var files = AnimationFiles.Of(db, look.Race, look.Character ?? look.Animal, look.Female);
-        var tables = new List<AnimationLengths>();
+        var paths = new List<string>();
         foreach (var file in files)
-            if (find(AnimationFiles.BareName(file)) is { } path && _files.TryGetValue(path, out var table)) tables.Add(table);
+            if (find(AnimationFiles.BareName(file)) is { } path && _files.ContainsKey(path)) paths.Add(path);
 
-        if (tables.Count == 0) return this;
+        if (paths.Count == 0) return this;
 
+        return _linkSets.GetOrAdd(string.Join("|", paths), static (_, s) => s.Self.Layered(s.Paths), (Self: this, Paths: paths));
+    }
+
+    /// <summary>
+    /// A table of the clips of the files at <paramref name="paths"/> (read ones, in link order), then this table's.
+    /// </summary>
+    AnimationLengths Layered(List<string> paths)
+    {
         var result = new AnimationLengths();
-        foreach (var table in tables) result.AddTable(table);
+        foreach (var path in paths) result.AddTable(_files[path]);
         result.AddTable(this);
         return result;
     }
