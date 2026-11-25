@@ -199,6 +199,20 @@ sealed class FurnitureUse(PlayerInterface player)
     }
 
     /// <summary>
+    /// The pointer over a cage (<c>FUN_1407fc6e0</c>'s cage branch, <b>Verified</b>): <c>use</c> while the selected character nearest it carries
+    /// someone (not when the hover reached its occupant first), else the cage's own (UseableStuff slot 130 <c>FUN_1405476c0</c>, <b>Verified</b>):
+    /// <c>use</c> for the player's cage, else <c>lockpick</c> while locked and <c>door_escape</c> when not.
+    /// </summary>
+    internal string CagePointer(CageSpot cage, bool occupantFirst)
+    {
+        var lead = player.Selected().MinBy(c => Vector3.DistanceSquared(c.Position, cage.Position));
+        if (!occupantFirst && lead is { Carrying.IsNone: false }) return "use";
+        if (cage.Owner == player.Session.World.Player.Faction) return "use";
+
+        return cage.Locked ? "lockpick" : "door_escape";
+    }
+
+    /// <summary>
     /// The verbs of a cage (the original's cage rows, <c>FUN_1407a6bc0</c>, <b>Verified</b>). Another faction's: locked, Pick Lock (76), Use Tools
     /// (285), Use Strength (286); unlocked, Put in (108) when a selected character carries someone, else Get in (107), or Set Free (110) when
     /// occupied. The player's own: Unlock (78) or Lock (77) by its lock, then Put in when empty and a selected character carries someone, Set Free

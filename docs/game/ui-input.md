@@ -287,7 +287,7 @@ and the Esc menu hidden), 1 `med`, 2 `search`, 3 `lift`, 4 `pick_item`, 5 `attk`
 0xc `door`, 0xd `door_escape`, 0xe `lock`, 0xf `lockpick`, 0x10 `house`, 0x11 `green`, 0x12 `mine`, 0x13 `spanner`, 0x14 `light`,
 0x15 `steal`, 0x16 `hand`, 0x17 `invalidmove`, 0x18 `scavenge`, 0x19 `knockout`; 6 has no case. It is called through thunk `140053acb`.
 The modes a building hover sets are in [building picking](#building-picking-and-selection) (`house` 0x10 is returned by none of them); a ground
-hit with no walkable point sets `invalidmove` (`FUN_140800250`). Callers of the setter (exe scan 2026-11-04): `FUN_1407fb410` characters ([table](#quick-right-click-on-a-character)), `FUN_1407fc6e0` buildings, `FUN_1407fc440` a ground item (`pick_item` 4, or `steal` 0x15 when its owner is a character of a real faction other than the player's; a right click on a stolen item without Alt shows "Hold down the ALT key to steal items" and only walks to it, order 29; **Verified**), `FUN_14048be80` / `FUN_14049ac90` the Overview map pan (`hand` 0x16), `FUN_140800250` no walkable ground (`invalidmove`), and `arrow` from the loading / UI paths (`FUN_1406eb3a0`, `FUN_140800f10`, `FUN_140801630`). The building-hover modes are in the building picking section; `light` and `door_escape` have no setter call in the scanned callers.
+hit with no walkable point sets `invalidmove` (`FUN_140800250`). Callers of the setter (exe scan 2026-11-04): `FUN_1407fb410` characters ([table](#quick-right-click-on-a-character)), `FUN_1407fc6e0` buildings, `FUN_1407fc440` a ground item (`pick_item` 4, or `steal` 0x15 when its owner is a character of a real faction other than the player's; a right click on a stolen item without Alt shows "Hold down the ALT key to steal items" and only walks to it, order 29; **Verified**), `FUN_14048be80` / `FUN_14049ac90` the Overview map pan (`hand` 0x16), `FUN_140800250` no walkable ground (`invalidmove`), and `arrow` from the loading / UI paths (`FUN_1406eb3a0`, `FUN_140800f10`, `FUN_140801630`). The building-hover modes are in the building picking section; `light` and `door_escape` are set by no constant of the scanned callers: they come from the building hover's slot 130 (`door_escape` a cage's, [building picking](#building-picking-and-selection)).
 
 Meitou (`PointerView`, engine choices): the window's own cursor is hidden and the pointer drawn last in the frame (not in
 screenshots or cinema takes). It follows the quick right-click order, so it never disagrees with the click: with a selection, over a
@@ -508,7 +508,7 @@ that activation menu-only; once the ruin becomes an unfinished construction site
 | FurnaceBuilding | as Farm | 26 LOOT_TARGET |
 | ResearchBuilding | as Storage | 87 |
 | TurretBuilding | as Storage | 146 USE_TURRET |
-| StorageBuilding | `arrow` for function 16; own `use`; no inventory: cage `lockpick` if locked else `door_escape`, other `use`; inventory: `lockpick` if locked else `scavenge` | 26 |
+| StorageBuilding | `arrow` for function 16; a player faction's (owner `+0x250`) `use`; no inventory: cage `lockpick` if locked else `door_escape`, other `use`; inventory: `lockpick` if locked else `scavenge` (**Verified**, `FUN_1405476c0`, slot 130 of StorageBuilding and UseableStuff) | 26 |
 | LightBuilding | `light` | as UseableStuff |
 | UseableStuff | as Storage | another faction's with an inventory: 26, or when locked 76 PICK_LOCK (owner faction flag +0x1d0) else 29; by function: 2, 9, 13 → 26; 7 → 97 USE_TRAINING_DUMMY; 6, 25 → 258 USE_BED_ORDER; 8 → 76 when another faction's and locked, else 108 PUT_IN_CAGE; 11 → 136 FEED_CORPSE_INTO_MACHINE; 16 → 29; else 87 / 152 |
 
@@ -519,7 +519,9 @@ that activation menu-only; once the ruin becomes an unfinished construction site
   left click selects the occupant. Meitou: cages (`PlayerInterface.PickWhereAt`, where the ray meets the cage before any other character); engine choices: a player's occupant's right
   click goes to it as well; the press opens the cage's menu and the occupant's beside it, as the original (`ContextMenuWindow.CharacterMenu`, below); beds not modelled.
 - A cage (its quick click is reached only when the context menu does not open at once, last point): `use` while the lead selected character
-  (+0xf0) carries someone (+0x348). Another faction's empty cage: 108 PUT_IN_CAGE when carrying, else 107 USE_CAGE; the player's own cage:
+  (+0xf0) carries someone (+0x348) and the hover did not reach the occupant first, else the cage's slot 130 (the table: another faction's
+  `lockpick` while locked, `door_escape` when not, the player's `use`), set by the plain setter, so no chance label (**Verified**, `FUN_1407fc6e0`).
+  Meitou: `FurnitureUse.CagePointer`, for an empty cage and for a player's occupant with no pointer of its own (`PointerView.OwnOccupiedCage`). Another faction's empty cage: 108 PUT_IN_CAGE when carrying, else 107 USE_CAGE; the player's own cage:
   108 (slot 131). In another faction's cage holding one of yours, Alt + right click gives 76 PICK_LOCK when its lock is locked or
   207 GET_OUT_OF_CAGE_ESCAPE when not; without Alt the bar shows "Hold down the ALT key to pick the lock." / "...to escape the cage.". **Verified**
   (`FUN_1407fc6e0`): this runs only when the occupant's own quick click (`FUN_1407fb410`) set no pointer (the pointer kind that `FUN_1406e3d60`
