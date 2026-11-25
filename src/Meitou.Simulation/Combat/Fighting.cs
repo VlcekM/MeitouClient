@@ -137,9 +137,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         bool shooting = st.Ranged && st.RangedState != (byte)RangedStates.Closing;
         bool holding = HoldsBack(cold, st, n.Position, next, t);
 
-        // In its footwork with a clear line to the target, the fight steering moves it (docs/game/combat.md "Fight steering"): its state sets the
-        // band, no paths.
-        if (Steer(world, i, ref n, cold, st, t, holding)) return;
+        // In its footwork, or leading a fleeing target, with a clear line to the target, the fight steering moves it (docs/game/combat.md "Fight
+        // steering"): its state sets the band, no paths.
+        if (Steer(world, i, ref n, cold, st, t, holding, lead)) return;
 
         float stand = CombatTuning.StandGap(st.Reach, cold.Fighter?.WeaponLength ?? 0, cold.CombatRunning);
         bool inReach = !st.Ranged && !behind && aimGap <= stand && CombatTuning.Gap(n.Position, aim, cold, tc) <= endReach
@@ -312,12 +312,12 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// Hands fighter <paramref name="i"/> to the fight steering (<see cref="CombatSteering"/>) when it is in its footwork, melee, not holding and not
-    /// down, and the line to its target is clear (<see cref="OnPathChase"/>): its paths are dropped and its fight state sets the band
-    /// (<c>combatMovementOffensive</c>'s callers, docs/game/combat.md "Fight steering"). A stumble holds it still (engine choice: the hit reaction
-    /// carries it). False: it walks paths.
+    /// Hands fighter <paramref name="i"/> to the fight steering (<see cref="CombatSteering"/>) when it is in its footwork or leads a fleeing target
+    /// by <paramref name="lead"/> seconds (<see cref="Lead"/>), melee, not holding and not down, and the line to its target is clear
+    /// (<see cref="OnPathChase"/>): its paths are dropped and its fight state sets the band (<c>combatMovementOffensive</c>'s callers,
+    /// docs/game/combat.md "Fight steering"). A stumble holds it still (engine choice: the hit reaction carries it). False: it walks paths.
     /// </summary>
-    bool Steer(World world, int i, ref CharacterHot n, CharacterCold cold, in CombatSlot st, int t, bool holding)
+    bool Steer(World world, int i, ref CharacterHot n, CharacterCold cold, in CombatSlot st, int t, bool holding, float lead)
     {
         var steer = cold.Steer ??= new SteerState();
         bool was = steer.Active;
@@ -332,10 +332,12 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         int band = BandTarget(world, in st, t);
         if (OnPathChase(world, i, cold, steer, t, band)) return false;
 
-        // A runner on a clear line runs its path to the target.
-        if (cold.CombatRunning) return false;
+        // A runner on a clear line runs its path to the target, unless it leads a fleeing one: that it steers at (CharMovement mode 1 in every
+        // state but the path chase, FUN_1402af1e0 seeking the lead point).
+        if (cold.CombatRunning && lead <= 0) return false;
 
         SetBand(world, cold, steer, in st, t, band);
+        steer.LeadSeconds = lead;
         if ((n.Flags & PathFlags) != 0) DropPath(ref n, cold);
 
         if (world.Tick < st.StunUntil) return true;

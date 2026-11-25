@@ -37,6 +37,11 @@ public sealed class SteerState
     public bool PowerThrough;
 
     /// <summary>
+    /// How many seconds of a fleeing target's way it seeks ahead of it (0: not leading; <see cref="PursuitSystem"/>, <c>FUN_1404354d0</c>).
+    /// </summary>
+    public float LeadSeconds;
+
+    /// <summary>
     /// The tick of the next same-place and clear-line check, and its answer.
     /// </summary>
     public long LineTick;
@@ -74,6 +79,7 @@ public sealed class SteerState
         h.Add(Max);
         h.Add(Limit);
         h.Add(PowerThrough);
+        if (LeadSeconds != 0) h.Add(LeadSeconds);
         h.Add(LineTick);
         h.Add(LineClear);
         for (int k = 0; k < CombatSteering.FilterLength; k++)
@@ -96,8 +102,8 @@ public sealed class SteerState
 /// <summary>
 /// The original's fight steering (<c>CombatMovementController::combatMovementUpdate</c>, <b>Observed</b>, docs/game/combat.md "Fight steering"): a
 /// velocity built from forces each tick, a seek along the facing to keep the band, repulsion from the bodies round it (enemies and, twice as strong,
-/// the rest), a dead zone, the side-step snap, the footwork speed caps and a smoothing filter. Running fighters (gap over 90) and those with no clear
-/// line to the target walk paths instead (<see cref="PursuitSystem"/>).
+/// the rest), a dead zone, the side-step snap, the footwork speed caps and a smoothing filter; after a fleeing target it seeks the lead point at a
+/// run. Other running fighters (gap over 90) and those with no clear line to the target walk paths instead (<see cref="PursuitSystem"/>).
 /// </summary>
 public static class CombatSteering
 {
@@ -115,6 +121,18 @@ public static class CombatSteering
     /// The most bodies one repulsion sum takes, enemies and the rest together (engine choice: the nearest, docs/game/combat.md "Fight steering").
     /// </summary>
     public const int MaxRepulsions = 26;
+
+    /// <summary>
+    /// How far beyond the two radii from the lead point the fleeing target's own push on its chaser reaches (<b>Verified</b> literal 40,
+    /// <c>FUN_1402af1e0</c>; <see cref="PassPush"/>).
+    /// </summary>
+    public const float PassReach = 40;
+
+    /// <summary>
+    /// The fleeing target's push on its chaser: its scale and the share of the seek its length is held to (<b>Verified</b> literals 3 and 0.8,
+    /// <c>FUN_1402af1e0</c>; <see cref="PassPush"/>).
+    /// </summary>
+    public const float PassPushScale = 3, PassSeekShare = 0.8f;
 
     /// <summary>
     /// The nearest bodies the repulsion first gathers by distance alone, so a few out of the flocking list among them still leave it its 26 (engine
@@ -376,11 +394,11 @@ public static class CombatSteering
 
     /// <summary>
     /// The steering velocity of fighter <paramref name="i"/> this tick (units per second, X and Z), with <paramref name="face"/> the flat unit vector
-    /// to whom it faces (<see cref="SteerState.Face"/>, else its band target); zero when the band target is gone. The seek and the power-through cone
-    /// go along the line to the band target, the side-step snap and the speed caps along the facing (<c>FUN_1402af1e0</c> overwrites its direction
-    /// with the look-at's after the forces). <paramref name="strafing"/> is its side-stepping state (the animation's, last tick);
-    /// <paramref name="moving"/> whether it moved last tick (the dead zone's STOP or START). Reads the last tick's places only; partition-safe
-    /// (writes the fighter's own smoothing).
+    /// to whom it faces (<see cref="SteerState.Face"/>, else its band target; the velocity's own way while it leads a fleeing target); zero when the
+    /// band target is gone. The seek and the power-through cone go along the line to the band target (its lead point while leading), the side-step
+    /// snap and the speed caps along the facing (<c>FUN_1402af1e0</c> overwrites its direction with the look-at's after the forces).
+    /// <paramref name="strafing"/> is its side-stepping state (the animation's, last tick); <paramref name="moving"/> whether it moved last tick (the
+    /// dead zone's STOP or START). Reads the last tick's places only; partition-safe (writes the fighter's own smoothing and steering speed).
     /// </summary>
     public static Vector2 Velocity(World world, CombatSystem combat, int i, CharacterCold cold, SteerState s, float maxSpeed, bool strafing,
         bool moving, out Vector2 face)
@@ -389,35 +407,93 @@ public static class CombatSteering
         var prev = world.Characters.Previous;
         int t = s.Target;
         if ((uint)t >= (uint)prev.Length || !prev[t].Alive) return Vector2.Zero;
+
+        // After a fleeing target it seeks the lead point instead of the target (FUN_1402ae0e0 -> FUN_1404354d0).
+        bool leading = s.LeadSeconds > 0;
         var me = prev[i].Position;
-        var to = prev[t].Position;
+        var to = leading ? LeadPoint(world, i, s, cold) : prev[t].Position;
         var flat = new Vector2(to.X - me.X, to.Z - me.Z);
         if (flat.LengthSquared() < 1e-6f) return Vector2.Zero;
+
         var line = Vector2.Normalize(flat);
-        face = Facing(prev, i, s, line);
+        face = leading ? line : Facing(prev, i, s, line);
         float mult = cold.Race?.CombatMoveSpeedMult ?? 1;
         float radius = Radius(cold);
         float rs = radius + Radius(world.Characters.Cold(t));
         float d = Vector3.Distance(me, to);
-
-        // The seek: walk in beyond max, back off inside min, else stand.
-        float seek = d > rs + s.Max ? (d / (rs + s.Max) - 1) * 100 * 2 * mult : MathF.Min((d / (rs + s.Min) - 1) * 100, 0);
-
         var (enemyDist, allyDist, stop, start) = Draws(world.Seed, Rng.Key(world.Characters.IdOf(i)), cold);
+        float seek = Seek(s, d, rs, mult, leading);
+        var drive = leading ? line * seek + PassPush(prev[t], me, rs, d, seek, mult) : line * seek;
+        var vel = Repulsions(world, combat, i, cold, s, me, rs, radius, line, (enemyDist, allyDist)) + drive;
+
+        // The dead zone: under STOP while moving, under START while standing, it stands.
+        if (!s.PowerThrough && vel.Length() < (moving ? stop : start)) vel = Vector2.Zero;
+
+        // Leading, it faces the way it moves, so the side-step snap leaves the velocity as it is.
+        if (leading && vel.LengthSquared() > 1e-8f) face = Vector2.Normalize(vel);
+        else vel = Snap(vel, face, strafing);
+
+        vel = Cap(vel, face, s, cold, maxSpeed, world.TickSeconds);
+        vel = new Vector2(Filter(s.HistX, vel.X, world.TickSeconds), Filter(s.HistZ, vel.Y, world.TickSeconds));
+        return vel * mult;
+    }
+
+    /// <summary>
+    /// The point a chaser leading its fleeing target seeks: the target's place + its velocity x <see cref="SteerState.LeadSeconds"/>
+    /// (<c>FUN_1404354d0</c>). Engine rule: bodies are solid here (the original's chaser runs through its runner), so while it is behind the runner
+    /// the point is put <see cref="CombatTuning.PassWidth"/> x the two footprints beside the runner's track, on the chaser's side (by slot when dead
+    /// behind), for it to pass the runner rather than push it along.
+    /// </summary>
+    static Vector3 LeadPoint(World world, int i, SteerState s, CharacterCold cold)
+    {
+        ref readonly var target = ref world.Characters.Previous[s.Target];
+        var me = world.Characters.Previous[i].Position;
+        var lead = target.Position + target.Velocity * s.LeadSeconds;
+        var heading = new Vector2(target.Velocity.X, target.Velocity.Z);
+        var back = new Vector2(me.X - target.Position.X, me.Z - target.Position.Z);
+        if (heading.LengthSquared() < 1e-8f || Vector2.Dot(back, heading) >= 0) return lead;
+
+        var across = Vector2.Normalize(new Vector2(-heading.Y, heading.X));
+        float side = Vector2.Dot(across, back);
+        float pass = CombatTuning.PassWidth * (CombatTuning.Footprint(cold) + CombatTuning.Footprint(world.Characters.Cold(s.Target)));
+        var offset = across * (side > 0 || side == 0 && (i & 1) == 0 ? pass : -pass);
+
+        return lead + new Vector3(offset.X, 0, offset.Y);
+    }
+
+    /// <summary>
+    /// The seek along the line, for a centre distance <paramref name="d"/> and radii <paramref name="rs"/>: walk in beyond max, back off inside min,
+    /// else stand; while leading the max end's term alone, so it also backs off inside max, and never the min end's (<c>FUN_1402e93c0</c>).
+    /// </summary>
+    static float Seek(SteerState s, float d, float rs, float mult, bool leading)
+    {
+        float outer = (d / (rs + s.Max) - 1) * 100 * 2 * mult;
+        if (leading || d > rs + s.Max) return outer;
+
+        return MathF.Min((d / (rs + s.Min) - 1) * 100, 0);
+    }
+
+    /// <summary>
+    /// The bodies' push round the fighter (<c>FlockingTools::calculateCurrentRepulsionVector</c>), damped: enemies once, the rest twice;
+    /// <paramref name="dist"/> its drawn ENEMY_DIST and ALLY_DIST.
+    /// </summary>
+    static Vector2 Repulsions(World world, CombatSystem combat, int i, CharacterCold cold, SteerState s, Vector3 me, float rs, float radius,
+        Vector2 line, (float Enemy, float Ally) dist)
+    {
         var q = new Push
         {
             World = world,
             Combat = combat,
             Me = i,
-            Target = t,
+            Target = s.Target,
             Faction = cold.Faction,
             At = me,
             Radius = rs,
             Own = radius,
             Face = line,
             Turn = s.PowerThrough,
-            EnemyReach = rs + enemyDist,
-            AllyReach = rs + allyDist,
+            EnemyReach = rs + dist.Enemy,
+            AllyReach = rs + dist.Ally,
         };
 
         // The repulsion takes the nearest MaxRepulsions bodies that push (they push hardest). A body pushes only within both the flocking list's
@@ -438,29 +514,65 @@ public static class CombatSteering
             (enemies, allies) = (Vector2.Zero, Vector2.Zero);
             for (int k = 0; k < q.Count; k++) Add(ref q, q.Slots[k], ref enemies, ref allies);
         }
-        var vel = (enemies + allies * AllyWeight) * RepulsionDamping + line * seek;
 
-        // The dead zone: under STOP while moving, under START while standing, it stands.
-        if (!s.PowerThrough && vel.Length() < (moving ? stop : start)) vel = Vector2.Zero;
+        return (enemies + allies * AllyWeight) * RepulsionDamping;
+    }
 
-        // The side-step snap: forward/back, or sideways while strafing; the other part is damped.
+    /// <summary>
+    /// The fleeing target's own push on a chaser that leads it (<c>FUN_1402af1e0</c>, <b>Verified</b> by disassembly; constants read from the
+    /// binary): <c>getRepulsionVector</c> away from the target with the radii + <see cref="PassReach"/> and the distance to the lead point
+    /// (<paramref name="toLead"/>), x the speed mult x 3, its length at most 0.8 x the <paramref name="seek"/>; one pointing behind the target's way
+    /// is then turned to the side of that way it is on, its length kept (<c>FUN_1402e9530</c>). Within reach of the lead point only, it holds the
+    /// chaser off the runner there.
+    /// </summary>
+    static Vector2 PassPush(in CharacterHot target, Vector3 me, float rs, float toLead, float seek, float mult)
+    {
+        float magnitude = (1 - toLead / (rs + PassReach)) * 100;
+        var away = new Vector2(me.X - target.Position.X, me.Z - target.Position.Z);
+        if (!(magnitude > 0) || away.LengthSquared() < 1e-8f) return Vector2.Zero;
+
+        float length = MathF.Min(magnitude * mult * PassPushScale, PassSeekShare * seek);
+        var push = Vector2.Normalize(away) * length;
+        var heading = new Vector2(target.Velocity.X, target.Velocity.Z);
+        if (heading.LengthSquared() < 1e-8f) return push;
+
+        heading = Vector2.Normalize(heading);
+        if (Vector2.Dot(push, heading) >= 0) return push;
+
+        var side = new Vector2(heading.Y, -heading.X);
+        return (Vector2.Dot(side, push) > 0 ? side : -side) * MathF.Abs(length);
+    }
+
+    /// <summary>
+    /// The side-step snap: forward/back, or sideways while strafing; the other part is damped.
+    /// </summary>
+    static Vector2 Snap(Vector2 vel, Vector2 face, bool strafing)
+    {
         var sideAxis = new Vector2(face.Y, -face.X);
         float z = Vector2.Dot(vel, face), x = Vector2.Dot(vel, sideAxis);
-        vel = strafing ? face * (z * StrafeDamping) + sideAxis * x : face * z + sideAxis * (x * StrafeDamping);
 
-        // The caps: facing forward the limit (never over the footwork's 18), backing off 16, sideways 18.
+        return strafing ? face * (z * StrafeDamping) + sideAxis * x : face * z + sideAxis * (x * StrafeDamping);
+    }
+
+    /// <summary>
+    /// The caps: facing forward the speed ramp (up to the limit and its top speed; never over the footwork's 18 unless running), backing off 16,
+    /// sideways 18. The ramp rises <see cref="MovementSystem.Acceleration"/> a second while it runs, from the speed it had
+    /// (<see cref="CharacterCold.SteerSpeed"/>, the path walk's too).
+    /// </summary>
+    static Vector2 Cap(Vector2 vel, Vector2 face, SteerState s, CharacterCold cold, float maxSpeed, float dt)
+    {
         float speed = vel.Length();
-        if (speed > 1e-4f)
-        {
-            var dir = vel / speed;
-            float dot = Vector2.Dot(dir, face);
-            float cap = dot > 0.5f ? MathF.Min(s.Limit, maxSpeed) : dot < -0.5f ? BackSpeed : SideSpeed;
-            cap = MathF.Min(cap, FootworkCap);
-            if (speed > cap) vel = dir * cap;
-        }
+        if (speed <= 1e-4f) return vel;
 
-        vel = new Vector2(Filter(s.HistX, vel.X, world.TickSeconds), Filter(s.HistZ, vel.Y, world.TickSeconds));
-        return vel * mult;
+        float top = MathF.Min(s.Limit, maxSpeed);
+        if (cold.CombatRunning) cold.SteerSpeed = MathF.Min(cold.SteerSpeed + MovementSystem.Acceleration * dt, top);
+
+        var dir = vel / speed;
+        float dot = Vector2.Dot(dir, face);
+        float cap = dot > 0.5f ? (cold.CombatRunning ? MathF.Min(top, cold.SteerSpeed) : top) : dot < -0.5f ? BackSpeed : SideSpeed;
+        if (!cold.CombatRunning) cap = MathF.Min(cap, FootworkCap);
+
+        return speed > cap ? dir * cap : vel;
     }
 
     /// <summary>
