@@ -81,6 +81,26 @@ sealed class Store(NpgsqlDataSource db)
             """);
         await cmd.ExecuteNonQueryAsync();
         await MigrateBenchMachineIds();
+        await RenameRetiredFingerprints();
+    }
+
+    /// <summary>
+    /// Gives the stored sessions of a retired fingerprint its replacement (BenchFingerprints), at every start: a fingerprint retired later is
+    /// renamed by the next deploy.
+    /// </summary>
+    async Task RenameRetiredFingerprints()
+    {
+        await using var connection = await db.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        foreach (var (retired, current) in BenchFingerprints.Retired)
+        {
+            await using var write = new NpgsqlCommand("update bench_session set fingerprint = $2 where fingerprint = $1", connection, transaction);
+            write.Parameters.Add(new() { Value = retired });
+            write.Parameters.Add(new() { Value = current });
+            await write.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
     }
 
     /// <summary>

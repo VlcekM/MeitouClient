@@ -32,8 +32,9 @@ static class BenchmarkSpec
     #region Spec
 
     /// <summary>
-    /// The benchmark's version: bumped by hand whenever the workload changes (tier tables, fixed settings, default user settings, a scenario's
-    /// start, segments or groups, the save, metric definitions); faster or slower code never bumps it. The fingerprint tells a forgotten bump.
+    /// The benchmark's version: bumped by hand whenever the workload changes (tier tables, fixed settings, default user settings that are not
+    /// BenchmarkNeutral, a scenario's start, segments or groups, the save, metric definitions); faster or slower code never bumps it. The
+    /// fingerprint tells a forgotten bump.
     /// </summary>
     public const int Version = 1;
 
@@ -221,7 +222,7 @@ static class BenchmarkSpec
 
     /// <summary>
     /// <paramref name="scenario"/>'s static spec as one text, lines ending in \n: version, metrics, the scenario (start, save, segments with a
-    /// world-set length by name only, groups), fixed settings, the benchmark's user settings and each tier's table.
+    /// world-set length by name only, groups), fixed settings, the benchmark's user settings but the neutral ones and each tier's table.
     /// </summary>
     internal static string CanonicalText(BenchmarkScenario scenario)
     {
