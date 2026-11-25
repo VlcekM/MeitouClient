@@ -120,6 +120,9 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// <inheritdoc/>
     public float TerrainHeight(float x, float z) => Ground(_world, x, z);
 
+    /// <inheritdoc/>
+    public bool AwaitsMesh(float x, float z) => !_world.Contains(WorldLayout.ZoneOf(x, z));
+
     /// <summary>
     /// How far under a character a walkable collision surface is still the floor it stands on in the water (engine choice: the 5-unit climb;
     /// Observed: the Lost Armory's floor 0.3 under its mesh).

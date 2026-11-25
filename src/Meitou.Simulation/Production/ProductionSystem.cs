@@ -385,10 +385,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     #region Orders and the operators' walk
 
     /// <summary>
-    /// The gunner spots of the player's turrets, as their walks found them, with each turret's <c>use range</c> (derived from the site and the
-    /// ground; not saved, not hashed).
+    /// The gunner spots of the player's turrets, as their walks found them, with each turret's <c>use range</c> and whether the spot was found on
+    /// the stand-in of a zone whose navmesh was not loaded (<see cref="IWalkability.AwaitsMesh"/>; derived from the site and the ground; not saved,
+    /// not hashed).
     /// </summary>
-    readonly Dictionary<string, (Vector3 Spot, float Range)> _turretSpots = [];
+    readonly Dictionary<string, (Vector3 Spot, float Range, bool Provisional)> _turretSpots = [];
 
     /// <summary>
     /// The seats that play a bed's clip, lain on at their use nodes with <see cref="World.SeatBedFix"/>.
@@ -630,7 +631,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && TurretPostOf(site) is { } post)
         {
             var spot = AiSystem.TurretSpot(world, post);
-            _turretSpots[site.Id] = (spot, post.UseRange);
+            _turretSpots[site.Id] = (spot, post.UseRange, world.Walkability.AwaitsMesh(post.Position.X, post.Position.Z));
             return spot;
         }
 
@@ -1092,7 +1093,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     void Approach(World world, int i, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt)
     {
         const ushort path = (ushort)MoveFlags.AnyPath;
-        if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !_turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m, n.Position);
+        if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction) FindTurretSpot(world, ref n, cold, site, m);
         if (AtSite(world, n, site, m))
         {
             StopWalk(ref n, cold);
@@ -1111,6 +1112,20 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         WalkToSite(ref n, cold, site, GoalOf(world, site, m, n.Position));
         n.Mode = SpeedMode.Free;
         n.TaskTime = PursuitSystem.RepathSeconds;
+    }
+
+    /// <summary>
+    /// Finds a turret's gunner spot for its operator's walk the first time, and again while the one found lay on the open-ground stand-in of a zone
+    /// whose navmesh was not loaded yet (#1422: such a spot was on the terrain under a wall's turret, and the gunner walked there and manned it from
+    /// the foot of the wall); a walk under way to the old spot is sent to the new one.
+    /// </summary>
+    void FindTurretSpot(World world, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m)
+    {
+        bool known = _turretSpots.TryGetValue(site.Id, out var old);
+        if (known && !old.Provisional) return;
+
+        var spot = GoalOf(world, site, m, n.Position);
+        if (known && spot != old.Spot && (n.Flags & (ushort)MoveFlags.AnyPath) != 0) WalkToSite(ref n, cold, site, spot);
     }
 
     /// <summary>

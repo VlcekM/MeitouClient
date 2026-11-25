@@ -2203,7 +2203,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
 - **Engine gaps:**
   - A quick right click on the player's furnace walks the selection there and opens its window
     (the original's 26 LOOT_TARGET); on the player's turret the nearest able selected character operates it (146 USE_TURRET, `UseTurretOrder`): it
-    walks to its gunner spot (as for town turrets below) and mans it from within the turret's `use range` of its position (doubled once stopped, at the
+    walks to its gunner spot (as for town turrets below; a spot found while the turret's zone has no navmesh yet lies on the terrain and is found
+    again until the mesh loads, so a wall's gunner is not left at its foot, #1422 **Observed**: that save's `--stream` probe) and mans it from within the turret's `use range` of its position (doubled once stopped, at the
     spot's height; the original's arrival rule, [work distance](game/buildings-production.md), no settle slack), facing it holding `combatstance`, counts as its operator (so it draws power) and the
     combat system fires it ([Ranged](#ranged)); one gunner, engine choice; someone else at it: "is already in use".
 

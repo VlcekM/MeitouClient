@@ -89,6 +89,12 @@ public interface IWalkability
     }
 
     /// <summary>
+    /// Whether the answers at world X/Z are a stand-in until the walkable surface there loads (the navmesh's open ground in a zone whose mesh is not
+    /// live yet): a spot found there is to be found again once it is. Default: false.
+    /// </summary>
+    bool AwaitsMesh(float x, float z) => false;
+
+    /// <summary>
     /// The faces of the walkable surface within <paramref name="reach"/> units of <paramref name="centre"/> (a cube round it), for a 3D snap onto the
     /// surface (<see cref="Construction.RefitSnap"/>); null when the surface there is not known (an open-ground stand-in, a zone not loaded), so the
     /// caller falls back to the 2D walkability.
