@@ -22,7 +22,7 @@ smooth ground in the Crater (x 96,000-112,000, z 117,000-130,000), among many mo
 3426253797) lowers nine of the ten lone needles to within about 70 raw of the ground the rule below gives.
 
 **Engine choice** (Fixes page "Holes and needles in the ground", on by default, read at start; `HeightmapRepair`, Meitou.Data): only the
-install's own file is repaired, never a mod's rebind ([RE_Kenshi data entries](rekenshi.md#data-entries); the row is then greyed and names the
+install's own file is repaired, never a mod's rebind ([RE_Kenshi data entries](rekenshi-data.md); the row is then greyed and names the
 mod). Holes: 4-connected patches at or below 64 raw, at most 2,000 samples, clear of the map's edge, with more than half their rim above 200
 raw, relaxed to a smooth surface spanning the rim. Needles: samples more than 4,000 above their 9 x 9 median (the map's edge repeated outward),
 grouped within 2 samples. The samples within 2 of any needle's tip are its flanks, and those more than 2,000 above their median are needle. A

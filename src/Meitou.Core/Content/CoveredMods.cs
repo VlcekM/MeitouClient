@@ -1,9 +1,9 @@
 namespace Meitou.Content;
 
 /// <summary>
-/// A Steam workshop item a covered mod was matched against: its id and Steam's update time (Unix seconds) of the version that was compared.
+/// A Steam Workshop original and, when checked against a port, the compared version's update time (Unix seconds).
 /// </summary>
-public sealed record MatchedItem(ulong Id, long Updated);
+public sealed record MatchedItem(ulong Id, long? Updated = null);
 
 /// <summary>
 /// A mod whose feature Meitou has built in (docs/formats/rekenshi.md): its <c>.mod</c> name or its code mod's id (or neither: matched by its
@@ -13,11 +13,10 @@ public sealed record MatchedItem(ulong Id, long Updated);
 public sealed record BuiltInMod(string? ModName, string? CodeId, string Setting, MatchedItem[] Items);
 
 /// <summary>
-/// An RE_Kenshi mod whose plugin does not run in Meitou, with a port on the Steam workshop that Meitou endorses (docs/formats/rekenshi.md
-/// "Endorsed ports"; the port's source is its maintainer's, not this repository's): the RE_Kenshi mod's <c>.mod</c> name and the workshop
-/// items that carry it, and the port's title, <c>.mod</c> name, workshop item and maintainer.
+/// An RE_Kenshi mod whose plugin does not run in Meitou, with an endorsed Steam Workshop port. The original is identified by its
+/// Workshop items or known <c>.mod</c> name. The port has a title, Workshop item, maintainer and an optional local <c>.mod</c> name.
 /// </summary>
-public sealed record EndorsedPort(string ModName, MatchedItem[] Items, string Port, string PortModName, ulong PortWorkshopId, string Maintainer);
+public sealed record EndorsedPort(string? ModName, MatchedItem[] Items, string Port, string? PortModName, ulong PortWorkshopId, string Maintainer);
 
 /// <summary>
 /// The mods Meitou covers, one table for the game (which takes in a built-in mod's settings and does not run its code mod) and the launcher
@@ -348,7 +347,7 @@ public static class CoveredMods
         "xp_info", [new(3795213616, 1788472284)], "[Meitou Client] XP Info Port", "XpInfo", 3844431170, "dxseba");
 
     /// <summary>
-    /// The RE_Kenshi mods with an endorsed port on the Steam workshop.
+    /// Steam Workshop ports Meitou endorses. For originals with alternatives, the first entry is the default offer.
     /// </summary>
     public static IReadOnlyList<EndorsedPort> Endorsed { get; } =
     [
@@ -356,6 +355,54 @@ public static class CoveredMods
         BuildingSearchBar, Cannibalism, ElementalEnchantment, EquipmentDurability, FixShoppingWages, JobManagement, JobTabs, KenshiAffixes,
         KenshiCompact, LimbToughness, LimitedStats, MapMarkers, Mentors, MetabolicTraversal, PersistentPrisoners, PoshDamageNumbers, QueenBirthing,
         SleepFix, Sparring, SquadAutonomy, VitalRead, VitalSense, WantedMap, WeaponDodgeGuard, WorkForCats, XpInfo,
+
+        new(null, [new(3824431439)], "[Meitou Client] Action RPG Port", null, 3845649512, "dxseba"),
+        new(null, [new(3742288543)], "[Meitou Client] Advanced Medic AI Port", null, 3845649561, "dxseba"),
+        new(null, [new(3784221846)], "[Meitou Client] Arcane Magic Port", null, 3845649596, "dxseba"),
+        new(null, [new(3798599010)], "[Meitou Client] Attack & Block Speed Uncapped Port", null, 3845649628, "dxseba"),
+        new(null, [new(3813851956)], "[Meitou Client] Auto-Pause on Load Port", null, 3845649668, "dxseba"),
+        new(null, [new(3824087152)], "[Meitou Client] Best Minimap Port", null, 3845649700, "dxseba"),
+        new(null, [new(3800922376)], "[Meitou Client] BodyMorphCap Port", null, 3845649729, "dxseba"),
+        new(null, [new(3838294517)], "[Meitou Client] BowMod Port", null, 3845649836, "dxseba"),
+        new(null, [new(3813761881)], "[Meitou Client] Build Mode Gizmo Port", null, 3845650286, "dxseba"),
+        new(null, [new(3807964959)], "[Meitou Client] Character Edit Tweaks Port", null, 3845650336, "dxseba"),
+        new(null, [new(3791017374)], "[Meitou Client] Characters Emotions Port", null, 3845650357, "dxseba"),
+        new(null, [new(3833747223)], "[Meitou Client] Cheat Menu Port", null, 3845650372, "dxseba"),
+        new(null, [new(3833745044)], "[Meitou Client] City Builder Port", null, 3845650394, "dxseba"),
+        new(null, [new(3805088430)], "[Meitou Client] Colored Stats Port", null, 3845650427, "dxseba"),
+        new(null, [new(3813852014)], "[Meitou Client] Container Highlight Port", null, 3845650451, "dxseba"),
+        new(null, [new(3796024680)], "[Meitou Client] Desolation System Port", null, 3845650481, "dxseba"),
+        new(null, [new(3737240806)], "[Meitou Client] Direct Control Port", null, 3845650498, "dxseba"),
+        new(null, [new(3805040918)], "[Meitou Client] Director Panel Port", null, 3845650517, "dxseba"),
+        new(null, [new(3788937435)], "[Meitou Client] Dynamic Wasteland Port", null, 3845650554, "dxseba"),
+        new(null, [new(3829117994)], "[Meitou Client] Earthworks Port", null, 3845650577, "dxseba"),
+        new("Extra Inventory Sections Plugin", [], "[Meitou Client] Extra Inventory Sections Port", null, 3844431017, "dxseba"),
+        new(null, [new(3798913525)], "[Meitou Client] Flowing Hair Port", null, 3845650600, "dxseba"),
+        new(null, [new(3787399736)], "[Meitou Client] Gate Fix Port", null, 3845650647, "dxseba"),
+        new(null, [new(3812150687)], "[Meitou Client] Gear Compare Alt Port", null, 3845650670, "dxseba"),
+        new(null, [new(3833105321)], "[Meitou Client] Glowing Lightsabers Port", null, 3845650799, "dxseba"),
+        new("Go Prone", [], "[Meitou Client] Go Prone Port", null, 3844431033, "dxseba"),
+        new(null, [new(3775510993)], "[Meitou Client] Guard Break & Bash Port", null, 3845650698, "dxseba"),
+        new(null, [new(3087291056)], "[Meitou Client] GunManufacture+ Sounds Port", null, 3845650731, "dxseba"),
+        new(null, [new(3800064617)], "[Meitou Client] Happy Families Port", null, 3845650757, "dxseba"),
+        new(null, [new(3816608451)], "[Meitou Client] Item Markers Port", null, 3845650777, "dxseba"),
+        new(null, [new(3781354452)], "[Meitou Client] Medic Splint Rigging Port", null, 3845650824, "dxseba"),
+        new(null, [new(3803535940)], "[Meitou Client] Medkit Merge Port", null, 3845650858, "dxseba"),
+        new(null, [new(3812165089)], "[Meitou Client] Nitoryu Port", null, 3845650929, "dxseba"),
+        new(null, [new(3778746024)], "[Meitou Client] Organ Harvesting Port", null, 3845650967, "dxseba"),
+        new(null, [new(3816121254), new(3688602277)], "[Meitou Client] Organize the Crafting Stations Port", null, 3845651002, "dxseba"),
+        new(null, [new(3813852189)], "[Meitou Client] Organize the Trader Port", null, 3845651032, "dxseba"),
+        new("QuestsAndContracts", [new(3797459646)], "[Meitou Client] Quests & Contracts Port", null, 3845651071, "dxseba"),
+        new(null, [new(3813761725)], "[Meitou Client] Quick Start Select Port", null, 3845651099, "dxseba"),
+        new("SentientSandsRebirth", [new(3819590113)], "[Meitou Client] Sentient Sands Port", null, 3845651129, "dxseba"),
+        new(null, [new(3826183068)], "[Meitou Client] Shop Counter Restock Port", null, 3845651150, "dxseba"),
+        new("SlaverMod", [new(3828708454)], "[Meitou Client] SlaverMod Port", null, 3845651170, "dxseba"),
+        new(null, [new(3810561672)], "[Meitou Client] Struggle Port", null, 3845651187, "dxseba"),
+        new(null, [new(3836973645)], "[Meitou Client] The Force Awakening Port", null, 3845650628, "dxseba"),
+        new("Guild Escort Contracts", [new(3798671709)], "[Meitou Client] The Mercenarie Port", null, 3845650896, "dxseba"),
+        new(null, [new(3841482484)], "[Meitou Client] Transmog Port", null, 3845651204, "dxseba"),
+        new(null, [new(3799167934)], "[Meitou Client] Uncap Defence Port", null, 3845651234, "dxseba"),
+        new("Sparring", [new(3776308916)], "[Meitou] Sparring", "SparringMeitou", 3842016392, "BeatTheCount"),
     ];
 
     /// <summary>
@@ -381,15 +428,20 @@ public static class CoveredMods
     }
 
     /// <summary>
-    /// The endorsed port of <paramref name="mod"/>, an RE_Kenshi plugin without code of its own, by its <c>.mod</c> name or its workshop item;
-    /// null when it has none.
+    /// The default endorsed port of an original mod, when available.
     /// </summary>
-    public static EndorsedPort? PortOf(ModInfo mod)
+    public static EndorsedPort? PortOf(ModInfo mod) => PortsOf(mod).FirstOrDefault();
+
+    /// <summary>
+    /// The endorsed ports of an original mod, in preference order.
+    /// </summary>
+    public static IEnumerable<EndorsedPort> PortsOf(ModInfo mod)
     {
-        if (!mod.HasNativePlugin || mod.HasCode) return null;
+        if (mod.HasCode) return [];
 
         ulong? item = WorkshopId(mod);
-        return Endorsed.FirstOrDefault(r => r.ModName == mod.Name || (item is { } id && r.Items.Any(i => i.Id == id)));
+        return Endorsed.Where(port => item is { } id && port.Items.Any(original => original.Id == id)
+            || mod.HasNativePlugin && port.ModName == mod.Name);
     }
 
     /// <summary>
@@ -399,9 +451,9 @@ public static class CoveredMods
     /// </summary>
     public static DateTimeOffset? UpdatedSince(ModInfo mod, IReadOnlyList<MatchedItem> items)
     {
-        if (WorkshopId(mod) is not { } id || items.FirstOrDefault(i => i.Id == id) is not { } matched) return null;
+        if (WorkshopId(mod) is not { } id || items.FirstOrDefault(i => i.Id == id)?.Updated is not { } matched) return null;
 
-        return WorkshopUpdates.TimeUpdated(mod.Folder, id) is { } updated && updated > matched.Updated
+        return WorkshopUpdates.TimeUpdated(mod.Folder, id) is { } updated && updated > matched
             ? DateTimeOffset.FromUnixTimeSeconds(updated)
             : null;
     }

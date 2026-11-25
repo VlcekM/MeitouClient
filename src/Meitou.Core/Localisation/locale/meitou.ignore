@@ -1032,15 +1032,45 @@ Work for Cats - Get Hired at NPC Workbenches
 Workcamp
 Yellow
 [Desktop Entry]\nType=Application\nName=Meitou Launcher\nCategories=Game;\n
+[Meitou Client] Action RPG Port
+[Meitou Client] Advanced Medic AI Port
+[Meitou Client] Arcane Magic Port
 [Meitou Client] Area Guard Port
+[Meitou Client] Attack & Block Speed Uncapped Port
+[Meitou Client] Auto-Pause on Load Port
+[Meitou Client] Best Minimap Port
 [Meitou Client] Better Looting Port
+[Meitou Client] BodyMorphCap Port
+[Meitou Client] BowMod Port
+[Meitou Client] Build Mode Gizmo Port
 [Meitou Client] Building Search Bar Port
 [Meitou Client] Cannibalism Port
+[Meitou Client] Character Edit Tweaks Port
+[Meitou Client] Characters Emotions Port
+[Meitou Client] Cheat Menu Port
+[Meitou Client] City Builder Port
+[Meitou Client] Colored Stats Port
+[Meitou Client] Container Highlight Port
+[Meitou Client] Desolation System Port
+[Meitou Client] Direct Control Port
+[Meitou Client] Director Panel Port
 [Meitou Client] Disarm Port
+[Meitou Client] Dynamic Wasteland Port
+[Meitou Client] Earthworks Port
 [Meitou Client] Elemental Enchantment Port
 [Meitou Client] Equipment Durability Port
+[Meitou Client] Extra Inventory Sections Port
 [Meitou Client] Fix Shopping Wages Port
+[Meitou Client] Flowing Hair Port
+[Meitou Client] Gate Fix Port
+[Meitou Client] Gear Compare Alt Port
+[Meitou Client] Glowing Lightsabers Port
+[Meitou Client] Go Prone Port
+[Meitou Client] Guard Break & Bash Port
+[Meitou Client] GunManufacture+ Sounds Port
+[Meitou Client] Happy Families Port
 [Meitou Client] It. Tickles. Me. Port
+[Meitou Client] Item Markers Port
 [Meitou Client] Job Management Port
 [Meitou Client] Job Tabs Port
 [Meitou Client] Kenshi Affixes Port
@@ -1050,17 +1080,33 @@ Yellow
 [Meitou Client] Limb Toughness Port
 [Meitou Client] Limited Stats Port
 [Meitou Client] Map Markers Port
+[Meitou Client] Medic Splint Rigging Port
+[Meitou Client] Medkit Merge Port
 [Meitou Client] Mentors Port
 [Meitou Client] Metabolic Traversal Port
+[Meitou Client] Nitoryu Port
+[Meitou Client] Organ Harvesting Port
+[Meitou Client] Organize the Crafting Stations Port
+[Meitou Client] Organize the Trader Port
 [Meitou Client] Persistent Prisoners Port
 [Meitou Client] Posh Damage Numbers Port
 [Meitou Client] Queen Birthing Port
+[Meitou Client] Quests & Contracts Port
+[Meitou Client] Quick Start Select Port
+[Meitou Client] Sentient Sands Port
+[Meitou Client] Shop Counter Restock Port
+[Meitou Client] SlaverMod Port
 [Meitou Client] Sleep Fix Port
 [Meitou Client] Sparring Port
 [Meitou Client] Speed Menu Port
 [Meitou Client] Squad Autonomy Port
 [Meitou Client] Stack Sort Port
+[Meitou Client] Struggle Port
 [Meitou Client] Taunt Expansion Port
+[Meitou Client] The Force Awakening Port
+[Meitou Client] The Mercenarie Port
+[Meitou Client] Transmog Port
+[Meitou Client] Uncap Defence Port
 [Meitou Client] Vital Read Port
 [Meitou Client] Vital Sense Port
 [Meitou Client] Wanted Map Port
@@ -1069,6 +1115,7 @@ Yellow
 [Meitou Client] XP Info Port
 [MeitouClient] Execution
 [Meitou] Proving Grounds
+[Meitou] Sparring
 brew install molten-vk vulkan-loader
 character panel line 
 character panel lines
@@ -1092,3 +1139,6 @@ npc range
 town panel line 
 world Y pos
 yyyy-MM-dd HH:mm
+Extra Inventory Sections Plugin
+Go Prone
+Guild Escort Contracts

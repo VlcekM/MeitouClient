@@ -102,7 +102,7 @@ How the game opens its other files decides whether a mod can replace them (**Ver
 
 **Observed:** mods that need the fixed-path files and the banks ship an `RE_Kenshi.json` for the third-party RE_Kenshi loader
 (`FileRebinds` path map, `SoundBanks` list; most such files list native `Plugins`); vanilla ignores it. Meitou applies `FileRebinds`
-([RE_Kenshi data entries](rekenshi.md#data-entries)).
+([RE_Kenshi data entries](rekenshi-data.md)).
 
 **Verified** `FUN_140816d90`: after base folders, walk active mods in cfg order; add subfolders
 holding files to matching base resource group, default General. Skip `leveldata`,

@@ -1176,8 +1176,8 @@ public sealed partial class MainWindow : Window
         var mods = _mods
             .Select(r => r.Mod)
             .ToList();
-        foreach (var row in _mods)
-            if (row.Port is { } port) row.PortInstalled = CoveredMods.HasPort(port, mods);
+
+        foreach (var row in _mods) row.RefreshPort(mods);
     }
 
     /// <summary>

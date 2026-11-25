@@ -614,7 +614,7 @@ Open for the next wave: which event each game action posts and on which object, 
 ### Mod sound banks
 
 **Observed** in RE_Kenshi's source (`Sound.cpp` `LoadQueuedBanks`, `Settings.cpp`): the banks the enabled mods' `RE_Kenshi.json` list
-under `SoundBanks` ([data entries](formats/rekenshi.md#data-entries)) load after `Init.bnk` and before every game bank, mod by mod in load
+under `SoundBanks` ([data entries](formats/rekenshi-data.md)) load after `Init.bnk` and before every game bank, mod by mod in load
 order; each is looked for under `data/audio/` and, when not there, at the path as written (`$(modroot "Name")` expanded). Its source
 says the order is so that mods' sounds override the game's. Mod banks are never unloaded.
 

@@ -324,18 +324,19 @@ interpolated string, which no translation could match.
   cache; a cold start with a long list is not measured), and the list is walked again on every change.
 - A mod whose `RE_Kenshi.json` names DLLs (`Plugins`, `PreloadPlugins`) is marked as a plugin mod whose DLLs Meitou ignores
   ([RE_Kenshi](formats/rekenshi.md)), unless it also has `meitou.json`: then only the code-mod note shows. One with `FileRebinds` says
-  they are applied to the map files, one with `SoundBanks` that they load before the game's ([data entries](formats/rekenshi.md#data-entries)).
+  they are applied to the map files, one with `SoundBanks` that they load before the game's ([data entries](formats/rekenshi-data.md)).
   The ignored plugin and code mod subtitles use distinct colours.
 - A mod Meitou has built in (`CoveredMods`, Meitou.Core, the table the game uses: [RE_Kenshi](formats/rekenshi.md)) says so and names
   the setting it became and that the mod is not run, instead of the plugin or code-mod note.
-- An RE_Kenshi plugin (no `meitou.json`) with an endorsed port on the Steam workshop ([endorsed ports](formats/rekenshi.md#endorsed-ports),
-  matched by `.mod` name or workshop item) names the port and its maintainer and, while the list does not hold it (a workshop mod by its
-  item, a local copy by its `.mod` name), has a **Get the port** button. The button, and once per mod the first listing in which such a
+- An RE_Kenshi plugin (no `meitou.json`) with an endorsed port on the Steam workshop (see [RE_Kenshi compatibility](formats/rekenshi.md),
+  matched by workshop item or known `.mod` name) names the port and its maintainer. If a mod has multiple endorsed ports, the row shows
+  the first installed one or offers the default. The list identifies installed ports by workshop item or known local `.mod` name. When
+  none is installed, the row has a **Get the port** button. The button, and once per mod the first listing in which such a
   mod is enabled and its port is not installed (one question for all of them), shows a table of each RE_Kenshi mod beside its port and
   maintainer and asks whether to subscribe now: **Subscribe** ([Workshop subscribe](#workshop-subscribe); offered only where Steam can
   be asked), **Open its page** (the ports' workshop pages) or No thanks. Each mod asked about on a listing is kept in `launcher.json`
   (`OfferedPorts`) and not asked again. Not asked while another question or the first-start dialog is open.
-- Each covered workshop item names the Steam update it was matched against. When the installed copy is newer (its `timeupdated` in
+- A covered workshop item can record the Steam update it was checked against. When the installed copy is newer (its `timeupdated` in
   `steamapps/workshop/appworkshop_233860.acf`, `WorkshopUpdates`), the row adds that it has updated since, with the date, and that some new
   features may be missing. A local copy has no date and gets no such note.
 - Any other RE_Kenshi plugin (not built in, no endorsed port) keeps the ignored-DLLs note and has a Request button opening the public wishlist

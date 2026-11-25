@@ -12,6 +12,11 @@ namespace Meitou.Launcher;
 public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null) : INotifyPropertyChanged
 {
     /// <summary>
+    /// The installed endorsed port of this original mod, if one is present.
+    /// </summary>
+    EndorsedPort? _installedPort;
+
+    /// <summary>
     /// How many of the blanked mods <see cref="BlankingNote"/> names; a patch out of place hits dozens.
     /// </summary>
     const int NamedBlanks = 3;
@@ -88,23 +93,28 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public BuiltInMod? BuiltIn => CoveredMods.BuiltInOf(Mod, Code.Id);
 
     /// <summary>
-    /// The endorsed port of this RE_Kenshi mod on the Steam workshop (<see cref="CoveredMods.PortOf"/>); null when it has none.
+    /// The installed endorsed port or the launcher's default offer.
     /// </summary>
-    public EndorsedPort? Port => CoveredMods.PortOf(Mod);
+    public EndorsedPort? Port => _installedPort ?? CoveredMods.PortOf(Mod);
 
     /// <summary>
-    /// Whether the mod list holds <see cref="Port"/>'s mod (set with the list), so the row does not offer it.
+    /// Whether the list already holds a port endorsed for this original mod.
     /// </summary>
-    public bool PortInstalled
+    public bool PortInstalled => _installedPort is not null;
+
+    /// <summary>
+    /// Selects the first endorsed port already present in the mod list.
+    /// </summary>
+    public void RefreshPort(IReadOnlyList<ModInfo> mods)
     {
-        get;
-        set
-        {
-            if (field == value) return;
-            field = value;
-            Changed(nameof(OtherNotes));
-            Changed(nameof(PortPage));
-        }
+        var installedPort = CoveredMods.PortsOf(Mod).FirstOrDefault(port => CoveredMods.HasPort(port, mods));
+        if (_installedPort == installedPort) return;
+
+        _installedPort = installedPort;
+        Changed(nameof(Port));
+        Changed(nameof(PortInstalled));
+        Changed(nameof(OtherNotes));
+        Changed(nameof(PortPage));
     }
 
     /// <summary>

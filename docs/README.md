@@ -75,7 +75,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [particle-universe](formats/particle-universe.md)
 - [phs](formats/phs.md)
 - [post-processing](formats/post-processing.md)
-- [rekenshi](formats/rekenshi.md)
+- [RE_Kenshi compatibility](formats/rekenshi.md) and [data entries](formats/rekenshi-data.md)
 - [runtime-materials](formats/runtime-materials.md)
 - [save](formats/save.md)
 - [settings](formats/settings.md)
