@@ -108,8 +108,10 @@ static class HardwareProbe
         }
         bool apple = appleSilicon || gpu.StartsWith("Apple", StringComparison.Ordinal);
         string preset = Recommend(integrated, apple, videoMemoryMb, memoryMb, cores, gpu);
-        // An integrated GPU's device-local heap is a share of the system's memory, not memory of its own.
-        string what = gpu.Length == 0 ? "GPU not found" : integrated ? $"{gpu} (integrated)"
+        // An integrated GPU's device-local heap is a share of the system's memory, not memory of its own. Without a device the reason is shown:
+        // the card is usually there with a driver that fails Vulkan, so "GPU not found" would blame the card.
+        string what = gpu.Length == 0 ? $"no Vulkan device ({problem})"
+            : integrated ? $"{gpu} (integrated)"
             : $"{gpu} ({videoMemoryMb / 1024.0:0.#} GB video memory)";
         string summary = $"{what}, {memoryMb / 1024.0:0.#} GB memory, {cores} threads: {preset}";
         return new(preset, summary, gpu, integrated, videoMemoryMb, memoryMb, cores, problem);

@@ -1146,7 +1146,7 @@ public sealed unsafe class VulkanDevice : IDisposable
                 EnabledExtensionCount = (uint)extNames.Count,
                 PpEnabledExtensionNames = extPtrs,
             };
-            VulkanException.Check(Vk.CreateInstance(in ci, null, out var instance), "vkCreateInstance");
+            CheckInstanceCreated(Vk.CreateInstance(in ci, null, out var instance));
             Instance = instance;
             SyncValidationEnabled = settingCount > 0 && _options.SyncValidation;
         }
@@ -1164,6 +1164,23 @@ public sealed unsafe class VulkanDevice : IDisposable
 
             SilkMarshal.Free((nint)extPtrs);
         }
+    }
+
+    /// <summary>
+    /// Throws unless <c>vkCreateInstance</c> succeeded. ErrorIncompatibleDriver is the loader's answer when no installed driver accepts a Vulkan 1.3
+    /// instance (none found, or each one refused), whatever the GPU, so it is named as a driver problem rather than a card the game does not know.
+    /// </summary>
+    static void CheckInstanceCreated(Result r)
+    {
+        if (r != Result.ErrorIncompatibleDriver || OperatingSystem.IsMacOS())
+        {
+            VulkanException.Check(r, "vkCreateInstance");
+            return;
+        }
+
+        const string message = "vkCreateInstance failed: ErrorIncompatibleDriver (the Vulkan loader found no graphics driver that accepts a "
+            + "Vulkan 1.3 instance; install or reinstall the GPU driver)";
+        throw new VulkanException(message, r);
     }
 
     /// <summary>
