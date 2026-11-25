@@ -504,6 +504,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         LoadZonesAroundStart();
         host.ApplyCamera(host.Session.Camera.Current);
         host.SendFocus();
+        host.SendView();
         host.LoadingStep("characters");
         CreateCharacters();
 
@@ -913,6 +914,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.WorldOptions.Distance ?? Meitou.Data.World.KenshiCamera.InitialDistance);
         host.SendFocus();
         host.ApplyCamera(host.Session.Camera.Current);
+        host.SendView();
         // --new-game is a shortcut past the creation editor; the same follow the editor's close gives a menu New Game.
         if (_hud is not null && start is not null && host.StartSave is null && host.WorldOptions.Screenshot is null
                 && host.PlayerSquad is { Leader.IsNone: false } squad)
@@ -2914,6 +2916,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             // Over a hair only.
             if (shortfall > 1e-3f) host.Camera.Target += new Vector3(0, shortfall, 0);
         }
+
+        host.SendView();
     }
 
     /// <summary>

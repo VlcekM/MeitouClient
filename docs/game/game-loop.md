@@ -125,7 +125,10 @@ visible-area and frustum tests) and its platoon tests pass. A turn also runs the
   - Ground speed in clock time: walkers 0.9 instead of 0.45, joggers about 3.4 instead of 1.65.
 - The other consumers of `+0xc4` (`FUN_14050d920`, `FUN_1405b4770`, `FUN_14043aee0`, `FUN_140685090`, the sensing `FUN_140853de0`) are not read.
 - Meitou: `MovementSystem.Move` steps a character out of view (`MedicalClock.OnScreen` against `World.View`) on twice the tick time; with no camera
-  (headless worlds, tests) on the tick time. The other consumers keep the tick time (**gap**).
+  (headless worlds, tests) on the tick time. The other consumers keep the tick time (**gap**). `World.View` is the drawn camera as the frame leaves it
+  (`GameHost.SendView`, after the follow camera's target on the character and the eye's ground clearance). **Observed** (#1384, Black Desert City
+  bridge, live client): the rig's camera, its pivot on the terrain about 220 below the deck, left the player's character outside its frustum while
+  it was drawn mid-screen, so it ran at twice its speed.
 
 ### Inactive characters
 

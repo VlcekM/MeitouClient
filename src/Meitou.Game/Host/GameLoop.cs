@@ -1482,6 +1482,7 @@ sealed class GameLoop(GameHost host)
         host.PlayBench.BenchLap(4);
         AdvanceTitleAndArrival(frameDt);
         KeepEyeAboveGround();
+        host.SendView();
         var size = FramebufferSizeNow();
         // Until the warm-up's frames run smoothly the water reflection draws everything and the sky its cloud volume, so their pipelines are made
         // under the cover (ReflectionPass.Warm, SkyClouds.Warm).

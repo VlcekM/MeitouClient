@@ -1036,6 +1036,7 @@ sealed partial class GameHost(
         SendFocus();
         ApplyCamera(Session.Camera.Current);
         if (TitleScreen.TitleVisible) TitleScreen.ApplyTitleCamera();
+        SendView();
     }
 
     /// <summary>
