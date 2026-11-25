@@ -161,6 +161,11 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
     /// The <see cref="_version"/> <see cref="_resident"/> was gathered at; -1 before the first gather.
     /// </summary>
     long _residentVersion = -1;
+    /// <summary>
+    /// <see cref="GatherResident"/>'s set of the handles seen, kept with its capacity: made at each gather it was the Metal host's largest allocation
+    /// (thousands of textures, large arrays, at every streamed texture's change).
+    /// </summary>
+    readonly HashSet<nint> _seen = [];
 
     #endregion
 
@@ -396,13 +401,13 @@ internal sealed unsafe class MetalBindlessTable : IGpuBindlessTable
     /// </summary>
     void GatherResident()
     {
-        var seen = new HashSet<nint>();
+        _seen.Clear();
         _residentCount = 0;
         foreach (var kind in _live)
         {
             foreach (var texture in kind)
             {
-                if (texture is not { NativePtr: not 0 } image || !seen.Add(image.NativePtr)) continue;
+                if (texture is not { NativePtr: not 0 } image || !_seen.Add(image.NativePtr)) continue;
 
                 if (_residentCount == _resident.Length) Array.Resize(ref _resident, _resident.Length * 2);
                 _resident[_residentCount++] = image.NativePtr;

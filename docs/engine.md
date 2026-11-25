@@ -84,6 +84,14 @@ counted; play benchmark from an empty navmesh cache with DotRecast's own tile he
 and 0 of 10. The heap count and `ConserveMemory` stay as they are: **Observed** (same benchmark, pooled heightfields, one run each) 8 heaps halve
 the gen0 collections (330 for 699) for 2.2 s of pauses against 2.9 s, with longer single ones (gen0 21 ms for 14, gen1 52 for 42) and frame times
 within the runs' spread; `ConserveMemory` 5 changed nothing (2.9 s of pauses, no blocking gen2 either way).
+**Metal idle trim** (`MetalGameLoop.TrimManagedHeap`, at most once a minute, after 2 s of quiet streaming or with the heap past 4 GB): a blocking,
+compacting collection (LOH too) only where the title, a menu, a loading screen or the exit covers it; in play a background one. **Observed**
+(2026-11-25, Mac mini M6, Metal, save `bench-bases-2026-10-27`, High): with the heap past 4 GB compacting in play, the heap sat at 4.1-4.6 GB
+(~1 GB fragmented, 0.9 GB live in a `dotnet-gcdump`), so every minute a gen2 of reason 10 (induced compacting) paused 270-643 ms; a background
+collection's `PromotedBytes` read 2.9 GB (what was allocated while it ran counts as surviving), so it is no live measure either. Background only,
+150 s with the travel: no blocking gen2, the longest GC pause 14 ms, the trims ~1 ms. Per-frame garbage the Metal host no longer makes (allocation
+trace, [bench.md](bench.md)): an overlay pass a frame (`DrawOverlayPass`, ~22 MB/s) and the bindless table's residency set
+(`MetalBindlessTable.GatherResident`, ~25 MB/s, at every entry change).
 Process memory beyond the GC heap is mostly untouched write-combined commit (~6 GB at 6.7 GB of VRAM in use), not resident RAM.
 **Pooled buffers** (allocation is the GC lever): streaming garbage is mostly LOH arrays from worker jobs. **Observed** in flights: gen0/gen1 pauses under
 ~40 ms; single blocking gen2s (`NonConcurrentGC`, reason `AllocSmall`) of 0.3-1.7 s in some runs despite SustainedLowLatency, with or without pooling. Pooled now:

@@ -510,7 +510,7 @@ sealed class PlayBench(GameHost host)
         foreach (var (type, bytes) in allocated.OrderByDescending(kv => kv.Value).Take(40))
             sb.Append(ci, $"| `{type}` | {bytes / 1048576.0:0} | {100.0 * bytes / Math.Max(total, 1):0.0}% |\n");
         sb.Append("\nGC reasons: 0 small allocation, 1 induced, 2 low memory, 3 empty, 4 large allocation, 5 out of space (small), "
-            + "6 out of space (large), 7 induced not forced.\n");
+            + "6 out of space (large), 7 induced not forced, 10 induced compacting.\n");
         return sb.ToString();
     }
 

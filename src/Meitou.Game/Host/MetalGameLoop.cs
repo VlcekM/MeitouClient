@@ -2525,6 +2525,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _worldHasRendered;
 
     /// <summary>
+    /// The overlay pass every frame reuses (<see cref="DrawOverlayPass"/>): its vertex, chunk and run lists keep their capacity, where a pass made
+    /// each frame grew them from empty (several MB of large arrays a frame).
+    /// </summary>
+    DebugOverlay.OverlayPass? _overlayPass;
+
+    /// <summary>
     /// The loop's clock.
     /// </summary>
     Stopwatch _clock = null!;
@@ -3215,7 +3221,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void DrawOverlayPass(DebugOverlay overlay, Vector2D<int> size, double dt, Vector3 eye, Matrix4x4 view, float aspect, bool feedbackShot,
         Silk.NET.Input.IMouse? pointerMouse, Vector2 pointerAt)
     {
-        using var overlayPass = overlay.BeginPass(size.X, size.Y);
+        // Disposing the pass draws its runs; Reset empties it for the frame.
+        using var overlayPass = (_overlayPass ??= overlay.BeginPass(size.X, size.Y)).Reset(size.X, size.Y);
         if (_hud is not null)
         {
             _hud.Width = size.X;
@@ -3406,40 +3413,47 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// Compacts the managed heap once the streamers have been quiet (at most once a minute) or past 4 GB.
+    /// Collects the managed heap once the streamers have been quiet or the heap is past 4 GB (at most once a minute): compacting, the large object
+    /// heap too, only where a loading screen or a menu covers the pause; else in the background.
     /// </summary>
     void TrimManagedHeap(double now)
     {
         // Once the terrain, object and foliage streamers have been quiet for two seconds, the large decode/upload
-        // buffers are garbage. Compact at that idle point (at most once a minute) so the LOH does not keep them
+        // buffers are garbage. Collect at that idle point (at most once a minute) so the LOH does not keep them
         // for the rest of the session. Active streaming is never interrupted.
         bool streamingIdle = (_streamer?.Idle ?? true) && (_objects?.Pending ?? 0) == 0 && (_foliage?.Pending ?? 0) == 0;
         if (!streamingIdle) _streamingIdleSince = 0;
         else if (_streamingIdleSince == 0) _streamingIdleSince = now;
-        var managedBefore = GC.GetGCMemoryInfo();
-        bool managedHighWater = managedBefore.HeapSizeBytes > 4L << 30;
-        if ((streamingIdle && now - _streamingIdleSince >= 2 || managedHighWater) && now - _lastManagedTrim >= 60)
+        var before = GC.GetGCMemoryInfo();
+        bool managedHighWater = before.HeapSizeBytes > 4L << 30;
+        if (!(streamingIdle && now - _streamingIdleSince >= 2 || managedHighWater) || now - _lastManagedTrim < 60) return;
+
+        _lastManagedTrim = now;
+
+        // Compacting the LOH is a stop-the-world move of every large object: 270-585 ms in play on a 4 GB heap (0.9 GB of it live), 1.6 s on a
+        // larger one. Only where a loading screen or a menu covers the pause; in play a background collection, which does not move live arrays.
+        // Neither the heap's size (it counts the garbage gen2 holds) nor a background collection's survivors (they count what was allocated while
+        // it ran) tells the live data, so no size makes the pause worth it in play.
+        bool compact = host.TitleScreen.TitleVisible || _settings?.Modal == true || host.ActiveSceneLoad is not null || host.Loading?.Exiting == true;
+        if (compact)
         {
-            _lastManagedTrim = now;
-            var before = managedBefore;
-            // Compacting the LOH is a stop-the-world move of every large object: on a 4+ GB heap it stalled
-            // this loop for 1.6 s. Do it where a loading screen or a menu covers the pause, or when the heap
-            // has grown past 4 GB; otherwise a background collection is enough and does not move live arrays.
-            bool safePoint = host.TitleScreen.TitleVisible || _settings?.Modal == true || host.ActiveSceneLoad is not null
-                || host.Loading?.Exiting == true;
-            bool compact = safePoint || managedHighWater;
-            if (compact)
-            {
-                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
-            }
-            else GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: false, compacting: false);
-            var after = GC.GetGCMemoryInfo();
-            long loh = after.GenerationInfo.Length > 3 ? after.GenerationInfo[3].SizeAfterBytes : 0;
-            if (_trace)
-                Console.WriteLine($"metal     idle trim ({(compact ? "compacting" : "background")}): " +
-                    $"heap {before.HeapSizeBytes / 1048576} -> {after.HeapSizeBytes / 1048576} MB, LOH {loh / 1048576} MB");
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
         }
+        else GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: false, compacting: false);
+
+        if (_trace) TraceTrim(before, compact);
+    }
+
+    /// <summary>
+    /// The trace line of a trim: the heap before and after, and the LOH left.
+    /// </summary>
+    static void TraceTrim(GCMemoryInfo before, bool compact)
+    {
+        var after = GC.GetGCMemoryInfo();
+        long loh = after.GenerationInfo.Length > 3 ? after.GenerationInfo[3].SizeAfterBytes : 0;
+        Console.WriteLine($"metal     idle trim ({(compact ? "compacting" : "background")}): " +
+            $"heap {before.HeapSizeBytes / 1048576} -> {after.HeapSizeBytes / 1048576} MB, LOH {loh / 1048576} MB");
     }
 
     /// <summary>

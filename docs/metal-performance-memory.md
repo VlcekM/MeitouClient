@@ -39,8 +39,8 @@ commitment, not a proven single leak.
   as a like-for-like target.
 - **Memory:** `MapWindows` retains 4 overlay/2 colour decoded tiles only during a compose and clears them afterwards
   (was 24 + 12 full decoded maps, hundreds of MB of LOH at 2048²/4096²). `TerrainTextures.Source` drops its blend/ground/world-colour/biome
-  CPU images after upload. When terrain/object/foliage streaming has been quiet for two seconds, the host does one
-  compacting LOH collection (at most once a minute).
+  CPU images after upload. When terrain/object/foliage streaming has been quiet for two seconds, the host collects
+  (at most once a minute; compacting the LOH only behind a loading screen or menu: [engine.md](engine.md) "Metal idle trim").
 - **Result:** over a 75 s Release run at the Hub, managed LOH fell from ~1.8 GB to **~0.67-0.69 GB**, managed heap to
   ~1.3-1.6 GB and RSS stayed ~0.9-1.7 GB without OOM or monotonic growth. The overview/map screenshot and the
   `MTL_DEBUG_LAYER=1` gate are clean.
