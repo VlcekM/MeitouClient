@@ -289,7 +289,8 @@ Motion vectors (temporal upscalers): an instance with a door, turret joint or ro
   - Interior-layout objects spawn without it (`FUN_140583400`).
   - A player's building placed in or on another (a ghost with a parent) gets it when the ghost is made real (`FUN_1404d72a0`): set when a ray cast straight up from the ghost's position, without end, hits nothing in the collision groups `0x8079e00` (`FUN_1409b7430`, `FUN_1409b6a90`), or when the parent building is destroyed (Building slot `0x330`, `+0x1a1`); the object factory (`FUN_14057cc70`) takes it as its last argument. So furniture on a roof, with open sky over it, is outside and stays drawn while the building is closed.
 - `is interior furniture` / `is exterior furniture` only pick collision groups and the build label (`FUN_14055f6e0`, `FUN_1404df450`).
-- Ground items and characters have no closed-interior rule, only the floor sweep `FUN_1409fb540` (**Observed**).
+- Ground items and characters have no closed-interior rule, only the floor sweep `FUN_1409fb540` (**Observed**; the items' building and floor:
+  [ui-input](game/ui-input.md#building-picking-and-selection)).
 - **Unknown:** what makes the doorway black. There is no occluder object; the mask is destroyed on close.
 
 **Meitou:**

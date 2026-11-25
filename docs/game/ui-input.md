@@ -461,9 +461,13 @@ interior-mask hulls); the hits are sorted nearest first (**Verified**, comparato
   outside, unless the layout marks it outside, as drawn; not modelled:
   the flag's own test against the current floor in a building left within 10 s (Meitou shows every floor then) and the player's whole-shown interior exception.
 - Characters and ground items on a hidden floor are not visible either (**Verified**, decompile): a character in a building above the floor it shows (`FUN_1405c9f60`); a ground
-  item above floor 0 above the floor its building shows, or above the current floor outside one (`FUN_1409fb540`, after each floor change in `FUN_1407f7230`). Meitou: neither
-  drawn nor picked above the viewed floor of a building in the interior view (characters `GameHost.hiddenIndoors`; items `GameHost.hiddenGround`, which the renderer takes as its `HiddenItems`), a
-  ground item's floor from where it is drawn.
+  item above floor 0 above the floor its building shows, or above the current floor outside one (`FUN_1409fb540`, after each floor change in `FUN_1407f7230`). An item's
+  building is its handle (item `+0x80`, the save's `insideBuilding`; a slot item's is the slot's building, `FUN_140784d50`), its floor (`+0xa4`) what a ray from 1 unit above
+  it (a slot item: above its box's top) straight down through the groups `0x8079e00` meets first (`FUN_1409b6dd0`: a roof, group 27, of a building with an interior gives its
+  top floor, another hit its group's floor, nothing 0), set when the item is laid (`FUN_140763fa0`) or put in a slot; no hull is tested. Meitou: neither drawn nor picked above
+  the viewed floor of a building in the interior view (characters `InteriorView.HiddenIndoors`; items `GroundItemSync.HiddenGround`, which the renderer takes as its
+  `HiddenItems`), a ground item's floor from where it is drawn and its building the one whose hull holds it, else the one whose floor collision its downward ray meets
+  highest (`InteriorView.ViewedUnder`), so an item on furniture on an open deck above the hull is on the deck's floor (#1395).
 - Parts of a building with an interior (`FUN_140291650`) count only when their floor is not above the floor that building shows; the floor of a
   hit comes from its group (`FUN_1409b1850`: 10/16/20/24/29 → 1, 11/17/21/25/30 → 2, 12/18/22/26/31 → 3, 27 roof → 4, else 0). So with a
   floor cut the ray passes the hidden roof and floors and reaches what is shown. When the viewed floor (PlayerInterface+0x1e4, PgUp/PgDn) is

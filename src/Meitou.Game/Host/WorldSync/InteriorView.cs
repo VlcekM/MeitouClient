@@ -270,6 +270,38 @@ sealed class InteriorView(GameHost host)
     }
 
     /// <summary>
+    /// The viewed or held-open building a loose item at <paramref name="at"/> lies in or on: the one whose hull holds it (<see cref="ViewedAt"/>), else
+    /// the one whose floor collision the downward ray from the item meets highest, so an item on a table on an open deck above the hull is on that
+    /// building's floor (game: the sweep <c>FUN_1409fb540</c> takes the item's building handle and its floor from that ray, <c>FUN_1409b6dd0</c>,
+    /// never a hull).
+    /// </summary>
+    internal InteriorVolume? ViewedUnder(System.Numerics.Vector3 at)
+    {
+        if (ViewedAt(at) is { } inside) return inside;
+
+        InteriorVolume? best = null;
+        float bestY = float.NegativeInfinity;
+        HighestUnder(_viewed, at, ref best, ref bestY);
+        HighestUnder(_furnished, at, ref best, ref bestY);
+        HighestUnder(_held, at, ref best, ref bestY);
+        return best;
+    }
+
+    /// <summary>
+    /// <see cref="ViewedUnder"/>'s step over one list: a building of <paramref name="list"/> whose floor collision under <paramref name="at"/> is
+    /// higher than <paramref name="bestY"/> becomes <paramref name="best"/>.
+    /// </summary>
+    static void HighestUnder(List<InteriorVolume> list, System.Numerics.Vector3 at, ref InteriorVolume? best, ref float bestY)
+    {
+        foreach (var b in list)
+        {
+            if (b.SurfaceUnder(at) is not { } hit || hit.Y <= bestY) continue;
+            best = b;
+            bestY = hit.Y;
+        }
+    }
+
+    /// <summary>
     /// The keep-open time: the occupied buildings' last occupied time is now; a building left within 10 s of game time of it is put in the interior
     /// view with every floor shown (<see cref="_held"/>), and one past it (the timer runs only while the building is complete, a construction site
     /// stays open: <c>FUN_14054a790</c> reads the owner's is-complete byte, <b>Verified</b>), or no longer loaded (unloaded, removed, destroyed),
