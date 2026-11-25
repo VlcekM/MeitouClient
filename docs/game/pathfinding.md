@@ -408,6 +408,11 @@ furniture: without it (`--own-only` in every interior) 99.3..99.8 % but 19.29 (8
 L-House `26.13:748-`, 34 of 34, is one the original [vacates](factions-squads-towns.md#town-residents) and stands empty in ours too). 19.29: its Bughouse `8-` and Longhouses `4-`,
 `3324-` reach their upper storey by stairs in 19.28/20.29, so alone (the border rule keeps ground-level regions only) it is pruned; with its neighbours
 (`--around 1`), as loaded in play, 19.29 is 91.2 %.
+**Cages on a roof** (**Observed**, #1383's save, rebirth's Storm House `43.11:73173-rebirth-INGAME`, tilted ~8°; `--survey-interiors 43,11 --png` and
+`probe` at 06228a518): its upper level is the walkable roof, reached by the interior stairs: inside the mask's hull (floor 1) but not covered, so a
+walker there is on top. The original's tile leaves a hole round each of its 11 roof cages as ours does (no face under a cage's origin, nearest roof
+vertex 7..10 away on both), and its only original-only samples there are single ones along polygon edges. On ours every roof cage has a floor within
+2 of its origin's height 4..10 away and a path from the door ends within 1 of its floor marker.
 **Shells and open structures**: as the original (**Verified** rule, "Generator" below: class, `interior` list), a building is a shell with an interior (its
 mask carves the exterior, its inside is an interior job) when its `interior` list is real, it is a plain building (class 12) and it has an interior mask
 with collision (`ZoneGeometryGatherer.IsShellWithInterior`, `InteriorOf`). A building with a blank interior has all its WALKABLE shapes walkable and its
