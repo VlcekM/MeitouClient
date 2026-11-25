@@ -128,6 +128,9 @@ A machine writes into the INVENTORY_STATE its building lists, also the original'
 Counter's `425867-zone28.29-INGAME`), a new `<site>-inventory` only when it lists none; a machine whose items are those its saved inventory
 loaded leaves that record as it was, with any items the load could not place. A saved item that no longer fits its cell goes to the next free
 cells and what finds no room is lost, as in the original's loader ([loading a saved inventory](../game/ui-screens.md#6-inventory-trade-dialogue-build)).
+A player storage's put and take priorities (Meitou's setting) are the GAMESTATE_BUILDING ints `meitou put priority` and `meitou take priority`
+(`StoragePriority` numbers, Forbidden -3 to Critical 4), written only when not Normal (0); a missing or unknown value reads as Normal (`Saving/MachineSave`). A player building's own name (Meitou's
+Rename) is the GAMESTATE_BUILDING string `meitou custom name`, written only when set; `name` keeps the record's name (`Saving/BuildingSave`).
 **Observed** (headless, Beep Fan Club 1 under the install's load order, which lacks all 68 of its mods): saves 1, 2 and 3 of an unchanged load write
 the same 183 zone files byte for byte; the first keeps every inventory and item record of the buildings it keeps and drops, with their inventories,
 the 166 player buildings whose BUILDING the data lacks, as the original does ([placement](../game/buildings-production.md#placement)).

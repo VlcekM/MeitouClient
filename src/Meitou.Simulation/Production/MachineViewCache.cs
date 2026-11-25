@@ -114,6 +114,8 @@ sealed class MachineViewCache
         Real(m.WindRated);
         Real(m.ProductionMult);
         Flag(m.Broken);
+        Number((int)m.PutPriority);
+        Number((int)m.TakePriority);
         Flag(m.Burning);
         Real(m.Metal);
         Real(m.Health);

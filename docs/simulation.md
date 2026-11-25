@@ -1815,7 +1815,8 @@ Damage: melee blows on walls and doors (`CombatSystem.ApplyZoneBuildings`, the o
   (96), `ConfirmDismantle(Site)` (the selection panel's Dismantle: the player's site at once, its furniture destroyed, refused while a non-furniture building stands in it;
   [selected building](game/ui-screens.md#selected-building)), `CancelSite(Site)` (engine: only a site with nothing delivered), `PauseSite(Site, Paused)`, `UpgradeSite(Site)` / `DowngradeSite(Site)`
   ([upgrades](game/buildings-production.md#upgrades)), `SetBuildingPublic(Building, Public)` (a site's `Public`, else an owned town building's
-  flag in `World.Fixtures`). Sites are named by instance id.
+  flag in `World.Fixtures`), `RenameSite(Site, Name)` (engine: the player's own player-built site's `CustomName`, trimmed, control characters
+  dropped, at most 40 characters, blank clears it; hashed, on `BuildingSnapshot.CustomName`). Sites are named by instance id.
 - `.../ConstructionSnapshot.cs` + `WorldSnapshot`: `Buildings` (`BuildingSnapshot`: `Id`, `Record`, `Position` absolute,
   `Rotation`, `Floor`, `Parent`, `Owner` faction index, `Progress`/`Target` in material units, `Materials` (item,
   required, delivered), `Complete`, `Paused`, `Dismantling`, `Public`, `TownName`), `BuildingsRevision`, `UnlockedBuildings`.
@@ -2133,7 +2134,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     `FarmBuilding::dontNeedWorkRightNow`): a manual operate order is blocked while the crop grows with water, and an active operate task (order or
     job) ends as soon as harvesting, clearing or watering finishes, with no hoeing clip or Farming XP ([farming](game/buildings-production.md#farming)).
   - 124 Hauling to (`CharacterTask.Haul`): items the hauler already carries that the storage's `limit inventory` lists or some machine makes or crafts
-    go first; else the nearest loose item of a listed record within 1200 of the hauler is picked up and carried there (`ProductionSystem.LooseFor`, the
+    go first; else the nearest loose item of a listed record within 1200 of the hauler (a gear storage with no list, `MachineData.HaulsAnyOfType`:
+    any loose or carried, not equipped, item of its `itemtype limit`; engine choice) is picked up and carried there (`ProductionSystem.LooseFor`, the
     original's source order, [hauling](game/buildings-production.md#hauling)), never one another faction owns (engine choice: the ownership test alone
     lets a hauler in a player town take such an item, which marks it stolen); else the nearest player machine within that 4.246733e7 bound (3D) of the storage whose output
     (a bench's: its finished items) the storage takes is emptied into the hauler's pack and carried there. Blocked with none. The walk stops at

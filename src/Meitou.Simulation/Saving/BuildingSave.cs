@@ -26,6 +26,12 @@ public static class BuildingSave
     /// </summary>
     public const string MeitouParent = "meitou parent";
 
+    /// <summary>
+    /// A player building's custom name (<see cref="BuildSite.CustomName"/>), a string of its GAMESTATE_BUILDING written only when set. Meitou's key,
+    /// not the original's.
+    /// </summary>
+    public const string CustomNameKey = "meitou custom name";
+
     #region Shared
 
     /// <summary>
@@ -149,6 +155,7 @@ public static class BuildingSave
                     Paused = state.Bools.GetValueOrDefault("pause"),
                     Public = state.Bools.GetValueOrDefault("is public day", true),
                     Destroyed = state.Bools.GetValueOrDefault("destroyed"),
+                    CustomName = Construction.RenameSite.Clean(state.Strings.GetValueOrDefault(CustomNameKey)),
                 });
                 made++;
             }
@@ -763,6 +770,8 @@ public static class BuildingSave
         state.Strings["owner faction ID"] = playerFactionId;
         state.Strings["residents template"] = "";
         state.Strings["name"] = site.Name;
+        if (site.CustomName is { } custom) state.Strings[CustomNameKey] = custom;
+        else state.Strings.Remove(CustomNameKey);
 
         // Its doors (a finished building has them registered): the same keys as a town building's (docs/game/locks.md "Save keys").
         fixtures.WriteBuilding(site.Id, state);

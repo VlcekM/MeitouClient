@@ -6602,3 +6602,45 @@ msgstr "显示器 {1}：{2}"
 #. machine-translated
 msgid "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor)."
 msgstr "游戏启动并进入全屏的显示器。自动：窗口所在的显示器（在 Wayland 上为第一个显示器）。"
+msgid "Put priority:"
+msgstr "存放优先级："
+
+#. machine-translated
+msgid "Take priority:"
+msgstr "取用优先级："
+
+#. machine-translated
+msgid "Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
+msgstr "搬运工和工人会先把物品放进存放优先级最高的储物处，优先级相同时放进最近的。禁止：从不使用。单击提高，右键单击或Shift+单击降低。"
+
+#. machine-translated
+msgid "Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
+msgstr "工人和建造者会先从取用优先级最高的储物处取物品，优先级相同时从最近的取。禁止：从不使用。单击提高，右键单击或Shift+单击降低。"
+
+#. machine-translated
+msgid "Forbidden"
+msgstr "禁止"
+
+#. machine-translated
+msgid "Deferred"
+msgstr "延后"
+
+#. machine-translated
+msgid "Preferred"
+msgstr "优先"
+
+#. machine-translated
+msgid "Important"
+msgstr "重要"
+
+#. machine-translated
+msgid "Rename"
+msgstr "重命名"
+
+#. machine-translated
+msgid "Give the building a name of your own, shown on its panel, its inventory and the jobs that use it."
+msgstr "给建筑起一个自己的名字，显示在它的面板、库存以及使用它的工作中。"
+
+#. machine-translated
+msgid "Leave it empty for the building's own name."
+msgstr "留空则使用建筑原本的名字。"

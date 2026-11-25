@@ -158,7 +158,25 @@ public sealed record CraftView(IReadOnlyList<(string Key, string Name, float Pro
 /// Something a bench can craft, with its hours and inputs per item, and whether research and the bench level allow it now.
 /// </summary>
 public sealed record CraftOptionView(string Key, string Name, CraftKind Kind, int Level, float Hours,
-    IReadOnlyList<(string Name, float PerItem)> Inputs, bool Unlocked);
+    IReadOnlyList<(string Name, float PerItem)> Inputs, bool Unlocked)
+{
+    /// <summary>
+    /// The item a hovered ITEMS row describes (<c>FUN_1402b79b0</c>, <b>Verified</b>, decompile): made by the item factory as the craft would make
+    /// it, armour at the quality of level 40 (Standard), a weapon of the option's model; null when the record is missing.
+    /// </summary>
+    public InventoryItemView? Product { get; init; }
+
+    /// <summary>
+    /// The row's <c>-Materials Cost:</c> (armour: <c>total coverage</c> x 0.01) or <c>-Materials Costs:</c> (a weapon's <c>material cost</c>);
+    /// -1 for the other kinds.
+    /// </summary>
+    public float MaterialCost { get; init; } = -1;
+
+    /// <summary>
+    /// An armour row's <c>-Fabrics Cost:</c>: <see cref="MaterialCost"/> x the record's <c>fabrics amount</c>; -1 for the other kinds.
+    /// </summary>
+    public float FabricsCost { get; init; } = -1;
+}
 
 /// <summary>
 /// What a bench's current smith would make of one queued craft (<c>FUN_1402bcf60</c>): <paramref name="Quality"/> the armour or crossbow quality (5
@@ -172,7 +190,13 @@ public readonly record struct CraftPrediction(int Quality, string? Model, bool M
 /// A crafting bench's current smith (<see cref="Machine.Smith"/>): his name, his effective level of the bench's stat, the stat multiplier's penalty
 /// in percent (0: none) and the prediction per queued craft.
 /// </summary>
-public sealed record CraftSmithView(string Name, int Skill, int Penalty, IReadOnlyList<CraftPrediction> Entries);
+public sealed record CraftSmithView(string Name, int Skill, int Penalty, IReadOnlyList<CraftPrediction> Entries)
+{
+    /// <summary>
+    /// The bench's stat (<see cref="MachineData.Stat"/>), which picks the critical chance's threshold (<see cref="CraftBench.CriticalChance"/>).
+    /// </summary>
+    public int Stat { get; init; }
+}
 
 /// <summary>
 /// What a <see cref="PowerView"/> shows: a consumer's demand and grant, a generator's output and load, a battery's flow and store
@@ -283,6 +307,14 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
     /// A storage (a "Hauling to" job can name it).
     /// </summary>
     public bool IsStorage { get; init; }
+    /// <summary>
+    /// A storage's put priority, set on its panel (<see cref="Machine.PutPriority"/>).
+    /// </summary>
+    public Items.StoragePriority PutPriority { get; init; }
+    /// <summary>
+    /// A storage's take priority, set on its panel (<see cref="Machine.TakePriority"/>).
+    /// </summary>
+    public Items.StoragePriority TakePriority { get; init; }
     /// <summary>
     /// Its BUILDING_FUNCTIONALITY <c>function</c> (-1: none; 12 a turret, 14 a furnace).
     /// </summary>
@@ -434,6 +466,8 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
             IsAutomatic = m.Data.IsAutomatic,
             InputsEmpty = m.HasEmptyInputs,
             IsStorage = m.Data.IsStorage,
+            PutPriority = m.PutPriority,
+            TakePriority = m.TakePriority,
             Function = m.Data.Function,
             StorageLimitName = m.Data.StorageLimit is [var only] ? Name(only) : null,
             StorageCapacity = m.Data.StorageLimit is [_] ? (int)m.Data.StackBonusMult : 0,

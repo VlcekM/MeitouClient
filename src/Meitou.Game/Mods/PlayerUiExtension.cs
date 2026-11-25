@@ -27,7 +27,7 @@ sealed class PlayerUiExtension(Action<string, string> command) : IUiExtension
         {
             "inventory", "stats", "squad", "stop", "medic", "rescue", "member", "context", "extendedstats", "floor-up", "floor-down", "build",
             "job-remove", "prospect", "building-buy", "building-dismantle", "building-pause", "building-doors", "building-locks", "building-public",
-            "building-upgrade", "building-downgrade", "machine-power", "machine-battery", "machine-incinerate", "tutorial", "help",
+            "building-upgrade", "building-downgrade", "building-put-priority", "building-take-priority", "building-rename", "machine-power", "machine-battery", "machine-incinerate", "tutorial", "help",
             Game.Building.BuildingModButtons.Action, CharacterModLines.Action, JobModButtons.Action,
         };
         foreach (string name in names)

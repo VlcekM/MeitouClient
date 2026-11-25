@@ -1533,17 +1533,25 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The name of a site's building, the game's text (the code mods' menu target and the test channel get it).
+    /// The name of a site's building, the game's text (the code mods' menu target and the test channel get it): the player's own name for it
+    /// when they gave one (RenameSite), else the record's.
     /// </summary>
     internal string SiteName(BuildingSnapshot site) =>
-        site.LevelPlacement is not null ? site.Name : Services?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
+        site.CustomName ?? (site.LevelPlacement is not null ? site.Name : RecordName(site));
+
+    /// <summary>
+    /// The build menu's name of the site's record; the record id without one.
+    /// </summary>
+    string RecordName(BuildingSnapshot site) => Services?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
 
     /// <summary>
     /// <see cref="SiteName"/> as shown, for the menu's title and the panels: a building's record name as the mods' text sources show it; a town
-    /// building's name as its record's when it is that, else as a name of its own (a place).
+    /// building's name as its record's when it is that, else as a name of its own (a place); the player's own name as typed.
     /// </summary>
     internal string ShownSiteName(BuildingSnapshot site) =>
-        site.LevelPlacement is not null ? player.ShownName("place", site.Record, site.Name) : ShownText.Record(site.Record, SiteName(site));
+        site.CustomName ?? (site.LevelPlacement is not null
+            ? player.ShownName("place", site.Record, site.Name)
+            : ShownText.Record(site.Record, SiteName(site)));
 
     /// <summary>
     /// Build category <paramref name="category"/> as the list shows it: the <c>building category</c> text of the first building of the catalog
@@ -1641,20 +1649,22 @@ sealed class BuildMode(PlayerInterface player)
 
     /// <summary>
     /// The rows of the code mods' job offers for a site (docs/modding.md "Mod jobs"), shown after its verbs (<see cref="ContextMenuWindow.Menu"/>):
-    /// on a finished building of the player's faction, each offer that names the building's record and is for one of the selected characters;
+    /// on a finished building, each offer that names the building's record, is for its owner (the player's faction unless the offer takes any,
+    /// <see cref="Simulation.Production.ModJobOffer.Owners"/>) and is for one of the selected characters;
     /// choosing it gives the selection that job there, Shift or not. The simulation tests the building and each character again as it applies
     /// the command (<see cref="Simulation.Production.AddJob"/>).
     /// </summary>
     internal List<(string Caption, Action Give)> OfferedJobs(BuildingSnapshot site)
     {
         var rows = new List<(string, Action)>();
-        if (!site.Complete || site.Owner != player.Session.World.Player.Faction) return rows;
+        if (!site.Complete) return rows;
 
+        int faction = player.Session.World.Player.Faction;
         var selected = player.Selected();
         var selection = player.SelectedIds();
         foreach (var offer in JobOffers())
         {
-            if (!offer.On(site.Record) || !selected.Any(c => offer.Takes(c.Animal))) continue;
+            if (!offer.On(site.Record) || !offer.OwnedBy(site.Owner, faction) || !selected.Any(c => offer.Takes(c.Animal))) continue;
 
             rows.Add((offer.Caption, () => GiveOffered(selection, offer, site)));
         }

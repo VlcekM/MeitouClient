@@ -694,6 +694,13 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     function 19 is not among them); its members are ordered GO_HOMEBUILDING (19) on the new home, or with no home found PATROL (22) and the platoon's
     +0x115 (`persistent`) set to 0 (`FUN_1407ebdd0`), each order with the clear flag (**Verified**, disassembly; [order givers](ai-tasks.md#order-givers)); `FUN_14038a720` and `FUN_1404d2dd0` with the building;
     "Building purchased!". Meitou: [house purchases](../simulation.md#town-house-purchases).
+  - Meitou's addition, not in the original: a complete storage of the player's gets `Put priority:` and `Take priority:` buttons (width 0.4)
+    naming its [storage priority](../modding.md) level (Forbidden in BadBright, above Normal in Good); a click raises the level, a right-click
+    or Shift+click lowers it, each wrapping (`General_Click`; `SetStoragePriority`).
+  - Meitou's addition, not in the original: a building the player built gets a `Rename` button (Main) after Dismantle. It opens the message box
+    titled RENAME with a text box (at most 40 characters) holding the building's name; RENAME sends `RenameSite`, Cancel or Esc changes nothing.
+    The name, trimmed and without control characters, replaces the record's name in the panel title, the context menu and inventory titles and
+    the job list (`Hauling to: <name>`); an empty one gives back the record's name. Saved as [`meitou custom name`](../formats/save.md).
   - 4 is the medical panel's section (**Observed**: `MedicalDatapanel`'s constructor `FUN_140726a70` passes 4 to `FUN_1406fd7d0`; it finds the
     `LifeBarN` widgets and their `Value`, `Yellow`, `Green`, `White`, `Datapanel`, `Tooltip`, `Robot` and `Crushed` children (and one more whose name string was not read), and `HealthText`). The
     header word is slot 114 (`FUN_1402fe040`: Normal / Broken / Under construction with a tooltip); the rows slot 115 (`FUN_140302380`): `Condition`, or
@@ -1211,7 +1218,17 @@ Overview tab 3 (`CraftingQueue`, constructor `FUN_1402bf0f0`; Meitou: `Productio
 stretch; the research tab does the same with `ResearchQueueList` in `ResearchQueuePanel` (`FUN_14049f5b0`) (**Verified**, decompile; Meitou: `QueueBox`, #463). The skin `Kenshi_ItemBoxEmpty` (`gui/templates/kenshi_templates.xml`) gives the box a `VScroll` 15 wide (`Kenshi_ScrollBarV`), so a queue taller than the box scrolls (**Observed**, the template); Meitou: `QueueView` draws that bar when the queue overflows and scrolls the rows with its arrows, track, thumb and the wheel (#1224). `CraftQueue` is an
 ItemBox of the bench's queue (building `+0x498` deque, filled by `FUN_1402b5ca0`, the ITEMS click `FUN_1402b9770` and the save loader); its tooltip callback `FUN_1402be650` sets the hovered index
 and calls `FUN_1402bcf60`, which writes into `QueueDescriptionPanel2` (the ingredients and the item's own tooltip rows come from `FUN_1402b6b40`, Panel 1 and 2). A hovered ITEMS row
-has a different description, `FUN_1402b79b0` ("Estimated Craft Time:", "-Materials Cost:", "-Fabrics Cost:"; **Verified** strings; Meitou's option description is not that).
+has a different description, `FUN_1402b79b0` (`mouseOverCraftList`, **Verified**, decompile 2026-11-24):
+- It makes the item the row crafts with the item factory (`FUN_140580750`): armour at the quality `FUN_14082e6b0` gives level 40 with no critical (Standard),
+  everything else at 0; a weapon of the row's model (user strings `id` / `id2`, the `PLAYER_WEAPONS` manufacturer). Panel 2 gets `Estimated Craft Time:` (the
+  item's hours, vfunc `0x328`, truncated; "{1,num} hr" / "{1,num} hrs"), then for armour (type 3) `-Materials Cost:` (`FUN_1402b7800`: `total coverage` x 0.01)
+  and `-Fabrics Cost:` (that x `fabrics amount`), for a weapon (type 2) `-Materials Costs:` (`material cost`). `FUN_1402b6b40` (item, true) then writes the
+  item's first tooltip rows (vfunc `0x278`; armour and type 15 drop the fourth) and an `Ingredients` row listing each ingredient " x{1,num}" to Panel 1 and,
+  unless the item is a weapon, its second tooltip rows (vfunc `0x280`) to Panel 2; the item is then destroyed. No smith rows.
+- Meitou (`ProductionWindows.OptionDescription`, the product from `CraftOptionView.Product`): Panel 1 takes the item tooltip's rows up to its weight, the
+  row's level and the inputs one per line; Panel 2 the rest of the tooltip without its paragraphs. Meitou's additions: while the bench has a smith,
+  armour, crossbows and robotic limbs show at the quality he makes (with his `-Predicted Result:` grade), and `-Critical Success Chance:` for the row's
+  level; a locked row reads "Needs research" in Bad.
 - **Queue entry description** (`FUN_1402bcf60`, **Verified** unless marked): `State:` "In production..." and, by the bench's status (building `+0x468`), a second `State:` row in Bad: 0 "Out of resources",
   1 "Output full", 3 "Upgrade required" (any other status adds none). An entry whose bench hand (entry `+0x18`, copied from the building in `FUN_1402b5ca0`) is null reads `State:`
   "Not assigned to a craft bench" in Bad instead and skips the status row; Meitou's entries always have a bench, so it never shows. Status 3 is set by `FUN_1402b5680` for an empty queue, or for a

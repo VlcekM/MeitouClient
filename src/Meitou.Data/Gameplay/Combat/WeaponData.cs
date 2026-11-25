@@ -249,6 +249,13 @@ public sealed record WeaponData
         RecordReading.Int(r, "skill category", (int)WeaponCategory.Unarmed) != (int)WeaponCategory.Unarmed ? Text(r, "meitou skill") : null;
 
     /// <summary>
+    /// Whether a WEAPON record is of the unarmed <c>skill category</c>, read as <see cref="From"/> reads it (missing: unarmed): one that fights as
+    /// fists (<see cref="IsUnarmed"/>) and is worn on the body (docs/characters.md "Worn unarmed weapons").
+    /// </summary>
+    public static bool IsUnarmedRecord(GameRecord r) =>
+        RecordReading.Int(r, "skill category", (int)WeaponCategory.Unarmed) == (int)WeaponCategory.Unarmed;
+
+    /// <summary>
     /// Reads a WEAPON record; the defaults are those named on each property (<c>skill category</c> defaults to unarmed).
     /// </summary>
     public static WeaponData From(GameRecord r)

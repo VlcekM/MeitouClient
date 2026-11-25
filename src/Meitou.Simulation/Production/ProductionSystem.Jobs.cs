@@ -54,13 +54,13 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A code mod's offered job (docs/modding.md "Mod jobs"): when the site is a finished building of the player's faction and of one of the offer's
-    /// records, each living player character named that the offer is for takes the job there (<see cref="PermaJobs.GiveOffered"/>).
+    /// A code mod's offered job (docs/modding.md "Mod jobs"): when the site is a finished building of an owner the offer is for
+    /// (<see cref="ModJobOffer.OwnedBy"/>) and of one of the offer's records, each living player character named that the offer is for takes the job there (<see cref="PermaJobs.GiveOffered"/>).
     /// </summary>
     void GiveOffered(World world, AddJob add, ModJobOffer offer)
     {
         if (world.Buildings.Find(add.Site) is not { Complete: true } site) return;
-        if (site.Owner != world.Player.Faction || !offer.On(site.Record)) return;
+        if (!offer.OwnedBy(site.Owner, world.Player.Faction) || !offer.On(site.Record)) return;
 
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
@@ -396,15 +396,16 @@ public sealed partial class ProductionSystem
                 && Site(world, keep) is { Complete: true } keptSite && keptSite.Owner == world.Player.Faction
                 && Ensure(world, keptSite) is { } keptStore && keptStore.Data.IsStorage && keptStore.Storage is not null
                 && Ditchable(world, cold, held).Any(item => Stores(keptStore, item))
-                && world.StorageAllows(cold, keep, StorageUse.Put, DitchRecord(world, cold, held)))
+                && world.StorageRank(cold, keep, StorageUse.Put, DitchRecord(world, cold, held)) != StoragePriority.Forbidden)
                 return (TaskType.DitchAllResources, keep);
 
             bool ditching = !PlayerOrders.Holds(world, slot) && cold.Inventory is { } carried && Ditchable(world, cold, carried).Any();
-            if (ditching && NearestSite(world, at, float.MaxValue, IsStore, Ditches) is { } store)
+            if (ditching && BestStore(world, at, IsStore, Ditches) is { } store)
                 return (TaskType.DitchAllResources, store);
 
-            bool Ditches(BuildSite s, Machine m) => InFinderRange(s.Position, at) && TakesDitched(world, cold, m)
-                && world.StorageAllows(cold, s.Id, StorageUse.Put, DitchRecord(world, cold, cold.Inventory!));
+            StoragePriority Ditches(BuildSite s, Machine m) => InFinderRange(s.Position, at) && TakesDitched(world, cold, m)
+                ? world.StorageRank(cold, s.Id, StorageUse.Put, DitchRecord(world, cold, cold.Inventory!))
+                : StoragePriority.Forbidden;
         }
 
         // Sleep and Sit not while holding position (FUN_1402b2b90), carrying someone (+0x348) or selected by the player (FUN_1407f4d20, the
@@ -628,6 +629,36 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
+    /// <see cref="NearestSite"/> for a storage search: the player's complete building whose machine passes <paramref name="kind"/> and whose
+    /// <paramref name="rank"/> (a test of the site and machine that answers <see cref="StoragePriority.Forbidden"/> for one that fails, else its
+    /// storage priority, <see cref="World.StorageRank(CharacterCold, string, StorageUse, string?)"/>) is highest; among equals the nearest
+    /// (ties: the lower site id). With no priority system every rank is Normal or Forbidden, so it is the nearest that passes.
+    /// </summary>
+    string? BestStore(World world, Vector3 at, Func<Machine, bool> kind, Func<BuildSite, Machine, StoragePriority> rank)
+    {
+        string? best = null;
+        float bestGap = float.MaxValue;
+        var bestRank = StoragePriority.Forbidden;
+        var all = world.Machines.All;
+        for (int k = 0; k < all.Count; k++)
+        {
+            var m = all[k];
+            if (!kind(m) || Site(world, m.Site) is not { Complete: true } site || site.Owner != world.Player.Faction) continue;
+
+            float gap = Gap(site.Position, at);
+            bool nearer = gap < bestGap || gap == bestGap && string.CompareOrdinal(m.Site, best) < 0;
+            if (!nearer && !world.StorageMayOutrank(bestRank)) continue;
+
+            var r = rank(site, m);
+            if (r == StoragePriority.Forbidden || r < bestRank || r == bestRank && !nearer) continue;
+
+            (best, bestGap, bestRank) = (m.Site, gap, r);
+        }
+
+        return best;
+    }
+
+    /// <summary>
     /// Starts an implicit job: a bed's sleep, a ditch's haul, else operating the site.
     /// </summary>
     void StartImplicit(World world, int slot, TaskType type, string siteId)
@@ -845,10 +876,11 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// A carried item a "Hauling to" job takes to its storage: a loose stack (not the character's own kit), that the storage takes and has room for,
-    /// of a record its <c>limit inventory</c> lists (what <see cref="LooseFor"/> picks up) or that a player machine makes or crafts.
+    /// of a record its <c>limit inventory</c> lists (what <see cref="LooseFor"/> picks up), of the type of a storage that takes any of it
+    /// (<see cref="MachineData.HaulsAnyOfType"/>), or that a player machine makes or crafts.
     /// </summary>
     static bool Takes(World world, Machine store, Items.ItemInstance item) =>
-        Stores(store, item) && (store.Data.StorageLimit.Contains(item.Record)
+        Stores(store, item) && (store.Data.StorageLimit.Contains(item.Record) || store.Data.HaulsAnyOfType
             || world.Machines.All.Any(s => !s.Data.IsStorage && !IsTownWork(s.Site) && Makes(s, item.Record)));
 
     /// <summary>
@@ -858,12 +890,16 @@ public sealed partial class ProductionSystem
     /// loose one; docs/game/buildings-production.md "Hauling"): for each record of the storage's <c>limit inventory</c> it has room for, the
     /// nearest loose item of it (<see cref="LooseSource.Nearest"/> from <paramref name="at"/>), while a unit fits the hauler's main grid (row 92
     /// Collecting resource needs state 82, room for it). Engine choices: an item another faction owns is never picked up, so a hauler steals
-    /// nothing (the ownership test alone lets one in a player town take such an item, which marks it stolen); a storage with no
-    /// <c>limit inventory</c> wants nothing from the ground.
+    /// nothing (the ownership test alone lets one in a player town take such an item, which marks it stolen); a storage for one kind of gear
+    /// (<see cref="MachineData.HaulsAnyOfType"/>) takes the nearest loose item of its type; any other storage with no <c>limit inventory</c>
+    /// wants nothing from the ground.
     /// </summary>
     GroundItem? LooseFor(World world, CharacterCold cold, Vector3 at, Machine store)
     {
         if (store.Storage is not { } grid || cold.Inventory is not { } inv) return null;
+        if (store.Data.HaulsAnyOfType)
+            return LooseSource.Nearest(world, _towns, cold, at, g => StoresLoose(store, g.Item) && Fits(inv, g.Item), ownOnly: true);
+
         foreach (string record in store.Data.StorageLimit)
         {
             if (_items.Create(record, 1) is not { } one || !store.Data.Accepts(record, one.Type) || !Fits(grid, one) || !Fits(inv, one)) continue;
@@ -872,6 +908,14 @@ public sealed partial class ProductionSystem
 
         return null;
     }
+
+    /// <summary>
+    /// A loose item on the ground the storage takes and has room for. Its section is not asked: a loose item keeps the one it was saved or dropped
+    /// with (<b>Observed</b>, the owner's save: an item spawned on the ground has an empty section; one taken off the body keeps its equipment
+    /// section), and picking it up puts it in <c>main</c>.
+    /// </summary>
+    static bool StoresLoose(Machine store, Items.ItemInstance item) =>
+        !item.LockedOn && item.Contents is null && store.Data.Accepts(item.Record, item.Type) && Fits(store.Storage!, item);
 
     /// <summary>
     /// A loose stack (not the character's own kit) the storage takes and has room for.
@@ -884,7 +928,9 @@ public sealed partial class ProductionSystem
     /// The record the storage filters are asked about for a ditch trip: the one every ditchable item shares, else null; none without a filter.
     /// </summary>
     static string? DitchRecord(World world, CharacterCold cold, Items.Inventory inv) =>
-        world.StorageFilters.Active ? Meitou.Simulation.Items.StorageFilters.OneRecord(Ditchable(world, cold, inv)) : null;
+        world.StorageFilters.Active || world.StoragePriorities.Active
+            ? Meitou.Simulation.Items.StorageFilters.OneRecord(Ditchable(world, cold, inv))
+            : null;
 
     /// <summary>
     /// A storage machine with its grid (what <see cref="TakesDitched"/> asks first).

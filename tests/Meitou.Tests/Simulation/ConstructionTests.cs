@@ -165,6 +165,41 @@ public class ConstructionTests
 
     static string SiteId(int n, Vector3 at) => BuildingRegistry.IdOf(n, WorldLayout.ZoneOf(at.X, at.Z));
 
+    // ------------------------------------------------------------------ custom names
+
+    /// <summary>
+    /// A building's custom name (<see cref="RenameSite"/>): set on the player's own building, control characters dropped, trimmed and capped at
+    /// <see cref="RenameSite.MaxLength"/>; a blank name gives back the record's name; another faction's building keeps its name. Catches a rename
+    /// that reached a building the player does not own, or a blank or overlong name kept as typed.
+    /// </summary>
+    [Fact]
+    public void A_building_the_player_built_takes_a_custom_name()
+    {
+        using var rig = new Rig();
+        string hut = SiteId(1, HutAt), shed = SiteId(2, ShedAt);
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Hut, HutAt, Quaternion.Identity),
+                new PlannedBuilding(Shed, ShedAt, Quaternion.Identity)]) { Tick = 2 });
+        rig.World.RunTicks(3);
+        var own = rig.World.Buildings.Find(hut)!;
+        var other = rig.World.Buildings.Find(shed)!;
+        other.Owner = Rig.PlayerFaction + 1;
+        void Rename(string site, string? name)
+        {
+            rig.Say(new RenameSite(site, name) { Tick = rig.World.Tick });
+            rig.World.RunTick();
+        }
+
+        Rename(hut, "  Water\nstore  ");
+        Rename(shed, "Theirs");
+        Assert.Equal(("Waterstore", null), (own.CustomName, other.CustomName));
+
+        Rename(hut, new string('x', 60));
+        Assert.Equal(RenameSite.MaxLength, own.CustomName!.Length);
+
+        Rename(hut, "   ");
+        Assert.Null(own.CustomName);
+    }
+
     // ------------------------------------------------------------------ determinism (the golden hash)
 
     /// <summary>

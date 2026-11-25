@@ -475,6 +475,19 @@ holds refuses the second mod.
   main grid), for a mod's own button too; `Arrange(root)` and `Arrange(root, bag)` stay the game's and never ask the filters. Engine API, not in
   the original. **Observed** with a scratch program (placement, order, rotation, each invalid answer, throw, merge, hash, inert without a
   filter); no test yet.
+- **Storage priority:** a registered system implementing `IStoragePriority` (`Meitou.Simulation.Items`) is asked `Priority(World, CharacterId who,
+  string storage, StorageUse use, string? record)` at the same searches as `IStorageFilter`, for each storage the filters allow, and answers a
+  `StoragePriority`: `Forbidden`, `Low`, `Deferred`, `Normal` (the default), `Preferred`, `Important`, `High`, `Critical`. The search takes the
+  highest priority and, among equals, the storage it takes without one (the nearest, its own tie rule); `Forbidden` passes the storage over as a
+  refusal does. Take and put are asked apart, so a store can be the last place things are put and the first they are taken from (put `Low`, take
+  `Critical`: an overstock store). Systems combine as: any `Forbidden` wins, else the first answer other than `Normal` in system order (mods in
+  load order); an answer outside the levels counts as `Normal`. The player sets each storage's own put and take level on its panel
+  (`Machine.PutPriority`, `Machine.TakePriority`, saved with the building, [save](formats/save.md)): its `Forbidden` wins too, and a level other than
+  `Normal` comes before the systems' answers, which apply where the player left a storage at `Normal`. A squad's kept ditch trip keeps its storage while it still takes something (only
+  `Forbidden` ends it). `world.StorageRank(who, storage, use, record)` gives the filters' and priority systems' combined answer (`Forbidden` for
+  a refusal), so a mod ranks its own storage picks as the game's searches do. Same threading, paused-order and fault rules as `IStorageFilter`;
+  one that throws answers `Normal`. Without a priority system or a storage's own level every search is the original's. Engine API, not in the
+  original.
 - **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the first
   (`world.Start` then says how: `WorldStartKind.NewGame`, `Load` or `Import`, with `SaveFolder` the full path of the save read, null for a new
   game; `Unknown` for a world the game host did not start; not saved, hashed or read by the engine, so a mod reads a file of its own or the
@@ -929,7 +942,8 @@ holds refuses the second mod.
   under Meitou keys (`meitou mjob<k>`, [save](formats/save.md)), out of the original's `pjob` list, with its building id but not a character
   target; a load puts it back while the type is registered and drops it otherwise.
   `AddJobOffer(new ModJobOffer(type, buildings, caption, takers))` (engine API, not in the original; after the type's `AddJobType`, one offer per
-  type) lets the player give such a job: the menu of a finished building of the player's faction whose record is in `buildings` (the one with
+  type) lets the player give such a job: the menu of a finished building of the player's faction (any faction's with
+  `Owners = ModJobOwners.Any`; the mod decides what using another's costs) whose record is in `buildings` (the one with
   its Dismantle, [ui-input](game/ui-input.md#context-menu-verbs); a built bed's too, a cage's own rows not) ends with `caption`, translated as
   the game's rows, for a selection holding a character `takers` allows (`ModJobTakers.People`, `Animals` or both), an animals-only selection
   included. Choosing it, Shift or not, queues the game's `AddJob`, which tests the building again and gives each selected living player
@@ -937,9 +951,10 @@ holds refuses the second mod.
   mod checks the job's building as it checks that the job is listed; the same building changes nothing); the jobs switch turns on and the
   character plans again. Refused: a type the mod has not claimed, a second offer for a type, no building, a blank one or one that is no
   BUILDING of the loaded data, a caption that is blank, over 32 characters, holds a control character or is the label of one of the game's
-  verbs, takers that are none or other than people and animals. **Observed** (2026-11-22, scratch world with a headless interface): an
-  animals-only selection is shown the row and takes the job, a person selected with it does not for an animals offer, a second building moves
-  the job in its place between two game jobs, and another record's, another faction's or an unfinished building gives nothing.
+  verbs, takers that are none or other than people and animals, an `Owners` that is neither. **Observed** (2026-11-22, scratch world with a
+  headless interface): an animals-only selection is shown the row and takes the job, a person selected with it does not for an animals offer, a second building moves
+  the job in its place between two game jobs, and another record's, another faction's (for the default `Owners`) or an unfinished building
+  gives nothing.
 - **Item use:** `AddItemUse(record, handler)`, one mod per item record string id. A right click on such an item in a player character's own
   inventory window (or its bag), with no other character's window open and no trade, runs `handler(ItemUse)` (world, user, item, that
   character's inventory) in the player system's serial step, before the click would equip or move it (`ItemUses`, `src/Meitou.Simulation/Player`),
@@ -1282,6 +1297,13 @@ holds refuses the second mod.
   keep it quick and never wait on the game): read only the context and the mod's own state, safely across threads. Texts other than names are cut to 4,000 characters. A source that throws is reported once
   and dropped. With no source, text shows as before at the cost of one check per lookup; with one, a shown text costs one dictionary lookup
   after its first time. Engine API, not in the original.
+- **Building panel bars:** in `Register`, `registration.AddBuildingRows(context => bars)` adds bars to the medical-bars column of a selected
+  complete building, placed piece or piece of furniture, right under its Condition (and a farm's crop bars), drawn as the Condition bar is.
+  Each `UiBuildingRow` has a name on the bar, a fraction (0 to 1, clamped) for how full it is, a number-column value ("" none) and a tooltip
+  or null; texts are shown as given, put on one line and cut to 80 characters. At most 6 bars from all sources together, in registration
+  order. The source gets the same `UiBuildingContext` as the buttons and the same rules (host thread, possibly every frame, cheap, never
+  touches the world); bars show state and have no press. A source that throws, or returns a bar without a name, is logged once and dropped
+  for the session. Engine API, not in the original.
 - **Item tooltip lines:** in `Register`, `registration.AddItemTooltipLines(context => lines)` adds `UiItemTooltipLine`s (a label and an
   optional value) to an item's tooltip, after the game's own rows and before the record's description. The source gets `UiItemTooltipContext`:
   the item's record string id, name, code-mod tag (`ItemInstance.ModTag`, so a mod shows what it keeps on the item: a condition, rolled
@@ -1900,7 +1922,8 @@ holds refuses the second mod.
 ## Data mods
 
 Some shapes need no code: a race's anatomy of any length, extra or missing parts, and parts of a new type such as a tail are plain records
-([bodies of other shapes](game/character-stats.md#bodies-of-other-shapes-meitou)).
+([bodies of other shapes](game/character-stats.md#bodies-of-other-shapes-meitou)). A WEAPON of the unarmed `skill category` fights as fists with
+martial arts and is worn on the body's skeleton ([worn unarmed weapons](characters.md#worn-unarmed-weapons)).
 
 ## Fixed record ids
 

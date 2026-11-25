@@ -1093,7 +1093,8 @@ Meitou: `CombatSystem.HullHalf`, `HitHull`, `LineOfFire`, `ClosingRayPasses`; a 
 (`FUN_1409991d0`, weapon choice `FUN_1405c97a0`). Without both, the shooting gate (`FUN_1407f2840`) fails: attack orders stay melee (`FUN_1407f9e20`) and the
 Shooting tasks 262/263/266 (condition 161) are not planned; an arm's change puts the held weapon away (`FUN_1405cc230`): a two-arm one on either arm, another
 when an arm it needs is out. The melee weapon drawn (`FUN_140345c10`; hip and back are the first item of the `hip` and `back` sections, `FUN_140747c30`,
-`FUN_140747e00`): right arm out, none (fists); right only, the hip one; both, the back one unless it is a crossbow, else the hip one. The hip one replaces a drawn
+`FUN_140747e00`): right arm out, none (fists); right only, the hip one; both, the back one unless it is a crossbow, else the hip one. Meitou
+adds one exception for its worn unarmed weapons ([characters](../characters.md#worn-unarmed-weapons)). The hip one replaces a drawn
 back one only when it rates higher by Item vtable +0x378, which returns 0 for every WEAPON and CROSSBOW (`FUN_1408a52d0`), so never. **Observed**, not built:
 with both arms, `FUN_140334250` keeps the weapon held instead of drawing the back one; it is true when the character's location resolves to a building whose
 +0xc2 byte is 0 (indoors?). Meitou: `MedicalState.ArmWorks` (also carrying and swimming); `Fighter.Weapon` takes back or hip by the arms each tick

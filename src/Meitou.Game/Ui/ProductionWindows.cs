@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ui;
 using Meitou.Game.Building;
 using Meitou.Game.Rendering.Ui;
@@ -1695,7 +1696,7 @@ sealed class ProductionWindows(PlayerInterface player)
     // The overview's Craft tab (docs/game/ui-screens.md "Selected building", docs/game/buildings-production.md "Crafting"): STATIONS lists the
     // player's crafting benches, ITEMS what the selected one can craft (a click queues one; locked or too advanced rows are red and do nothing),
     // QUEUE its queue (the original's list items, QueueRow: the X takes one off), Repeat Queue its repeat toggle, DESCRIPTION the hovered or last
-    // clicked craft's time and inputs.
+    // clicked craft's product (OptionDescription).
     /// <summary>
     /// The Craft tab's index in the overview's tabs.
     /// </summary>
@@ -1869,18 +1870,99 @@ sealed class ProductionWindows(PlayerInterface player)
         string? focus = hovered is { } h ? h[(h.IndexOf(':') + 1)..] : _craftFocus;
         if (focus is null || options.FirstOrDefault(o => o.Key == focus) is not { } option) return;
 
+        OptionDescription(controls, _craftStation, option);
+    }
+
+    /// <summary>
+    /// The description of a hovered or last clicked ITEMS row (<c>FUN_1402b79b0</c>, <b>Verified</b>, decompile): the item the craft makes, armour
+    /// at the quality of level 40, a weapon of the row's model. Panel 2 gets <c>Estimated Craft Time:</c> (the item's hours, truncated, "{1,num} hr"
+    /// or "hrs"), for armour <c>-Materials Cost:</c> and <c>-Fabrics Cost:</c>, for a weapon <c>-Materials Costs:</c>; then <c>FUN_1402b6b40</c>
+    /// writes the item's first tooltip rows and the ingredients to Panel 1 and, for all but weapons, its second tooltip rows to Panel 2. Meitou:
+    /// Panel 1 takes the item tooltip's rows to the weight, then the recipe's inputs; Panel 2 the rest of the tooltip without its paragraphs.
+    /// Meitou's additions: while the bench has a smith, armour, crossbows and robotic limbs show at the quality he makes (his <c>-Predicted Result:</c>, as a
+    /// queued craft's) and <c>-Critical Success Chance:</c> for the row's level; "Needs research" in Bad for a locked row.
+    /// </summary>
+    void OptionDescription(List<UiControl> controls, string site, CraftOptionView option)
+    {
+        var smith = player.Session.CurrentSnapshot.Smiths.GetValueOrDefault(site);
+        var tooltip = option.Product is { } product ? player.TooltipRuntime.ItemLines(ProductTip(option, product, smith)) : [];
+        int head = tooltip.ToList().FindIndex(l => l.Key == "-Weight") + 1;
+        if (head <= 0) head = Math.Min(1, tooltip.Count);
+
+        var first = tooltip.Take(head).Select(PanelLine).ToList();
+        if (first.Count == 0) first.Add(new(option.Name, ""));
+        if (option.Level > 0) first.Add(new(Loc.Tr("Level:"), option.Level.ToString(CultureInfo.InvariantCulture), PlayerInterface.MainColour));
+        first.Add(new(Loc.Tr("Ingredients"), ""));
+        foreach (var (item, per) in option.Inputs)
+            first.Add(new(item, per.ToString("0.##", CultureInfo.InvariantCulture), PlayerInterface.MainColour));
+        if (!option.Unlocked) first.Add(new("Needs research", "", PlayerInterface.BadColour));
+        DatapanelLines(controls, "QueueDescriptionPanel1", first);
+
+        var second = CraftCostLines(option);
+        if (smith is not null) AddSmithLines(second, option, smith);
+        if (option.Kind != CraftKind.Weapon) second.AddRange(tooltip.Skip(head).Where(l => !l.Paragraph).Select(PanelLine));
+        DatapanelLines(controls, "QueueDescriptionPanel2", second);
+    }
+
+    /// <summary>
+    /// The product's tooltip: the option's item, for armour, crossbows and robotic limbs at the quality the bench's smith makes (Meitou's addition).
+    /// </summary>
+    static TooltipRuntime.ItemTip ProductTip(CraftOptionView option, InventoryItemView product, CraftSmithView? smith)
+    {
+        var tip = TooltipRuntime.ItemTip.Of(product);
+        if (smith is null || option.Kind is not (CraftKind.Armour or CraftKind.Crossbow or CraftKind.Robotics)) return tip;
+
+        int quality = CraftBench.ArmourQuality(smith.Skill, false);
+        return tip with { Quality = quality, Level = quality };
+    }
+
+    /// <summary>
+    /// A tooltip row as a description panel line, in the tooltip's colours on the parchment.
+    /// </summary>
+    static PlayerInterface.HudLine PanelLine(TooltipLine line) => new(line.Key, line.Whole,
+        line.KeyTone == TooltipTone.Default ? null : TooltipRuntime.TipColour(line.KeyTone, false),
+        line.ValueTone == TooltipTone.Default ? null : TooltipRuntime.TipColour(line.ValueTone, false));
+
+    /// <summary>
+    /// <c>Estimated Craft Time:</c> and the material rows of <c>FUN_1402b79b0</c>.
+    /// </summary>
+    static List<PlayerInterface.HudLine> CraftCostLines(CraftOptionView option)
+    {
+        int hours = (int)option.Hours;
         var lines = new List<PlayerInterface.HudLine>
         {
-            new(option.Name, ""),
-            new("Time:", $"{option.Hours.ToString("0.#", CultureInfo.InvariantCulture)} h", PlayerInterface.MainColour),
+            new(Loc.Tr("Estimated Craft Time:"), Loc.Plural("{1,num} hr", "{1,num} hrs", hours, hours)),
         };
-        if (option.Level > 0)
-            lines.Add(new("Level:", option.Level.ToString(CultureInfo.InvariantCulture), PlayerInterface.MainColour));
-        foreach (var (item, per) in option.Inputs)
-            lines.Add(new(item, per.ToString("0.##", CultureInfo.InvariantCulture), PlayerInterface.MainColour));
-        if (!option.Unlocked) lines.Add(new("Needs research", "", PlayerInterface.BadColour));
 
-        DatapanelLines(controls, "QueueDescriptionPanel1", lines);
+        if (option.Kind == CraftKind.Weapon && option.MaterialCost >= 0)
+            lines.Add(new(Loc.Tr("-Materials Costs:"), Loc.Format("{1,num}", (int)option.MaterialCost)));
+        if (option.Kind == CraftKind.Armour && option.MaterialCost >= 0)
+            lines.Add(new(Loc.Tr("-Materials Cost:"), Loc.Format("{1,num}", option.MaterialCost)));
+        if (option.Kind == CraftKind.Armour && option.FabricsCost >= 0)
+            lines.Add(new(Loc.Tr("-Fabrics Cost:"), Loc.Format("{1,num}", option.FabricsCost)));
+
+        return lines;
+    }
+
+    /// <summary>
+    /// Meitou's smith rows for a hovered ITEMS row: the grade he makes of armour, crossbows and robotic limbs, then his critical chance for the row's
+    /// level (<see cref="CraftBench.CriticalChance"/>, as <c>FUN_1402b5900</c>, x 100 truncated and clamped).
+    /// </summary>
+    static void AddSmithLines(List<PlayerInterface.HudLine> lines, CraftOptionView option, CraftSmithView smith)
+    {
+        if (option.Kind is CraftKind.Armour or CraftKind.Crossbow or CraftKind.Robotics)
+        {
+            int grade = Simulation.Combat.ArmourTooltip.GradeOf(CraftBench.ArmourQuality(smith.Skill, false));
+            lines.Add(new(Loc.Tr("-Predicted Result:"),
+                PlayerInterface.Tag(TooltipRuntime.TipColour(TooltipRuntime.GradeTone(grade), false))
+                    + Loc.Tr(Simulation.Combat.ArmourTooltip.GradeNames[grade])));
+        }
+
+        if (option.Kind is CraftKind.Armour or CraftKind.Crossbow or CraftKind.Weapon)
+        {
+            int critical = Math.Clamp((int)(CraftBench.CriticalChance(smith.Skill, smith.Stat, option.Level) * 100), 0, 100);
+            lines.Add(new(Loc.Tr("-Critical Success Chance:"), Loc.Tr("{1,num}%", critical)));
+        }
     }
 
     /// <summary>

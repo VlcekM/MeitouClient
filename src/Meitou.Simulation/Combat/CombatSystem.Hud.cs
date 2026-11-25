@@ -108,6 +108,9 @@ public sealed partial class CombatSystem
     {
         if (cold.Fighter is not { } f) return 1;
 
+        // A worn unarmed weapon in hand fights as fists: Martial Arts, as with no weapon (engine extension, docs/characters.md).
+        if (cold.DrawnWeapon == WeaponKinds.None && f.Weapon is { Data.IsUnarmed: true } && f.Crossbow is null) return 1;
+
         bool? crossbow;
         if (cold.DrawnWeapon != WeaponKinds.None) crossbow = cold.DrawnWeapon == BowKind;
         else if (f.BackWeapon is not null) crossbow = false;

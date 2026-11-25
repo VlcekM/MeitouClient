@@ -430,6 +430,11 @@ public sealed partial class UiHost
     internal ItemTooltipLines ItemTips { get; } = new();
 
     /// <summary>
+    /// The extensions' building panel bar sources (<see cref="UiRegistration.AddBuildingRows"/>).
+    /// </summary>
+    internal BuildingPanelRows BuildingBars { get; } = new();
+
+    /// <summary>
     /// The town panel line sources, with their owners, in registration order.
     /// </summary>
     readonly List<(string Owner, Func<UiTownContext, IEnumerable<UiTownLine>> Lines)> _townLines = [];
@@ -671,6 +676,7 @@ public sealed partial class UiHost
         _townLines.RemoveAll(l => l.Owner == owner);
         ItemTips.Remove(owner);
         ShownText.Remove(this, owner);
+        BuildingBars.Remove(owner);
         CharacterPanel.Remove(owner);
         Screens.Remove(owner);
         ScreenOverrides.Remove(owner);
@@ -986,6 +992,17 @@ public sealed partial class UiHost
     /// </summary>
     public string ItemName(string record, string name, string modTag = "") =>
         ShownText.Record(record, name, ShownText.RecordName, modTag);
+
+    /// <summary>
+    /// Whether any extension adds building panel bars (<see cref="BuildingRows"/>).
+    /// </summary>
+    public bool HasBuildingRows => BuildingBars.Any;
+
+    /// <summary>
+    /// The bars the extensions add under the selected building's Condition (<see cref="BuildingPanelRows.For"/>); a failing source is reported as a
+    /// <see cref="Diagnostic"/> and dropped.
+    /// </summary>
+    public IReadOnlyList<UiBuildingRow> BuildingRows(UiBuildingContext context) => BuildingBars.For(context, Diagnostic);
 
     /// <summary>
     /// Whether any extension adds character panel lines (<see cref="CharacterPanelLines"/>).
@@ -1648,6 +1665,19 @@ public sealed class UiRegistration : IDisposable
     {
         Check();
         ShownText.Refresh();
+    }
+
+    /// <summary>
+    /// Adds bars under the Condition bar of a selected building, placed piece or piece of furniture (docs/modding.md "Building panel bars"):
+    /// <paramref name="rows"/> runs on the host's thread whenever the panel's bars are bound, which can be every frame, so it must be cheap, and
+    /// while a tick may be in flight, so it must not touch the world; it reads the context. Bars show state only; buttons go through
+    /// <see cref="AddBuildingActions"/>.
+    /// </summary>
+    public void AddBuildingRows(Func<UiBuildingContext, IEnumerable<UiBuildingRow>> rows)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(rows);
+        _host.BuildingBars.Add(Id, rows);
     }
 
     /// <summary>

@@ -37,6 +37,11 @@ public sealed record BuildingSnapshot(
     public string Name { get; init; } = "";
 
     /// <summary>
+    /// The name the player gave it (<see cref="BuildSite.CustomName"/>); null for none.
+    /// </summary>
+    public string? CustomName { get; init; }
+
+    /// <summary>
     /// Whether it is destroyed.
     /// </summary>
     public bool Destroyed { get; init; }

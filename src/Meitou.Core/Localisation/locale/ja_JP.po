@@ -5769,3 +5769,45 @@ msgstr "モニター {1}: {2}"
 #. machine-translated
 msgid "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor)."
 msgstr "ゲームが起動し、フルスクリーンになるモニター。自動：ウィンドウがあるモニター（Wayland では最初のモニター）。"
+msgid "Put priority:"
+msgstr "搬入優先度:"
+
+#. machine-translated
+msgid "Take priority:"
+msgstr "搬出優先度:"
+
+#. machine-translated
+msgid "Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
+msgstr "運搬係と作業者は、搬入優先度が最も高い倉庫に先に物を入れます。同じ優先度なら最も近い倉庫です。禁止：使わない。クリックで上げ、右クリックまたはShift+クリックで下げます。"
+
+#. machine-translated
+msgid "Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
+msgstr "作業者と建築者は、搬出優先度が最も高い倉庫から先に物を取ります。同じ優先度なら最も近い倉庫です。禁止：使わない。クリックで上げ、右クリックまたはShift+クリックで下げます。"
+
+#. machine-translated
+msgid "Forbidden"
+msgstr "禁止"
+
+#. machine-translated
+msgid "Deferred"
+msgstr "後回し"
+
+#. machine-translated
+msgid "Preferred"
+msgstr "優先"
+
+#. machine-translated
+msgid "Important"
+msgstr "重要"
+
+#. machine-translated
+msgid "Rename"
+msgstr "名前を変更"
+
+#. machine-translated
+msgid "Give the building a name of your own, shown on its panel, its inventory and the jobs that use it."
+msgstr "建物に独自の名前を付けます。パネル、インベントリ、それを使う作業に表示されます。"
+
+#. machine-translated
+msgid "Leave it empty for the building's own name."
+msgstr "空にすると建物本来の名前に戻ります。"

@@ -82,21 +82,23 @@ internal static class FillSources
     /// The nearest storage holding <paramref name="record"/> that the character may use (<c>canIUseThisBuilding</c>,
     /// <see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, int, Locks.Fixture?)"/>: a storage, holding an inventory, only of its own
     /// faction) and the storage filters let it take the item from (<see cref="Items.IStorageFilter"/>): a container fixture, then a complete player
-    /// storage machine; null with none.
+    /// storage machine; null with none. Of those, the one of the highest take priority (<see cref="Items.IStoragePriority"/>, engine API), the
+    /// nearest among equals.
     /// </summary>
     static FillSource? Storage(World world, CharacterCold cold, Vector3 at, string record, Func<Vector3, bool>? inTown)
     {
         FillSource? best = null;
         float bestD = float.MaxValue;
+        var bestRank = Items.StoragePriority.Forbidden;
         foreach (var f in world.Fixtures.All)
         {
             if (!IsStorage(f.Function) || f.Contents is not { } box || !ProductionSystem.StorageHolds(box, record)) continue;
 
             float d = Vector3.DistanceSquared(f.Position, at);
-            if (!Closer(d, bestD) || inTown is not null && !inTown(f.Position) || !world.Fixtures.CanUse(world, cold, f)) continue;
-            if (!world.StorageAllows(cold, f.Id, Items.StorageUse.Take, record)) continue;
+            if (!Worth(world, d, bestD, bestRank) || inTown is not null && !inTown(f.Position) || !world.Fixtures.CanUse(world, cold, f)) continue;
+            if (Outranks(world.StorageRank(cold, f.Id, Items.StorageUse.Take, record), d, bestRank, bestD) is not { } rank) continue;
 
-            (best, bestD) = (new FillSource(FillSourceKind.Storage, f.Position, record, f.Id), d);
+            (best, bestD, bestRank) = (new FillSource(FillSourceKind.Storage, f.Position, record, f.Id), d, rank);
         }
 
         foreach (var m in world.Machines.All)
@@ -105,11 +107,11 @@ internal static class FillSources
             if (world.Buildings.Find(m.Site) is not { Complete: true } site) continue;
 
             float d = Vector3.DistanceSquared(site.Position, at);
-            if (!Closer(d, bestD) || inTown is not null && !inTown(site.Position)) continue;
+            if (!Worth(world, d, bestD, bestRank) || inTown is not null && !inTown(site.Position)) continue;
             if (!world.Fixtures.CanUse(world, cold, site.Owner, (Locks.Fixture?)null)) continue;
-            if (!world.StorageAllows(cold, m.Site, Items.StorageUse.Take, record)) continue;
+            if (Outranks(world.StorageRank(cold, m.Site, Items.StorageUse.Take, record), d, bestRank, bestD) is not { } rank) continue;
 
-            (best, bestD) = (new FillSource(FillSourceKind.Storage, site.Position, record, m.Site), d);
+            (best, bestD, bestRank) = (new FillSource(FillSourceKind.Storage, site.Position, record, m.Site), d, rank);
         }
 
         return best;
@@ -134,6 +136,20 @@ internal static class FillSources
 
         return best;
     }
+
+    /// <summary>
+    /// Whether a storage at squared distance <paramref name="d"/> is worth ranking: within the finder's range and nearer than the best so far, or
+    /// in range while a farther storage could still outrank the best (<see cref="World.StorageMayOutrank"/>).
+    /// </summary>
+    static bool Worth(World world, float d, float bestD, Items.StoragePriority bestRank) =>
+        Closer(d, bestD) || d <= ConstructionSystem.SourceRangeSquared && world.StorageMayOutrank(bestRank);
+
+    /// <summary>
+    /// The storage's rank when it beats the best so far (a higher priority, or the same and nearer: a tie keeps the first); null when it is
+    /// forbidden or does not.
+    /// </summary>
+    static Items.StoragePriority? Outranks(Items.StoragePriority rank, float d, Items.StoragePriority bestRank, float bestD) =>
+        rank != Items.StoragePriority.Forbidden && (rank > bestRank || rank == bestRank && d < bestD) ? rank : null;
 
     /// <summary>
     /// Whether a squared distance is within the finder's range (the bound kept) and nearer than the best so far (a tie keeps the first).

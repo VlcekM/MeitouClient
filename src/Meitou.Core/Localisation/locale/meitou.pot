@@ -913,7 +913,7 @@ msgstr ""
 msgid "Built into Meitou: {1}; this mod is not run"
 msgstr ""
 
-#: src/Meitou.Game/PlayerInterface.cs src/Meitou.Game/Title/FrontendScreens.cs src/Meitou.Game/Ui/StackSplitDialog.cs
+#: src/Meitou.Game/Building/RenameBuildingDialog.cs src/Meitou.Game/PlayerInterface.cs src/Meitou.Game/Title/FrontendScreens.cs src/Meitou.Game/Ui/StackSplitDialog.cs
 msgid "CANCEL"
 msgstr ""
 
@@ -1387,6 +1387,10 @@ msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "Default settings restored."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Deferred"
 msgstr ""
 
 #: launcher/Meitou.Launcher/GraphicsPage.cs launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Settings/LookBar.cs
@@ -1925,6 +1929,10 @@ msgstr ""
 msgid "For a window: on renders in its real pixels. Off renders in virtual Retina pixels, one per point (a quarter of the pixels on a 2x display) and stretches to the window. No effect on a display without Retina. Full screen has Render resolution."
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Forbidden"
+msgstr ""
+
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Forward"
 msgstr ""
@@ -2043,6 +2051,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Give orders and open menus (the game's right button)."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Give the building a name of your own, shown on its panel, its inventory and the jobs that use it."
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
@@ -2229,6 +2241,10 @@ msgstr ""
 msgid "Hardware must be probed before submitting."
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
+msgstr ""
+
 #: src/Meitou.Game/Ui/HudPanels.cs
 msgid "Hauling"
 msgstr ""
@@ -2301,7 +2317,7 @@ msgstr ""
 msgid "Hide other factions' hats"
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTiers.cs src/Meitou.Data/Textures/TextureQuality.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/GameplaySettings.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/QualityTiers.cs
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTiers.cs src/Meitou.Data/Textures/TextureQuality.cs src/Meitou.Game/Building/BuildingSelection.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/GameplaySettings.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "High"
 msgstr ""
 
@@ -2523,6 +2539,10 @@ msgstr ""
 
 #: src/Meitou.Game/Title/FrontendScreens.cs
 msgid "Import this save into a new game? Unsaved progress will be lost."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Important"
 msgstr ""
 
 #: src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/SettingsMenu.cs
@@ -2857,6 +2877,10 @@ msgstr ""
 msgid "Leave fading tracks on the ground after walking through fresh blood."
 msgstr ""
 
+#: src/Meitou.Game/Building/RenameBuildingDialog.cs
+msgid "Leave it empty for the building's own name."
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game."
 msgstr ""
@@ -3006,7 +3030,7 @@ msgstr ""
 msgid "Loot into backpack"
 msgstr ""
 
-#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTiers.cs src/Meitou.Data/Textures/TextureQuality.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/QualityTiers.cs
+#: launcher/Meitou.Launcher/Benchmarks/BenchmarkTiers.cs src/Meitou.Data/Textures/TextureQuality.cs src/Meitou.Game/Building/BuildingSelection.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Low"
 msgstr ""
 
@@ -4073,6 +4097,10 @@ msgstr ""
 msgid "Post FX"
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Preferred"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Preset '{1}' applied."
 msgstr ""
@@ -4155,6 +4183,10 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/ContextMenuWindow.cs
 msgid "Put on Shackles"
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Put priority:"
 msgstr ""
 
 #: src/Meitou.Game/Title/FrontendScreens.cs
@@ -4311,6 +4343,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Remove"
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingSelection.cs src/Meitou.Game/Building/RenameBuildingDialog.cs
+msgid "Rename"
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
@@ -5289,6 +5325,10 @@ msgstr ""
 msgid "Take picture"
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Take priority:"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "Take the chosen preset's mod list and load order"
 msgstr ""
@@ -5775,10 +5815,6 @@ msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Time speed"
-msgstr ""
-
-#: src/Meitou.Game/Ui/ProductionWindows.cs
-msgid "Time:"
 msgstr ""
 
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
@@ -6303,6 +6339,10 @@ msgstr ""
 
 #: src/Meitou.Game/Tutorials/TutorialPanel.cs
 msgid "Workers"
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingSelection.cs
+msgid "Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs

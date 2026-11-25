@@ -5772,3 +5772,45 @@ msgstr "Monitor {1}: {2}"
 #. machine-translated
 msgid "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor)."
 msgstr "El monitor en el que el juego se inicia y pasa a pantalla completa. Automático: aquel en el que está su ventana (en Wayland, el primer monitor)."
+msgid "Put priority:"
+msgstr "Prioridad de depósito:"
+
+#. machine-translated
+msgid "Take priority:"
+msgstr "Prioridad de retirada:"
+
+#. machine-translated
+msgid "Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
+msgstr "Los porteadores y trabajadores guardan las cosas primero en el almacén con mayor prioridad de depósito y, a igualdad, en el más cercano. Prohibido: nunca. Clic para subir, clic derecho o Mayús+clic para bajar."
+
+#. machine-translated
+msgid "Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower."
+msgstr "Los trabajadores y constructores toman las cosas primero del almacén con mayor prioridad de retirada y, a igualdad, del más cercano. Prohibido: nunca. Clic para subir, clic derecho o Mayús+clic para bajar."
+
+#. machine-translated
+msgid "Forbidden"
+msgstr "Prohibido"
+
+#. machine-translated
+msgid "Deferred"
+msgstr "Aplazado"
+
+#. machine-translated
+msgid "Preferred"
+msgstr "Preferente"
+
+#. machine-translated
+msgid "Important"
+msgstr "Importante"
+
+#. machine-translated
+msgid "Rename"
+msgstr "Renombrar"
+
+#. machine-translated
+msgid "Give the building a name of your own, shown on its panel, its inventory and the jobs that use it."
+msgstr "Dale al edificio un nombre propio, que se muestra en su panel, su inventario y los trabajos que lo usan."
+
+#. machine-translated
+msgid "Leave it empty for the building's own name."
+msgstr "Déjalo vacío para el nombre original del edificio."

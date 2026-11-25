@@ -443,7 +443,8 @@ sealed class BuildingSelection(PlayerInterface player)
         }
 
         AddPublicLines(focus, site, detail, mine, playerSite, stats);
-        var header = HeaderLine(focus, detail, rock, mine, inspected);
+        if (playerSite && site is { Complete: true }) AddPriorityLines(focus, stats);
+        var header = HeaderLine(focus, site, detail, rock, mine, inspected);
         return (header, [.. state], [.. stats], status, bad, [.. extended]);
     }
 
@@ -599,11 +600,73 @@ sealed class BuildingSelection(PlayerInterface player)
     }
 
     /// <summary>
+    /// A complete storage of the player's: its Put priority and Take priority buttons (<see cref="Simulation.Items.StoragePriority"/>), a click
+    /// raising the level, Shift+click lowering it (each wraps). Meitou's setting, not in the original.
+    /// </summary>
+    void AddPriorityLines(SelectedBuilding focus, List<PlayerInterface.HudLine> stats)
+    {
+        if (player.Production.Machine(focus.SiteId) is not { IsStorage: true, HasStorage: true } storage) return;
+
+        stats.Add(PriorityLine(Loc.Tr("Put priority:"), storage.PutPriority, PutTip, "meitou:building-put-priority"));
+        stats.Add(PriorityLine(Loc.Tr("Take priority:"), storage.TakePriority, TakeTip, "meitou:building-take-priority"));
+    }
+
+    /// <summary>
+    /// The Put priority button's tooltip.
+    /// </summary>
+    static string PutTip => Loc.Tr("Haulers and workers put things into the storage of the highest put priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower.");
+
+    /// <summary>
+    /// The Take priority button's tooltip.
+    /// </summary>
+    static string TakeTip => Loc.Tr("Workers and builders take things from the storage of the highest take priority first, the nearest among equals. Forbidden: never. Click to raise, right-click or Shift+click to lower.");
+
+    /// <summary>
+    /// One priority button line: the level's name, coloured bad for Forbidden, good above Normal.
+    /// </summary>
+    static PlayerInterface.HudLine PriorityLine(string label, Simulation.Items.StoragePriority level, string tip, string action)
+    {
+        var colour = level switch
+        {
+            Simulation.Items.StoragePriority.Forbidden => PlayerInterface.BadBrightColour,
+            > Simulation.Items.StoragePriority.Normal => PlayerInterface.GoodColour,
+            _ => PlayerInterface.MainColour,
+        };
+        return new(label, PriorityName(level), PlayerInterface.MainColour, colour, tip, action, ButtonWidth: 0.4f);
+    }
+
+    /// <summary>
+    /// A storage priority's name on its button.
+    /// </summary>
+    static string PriorityName(Simulation.Items.StoragePriority level) => level switch
+    {
+        Simulation.Items.StoragePriority.Forbidden => Loc.Tr("Forbidden"),
+        Simulation.Items.StoragePriority.Low => Loc.Tr("Low"),
+        Simulation.Items.StoragePriority.Deferred => Loc.Tr("Deferred"),
+        Simulation.Items.StoragePriority.Preferred => Loc.Tr("Preferred"),
+        Simulation.Items.StoragePriority.Important => Loc.Tr("Important"),
+        Simulation.Items.StoragePriority.High => Loc.Tr("High"),
+        Simulation.Items.StoragePriority.Critical => Loc.Tr("Critical"),
+        _ => Loc.Tr("Normal"),
+    };
+
+    /// <summary>
+    /// The level after <paramref name="level"/>: one up, or one down when <paramref name="down"/>, wrapping round the ends.
+    /// </summary>
+    static Simulation.Items.StoragePriority NextPriority(Simulation.Items.StoragePriority level, bool down)
+    {
+        const int first = (int)Simulation.Items.StoragePriority.Forbidden;
+        const int count = Simulation.Items.StoragePriority.Critical - Simulation.Items.StoragePriority.Forbidden + 1;
+        int step = down ? count - 1 : 1;
+        return (Simulation.Items.StoragePriority)(((int)level - first + step) % count + first);
+    }
+
+    /// <summary>
     /// The name bar: the building's (or bed's) name and its owner, the player's faction for the player's own building; a town machine's, its level
     /// building's (<see cref="WorldBuildingInfo.Owner"/>).
     /// </summary>
-    PlayerInterface.HudLine HeaderLine(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail, bool rock, bool mine,
-        Simulation.Production.RichnessView? inspected)
+    PlayerInterface.HudLine HeaderLine(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site, Simulation.Locks.BuildingDetail? detail,
+        bool rock, bool mine, Simulation.Production.RichnessView? inspected)
     {
         // A rock (slot 113): the player's faction once a player character has worked it, else its owner nofac's name ("No Faction"; its town
         // NO_TOWN is explored, not secret).
@@ -614,18 +677,25 @@ sealed class BuildingSelection(PlayerInterface player)
                 : player.RecordName?.Invoke(Simulation.Factions.SquadManagement.DismissFallbackFaction);
         }
 
-        var name = detail?.Bed?.Name ?? focus.Name;
+        // A site's name is read each frame, so a rename shows at once.
+        var name = detail?.Bed?.Name ?? (site is not null ? player.Build.ShownSiteName(site) : focus.Name);
         var value = mine ? player.ShownFactionName(player.Session.World.Player.Faction) ?? "" : owner ?? "";
         return new PlayerInterface.HudLine(name, value, PlayerInterface.TitleColour, PlayerInterface.TitleColour);
     }
 
     /// <summary>
-    /// The construction buttons of a player's site without a level placement: Dismantle, and while unfinished PAUSE CONSTRUCTION
+    /// The Rename button's tooltip.
+    /// </summary>
+    static string RenameTip => Loc.Tr("Give the building a name of your own, shown on its panel, its inventory and the jobs that use it.");
+
+    /// <summary>
+    /// The construction buttons of a player's site without a level placement: Dismantle, Rename (Meitou), and while unfinished PAUSE CONSTRUCTION
     /// (or its [PAUSED] caption).
     /// </summary>
     static void AddConstructionButtons(Simulation.Construction.BuildingSnapshot site, List<PlayerInterface.HudLine> state)
     {
         state.Add(new("", Loc.Tr("Dismantle"), ValueColour: PlayerInterface.BadBrightColour, Action: "meitou:building-dismantle"));
+        state.Add(new("", Loc.Tr("Rename"), ValueColour: PlayerInterface.MainColour, Tooltip: RenameTip, Action: "meitou:building-rename"));
         if (site.Complete) return;
 
         state.Add(site.Paused
@@ -838,7 +908,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// Condition</c> (<see cref="DoorConditionRow"/>), then <c>Building Condition</c> (<c>Condition</c> without doors), the construction progress as
     /// the number and its fraction of the target as the bar, then while unfinished a row per material, delivered over required. Meitou models no
     /// building damage, so a finished building's progress is its target (the original's damaged state lowers it). A complete farm adds its crop bars
-    /// after Condition.
+    /// after Condition, then a complete building the mods' bars (<see cref="BuildingModButtons.Rows"/>).
     /// </summary>
     internal List<PlayerInterface.MedicalRow> BuildingRows(SelectedBuilding focus)
     {
@@ -859,6 +929,7 @@ sealed class BuildingSelection(PlayerInterface player)
         rows.Add(Bar(Loc.Tr(door is null ? "Condition" : "Building Condition"), fraction, progressValue, tip));
 
         if (complete && PanelMachine(focus)?.Farm is { } farm) FarmPanel.AddRows(farm, rows);
+        if (complete) rows.AddRange(ModButtons.Rows(focus));
 
         // A wind generator's rows (WindGeneratorBuilding::getGUIPower section 4): Wind, its share as a whole percent and the bar; Power Output,
         // the output as an int over the rated.
@@ -1003,7 +1074,12 @@ sealed class BuildingSelection(PlayerInterface player)
             player.Say(new Simulation.Construction.SetBuildingPublic(id, !site.Public) { Tick = player.Session.World.Tick });
         }
 
-        if (action == "building-dismantle" && site?.LevelPlacement is null)
+        if (action == "building-rename" && site is { LevelPlacement: null })
+        {
+            player.InterfaceSounds.Sound("General_Click");
+            player.RenameBuildingDialog.Ask(id, site.CustomName ?? player.Build.ShownSiteName(site));
+        }
+        else if (action == "building-dismantle" && site?.LevelPlacement is null)
         {
             // Slot 84 (FUN_14054db30): with furniture in it the furniture warning, else "Are you sure?"; Yes dismantles it at once
             // (Building::confirmDismantle).
@@ -1026,10 +1102,37 @@ sealed class BuildingSelection(PlayerInterface player)
             player.InterfaceSounds.Sound("General_Click");   // engine choice: the button's own sound is not traced
             player.Say(new Simulation.Production.IncinerateFurnace(id) { Tick = player.Session.World.Tick });
         }
+        else if (action is "building-put-priority" or "building-take-priority" && player.Production.Machine(id) is { IsStorage: true } storage)
+            SetPriority(id, storage, action == "building-put-priority", player.SlowModifier);
         else if (action == "building-pause" && site is { Complete: false })
             player.Say(new Simulation.Construction.PauseSite(id, !site.Paused) { Tick = player.Session.World.Tick });
         else if (action == "building-doors") player.Say(new Simulation.Locks.ToggleDoorsOrder(id) { Tick = player.Session.World.Tick });
         else if (action == "building-locks") player.Say(new Simulation.Locks.ToggleDoorLocksOrder(id) { Tick = player.Session.World.Tick });
+    }
+
+    /// <summary>
+    /// A right press on the HUD control <paramref name="action"/> names: a storage's Put or Take priority button goes one level down (a left
+    /// click raises it). False for any other control.
+    /// </summary>
+    internal bool PriorityRightClick(string action)
+    {
+        if (action.StartsWith("meitou:", StringComparison.Ordinal)) action = action["meitou:".Length..];
+        if (action is not ("building-put-priority" or "building-take-priority")) return false;
+        if (BuildingFocus()?.SiteId is not { } id || player.Production.Machine(id) is not { IsStorage: true } storage) return false;
+
+        SetPriority(id, storage, action == "building-put-priority", down: true);
+        return true;
+    }
+
+    /// <summary>
+    /// A press of a storage's Put or Take priority button: the next level up, or down (<paramref name="down"/>), with the click sound.
+    /// </summary>
+    void SetPriority(string id, Simulation.Production.MachineSnapshot storage, bool put, bool down)
+    {
+        var use = put ? Simulation.Items.StorageUse.Put : Simulation.Items.StorageUse.Take;
+        var level = NextPriority(put ? storage.PutPriority : storage.TakePriority, down);
+        player.InterfaceSounds.Sound("General_Click");
+        player.Say(new Simulation.Production.SetStoragePriority(id, use, level) { Tick = player.Session.World.Tick });
     }
 
     #endregion
