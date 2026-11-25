@@ -743,7 +743,8 @@ internal sealed class TownGoals(TownDutySystem owner)
         {
             if (ask.Target is { Kind: PlanTarget.Found, Fixture: { } id } && world.Fixtures.Find(id) is { } cage)
             {
-                if (state == StateType.IsAtLocation) return FixtureRegistry.AtCage(cage, world.Characters.Previous[ask.Slot].Position, false);
+                var at = world.Characters.Previous[ask.Slot].Position;
+                if (state == StateType.IsAtLocation) return world.Fixtures.AtCage(cage, at, false, world.Walkability);
                 if (state == StateType.MachineHasFreeOperatorSlot) return FixtureRegistry.IsFree(world.Characters, cage);
             }
 
@@ -1033,7 +1034,7 @@ internal sealed class TownGoals(TownDutySystem owner)
             bool stolen = held is { Inventory: { } inv } && goals.Owner.CarriesStolen(inv, held.Faction);
             return state switch
             {
-                StateType.IsAtLocation => cage is not null && FixtureRegistry.AtCage(cage, table.Previous[ask.Slot].Position, false),
+                StateType.IsAtLocation => cage is not null && world.Fixtures.AtCage(cage, table.Previous[ask.Slot].Position, false, world.Walkability),
                 StateType.IsItemLootable => stolen,
                 StateType.IsSubjectInInventory => !stolen,
                 _ => null,

@@ -1717,7 +1717,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   Every cage job (172, the gatherers, the fate goals, the liberators) walks onto the cage's floor and is at the cage only on its level: row 107's
   `isAtLocation` for a building is `AI::isWithinChoppingRange` (`FUN_14059c6d0`, **Verified**: flat distance and the same floor), and `Task_UseCage`'s
   start (`FUN_140358040`, **Verified**) teleports the character in wherever it stands, so a flat test put a slave under an upper-storey cage into it.
-  Meitou's level (`CaptiveSystem.OnCageLevel`, engine stand-in for the floor number) is within 15 of the floor under the cage's use node nearest the
+  Meitou's level (`FixtureRegistry.OnCageFloor`, engine stand-in for the floor number, shared by every cage test) is within 15 of the floor under the cage's use node nearest the
   worker (`FixtureRegistry.FloorMarker`), not of the cage's origin: rebirth's Storm House cages stand 17 to 19 over their floor (**Observed**, #1383).
   A cage a squad mate works on or the slave ignores is passed over; another squad's work does not count (172 and 245, `FUN_1408db510` with limit 0 on the squad's own
   blackboard, `FUN_1402690e0`, **Verified**).

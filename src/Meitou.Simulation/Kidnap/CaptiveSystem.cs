@@ -1323,16 +1323,16 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// (<see cref="ReachOf"/>) it has arrived, or when a walk ended within <see cref="CaptiveSettings.Slack"/>; a walk that ended farther counts
     /// against <see cref="CaptiveSettings.Walks"/>. Either way only on the cage's level: the rows these jobs plan reach a cage through
     /// <c>isAtLocation</c>, which for a building is <c>AI::isWithinChoppingRange</c> (<c>FUN_14059c6d0</c>, <b>Verified</b>: the flat distance
-    /// and the same floor, <see cref="FixtureRegistry.WorkHeight"/> here), so one standing under a cage on an upper storey is not at it, and 107
-    /// <c>Task_UseCage</c>'s start (<c>FUN_140358040</c>) puts it into the cage wherever it stands (<see cref="OnCageLevel"/>). Its own faction's
-    /// shut doors on the way are unlocked first (the lock rounds' "keys", engine choice). False: give up.
+    /// and the same floor, <see cref="FixtureRegistry.OnCageFloor"/> here), so one standing under a cage on an upper storey is not at it, and 107
+    /// <c>Task_UseCage</c>'s start (<c>FUN_140358040</c>) puts it into the cage wherever it stands. Its own faction's shut doors on the way are
+    /// unlocked first (the lock rounds' "keys", engine choice). False: give up.
     /// </summary>
     bool Walk(World world, CaptiveJob j, int w, Fixture cage, out bool arrived)
     {
         var table = world.Characters;
         ref var n = ref table.Next[w];
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(cage.Position.X, cage.Position.Z));
-        bool level = OnCageLevel(world, n.Position, cage);
+        bool level = world.Fixtures.OnCageFloor(cage, n.Position, world.Walkability);
         bool walking = WalksOwn(table, w, j);
         arrived = level && (d <= cage.UseRange + ReachOf(j) || !walking && j.Walks > 0 && d <= Settings.Slack);
         if (arrived || walking) return true;
@@ -1348,19 +1348,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
         TaskStart.Walk(world, w, cage.Position, SpeedMode.Walk, RowOf(j.Kind), j.Source);   // onto its floor: a flat goal ends under an upper cage
         return true;
-    }
-
-    /// <summary>
-    /// The level half of <c>AI::isWithinChoppingRange</c> for a cage (<c>FUN_14059c6d0</c>, <b>Verified</b>: the same floor, or less than
-    /// <see cref="FixtureRegistry.WorkHeight"/> apart; docs/game/buildings-production.md "Work distance"). Engine stand-in for the floor number: the
-    /// worker at <paramref name="at"/> is within <see cref="FixtureRegistry.WorkHeight"/> of the floor under the cage's use node nearest it
-    /// (<see cref="FixtureRegistry.FloorMarker"/>; its origin when no node has a floor), not of the cage's origin, which can stand 17 to 19 over that
-    /// floor (rebirth's Storm House cages, <b>Observed</b>, #1383).
-    /// </summary>
-    static bool OnCageLevel(World world, Vector3 at, Fixture cage)
-    {
-        float floor = world.Fixtures.FloorMarker(cage.Id, at, world.Walkability)?.Y ?? cage.Position.Y;
-        return MathF.Abs(at.Y - floor) < FixtureRegistry.WorkHeight;
     }
 
     /// <summary>

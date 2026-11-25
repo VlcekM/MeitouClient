@@ -170,7 +170,7 @@ public sealed partial class LockSystem
     /// (<paramref name="at"/>, <paramref name="reach"/>; while it walks, the side its walk aims at, as a walk up a ramp round a building passes nearer
     /// the door's inner side, #1405), at a cage on its floor and at a door within <see cref="DoorPlan.DoorHeight"/> of the leaf's foot. The rows
     /// reach it through <c>isAtLocation</c>, <c>AI::isWithinChoppingRange</c> (<c>FUN_14059c6d0</c>, <b>Verified</b>: the flat distance and the
-    /// same floor, <see cref="FixtureRegistry.WorkHeight"/> for a cage, 130 for a door), so one standing under an upper-storey cage (#1397) or under
+    /// same floor, <see cref="FixtureRegistry.OnCageFloor"/> for a cage, 130 for a door), so one standing under an upper-storey cage (#1397) or under
     /// a door up a ramp (#1405) is not at it. Containers keep the flat test: a container's walk floor lies up to 17 off its origin
     /// (docs/game/locks.md, #292).
     /// </summary>
@@ -180,7 +180,7 @@ public sealed partial class LockSystem
         (at, reach) = WorkSpot(world, f, n.Task == (byte)CharacterTask.GoTo ? n.Goal : Flat(position));
         bool level = f.Kind switch
         {
-            FixtureKind.Cage => MathF.Abs(position.Y - f.Position.Y) < FixtureRegistry.WorkHeight,
+            FixtureKind.Cage => world.Fixtures.OnCageFloor(f, position, world.Walkability),
             FixtureKind.Door => world.Fixtures.DoorSpotOf(f) is not { } spot || MathF.Abs(position.Y - spot.Foot) <= DoorPlan.DoorHeight,
             _ => true,
         };

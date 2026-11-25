@@ -1596,7 +1596,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (cage is null || !FixtureRegistry.IsFree(table, cage)) return End(world, d);
 
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (FixtureRegistry.AtCage(cage, gn.Position, walking)) return LockUp(world, d, g, b, cage);
+        if (world.Fixtures.AtCage(cage, gn.Position, walking, world.Walkability)) return LockUp(world, d, g, b, cage);
 
         return walking || Lost(world, d, g, TargetKey(d));
     }
@@ -2000,7 +2000,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
 
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (FixtureRegistry.AtCage(cage, gn.Position, walking))
+        if (world.Fixtures.AtCage(cage, gn.Position, walking, world.Walkability))
         {
             TaskStart.Stand(table, g);
             if ((d.Next += world.TickSeconds) <= CarrySystem.ConfiscateSeconds) return true;

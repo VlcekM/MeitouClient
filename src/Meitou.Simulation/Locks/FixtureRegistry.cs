@@ -1649,20 +1649,39 @@ public sealed partial class FixtureRegistry
     /// <summary>
     /// Whether a character is at a cage to use it (goal 108's <c>isAtLocation</c> for a building, <c>AI::isWithinChoppingRange</c>
     /// <c>FUN_14059c6d0</c>:114-122, docs/game/buildings-production.md "Work distance"): its flat distance to the cage's position is below the
-    /// functionality's <c>use range</c>, doubled while it is not moving, and it is less than 15 above or below it (the original's same-floor test has
-    /// no counterpart here: Meitou's cage has no floor of its own).
+    /// functionality's <c>use range</c>, doubled while it is not moving, and it stands on the cage's floor (<see cref="OnCageFloor"/>).
     /// </summary>
-    public static bool AtCage(Fixture cage, Vector3 character, bool moving) => AtFixture(cage, character, moving);
+    public bool AtCage(Fixture cage, Vector3 character, bool moving, IWalkability walk) =>
+        InReach(cage, character, moving) && OnCageFloor(cage, character, walk);
 
     /// <summary>
-    /// Whether a character is at a piece of furniture to use it (a cage, a bed, a storage container; <c>isAtLocation</c> for a building,
-    /// <c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>, <b>Verified</b>): as <see cref="AtCage"/>.
+    /// The level half of <c>AI::isWithinChoppingRange</c> for a cage (<c>FUN_14059c6d0</c>, <b>Verified</b>: the same floor, or less than
+    /// <see cref="WorkHeight"/> apart). Engine stand-in for the floor number: <paramref name="at"/> is within <see cref="WorkHeight"/> of the floor
+    /// under the cage's use node nearest it (<see cref="FloorMarker"/>; its origin when no node has a floor), not of the cage's origin, which can
+    /// stand 17 to 19 over that floor (rebirth's Storm House cages, <b>Observed</b>, #1383).
     /// </summary>
-    public static bool AtFixture(Fixture f, Vector3 character, bool moving)
+    public bool OnCageFloor(Fixture cage, Vector3 at, IWalkability walk)
+    {
+        float floor = FloorMarker(cage.Id, at, walk)?.Y ?? cage.Position.Y;
+        return MathF.Abs(at.Y - floor) < WorkHeight;
+    }
+
+    /// <summary>
+    /// Whether a character is at a bed or a storage container to use it (<c>isAtLocation</c> for a building, <c>AI::isWithinChoppingRange</c>
+    /// <c>FUN_14059c6d0</c>, <b>Verified</b>): within its reach (<see cref="InReach"/>) and less than <see cref="WorkHeight"/> above or below its
+    /// origin.
+    /// </summary>
+    public static bool AtFixture(Fixture f, Vector3 character, bool moving) =>
+        InReach(f, character, moving) && MathF.Abs(character.Y - f.Position.Y) < WorkHeight;
+
+    /// <summary>
+    /// The flat half of <c>AI::isWithinChoppingRange</c> for furniture: the flat distance to its position below its <c>use range</c>, doubled while
+    /// the character is not moving.
+    /// </summary>
+    static bool InReach(Fixture f, Vector3 character, bool moving)
     {
         float reach = f.UseRange * (moving ? 1 : StillReachFactor);
-        return Vector2.Distance(new(character.X, character.Z), new(f.Position.X, f.Position.Z)) < reach
-                && MathF.Abs(character.Y - f.Position.Y) < WorkHeight;
+        return Vector2.Distance(new(character.X, character.Z), new(f.Position.X, f.Position.Z)) < reach;
     }
 
     /// <summary>

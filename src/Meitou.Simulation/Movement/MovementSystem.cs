@@ -2033,7 +2033,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             reached = occupied || dist <= (last ? cold.ArriveWithin > 0 ? cold.ArriveWithin : FinalArrive : pass)
                 && (last || dist <= CornerReach || CanCut(walk, p.Position, cold.Path[n.PathCursor + 1], 2 * pass))
                 // A corner the agent's velocity has carried past (it turns at its acceleration, not at once) is behind it, not circled.
-                || !last && dist <= ArriveRadius && to.X * p.Velocity.X + to.Y * p.Velocity.Z < 0;
+                || !last && dist <= ArriveRadius && to.X * p.Velocity.X + to.Y * p.Velocity.Z < 0
+                || !last && AtFeet(p.Position, cold.Path[n.PathCursor + 1]);
 
             if (reached)
             {
@@ -2055,7 +2056,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             else if (!cold.InCombat)
             {
                 var past = PastCorner(p, cold.Path[n.PathCursor + 1]);
-                (s.Dir, s.Desired) = CornerBrake(p.Velocity, past, s.Dir, s.Desired, PathAcceleration(cold));
+                if (TurnsAhead(past, dist)) (s.Dir, s.Desired) = CornerBrake(p.Velocity, past, s.Dir, s.Desired, PathAcceleration(cold));
             }
         }
 
@@ -2540,6 +2541,27 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// The way from the walker to the point past the corner it heads for, the point <see cref="CornerBrake"/> tests.
     /// </summary>
     static Vector2 PastCorner(in CharacterHot p, Vector3 past) => new(past.X - p.Position.X, past.Z - p.Position.Z);
+
+    /// <summary>
+    /// Whether the point past the corner lies ahead of the walker for <see cref="CornerBrake"/> to test: one nearer than the corner, or within
+    /// <see cref="ArriveRadius"/>, lies back at the walker (a path doubling back to its feet, #1387), and steering square across toward it circles
+    /// it for good (engine choice; the original's corner is an end of the first portal the agent has not crossed, <c>FUN_140144330</c>).
+    /// </summary>
+    static bool TurnsAhead(Vector2 past, float dist)
+    {
+        float length2 = past.LengthSquared();
+        return length2 >= dist * dist && length2 > ArriveRadius * ArriveRadius;
+    }
+
+    /// <summary>
+    /// Whether a path point lies at the walker's feet: within <see cref="CornerReach"/> on the ground plane and <see cref="CorridorSlack"/> in
+    /// height. The waypoint before such a point is passed, not walked to and back (engine choice, #1387).
+    /// </summary>
+    static bool AtFeet(Vector3 at, Vector3 point)
+    {
+        var flat = new Vector2(point.X - at.X, point.Z - at.Z);
+        return flat.LengthSquared() <= CornerReach * CornerReach && MathF.Abs(point.Y - at.Y) <= CorridorSlack;
+    }
 
     /// <summary>
     /// The factor on a character's step time: <see cref="OffViewTime"/> out of view.

@@ -1273,7 +1273,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (cage is null || !FixtureRegistry.IsFree(table, cage)) return ToCage(world, a, g);
 
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (FixtureRegistry.AtCage(cage, gn.Position, walking)) return LockUp(world, a, g, t, cage);
+        if (world.Fixtures.AtCage(cage, gn.Position, walking, world.Walkability)) return LockUp(world, a, g, t, cage);
         if (walking) return true;
 
         // A lost walk (FUN_14050d970): the cage goes into the guard's ignore map for 20 s and the finder picks again.
