@@ -5760,3 +5760,15 @@ msgid "{1} mod"
 msgid_plural "{1} mods"
 msgstr[0] "{1} mod"
 msgstr[1] "{1} mods"
+
+#. machine-translated
+msgid "Monitor"
+msgstr "Monitor"
+
+#. machine-translated
+msgid "Monitor {1}: {2}"
+msgstr "Monitor {1}: {2}"
+
+#. machine-translated
+msgid "The monitor the game starts and goes full screen on. Automatic: the one its window is on (on Wayland, the first monitor)."
+msgstr "El monitor en el que el juego se inicia y pasa a pantalla completa. Automático: aquel en el que está su ventana (en Wayland, el primer monitor)."

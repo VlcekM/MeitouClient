@@ -1,4 +1,3 @@
-using Meitou.Game.Rendering.Frame;
 using Silk.NET.GLFW;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
@@ -8,169 +7,134 @@ namespace Meitou.Game.Rendering.Display;
 /// <summary>
 /// Borderless full screen for the viewer and the game (Alt+Enter, the Tab panel, the viewer's F2 editor button): the window loses its border and
 /// covers its monitor, so nothing of the desktop shows and switching away is instant (no exclusive mode change). Toggling again gives the bordered,
-/// maximized window back. Off Windows the window manager is asked for full screen instead, through GLFW on the primary monitor: KDE and other
-/// desktops keep their panel above a window that merely covers the monitor, and Wayland compositors ignore the position a client asks for. That path
-/// keeps the windowed place itself and asks GLFW whether the window is full screen (see <see cref="FullScreen"/>).
+/// maximized window back. Off Windows the window manager is asked for full screen instead (<see cref="WindowManagerFullScreen"/>): KDE and other
+/// desktops keep their panel above a window that merely covers the monitor, and Wayland compositors ignore the position a client asks for. The
+/// monitor is the chosen one, else the one the window is on, else the primary (<see cref="GlfwMonitors.Target"/>).
 /// </summary>
 public static class BorderlessFullScreen
 {
-    /// <summary>
-    /// The window's place before full screen off Windows, put back when it leaves (one window per process: the game or the viewer).
-    /// </summary>
-    static Vector2D<int> s_windowedPosition, s_windowedSize;
-
-    /// <summary>
-    /// How far in from a monitor's corner a window is put, as Silk.NET's default 50,50: on X11 the position is the content's, and the title bar goes
-    /// above it.
-    /// </summary>
-    const int Inset = 50;
+    #region Switching
 
     /// <summary>
     /// Whether the window is in full screen: borderless (Windows) or full screen on a monitor (GLFW).
     /// </summary>
-    public static bool IsOn(IWindow window) => window.WindowBorder == WindowBorder.Hidden || FullScreen(window);
+    public static bool IsOn(IWindow window) => window.WindowBorder == WindowBorder.Hidden || WindowManagerFullScreen.IsOn(window);
 
     /// <summary>
-    /// Whether the window is full screen on a monitor, asked of GLFW: on KDE (Wayland and XWayland) a window maximized before going full screen stays
-    /// maximized in it (Observed 2026-10-25), and Silk.NET's WindowState, which checks Maximized first, then says Maximized (Verified: Silk.NET 2.23
-    /// GlfwWindow.CoreWindowState).
+    /// Switches the window between borderless full screen and the bordered, maximized window. Full screen goes to monitor
+    /// <paramref name="monitorIndex"/> (1-based) when it exists, else, with <paramref name="followWindow"/>, to the one the window is on; false at
+    /// start-up, where the window has not been placed by the player.
     /// </summary>
-    static unsafe bool FullScreen(IWindow window) => window.Native?.Glfw is { } handle
-        ? GlfwProvider.GLFW.Value.GetWindowMonitor((WindowHandle*)handle) != null
-        : window.WindowState == WindowState.Fullscreen;
-
-    /// <summary>
-    /// Full screen on the requested monitor, or the primary monitor when none was requested, at its current video mode, keeping the windowed place to
-    /// go back to. Auto-iconify off on Linux: GLFW otherwise minimizes a full-screen window when it loses focus (Alt+Tab), which borderless full
-    /// screen on Windows never does, and the window manager keeps only the focused full-screen window on top. Not on macOS, where GLFW raises a
-    /// full-screen window above the menu bar and minimizing is what gets it out of the way.
-    /// </summary>
-    static unsafe Vector2D<int>? EnterFullScreen(IWindow window, nint handle, int? monitorIndex)
-    {
-        var glfw = GlfwProvider.GLFW.Value;
-        var monitor = RequestedMonitor(glfw, monitorIndex);
-        if (monitor == null) monitor = glfw.GetPrimaryMonitor();
-        if (monitor == null) return null;
-        var mode = glfw.GetVideoMode(monitor);
-        if (mode == null) return null;
-        s_windowedPosition = window.Position;
-        s_windowedSize = window.Size;
-        if (OperatingSystem.IsLinux())
-            glfw.SetWindowAttrib((WindowHandle*)handle, WindowAttributeSetter.AutoIconify, false);
-        glfw.SetWindowMonitor((WindowHandle*)handle, monitor, 0, 0, mode->Width, mode->Height, mode->RefreshRate);
-        return new Vector2D<int>(mode->Width, mode->Height);
-    }
-
-    /// <summary>
-    /// The 1-based requested GLFW monitor, or null when <paramref name="monitorIndex"/> is absent or outside the current monitor list.
-    /// </summary>
-    static unsafe Silk.NET.GLFW.Monitor* RequestedMonitor(Glfw glfw, int? monitorIndex)
-    {
-        if (monitorIndex is not { } index || index < 1) return null;
-
-        var monitors = glfw.GetMonitors(out int count);
-        return index <= count ? monitors[index - 1] : null;
-    }
-
-    /// <summary>
-    /// Out of full screen through GLFW, back to the windowed place kept on entering (X11 and macOS honour the position; Wayland ignores it), then
-    /// maximized.
-    /// </summary>
-    static unsafe void LeaveFullScreen(IWindow window, nint handle)
-    {
-        var glfw = GlfwProvider.GLFW.Value;
-        if (s_windowedSize.X <= 0 || s_windowedSize.Y <= 0) s_windowedSize = window.Size;
-        glfw.SetWindowMonitor((WindowHandle*)handle, null, s_windowedPosition.X, s_windowedPosition.Y, s_windowedSize.X, s_windowedSize.Y, 0);
-        glfw.MaximizeWindow((WindowHandle*)handle);
-    }
-
-    /// <summary>
-    /// Puts the window near the corner of the primary monitor's work area (X11 honours it; Wayland places windows itself).
-    /// </summary>
-    public static unsafe void MoveToPrimaryMonitor(IWindow window)
-    {
-        var glfw = GlfwProvider.GLFW.Value;
-        var primary = glfw.GetPrimaryMonitor();
-        if (primary == null) return;
-        glfw.GetMonitorWorkarea(primary, out int x, out int y, out _, out _);
-        window.Position = new Vector2D<int>(x + Inset, y + Inset);
-    }
-
-    /// <summary>
-    /// Switches the window between borderless full screen on its monitor and the bordered, maximized window.
-    /// </summary>
-    public static void Toggle(IWindow window, int? monitorIndex = null)
+    public static void Toggle(IWindow window, int? monitorIndex = null, bool followWindow = true)
     {
         if (IsOn(window))
         {
-            if (FullScreen(window) && window.Native?.Glfw is { } glfwWindow) LeaveFullScreen(window, glfwWindow);
-            else
-            {
-                // Windows' borderless window.
-                window.WindowBorder = WindowBorder.Resizable;
-                window.WindowState = WindowState.Maximized;
-            }
+            Leave(window);
             Console.WriteLine("window    bordered");
             return;
         }
 
-        // The monitor the window is on: its origin in desktop coordinates, which is what Position takes. The size is the monitor's video
-        // mode: GLFW's Bounds is the work area (1920 x 1032 over a 48 px taskbar, Observed 2026-10-10), and Windows keeps the taskbar on
-        // top of a window that does not cover the whole monitor.
-        var monitor = window.Monitor ?? Silk.NET.Windowing.Monitor.GetMainMonitor(window);
-        var size = monitor.VideoMode.Resolution ?? monitor.Bounds.Size;
-        if (!OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows()) EnterBorderless(window, monitorIndex, followWindow);
+        else WindowManagerFullScreen.Enter(window, monitorIndex, followWindow);
+    }
+
+    /// <summary>
+    /// Moves a full-screen window to monitor <paramref name="monitorIndex"/>, or to the one it is on when that is null (a changed Monitor setting);
+    /// a window not in full screen is left where it is.
+    /// </summary>
+    public static void MoveTo(IWindow window, int? monitorIndex)
+    {
+        if (!IsOn(window)) return;
+
+        if (OperatingSystem.IsWindows()) PlaceBorderless(window, monitorIndex, followWindow: true);
+        else WindowManagerFullScreen.MoveTo(window, monitorIndex);
+    }
+
+    /// <summary>
+    /// Back to the bordered, maximized window.
+    /// </summary>
+    static void Leave(IWindow window)
+    {
+        if (WindowManagerFullScreen.IsOn(window) && window.Native?.Glfw is { } glfwWindow)
         {
-            // Shown first on Wayland: GLFW ignores showing a full-screen window, and there going full screen doesn't show it either (X11 maps it
-            // itself).
-            if (window.Native?.Wayland is not null) window.IsVisible = true;
-            if (window.Native?.Glfw is { } handle) size = EnterFullScreen(window, handle, monitorIndex) ?? size;
-            else window.WindowState = WindowState.Fullscreen;
-            Console.WriteLine($"window    full screen {size.X} x {size.Y}, asked of the window manager");
+            WindowManagerFullScreen.Leave(window, glfwWindow);
             return;
         }
 
-        // Bounds is the work area, so its origin is below a taskbar or panel at the top (or right of one on the left): the corner of the monitor
-        // itself is read from GLFW (under Wine too, where a panel at the top left the window 34 px down with its bottom cut off).
-        var origin = MonitorCorner(window) ?? monitor.Bounds.Origin;
+        // Windows' borderless window.
+        window.WindowBorder = WindowBorder.Resizable;
+        window.WindowState = WindowState.Maximized;
+    }
+
+    #endregion
+
+    #region Borderless window (Windows)
+
+    /// <summary>
+    /// The borderless window over the monitor <see cref="GlfwMonitors.Target"/> picks.
+    /// </summary>
+    static void EnterBorderless(IWindow window, int? monitorIndex, bool followWindow)
+    {
+        // Picked before the window changes: restoring it below moves it.
+        var (origin, size) = BorderlessPlace(window, monitorIndex, followWindow);
 
         // Only when it is not: setting it restores the window, which shows one still hidden (the game sizes its window before showing it).
         if (window.WindowState != WindowState.Normal) window.WindowState = WindowState.Normal;
         window.WindowBorder = WindowBorder.Hidden;
-        window.Position = origin;
-        window.Size = size;
-        Console.WriteLine($"window    borderless full screen {size.X} x {size.Y} at {origin.X},{origin.Y} " +
-            $"(monitor work area {monitor.Bounds.Size.X} x {monitor.Bounds.Size.Y} at {monitor.Bounds.Origin.X},{monitor.Bounds.Origin.Y})");
+        Cover(window, origin, size);
     }
 
     /// <summary>
-    /// The top-left corner of the monitor the window is on (the one under its centre, else the primary), or null when GLFW cannot say.
+    /// Puts the borderless window over the monitor <see cref="GlfwMonitors.Target"/> picks.
     /// </summary>
-    static unsafe Vector2D<int>? MonitorCorner(IWindow window)
+    static void PlaceBorderless(IWindow window, int? monitorIndex, bool followWindow)
+    {
+        var (origin, size) = BorderlessPlace(window, monitorIndex, followWindow);
+        Cover(window, origin, size);
+    }
+
+    /// <summary>
+    /// Gives the window the place and size of a monitor.
+    /// </summary>
+    static void Cover(IWindow window, Vector2D<int> origin, Vector2D<int> size)
+    {
+        window.Position = origin;
+        window.Size = size;
+        Console.WriteLine($"window    borderless full screen {size.X} x {size.Y} at {origin.X},{origin.Y}");
+    }
+
+    /// <summary>
+    /// The corner and size of the monitor the borderless window covers, from GLFW, else Silk.NET's monitor of the window. The size is the monitor's
+    /// video mode: GLFW's Bounds is the work area (1920 x 1032 over a 48 px taskbar, Observed 2026-10-10), and Windows keeps the taskbar on top of a
+    /// window that does not cover the whole monitor. The corner is the monitor's own, not the work area's, which is below a taskbar or panel at the
+    /// top (or right of one on the left; under Wine too, where a panel at the top left the window 34 px down with its bottom cut off).
+    /// </summary>
+    static (Vector2D<int> Origin, Vector2D<int> Size) BorderlessPlace(IWindow window, int? monitorIndex, bool followWindow)
+    {
+        if (GlfwMonitorRect(window, monitorIndex, followWindow) is { } rect) return rect;
+
+        var monitor = window.Monitor ?? Silk.NET.Windowing.Monitor.GetMainMonitor(window);
+        return (monitor.Bounds.Origin, monitor.VideoMode.Resolution ?? monitor.Bounds.Size);
+    }
+
+    /// <summary>
+    /// The corner and video mode size of the monitor <see cref="GlfwMonitors.Target"/> picks, or null when GLFW cannot say.
+    /// </summary>
+    static unsafe (Vector2D<int> Origin, Vector2D<int> Size)? GlfwMonitorRect(IWindow window, int? monitorIndex, bool followWindow)
     {
         try
         {
             var glfw = Glfw.GetApi();
-            var monitors = glfw.GetMonitors(out int count);
-            var centre = window.Position + window.Size / 2;
-            Silk.NET.GLFW.Monitor* found = null;
-            for (int i = 0; i < count; i++)
-            {
-                glfw.GetMonitorWorkarea(monitors[i], out int x, out int y, out int w, out int h);
-                if (centre.X >= x && centre.X < x + w && centre.Y >= y && centre.Y < y + h)
-                {
-                    found = monitors[i];
-                    break;
-                }
-            }
-            if (found == null) found = glfw.GetPrimaryMonitor();
-            if (found == null) return null;
-            glfw.GetMonitorPos(found, out int px, out int py);
-            return new Vector2D<int>(px, py);
+            var monitor = GlfwMonitors.Target(glfw, window, monitorIndex, followWindow);
+            if (monitor == null) return null;
+
+            return GlfwMonitors.Rect(glfw, monitor);
         }
         catch (Exception e) when (e is NotSupportedException or DllNotFoundException or EntryPointNotFoundException)
         {
             return null;
         }
     }
+
+    #endregion
 }

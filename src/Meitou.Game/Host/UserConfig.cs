@@ -354,6 +354,11 @@ sealed class UserConfig
     /// </summary>
     public bool FullScreen { get; set; } = true;
     /// <summary>
+    /// The monitor full screen goes to, 1-based in GLFW's order (as <c>--monitor</c>, which wins for its run), the window starts on too; 0 (or a
+    /// monitor no longer there) is automatic: the one the window is on, else the primary (docs/viewer.md, Alt+Enter).
+    /// </summary>
+    public int Monitor { get; set; }
+    /// <summary>
     /// World ticks per second, 30 by default (the session's fixed-step clock).
     /// </summary>
     public int TickRate { get; set; } = 30;

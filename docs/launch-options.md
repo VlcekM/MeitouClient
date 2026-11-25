@@ -143,7 +143,7 @@ When an option maps to a settings row, it overrides that setting for the current
 | `--windowed` | | off (fullscreen) | Opens a bordered window (maximized unless `--size` is given). |
 | `--hidden-window` | | off | Creates an invisible window (implies `--windowed`) for unattended runs like `--play-bench`. Renders and presents normally. |
 | `--headless` | | off | Runs without a window, swapchain, or audio, rendering offscreen at `--size` (default `1920x1080`, 30 FPS unless `--fps-limit` is set). Designed for the agent channel. Also enabled by `MEITOU_HEADLESS=1`. |
-| `--monitor <n>` | 1-based index | system default | Places the window on monitor `n`. |
+| `--monitor <n>` | 1-based index | the Monitor setting | Starts the window and its full screen on monitor `n` (GLFW's order) for this run; a missing one is automatic ([viewer](viewer.md), Alt+Enter). |
 | `--show-keys` | | off | Opens the F10 key list on startup. |
 | `--play-shots` | | off | Continuously flies through saved camera bookmarks in a loop. |
 | `--crowd <n>` | count | `0` | Spawns `n` generated test characters in the starting town. |

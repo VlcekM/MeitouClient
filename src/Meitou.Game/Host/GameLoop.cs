@@ -394,15 +394,18 @@ sealed class GameLoop(GameHost host)
     void ShowWindow()
     {
         // X11 opens it where Silk.NET asks (50,50), the desktop's corner, which can be another monitor (Observed 2026-10-26, XWayland): on the
-        // primary monitor instead, the one full screen uses; leaving full screen puts it back where it was when full screen began.
-        if (_window?.Native?.X11 is not null) BorderlessFullScreen.MoveToPrimaryMonitor(_window);
+        // chosen monitor instead, else the primary, the one full screen starts on; leaving full screen puts it back where it was when full screen
+        // began. Elsewhere only onto a chosen monitor: Wayland places windows itself.
+        var monitor = ChosenMonitor();
+        bool placed = _window?.Native?.X11 is not null || (monitor is not null && _window?.Native?.Wayland is null);
+        if (_window is not null && placed) GlfwMonitors.MoveWindowTo(_window, monitor);
         // Borderless full screen as the viewer starts (Alt+Enter and the Tab panel switch it); --windowed keeps a window for
         // this run: the size asked by --size, else maximised. Sized while still hidden: resizing after it shows (maximised,
         // then borderless) flashed white and black before the first frame.
         bool fullScreen = host.Config.FullScreen && !host.WorldOptions.Windowed && !_headless;
         (_savedVSync, _savedFullScreen) = (_vsync, fullScreen);
         if (_window is null) { }
-        else if (fullScreen) BorderlessFullScreen.Toggle(_window, _display.Monitor);
+        else if (fullScreen) BorderlessFullScreen.Toggle(_window, monitor, followWindow: false);
         else if (!host.WorldOptions.SizeGiven && !host.WorldOptions.HiddenWindow)
             _window.WindowState = WindowState.Maximized;   // maximising would show a hidden window
         host.BeginLoadingScreen(_display);   // its textures and fonts are made before the window shows
@@ -514,6 +517,8 @@ sealed class GameLoop(GameHost host)
         _panel = new SettingsMenu(host.Player, values, host.Session.Bindings, SaveSettings, frameLimit, host.Config)
         {
             UpscalerStatus = () => host.Gpu.Post?.ActiveUpscaler ?? "Off",
+            MonitorNames = _window is null ? null : GlfwMonitors.Names,
+            MonitorChanged = MonitorChanged,
             // The loaded frame generation's state; a change it cannot follow shows as pending until the restart.
             FrameGenerationStatus = () => FrameGenerationSetup.FrameGenerationState(_display, _frameGenerationLoaded,
                 host.Config.FrameGenerationMethod, _hdrAtStart),
@@ -848,7 +853,20 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     void ToggleFullScreen()
     {
-        if (_window is not null) BorderlessFullScreen.Toggle(_window, _display.Monitor);
+        if (_window is not null) BorderlessFullScreen.Toggle(_window, ChosenMonitor());
+    }
+
+    /// <summary>
+    /// The monitor asked for (1-based): <c>--monitor</c> for its run, else the Monitor setting; null: automatic (<see cref="UserConfig.Monitor"/>).
+    /// </summary>
+    int? ChosenMonitor() => _display.Monitor ?? (host.Config.Monitor > 0 ? host.Config.Monitor : null);
+
+    /// <summary>
+    /// Moves a full-screen window to the monitor the Monitor setting now names.
+    /// </summary>
+    void MonitorChanged()
+    {
+        if (_window is not null) BorderlessFullScreen.MoveTo(_window, ChosenMonitor());
     }
 
     /// <summary>

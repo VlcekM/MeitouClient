@@ -382,8 +382,8 @@ static class LauncherSchema
     }
 
     /// <summary>
-    /// The launcher's Display section: full screen, VSync, the frame limit, frame generation, HDR output, the world tick and the Display ones of
-    /// the given sliders.
+    /// The launcher's Display section: full screen, its monitor, VSync, the frame limit, frame generation, HDR output, the world tick and the
+    /// Display ones of the given sliders.
     /// </summary>
     static SettingsSection DisplaySection(UserConfig defaults, List<SettingDescription> sliders) => new()
     {
@@ -394,6 +394,12 @@ static class LauncherSchema
             {
                 Key = Key(nameof(UserConfig.FullScreen)), Kind = SettingKind.Toggle, Name = "Full screen",
                 Description = SettingHints.SliderHint("Full screen"), Default = defaults.FullScreen ? 1 : 0, On = "Borderless", Off = "Window",
+            },
+            new()
+            {
+                Key = Key(nameof(UserConfig.Monitor)), Kind = SettingKind.Slider, Name = SettingsMenu.MonitorName,
+                Description = SettingsMenu.MonitorHint, Default = defaults.Monitor, Shown = defaults.Monitor, Min = 0,
+                Max = SettingsMenu.LauncherMonitors, Step = 1, OffBelow = 1, OffText = "Automatic", Renderer = VulkanRenderer,
             },
             new()
             {
