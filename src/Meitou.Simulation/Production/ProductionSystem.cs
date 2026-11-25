@@ -617,9 +617,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// Where a character at <paramref name="from"/> walks to for a machine, and the height of the floor it walks on: a turret's gunner spot
-    /// (<see cref="Ai.AiSystem.TurretSpot"/>); a rock's middle (<see cref="RockGoal"/>); else the spot on the machine's floor within its use range
-    /// nearest the walker (<see cref="SiteReach.WorkSpot"/>), which <see cref="AtSite"/> then passes: furniture cuts a hole in the floor's navmesh,
-    /// and a walk to the place itself could end on a stair beside it, short of the height test.
+    /// (<see cref="Ai.AiSystem.TurretSpot"/>); a rock's walk point on the walker's side (<see cref="RockGoal"/>); else the spot on the machine's
+    /// floor within its use range nearest the walker (<see cref="SiteReach.WorkSpot"/>), which <see cref="AtSite"/> then passes: furniture cuts a
+    /// hole in the floor's navmesh, and a walk to the place itself could end on a stair beside it, short of the height test.
     /// </summary>
     Vector3 GoalOf(World world, BuildSite site, Machine m, Vector3 from)
     {
@@ -630,7 +630,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             return spot;
         }
 
-        if (_naturalBounds.TryGetValue(site.Id, out var rock)) return RockGoal(world, site, rock.Centre);
+        if (_naturalBounds.ContainsKey(site.Id)) return RockGoal(world.Walkability, site, from);
 
         float limit = SiteReach.HeightLimit(world.Fixtures.DoorsByBuilding[site.Id].Any(), SiteReach.InBuilding(site));
         if (UseNodeMarker(world, site, from, limit) is { } node) return node;
@@ -688,13 +688,32 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         string.Equals(walk.InteriorNear(a, RoomFaceReach), walk.InteriorNear(b, RoomFaceReach), StringComparison.Ordinal);
 
     /// <summary>
-    /// A rock is walked to at its bounds' middle, which its footprint holds (its origin can lie off its pile): the floor point at or next to it
-    /// (<see cref="MovementSystem.GoToFloor"/>), on the rock's own height.
+    /// Where a rock's operator at <paramref name="from"/> walks to (<c>getPosWithinChoppingRange</c> <c>FUN_14059bf30</c>, the foliage branch,
+    /// <b>Verified</b>): <see cref="RockApproach"/> from the rock's position toward the walker, put on the navmesh (<see cref="RockSnap"/>), at the
+    /// height found there; the rock's position when no surface lies within reach. The rock's middle or position is no goal: a large rock's lies
+    /// inside its pile, off the mesh, and no path led there (#1391).
     /// </summary>
-    static Vector3 RockGoal(World world, BuildSite site, Vector3 centre)
+    static Vector3 RockGoal(IWalkability walk, BuildSite site, Vector3 from)
     {
-        var at = world.Walkability.FloorNear(centre.X, centre.Z, centre.Y, MovementSystem.FloorSlack) ?? centre;
-        return new Vector3(at.X, site.Position.Y, at.Z);
+        var origin = site.Position;
+        var toward = from - origin;
+        var aim = toward.LengthSquared() > 1e-6f ? origin + Vector3.Normalize(toward) * RockApproach : origin;
+        return RockSnap(walk, aim) ?? origin;
+    }
+
+    /// <summary>
+    /// The original's closest navmesh point to a rock's walk aim (<c>FUN_1403a3ac0</c> with the cube <see cref="RockSnapReach"/> and the extent
+    /// <see cref="RockSnapExtent"/>, <see cref="RefitSnap"/>) where the walkability knows its faces, else the closest walkable point in
+    /// X/Z (<see cref="WalkableSpots.Closest"/>); null when there is none. The faces are taken out to the cube plus the clearance step's largest box
+    /// and its edge reach (5 extents), which may lie round a point found at the cube's side.
+    /// </summary>
+    static Vector3? RockSnap(IWalkability walk, Vector3 aim)
+    {
+        if (walk.SurfaceFaces(aim, RockSnapReach + 5 * RockSnapExtent) is { } faces)
+            return RefitSnap.Snap(faces, aim, RockSnapReach, RockSnapExtent);
+        if (!WalkableSpots.Closest(walk, new Vector2(aim.X, aim.Z), RockSnapReach, out var spot)) return null;
+
+        return new Vector3(spot.X, walk.GroundHeight(spot.X, spot.Y, aim.Y), spot.Y);
     }
 
     /// <summary>
@@ -809,7 +828,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// Whether the operator is at the machine: a turret's gunner at its spot or within the turret's use range, a rock's within
-    /// <see cref="RockReach"/> of its footprint, else within reach of the site; a gunner also at its spot's height, a machine's operator at the site's.
+    /// <see cref="RockReach"/> of its footprint or stopped at its walk's end (<see cref="AtRockWalkEnd"/>), else within reach of the site; a gunner
+    /// also at its spot's height, a machine's operator at the site's.
     /// </summary>
     bool AtSite(World world, in CharacterHot n, BuildSite site, Machine m)
     {
@@ -823,8 +843,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
 
         // A rock: at its footprint (engine choice, #587: the original's use range of the position marker, doubled when stopped, has a copper
-        // rock mined from 100 to 200 off its middle).
-        if (_naturalBounds.TryGetValue(site.Id, out var rock)) return SiteReach.Within(n, rock.Gap(n.Position), RockReach);
+        // rock mined from 100 to 200 off its middle), or stopped where its walk ends (RockGoal): a small rock's walk point stands off its footprint,
+        // where the original's iron miner arrives by that use range (50, doubled once stopped).
+        if (_naturalBounds.TryGetValue(site.Id, out var rock))
+            return SiteReach.Within(n, rock.Gap(n.Position), RockReach) || AtRockWalkEnd(n, site);
 
         // The machine's use range (UseableStuff::getReachRange): from its position marker when it has use nodes (FUN_14059c6d0: the X/Z distance to
         // getPositionMarker), and for one inside a building from the same building's floor as that node (engine choice: the original's worker
@@ -840,6 +862,13 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (!SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange)) return false;
         return SiteReach.AtHeight(n, site, door) || OffFloor(world, n, site);
     }
+
+    /// <summary>
+    /// Whether a rock's operator stands stopped within <see cref="RockApproach"/> of the rock's position in X/Z, plus <see cref="RockReach"/> for the
+    /// snap's clearance step (engine choice): there its walk to the point <see cref="RockGoal"/> aims at has ended.
+    /// </summary>
+    static bool AtRockWalkEnd(in CharacterHot n, BuildSite site) =>
+        (n.Flags & (ushort)MoveFlags.AnyPath) == 0 && Gap(n.Position, site.Position) <= RockApproach + RockReach;
 
     /// <summary>
     /// Whether the character is at the player machine of site <paramref name="siteId"/> (<see cref="AtSite"/>); false when there is none.

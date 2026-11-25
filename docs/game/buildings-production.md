@@ -166,7 +166,11 @@ the goal conditions (the call is virtual). Meitou applies the height limit above
 every update, and `FUN_140596800`, which gives the arrival test above its point): for a building that is not foliage and has no object at
 slot 0x2c8 (a constant null for `UseableStuff` and `ProductionBuilding`, `FUN_1400f6b20`) both are `getPositionMarker(the character's
 position)` (`FUN_14054b850`): with two or more use nodes the one nearest the character (squared 3D distance, the bad nodes skipped), else
-the marker. Data (**Verified**, merged base game): Quarry Mine A and B hold eight `Node Use` instances 120 to 140 units round the mine
+the marker. For a foliage building (a rock, `+0xc0`) with no point given (the planner `FUN_14026b530` makes its Task_Move steps with the
+point ZERO, which `FUN_140354600` hands on): 65 (`DAT_1416f0010`) from the rock's position toward the character (the 3D direction), put
+on the navmesh by the closest-point query `FUN_1403a3ac0` with cube 150 (`_DAT_1416cf06c`) and extent 10 (`DAT_14167fad4`), the door and
+water filter ([refit snap](pathfinding.md#refit-snap)); with a point given, that point with cube 50 (`DAT_141683170`); when the query finds
+nothing, the rock's position (**Verified**, decompile; constants read from the 1.0.68 exe). Data (**Verified**, merged base game): Quarry Mine A and B hold eight `Node Use` instances 120 to 140 units round the mine
 (local radius 133 to 155, `scale` 0.9), a Well eight at 21 to 33; the Stone mine's `use range` is 40, the Well's 18.
 
 Meitou's NPC town workers (189, 190, and a player slave's work, `AiSystem.AtWorkplace`, `WorkFunctionality.MarkerOf`): they walk to the
@@ -188,11 +192,17 @@ passed over), and its operator or hauler walks to that node; for a machine insid
 floor, as the node does (`IWalkability.InteriorNear`, engine choice). **Observed** (original 1.0.68, #1180: a Copper Alloy Bench against a
 Storm House's inner wall, a worker on its operate job standing against the wall outside, about 33 from the nearest node, within the reach
 rule above once stopped): the worker walked round through the door and worked the bench from inside.
-A rock's operator has arrived within 10 (20 once stopped) of its mesh's footprint (the convex hull of
-its vertices seen from above) as the instance places it (its bounds circle without the mesh); it walks to the bounds box's centre and
-faces it (a rock's origin can lie off its pile). Engine choice, nearer than the original: its rule above has a copper rock (`use range`
-100) mined from 100 to 200 off its position marker (#587), and the bounds box let miners work a scattered or long rock from 20 m off
-(#332). **Observed** (navmesh walks at the two copper rocks by 52474,-95934, zone 43.11): a walker reaches the footprint itself. Taking its ore
+A rock's operator walks to the original's point above (`ProductionSystem.RockGoal`: `RefitSnap` with cube 150 and extent 10 where the
+walkability knows its faces, else the closest walkable point in X/Z) and faces the rock's bounds centre (a rock's origin can lie off its pile).
+It has arrived within 10 (20 once stopped) of its mesh's footprint (the convex hull of its vertices seen from above) as the instance places
+it (its bounds circle without the mesh), or stopped within 75 of the rock's position in X/Z (the walk point's 65 plus 10 for the clearance
+step: a small rock's walk point stands off its footprint, where the original's iron miner arrives by its `use range` 50, doubled once
+stopped). Engine choice, nearer than the original: its rule above has a copper rock (`use range` 100) mined from 100 to 200 off its
+position marker (#587), and the bounds box let miners work a scattered or long rock from 20 m off (#332). **Observed** (navmesh walks at
+the two copper rocks by 52474,-95934, zone 43.11): a walker reaches the footprint itself. **Observed** (#1391 save, an Iron Resource at
+-53422,881.7,2493, scale 2.5, flipped): its position and bounds centre lie inside the pile, 30 under the ground round it and off the
+navmesh, and no path led there, so a miner sent from 100 off never set out; the original's walk point lies on the mesh at the footprint's
+edge and is reached. Taking its ore
 measures 40 to the footprint's edge. Height: Meitou knows no floor of a player building or of one standing in it, so `SiteReach.AtHeight` requires |dy| below the limit above (130 door, 15 inside a building, else 45; slot 0x428 not read) for every site goal, except that a builder or fetcher outdoors at an outdoor site (no parent, or snapped to a building's outside; floor 0) is on its floor whatever the height, as the original compares the worker's floor (0 outdoors) with the building's `floornum` (`+0xa4`, **Verified** by the state reader `FUN_140552b70`) (`ConstructionSystem.OnSiteFloor`; **Observed**, #1255: `more building.mod`'s Outpost s-V big stands with its origin 219 under its own slab, 199 under the terrain, and its builders stood on the slab without ever arriving; #1246: a Spotlight snapped to a house's outside wall 56 over the ground had its builders stand under it for ever); a builder measures a `ceiling placement` site from the floor under it (`ConstructionSystem.FloorHeight`), as the same-floor test passes it (#592: lamps hang 26 to 48 over a swamp house floor). Walk: a builder, a storage fetcher, a player machine's operator or hauler and a corpse carrier to a player machine walk to the site's position on its floor when they can stand there within that limit, else to the point nearest them, on rings round the site out to the reach plus 40, that stands on the floor within the limit and within the reach (builders 40, machines the `use range`) of the hull (`SiteReach.WorkSpot`, engine choice standing in for the position marker; a turret's gunner and a rock's miner keep their own spots): furniture cuts holes in a floor's mesh, and a path to the position itself may end on any surface within its goal floor slack (`NavQuery.GoalFloorSlack` 40), such as a stair beside the site, where the height test above never passes.
 
 Repair (**Verified**, Building slot 0x328 `FUN_1400f6b70`, `Task_Build` `FUN_14034a440`): a building needs repair when

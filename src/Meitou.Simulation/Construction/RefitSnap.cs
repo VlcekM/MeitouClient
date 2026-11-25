@@ -3,55 +3,57 @@ using System.Numerics;
 namespace Meitou.Simulation.Construction;
 
 /// <summary>
-/// The two-step snap of a town's centre onto the navmesh (<b>Verified</b>, the closest-point wrapper <c>FUN_1403a2fa0</c> / <c>FUN_1403a2300</c>,
-/// docs/game/buildings-production.md "Outposts"): the 3D closest point, then the nearest point kept <see cref="Clearance"/> units clear of the
-/// mesh's boundary.
+/// The original's two-step snap of a point onto the navmesh (<b>Verified</b>, the closest-point wrapper <c>FUN_1403a2fa0</c> / <c>FUN_1403a2300</c>,
+/// docs/game/pathfinding.md "Refit snap"): the 3D closest point within a cube of the call's reach, then the nearest point kept the call's extent
+/// clear of the mesh's boundary. A town's centre is snapped with <see cref="Reach"/> and <see cref="Clearance"/>, a rock's walk point with its own
+/// (<c>getPosWithinChoppingRange</c>, docs/game/buildings-production.md "Work distance").
 /// </summary>
 static class RefitSnap
 {
     /// <summary>
-    /// The half size of the cube the 3D closest-point query searches (500 units, 50 in Havok space).
+    /// The half size of the cube the town refit's 3D closest-point query searches (500 units, 50 in Havok space).
     /// </summary>
     public const float Reach = 500;
     /// <summary>
-    /// The clearance step's distance from the mesh's boundary (the extent value 2 Havok = 20 units) and its vertical reach (the up component stays at
-    /// the cap).
+    /// The town refit's clearance extent (2 Havok = 20 units): the clearance step's distance from the mesh's boundary, its first search box's half
+    /// size and its vertical reach (the up component stays at the extent).
     /// </summary>
-    public const float Clearance = 20, VerticalReach = 20;
+    public const float Clearance = 20;
     /// <summary>
-    /// The half sizes of the clearance step's search boxes: the start extent doubled on each of three iterations; the first box that finds a point wins.
+    /// The clearance step's search boxes: the extent doubled on each of three iterations (1, 2 and 4 extents); the first box that finds a point wins.
     /// </summary>
-    static readonly float[] Boxes = [20, 40, 80];
+    const int Iterations = 3;
     /// <summary>
     /// The spacing of the clearance search's candidate grid (engine choice; the original solves the 2D problem exactly).
     /// </summary>
     const float GridStep = 0.25f;
 
     /// <summary>
-    /// The snapped centre for <paramref name="centre"/> on <paramref name="faces"/>: step 1, then the clearance step from its point (step 1's point
-    /// when no box finds one); null when no unfiltered face lies within <see cref="Reach"/> (no snap).
+    /// The snapped point for <paramref name="centre"/> on <paramref name="faces"/>: step 1 within <paramref name="reach"/>, then the clearance step
+    /// of <paramref name="extent"/> from its point (step 1's point when no box finds one); null when no unfiltered face lies within the reach (no
+    /// snap). The defaults are the town refit's.
     /// </summary>
-    public static Vector3? Snap(IReadOnlyList<SurfaceFace> faces, Vector3 centre)
+    public static Vector3? Snap(IReadOnlyList<SurfaceFace> faces, Vector3 centre, float reach = Reach, float extent = Clearance)
     {
-        var first = Closest(faces, centre);
+        var first = Closest(faces, centre, reach);
         if (first is null) return null;
 
-        return Clear(faces, first.Value) ?? first;
+        return Clear(faces, first.Value, extent) ?? first;
     }
 
     #region Step 1
 
     /// <summary>
     /// The point of the unfiltered faces nearest to <paramref name="at"/> in 3D, among the faces whose box meets the cube of half size
-    /// <see cref="Reach"/> round it.
+    /// <paramref name="reach"/> round it.
     /// </summary>
-    public static Vector3? Closest(IReadOnlyList<SurfaceFace> faces, Vector3 at)
+    public static Vector3? Closest(IReadOnlyList<SurfaceFace> faces, Vector3 at, float reach = Reach)
     {
         Vector3? best = null;
         float bestDistance = float.MaxValue;
         foreach (var face in faces)
         {
-            if (face.Filtered || !BoxMeets(face, at.X, at.Z, Reach, at.Y, Reach)) continue;
+            if (face.Filtered || !BoxMeets(face, at.X, at.Z, reach, at.Y, reach)) continue;
 
             foreach (var (a, b, c) in For(face).Triangles)
             {
@@ -104,18 +106,19 @@ static class RefitSnap
     #region Step 2
 
     /// <summary>
-    /// The clearance step from <paramref name="start"/>: for each search box in turn the faces in it (horizontally the box, vertically
-    /// <see cref="VerticalReach"/>), then the point nearest the start in X/Z that lies on one of them and is at least <see cref="Clearance"/> from every
-    /// open edge of them; null when no box has one. Engine choice: plain distance to the open edges, where the original grows the 2D convex hull of
-    /// each boundary loop by 20 units with 8 segments per corner (docs/game/buildings-production.md).
+    /// The clearance step of <paramref name="extent"/> from <paramref name="start"/>: for each search box in turn the faces in it (horizontally the
+    /// box, vertically the extent), then the point nearest the start in X/Z that lies on one of them and is at least the extent from every open edge
+    /// of them; null when no box has one. Engine choice: plain distance to the open edges, where the original grows the 2D convex hull of each
+    /// boundary loop by the extent with 8 segments per corner (docs/game/pathfinding.md "Refit snap").
     /// </summary>
-    static Vector3? Clear(IReadOnlyList<SurfaceFace> faces, Vector3 start)
+    static Vector3? Clear(IReadOnlyList<SurfaceFace> faces, Vector3 start, float extent)
     {
-        foreach (float box in Boxes)
+        float box = extent;
+        for (int k = 0; k < Iterations; k++, box *= 2)
         {
-            var near = faces.Where(f => BoxMeets(f, start.X, start.Z, box, start.Y, VerticalReach)).ToList();
-            var edges = OpenEdges(near, start, box + Clearance);
-            var found = Nearest(near, edges, start, box);
+            var near = faces.Where(f => BoxMeets(f, start.X, start.Z, box, start.Y, extent)).ToList();
+            var edges = OpenEdges(near, start, box + extent);
+            var found = Nearest(near, edges, start, box, extent);
             if (found is not null) return found;
         }
 
@@ -146,9 +149,10 @@ static class RefitSnap
 
     /// <summary>
     /// The candidate nearest the start on the grid of <see cref="GridStep"/> over the box that stands on a face and clears every edge; its height is
-    /// the face's, the one nearest the start's height where faces stack. Null when none.
+    /// the face's, the one nearest the start's height where faces stack. Null when none. <paramref name="extent"/> is the clearance and the vertical
+    /// reach.
     /// </summary>
-    static Vector3? Nearest(List<SurfaceFace> near, List<(Vector2 A, Vector2 B)> edges, Vector3 start, float box)
+    static Vector3? Nearest(List<SurfaceFace> near, List<(Vector2 A, Vector2 B)> edges, Vector3 start, float box, float extent)
     {
         int n = (int)(box / GridStep);
         float bestDistance = float.MaxValue;
@@ -161,7 +165,7 @@ static class RefitSnap
                 if (d >= bestDistance) continue;
 
                 var p = new Vector2(start.X + i * GridStep, start.Z + j * GridStep);
-                if (!ClearOf(edges, p) || !TryHeight(near, p, start.Y, out float y)) continue;
+                if (!ClearOf(edges, p, extent) || !TryHeight(near, p, start.Y, extent, out float y)) continue;
 
                 bestDistance = d;
                 best = new Vector3(p.X, y, p.Y);
@@ -172,29 +176,29 @@ static class RefitSnap
     }
 
     /// <summary>
-    /// Whether <paramref name="p"/> is at least <see cref="Clearance"/> from every edge.
+    /// Whether <paramref name="p"/> is at least <paramref name="clearance"/> from every edge.
     /// </summary>
-    static bool ClearOf(List<(Vector2 A, Vector2 B)> edges, Vector2 p)
+    static bool ClearOf(List<(Vector2 A, Vector2 B)> edges, Vector2 p, float clearance)
     {
         foreach (var (a, b) in edges)
         {
-            if (SegmentDistance(p, a, b) < Clearance) return false;
+            if (SegmentDistance(p, a, b) < clearance) return false;
         }
 
         return true;
     }
 
     /// <summary>
-    /// The height at X/Z of the face under it whose surface is nearest <paramref name="nearY"/> (within <see cref="VerticalReach"/>); false when no
+    /// The height at X/Z of the face under it whose surface is nearest <paramref name="nearY"/> (within <paramref name="reach"/>); false when no
     /// face lies under the point.
     /// </summary>
-    static bool TryHeight(List<SurfaceFace> near, Vector2 p, float nearY, out float height)
+    static bool TryHeight(List<SurfaceFace> near, Vector2 p, float nearY, float reach, out float height)
     {
         height = 0;
         bool found = false;
         foreach (var face in near)
         {
-            if (!HeightAt(face, p, out float y) || MathF.Abs(y - nearY) > VerticalReach) continue;
+            if (!HeightAt(face, p, out float y) || MathF.Abs(y - nearY) > reach) continue;
             if (found && MathF.Abs(y - nearY) >= MathF.Abs(height - nearY)) continue;
 
             height = y;
