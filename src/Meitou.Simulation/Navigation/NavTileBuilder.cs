@@ -136,23 +136,37 @@ internal static class NavTileBuilder
     /// <summary>
     /// The tile's polygons over watershed regions: chunky polygons, where monotone partitioning cuts open ground into long strips (a fifth more
     /// polygons for a search to expand; docs/game/pathfinding.md "Search cost"). DotRecast refuses some watershed contours that Recast only warns
-    /// about (a region winding round a hole with two outlines, an outline simplified into a bad one): such a tile is partitioned monotone.
+    /// about (a region winding round a hole with two outlines, an outline simplified into a bad one): such a tile is partitioned monotone. So is a
+    /// tile whose watershed polygons leave part of its contours uncovered, when the monotone ones leave less (docs/game/pathfinding.md, "Search
+    /// cost", uncovered contours).
     /// </summary>
     static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<NavSideSteps.StepLink> steps)
     {
-        if (s.Watershed && TryPartition(ctx, chf, s, ticks, steps, watershed: true, out var mesh)) return mesh;
+        if (s.Watershed && TryPartition(ctx, chf, s, ticks, steps, watershed: true, out var mesh, out long uncovered))
+        {
+            if (uncovered <= 0) return mesh;
 
-        TryPartition(ctx, chf, s, ticks, steps, watershed: false, out mesh);
+            TryPartition(ctx, chf, s, ticks, steps, watershed: false, out var monotone, out long monotoneUncovered);
+            if (monotoneUncovered < uncovered) return monotone;
+
+            // The heights are sampled by the field's regions, so the watershed ones are built again.
+            TryPartition(ctx, chf, s, ticks, steps, watershed: true, out mesh, out _);
+            return mesh;
+        }
+
+        TryPartition(ctx, chf, s, ticks, steps, watershed: false, out mesh, out _);
         return mesh;
     }
 
     /// <summary>
-    /// Builds the regions (watershed or monotone), the contours and the polygons; false when the watershed contours were refused.
+    /// Builds the regions (watershed or monotone), the contours and the polygons, and twice the area in square cells of the contours the polygons
+    /// leave uncovered (<see cref="NavUncoveredArea"/>); false when the watershed contours were refused.
     /// </summary>
     static bool TryPartition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<NavSideSteps.StepLink> steps,
-        bool watershed, out RcPolyMesh? mesh)
+        bool watershed, out RcPolyMesh? mesh, out long uncovered)
     {
         mesh = null;
+        uncovered = 0;
         long t0 = Stopwatch.GetTimestamp();
         NavSideSteps.Cut(chf, steps);
         NavTileRegions.Build(ctx, chf, s.MinRegionArea, s.MergeRegionArea, watershed);
@@ -178,6 +192,8 @@ internal static class NavTileBuilder
         mesh = contours.conts.Count == 0 ? null : RcMeshs.BuildPolyMesh(ctx, contours, ZoneNavMesh.MaxVerticesPerPolygon);
         Interlocked.Add(ref ticks.Contours, t2 - t1);
         Interlocked.Add(ref ticks.Mesh, Stopwatch.GetTimestamp() - t2);
+        if (mesh is not null) uncovered = NavUncoveredArea.Doubled(contours, mesh);
+
         return true;
     }
 
