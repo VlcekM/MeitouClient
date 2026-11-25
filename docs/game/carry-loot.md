@@ -421,7 +421,8 @@ A per-character status update lets a state above 1 run down from that stamp. Wit
 - **State 3 and elapsed / 24 above 4.0:** the state becomes 0 and the owner is cleared.
 - **State 2 and elapsed above 12.0:** the state becomes 3 and `+0x8` is stamped again.
 
-These writes are direct, not through the setter. State 1 never takes this path.
+These writes are direct, not through the setter. State 1 never takes this path. The status tooltip's "Time remaining:" counts down to these thresholds
+([status rows](ui-screens.md)).
 
 **Verified** by disassembly of a Kenshi 1.0.65 `kenshi_x64.exe`, sha256 `504b362c…cd3e`. In that build, the setter is `FUN_1405a3eb0`, the rule is `FUN_1405a44c0`, and its only caller is the vtable-reached `FUN_1405a4750`. Its constants are 24.0, 4.0 and 12.0. The other addresses in this file come from another build.
 
