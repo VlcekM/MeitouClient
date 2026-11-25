@@ -3,9 +3,10 @@
 #
 # Usage: meitou-dev-macos.sh [options] [--] [args...]
 #   (default)    Builds the game (Release) and runs it from its build folder; args go to the game. Metal unless args name --renderer.
-#   --launcher   Builds the game (Release) and the launcher (Debug), copies the game into the launcher's versions/ folder as the dev
-#                version (newest, so Play uses it, and the Versions and Benchmark pages list it) with the settings schema a release
-#                ships, then runs the launcher. Remaining args go to the launcher; game arguments belong in its Launch arguments.
+#   --launcher   Builds the game (Release) and the launcher (Debug), installs the game in the launcher's versions/ folder as the dev
+#                version (newest, so Play uses it, and the Versions and Benchmark pages list it) in the app bundle a release ships,
+#                with its settings schema, then runs the launcher. Remaining args go to the launcher; game arguments belong in its
+#                Launch arguments.
 #   --no-build   Skips the builds (the last ones are used).
 #   --remove     Removes the dev version from versions/ and exits.
 #   -h, --help   This text.
@@ -85,10 +86,14 @@ if [ "$mode" = launcher ]; then
     if [ "$build" = 1 ]; then build_game && build_launcher || exit 1; fi
     [ -x "$BUILD/MeitouClient" ] || { echo "meitou-dev-macos: no game build in $BUILD (run without --no-build)" >&2; exit 1; }
 
-    # The game as an installed version: its folder, and the schema the Graphics page and the Metal check read.
+    # The game as an installed version, laid out as a release (package-release.ps1): the build in the app bundle, with the schema the
+    # Graphics page and the Metal check read. Anything else in the version's folder (an older, flat install) goes.
+    app="$DEV/MeitouClient.app"
     mkdir -p "$DEV"
-    rsync -a --delete "$BUILD/" "$DEV/"
-    "$DEV/MeitouClient" --settings-schema "$DEV/settings-schema.json"
+    find "$DEV" -mindepth 1 -maxdepth 1 ! -name MeitouClient.app -exec rm -rf {} +
+    "$REPO/tools/scripts/macos-bundle.sh" "$app" "$VERSION" 14.0
+    rsync -a --delete "$BUILD/" "$app/Contents/MacOS/"
+    "$app/Contents/MacOS/MeitouClient" --settings-schema "$app/Contents/MacOS/settings-schema.json"
     echo "installed $VERSION in $DEV"
 
     cd "$REPO"

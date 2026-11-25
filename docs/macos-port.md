@@ -27,11 +27,29 @@ A native Metal path next to Vulkan: [metal-backend](metal-backend.md).
   (**Observed**, #20). The launcher's **Metal** choice starts the game with `--renderer metal` and removes
   `DYLD_LIBRARY_PATH`; it needs neither the loader nor MoltenVK. **Auto** uses Vulkan when the loader exists and Metal otherwise,
   so a new Apple-silicon user does not need Homebrew. Metal is offered on Apple silicon only in the launcher for now.
-- Running a checkout: `tools/scripts/meitou-dev-macos.sh` builds the game (Release) and runs it with Metal; `--launcher` instead copies the build
-  into the launcher's `versions/` as `99.0.0-dev` (with the settings schema a release ships, so Play, Graphics, Detect and the Benchmark page
+- Running a checkout: `tools/scripts/meitou-dev-macos.sh` builds the game (Release) and runs it with Metal; `--launcher` instead installs the build
+  into the launcher's `versions/` as `99.0.0-dev` in the release's app bundle (with the settings schema a release ships, so Play, Graphics, Detect and the Benchmark page
   treat it as an installed version) and runs the Debug launcher from the checkout. The launcher otherwise runs installed releases only
   ([launcher](launcher.md)); its `DebugGame` hook looks for the Windows `.exe`. Options and variables: `--help`.
 - Screenshots and other `C:\Temp` defaults land in a folder literally named `C:\Temp` under the CWD.
+
+## App bundle
+
+Release zips hold the game in `MeitouClient.app` (`tools/scripts/macos-bundle.sh` writes its `Info.plist` and icon; `package-release.ps1` moves
+the whole publish, viewer and tools included, into `Contents/MacOS`). The launcher starts `Contents/MacOS/MeitouClient` directly, and older
+flat builds still run without Game Mode ([launcher](launcher.md)).
+
+- Game Mode: **Observed** (macOS 27.2, `log stream` of `gamepolicyd`): a process started directly from a bundle's `Contents/MacOS`, without
+  `open` and without a bundle signature, gets `Found game … labelReason=LSSupportsGameMode (Info.plist)`, then `Game mode enabled` in native
+  full screen. A bare executable started as the child of a bundled app declaring a game stays `anon<MeitouClient>` to RunningBoard and is never
+  labelled a game: the launcher's bundle cannot give the game Game Mode.
+- `codesign` refuses the bundle as a whole: it treats the `.dll`s in `Contents/MacOS` as unsigned nested code. Given the path of the bundle's
+  main executable, it still signs the whole bundle, so it fails too (**Observed**). `package-release.ps1` therefore signs each Mach-O file while
+  the publish is flat and moves them in afterwards. The bundle has no seal, which is fine to run (the embedded signatures survive the zip).
+- GLFW changes the working directory to `Contents/Resources` when the program runs from a bundle (`GLFW_COCOA_CHDIR_RESOURCES`); the game turns
+  that off before its first window (`GlfwStartup`), keeping the launcher's data folder and its `meitou.user.json`. **Observed** with `lsof`.
+- The game and the viewer write `log.txt` (and a typed-in `meitou.local.json`) beside the executable, in `Contents/MacOS`; the launcher reads
+  them there.
 
 ## MoltenVK constraints and the fixes
 

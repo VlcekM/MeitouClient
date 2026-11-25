@@ -40,8 +40,10 @@ flipped above the pointer near the screen's bottom covered the cursor and took t
   cached together with page 1's ETag in `releases-cache.json`; an unchanged page 1 is a 304 that costs no quota and keeps the cache. Downloads use the asset URLs, which don't count
   against the quota.
 - A download is checked against the asset's `digest` (`sha256:<hex>`) when GitHub lists one. The zip's single top folder becomes
-  `versions/<version>/`. The game is `MeitouClient[.exe]` since 0.15 (`meitou[.exe]` before; the launcher takes either); on Unix
-  it gets its execute bits. Cancelling a download removes the partial zip and unpacked folder.
+  `versions/<version>/`. The game is `MeitouClient[.exe]` since 0.15 (`meitou[.exe]` before); on macOS the launcher looks for
+  `MeitouClient.app/Contents/MacOS/MeitouClient` first ([macos-port](macos-port.md#app-bundle)), so flat older builds still run
+  (`Releases.GameExecutables`). The version's own files (`settings-schema.json`, `log.txt`) are read beside the executable it finds. On Unix
+  the executable gets its execute bits. Cancelling a download removes the partial zip and unpacked folder.
 
 ## One executable (Native AOT)
 
@@ -115,7 +117,8 @@ binary in `package-release.ps1` is the real fix (not set up).
 
 `release.yml` and `nightly.yml` run `tools/scripts/package-release.ps1 -Rid <rid>` on one runner per RID (win-x64 on Windows, linux-x64 on Ubuntu,
 both osx RIDs on macOS) and attaches all four zips to the one `v<version>` release. Each zip has a single top folder
-`Meitou-<version>-<rid>/` with the game (named by `Meitou.Game`'s `AssemblyName`), `meitou-viewer` and the self-contained .NET runtime. Unix zips are made with
+`Meitou-<version>-<rid>/` with the game (named by `Meitou.Game`'s `AssemblyName`), `meitou-viewer` and the self-contained .NET runtime; macOS zips hold
+them in `MeitouClient.app/Contents/MacOS`, the readme and licences beside the bundle. Unix zips are made with
 `zip(1)` (execute bits kept), macOS binaries (and Apple Silicon dylibs; Intel ones stay as shipped, as re-signing corrupts the unpadded shaderc and spirv-cross) are
 ad-hoc signed, runtime debug symbols (`*.dbg`, ~250 MB) are dropped.
 

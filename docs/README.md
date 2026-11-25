@@ -22,7 +22,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [launch-options](launch-options.md): every command-line option and environment variable
 - [launcher](launcher.md): game release installer, mod list and presets
 - [feedback](feedback.md): the in-game feedback button and its service, issue forms and the Haiku area labels
-- [macos-port](macos-port.md): running on MoltenVK, its constraints and fixes; the native Metal path next to it
+- [macos-port](macos-port.md): running on MoltenVK, its constraints and fixes; the app bundle and Game Mode; the native Metal path next to it
 - [metal-backend](metal-backend.md): a native Metal path next to Vulkan - what the spike proved and what a second backend would need
 - [metal-content-testability-plan](metal-content-testability-plan.md): the content/testability gaps and the order to close them
 - [metal-performance-memory](metal-performance-memory.md): the Metal frame-rate and bounded-memory plan (baseline, targets, order)

@@ -270,10 +270,14 @@ public sealed class Releases(HttpClient http)
     #region Installed versions
 
     /// <summary>
-    /// The game's executable names, newest first: <c>MeitouClient</c> since 0.15, <c>meitou</c> before (<c>.exe</c> on Windows).
+    /// The game's executable paths in a version's folder, newest layout first: on macOS the executable in the <c>MeitouClient.app</c> bundle,
+    /// which Game Mode needs (docs/macos-port.md "App bundle"); <c>MeitouClient</c> beside the version's files in older builds and on the other
+    /// systems since 0.15, <c>meitou</c> before (<c>.exe</c> on Windows).
     /// </summary>
     internal static readonly string[] GameExecutables =
-        OperatingSystem.IsWindows() ? ["MeitouClient.exe", "meitou.exe"] : ["MeitouClient", "meitou"];
+        OperatingSystem.IsWindows() ? ["MeitouClient.exe", "meitou.exe"]
+        : OperatingSystem.IsMacOS() ? ["MeitouClient.app/Contents/MacOS/MeitouClient", "MeitouClient", "meitou"]
+        : ["MeitouClient", "meitou"];
 
     /// <summary>
     /// The folder holding one folder per installed version.

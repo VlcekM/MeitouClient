@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Meitou.Game.Rendering.Display;
 using Silk.NET.GLFW;
 using Silk.NET.Windowing;
 using SharpMetal.Foundation;
@@ -125,6 +126,7 @@ public sealed unsafe class MetalDisplay : IDisposable
     public MetalDisplay(WindowOptions options, bool vsync = true)
     {
         ObjectiveC.LinkMetal();
+        GlfwStartup.KeepWorkingDirectory();
         Window = Silk.NET.Windowing.Window.Create(options);
         Window.Initialize();
         Device = MTLDevice.CreateSystemDefaultDevice();
