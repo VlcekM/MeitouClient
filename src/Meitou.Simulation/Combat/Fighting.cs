@@ -24,6 +24,12 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     public const float RepathDistance = 12, RepathSeconds = 0.5f;
 
     /// <summary>
+    /// The step of the ground walk to a point past a runner (<see cref="GroundAlong"/>, engine choice): a slope rises well under a standing step's
+    /// 12 units over it.
+    /// </summary>
+    const float GroundStep = 4;
+
+    /// <summary>
     /// How long a chase along a path lasts at least after a fighter met a blocked line (<b>Verified</b> literal 2.0, <c>FUN_14060c8b0</c>'s
     /// timer +0x14c).
     /// </summary>
@@ -154,13 +160,14 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 
         if ((n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0 || n.TaskTime > 0) return;
 
-        // The point past the runner only now, at most once per RepathSeconds: the navmesh test is a point query per chaser.
-        if (behind) goal = PassPoint(world, i, cold, tc, next[t].Position.Y, d, tv, lead, goal);
+        // The point past the runner only now, at most once per RepathSeconds: the ground walk to it is a few dozen point queries per chaser.
+        float height = next[t].Position.Y;
+        if (behind) (goal, height) = PassPoint(world, i, cold, tc, next[t].Position, d, tv, lead);
 
         bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > RepathDistance * RepathDistance;
         if (!stale) return;
 
-        AskPath(ref n, cold, goal, next[t].Position.Y);
+        AskPath(ref n, cold, goal, height);
     }
 
     /// <summary>
@@ -266,21 +273,42 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// The point past a runner that a chaser behind it aims at: beside the runner's track on the chaser's side (by slot when dead behind),
-    /// RepathSeconds of the runner's way past the lead. <paramref name="goal"/> stays when that point is off the navmesh (a wall, a cliff): the
-    /// chaser then goes for the target itself.
+    /// The point past a runner that a chaser behind it aims at, with the height of the ground there: beside the runner's track on the chaser's
+    /// side (by slot when dead behind), RepathSeconds of the runner's way past the lead. The runner's own place stays the goal when the ground
+    /// from it to that point is broken (a wall, a cliff, off the navmesh): the chaser then goes for the target itself.
     /// </summary>
-    static Vector2 PassPoint(World world, int i, CharacterCold cold, CharacterCold? tc, float targetHeight, Vector3 d, Vector3 tv, float lead,
-        Vector2 goal)
+    static (Vector2 Goal, float Height) PassPoint(World world, int i, CharacterCold cold, CharacterCold? tc, Vector3 target, Vector3 d, Vector3 tv,
+        float lead)
     {
         var heading = Vector2.Normalize(new Vector2(tv.X, tv.Z));
         var across = new Vector2(-heading.Y, heading.X);
         float side = across.X * -d.X + across.Y * -d.Z;
         float pass = CombatTuning.PassWidth * (CombatTuning.Footprint(cold) + CombatTuning.Footprint(tc));
         float offset = side > 0 || side == 0 && (i & 1) == 0 ? pass : -pass;
+        var goal = new Vector2(target.X, target.Z);
         var ahead = goal + new Vector2(tv.X, tv.Z) * (lead + RepathSeconds) + across * offset;
 
-        return world.Walkability.IsWalkable(ahead.X, ahead.Y, targetHeight) ? ahead : goal;
+        return GroundAlong(world.Walkability, target, ahead) is { } height ? (ahead, height) : (goal, target.Y);
+    }
+
+    /// <summary>
+    /// The ground's height at <paramref name="to"/>, walked to from <paramref name="from"/> in <see cref="GroundStep"/> steps, each step's height
+    /// carried on to the next (a runner's way up or down a slope stays on the ground, where a test at the runner's own height finds the point
+    /// ahead out of a standing step's reach and the chaser trailed it, #1394); null when a step finds no ground to stand on.
+    /// </summary>
+    static float? GroundAlong(IWalkability walk, Vector3 from, Vector2 to)
+    {
+        var leg = to - new Vector2(from.X, from.Z);
+        float length = leg.Length();
+        int steps = Math.Max(1, (int)MathF.Ceiling(length / GroundStep));
+        float y = from.Y;
+        for (int k = 1; k <= steps; k++)
+        {
+            var at = new Vector2(from.X, from.Z) + leg * ((float)k / steps);
+            if (!walk.TryStand(at.X, at.Y, y, out y)) return null;
+        }
+
+        return y;
     }
 
     /// <summary>
