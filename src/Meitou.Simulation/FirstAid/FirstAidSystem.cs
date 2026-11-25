@@ -699,7 +699,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         if (robot && RoomLeft(body, race, true) <= Done)
         {
             if (organic) Say(world, m, medicCold.TreatTarget, KitEmpty);   // organic parts left, no first aid kit
-            else Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
+            else Finish(world, m, p, medicCold, patientCold);
 
             End(world, m);
             return;
@@ -796,7 +796,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         // which would keep the treatment going for ever.
         if (RoomLeft(body, race, false) + RoomLeft(body, race, true) <= Done || body.Bandage(dt, null, race, out _) <= 0)
         {
-            Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
+            Finish(world, m, p, medicCold, patientCold);
             End(world, m);
             return;
         }
@@ -805,6 +805,28 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         _xp.Medic(stats, race, medicRace, dt, StatsEnumerated.Medic);
         Deeds?.FirstAid(world, m, p, dt);
     }
+
+    /// <summary>
+    /// A finished treatment (<c>Task_FirstAid</c>'s update <c>FUN_1403563a0</c>, once its step reports the patient done, <b>Verified</b>): a medic not
+    /// of the player's faction takes an imprisoned patient other than itself that it regards as friendly, disguise read (slot 126 with 1), out of
+    /// its cage or restraint (<see cref="FixtureRegistry.LetOut"/>); then it says event 20 to the patient, which answers 21 only when no longer held.
+    /// </summary>
+    void Finish(World world, int m, int p, CharacterCold medicCold, CharacterCold patientCold)
+    {
+        if (m != p && !medicCold.IsPlayer && patientCold.IsImprisoned && RegardsDisguised(world, m, p))
+            world.Fixtures.LetOut(world, world.Characters.IdOf(p));
+
+        int answer = patientCold.IsImprisoned ? -1 : BeingHealedFinished;
+        Say(world, m, medicCold.TreatTarget, HealingOtherFinished, answer);
+    }
+
+    /// <summary>
+    /// "A regards B as friendly" with B's working disguise read (slot 126 with 1, <c>FUN_1407923d0</c>); without a dialogue system,
+    /// <see cref="Allied"/>.
+    /// </summary>
+    bool RegardsDisguised(World world, int a, int b) => world.SystemOf<Dialogue.DialogueSystem>() is { } dialogue
+        ? dialogue.RegardsFriendly(world, a, b, disguise: true)
+        : Allied(world, a, b);
 
     /// <summary>
     /// One update of a splint (task "Splinting", <c>FUN_140649d50</c>, docs/game/character-stats.md "Splints"): the medic's <c>medic</c> skill and

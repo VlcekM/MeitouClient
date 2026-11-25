@@ -2188,6 +2188,24 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// Takes a prisoner out of whatever holds it by another's hand with nothing else changed (the hold clear <c>FUN_140330600</c> with 0, which
+    /// <c>Task_FirstAid</c>'s end calls for a friendly caged patient, docs/game/locks.md "Leaving", <b>Verified</b>): it stands at the
+    /// <see cref="ExitSpot"/>; the lock, the escaped flag, the slave state and the crimes stay as they were. False when it is not imprisoned or its
+    /// cage or restraint is not found.
+    /// </summary>
+    public bool LetOut(World world, CharacterId prisoner)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(prisoner, out int s) || table.Cold(s) is not { IsImprisoned: true } c) return false;
+        if (c.InWhat is not { } id || Find(id) is not { } cage) return false;
+
+        if (cage.Occupant == prisoner) cage.Occupant = CharacterId.None;
+        StepOut(table, s, cage);
+        Clear(c);
+        return true;
+    }
+
+    /// <summary>
     /// The leave of Task_GetOutOfCage (<c>FUN_1403554b0</c>, locks.md "Cages and beds", <b>Verified</b>): out of the cage at its exit spot, the hold
     /// cleared. The task's flag (1 for 207 and 256, 0 for 133) is set again at the task's start (slot 1, <c>FUN_140335250</c>, <b>Verified</b>): 0
     /// when the sentence is served (<c>FUN_1405c9f00</c>, <see cref="SentenceServed"/>), then 1 when the cage owner's faction is <c>not real</c> or of

@@ -435,6 +435,7 @@ the act-out is a round on the one target, done once worked; 111's inner point is
   (its lock node is 14.1 away); Peeler Machine's one node at (0.1, 11.3). Meitou: `FixtureRegistry.ExitSpot` for Get out and Release; lifting out leaves the body to the carrier, but a gatherer's take-out
   (173, 217, 245), which no one carries, puts it at the exit spot too (`LiftOut` with `stepOut`). **Observed** (Rebirth, 2026-11-09): the middle of an
   emptied Prisoner Cage is a pocket of the navmesh no path leaves, so a slave left there stood still all hour while the original's walked to the mines.
+- **Medic's release**: an NPC medic finishing a friendly prisoner's first aid clears the hold, cage left locked ([first aid](character-stats.md#first-aid-update); `FixtureRegistry.LetOut`).
 - **Release** (`Task_ReleasePrisoner` 110): clears the occupancy, "{1} has been released from prison." (**Observed**).
 - **Beds**: `+0x2f8 = 1`, bed handle +0x300 ([carry-loot](carry-loot.md)); beds have no lock. Details below.
 - Character save keys: `in something` (= +0x2f8) and `in what` (handle +0x300) (**Verified**, `FUN_1406280a0`); platoons
