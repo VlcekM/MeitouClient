@@ -47,8 +47,7 @@ Not accepted at the moment:
 
 ## Before you start
 
-1. Check the [roadmap](https://meitou.kenshi.wiki/roadmap), open issues
-   and PRs so you don't build what someone else is already building.
+1. Check open issues and PRs so you don't build what someone else is already building.
 2. For anything beyond bugfixing, DM VlcekM first. I am sorry, but again, code is cheap, mental bandwidth is in short supply 😓
 3. If it's a PR for a code hook, consider how practical it would be to do with a regular harmony patch instead
 

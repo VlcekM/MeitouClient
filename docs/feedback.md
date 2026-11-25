@@ -1,10 +1,4 @@
-# Roadmap, feedback and issue labels
-
-## Roadmap
-
-`site/src/data/roadmap.ts`, page `/roadmap`, kept by hand: `versions` (oldest first), each with areas and their features. A feature
-has a stable `id` (its link `/roadmap#id`), a name, a status (`done`, `wip`, `planned`) and a note. A new version is a new entry in
-`versions`; the page draws its section, its nav link and its status bar. Nothing edits the file automatically.
+# Feedback and issue labels
 
 ## Reports service
 

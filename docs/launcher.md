@@ -339,7 +339,7 @@ interpolated string, which no translation could match.
   `steamapps/workshop/appworkshop_233860.acf`, `WorkshopUpdates`), the row adds that it has updated since, with the date, and that some new
   features may be missing. A local copy has no date and gets no such note.
 - Any other RE_Kenshi plugin (not built in, no endorsed port) keeps the ignored-DLLs note and has a Request button opening the public wishlist
-  of RE_Kenshi mods (`CoveredMods.Wishlist`, the roadmap's compatibility sheet), where players ask for one to be covered.
+  of RE_Kenshi mods (`CoveredMods.Wishlist`), where players ask for one to be covered.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)); enabled, its code runs, with no question
   ([Trust](modding.md#trust)).
 - A code mod's row lists what it requires, loads after and conflicts with, and each refusal the game would make without its code

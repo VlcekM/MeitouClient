@@ -359,7 +359,7 @@ public static class CoveredMods
     ];
 
     /// <summary>
-    /// The public wishlist of RE_Kenshi mods for Meitou (the roadmap's compatibility sheet), where players ask for one to be covered.
+    /// The public wishlist of RE_Kenshi mods for Meitou, where players ask for one to be covered.
     /// </summary>
     public static Uri Wishlist { get; } = new("https://docs.google.com/spreadsheets/d/1h6HXRgT1MbioPtgj3enuXIdevj2JWaRU8qSz-99Haoo/edit?gid=0#gid=0");
 
