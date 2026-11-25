@@ -1,9 +1,9 @@
 diff --git a/README-linux.md b/README-linux.md
 new file mode 100644
-index 0000000..ed23b94
+index 0000000..669701a
 --- /dev/null
 +++ b/README-linux.md
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,64 @@
 +# FidelityFX SDK 1.1.4: native Linux port of the Vulkan `ffx_api` library (milestone 1)
 +
 +> **Unofficial build.** This is an unofficial build of AMD FidelityFX SDK 1.1.4, modified to build on Linux. It is not
@@ -11,7 +11,7 @@ index 0000000..ed23b94
 +> are under the same MIT licence. FidelityFX and FSR are AMD trademarks, used here only to name the software.
 +
 +Base: `GPUOpen-LibrariesAndSDKs/FidelityFX-SDK` tag `v1.1.4`, commit `c6efa6bf7f2027b3ec94f28578bb5965eabb9e55`
-+(MIT licence, see `LICENSE.txt`). Branch `linux-port`; every change is either `#ifdef _WIN32`-guarded or
++(MIT licence, see `LICENSE.txt`). Branch `linux-port`; every change but the upscaler one below is either `#ifdef _WIN32`-guarded or
 +harmless on Windows, so the commits can be exported as a patch series onto the pinned upstream commit.
 +
 +Result: `libamd_fidelityfx_vk.so`, a drop-in for `amd_fidelityfx_vk.dll`. It exports exactly
@@ -47,6 +47,9 @@ index 0000000..ed23b94
 +  calls, `FFX_UNUSED` include, `FFX_SDK_DEFAULT_CONTEXT_SIZE` doubled on Linux (`wchar_t` is 4 bytes, the private
 +  contexts outgrew the public blob), and `ffx_vk.cpp` scratch-memory arrays aligned to 16 bytes (gcc emits `movaps`
 +  for them; the 4-byte alignment faulted only in optimised builds).
++- **Upscaler:** `ffx_fsr3upscaler.cpp` never takes the Lanczos lookup table (AMD's choice for 32-64 lane subgroups):
++  read with linear filtering it smeared the reprojected history below native scale (Meitou issue #1423); the
++  computed kernel, as on other GPUs.
 +- Export control: `linux/ffx_api.map` (version script) + `-fvisibility=hidden`.
 +
 +## Measured
@@ -986,6 +989,21 @@ index d914479..ddabe87 100644
          descriptorPoolCreateInfo.pPoolSizes = poolSizes;
          descriptorPoolCreateInfo.maxSets = backendContext->maxEffectContexts * FFX_MAX_PASS_COUNT * MAX_PIPELINE_USAGE_PER_FRAME * FFX_MAX_QUEUED_FRAMES;
  
+diff --git a/sdk/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp b/sdk/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp
+index b5f1f74..967ba72 100644
+--- a/sdk/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp
++++ b/sdk/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp
+@@ -415,7 +415,9 @@ static FfxErrorCode createPipelineStates(FfxFsr3UpscalerContext_Private* context
+     const uint32_t waveLaneCountMax = capabilities.waveLaneCountMax;
+     if (waveLaneCountMin == 32 && waveLaneCountMax == 64)
+     {
+-        useLut         = true;
++        // Meitou: no Lanczos lookup table. Its linearly filtered weights blur the reprojected history below native scale with these GLSL
++        // shaders (seen with the table forced on an RTX 4070; RADV, 32-64 lanes, took it): the computed kernel, as on every other GPU.
++        useLut         = false;
+         canForceWave64 = haveShaderModel66;
+     }
+     else
 diff --git a/sdk/src/shared/ffx_message.cpp b/sdk/src/shared/ffx_message.cpp
 index 7dd5127..5aa08b2 100644
 --- a/sdk/src/shared/ffx_message.cpp

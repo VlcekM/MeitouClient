@@ -38,11 +38,14 @@ Linux runs DLSS through NGX (`Upscalers/Ngx.cs`): NVIDIA's NGX client library (t
 built into `libmeitou_ngx.so` by `tools/scripts/build-ngx-shim.sh`) over the driver's `libnvidia-ngx.so.1`, with the DLSS
 model `libnvidia-ngx-dlss.so.<version>`; each file is looked for in `MEITOU_DLSS_PATH`, then beside the executable, and
 NGX gets the same two folders to find the model. The client library is linked on Ubuntu 22.04 for releases, so it
-loads on glibc 2.35 and newer; on an older glibc the game logs the loader's error and runs without DLSS. FSR on Linux needs our build of the FidelityFX library ("Frame generation"); our patch changes no shader or
-upscaler logic. FFX's Vulkan backend reports shader model 5.1, so the FSR 3 upscaler never forces wave64 there; its one choice by GPU is
-the history reprojection, a Lanczos lookup table on cards with 32-64 lane subgroups (AMD) and the computed kernel elsewhere (FFX 1.1.4
-`ffx_fsr3upscaler.cpp`, `ffx_vk.cpp`). **Verified** (2026-11-24, RTX 4070, the lookup table forced in a debug build, native scale,
-mean |Laplacian| 19.95 against 19.94): the table path is as sharp. `MEITOU_NGX_LOG=1` prints NGX's whole log (its verbose level).
+loads on glibc 2.35 and newer; on an older glibc the game logs the loader's error and runs without DLSS. FSR on Linux needs our build of the FidelityFX library ("Frame generation"); our patch changes no shader, and of the
+upscaler logic only the history reprojection's kernel. FFX's Vulkan backend reports shader model 5.1, so the FSR 3 upscaler never forces wave64
+there; its one choice by GPU is that kernel: AMD's code takes a Lanczos lookup table on cards with 32-64 lane subgroups (AMD, RADV) and the
+computed kernel elsewhere (FFX 1.1.4 `ffx_fsr3upscaler.cpp`, `ffx_vk.cpp`); our patch takes the computed one everywhere. **Verified** (2026-11-25,
+RTX 4070, issue #1423's save, 2560x1362, Quality, still camera, mean |Laplacian|): AMD's branch forced, the table smears the world (4.42, the
+computed kernel 7.90); the patched branch forced, 7.90. The table read point-sampled or with `texelFetch` gives 7.16 and the computed weight in
+its place 7.90, so its weights go wrong only between table entries, with linear filtering. At native scale the table path is as sharp (19.95
+against 19.94, 2026-11-24). `MEITOU_NGX_LOG=1` prints NGX's whole log (its verbose level).
 NGX is loaded only when the model and the client library are in one of those folders and `MEITOU_DLSS` is not `0`, and
 handed only a device on NVIDIA's own driver (not NVK); without DLSS (other GPU, no NVIDIA driver, no libffi) it is shut
 down at once and the game runs on. Builds copy both to the output folder, never into a publish; the Linux release zip
