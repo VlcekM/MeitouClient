@@ -1352,7 +1352,7 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   the same way and runs to his squad's home under the order (127 Retreating fast), then the capture goes on. Both only with town data.
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
   (`CarrySystem.BeginPickUp`), `FindCage` from the guard over his town candidates (`CageCandidates`, as kidnapping and town duty; his squad's home building; his squad mates' cages reserved), walk,
-  and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
+  and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 from the floor under its nearest use node, `OnCageFloor`) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
   stopping with the target up (it ran off, the guard lost it) starts it again at any distance: the order stays queued and is planned again each update,
   its need 7 planning the fight anew (the order step `FUN_140510920` pops it only on its desire or done test; a failed step pops the front only when it
   is the order's own row, `FUN_140506b10` comparing the task type, so the fight row ending pops nothing, **Verified**); only 113 / 95 above or a new order
@@ -1375,8 +1375,8 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
 - **Cage walks** (arrest, town duty 112 / 281; engine): a walk onto the cage's floor (`TaskStart.Walk` with the cage's position, `MovementSystem.GoToFloor`), so a cage on
   an upper storey is reached by the stairs. A flat goal resolves on the walker's own storey and ends under the cage, out of `AtCage`'s height. **Observed** (#314 save, Sho-Battai
   Police Station Tower, `Outpost s-IV` `43.11:6-Newwworld-INGAME`): its 19 cages stand on the storey at y 1092, 43 above the ground floor where the guards lift raiders; the
-  guards carry all eight raiders up and cage them. Still flat (arrival by distance only, so they do not loop):
-  the captive jobs' cage walks and confiscation (212). The player's Put in Cage order (`StepTo`) is flat too but tests `AtCage`: an upper-storey cage still fails it.
+  guards carry all eight raiders up and cage them. The captive jobs' cage walks go onto the floor too (`CaptiveSystem.Walk`). Still flat (arrival
+  by distance only, so it does not loop): confiscation (212). The player's Put in Cage order (`StepTo`) is flat too but tests `AtCage`: an upper-storey cage still fails it.
 - **Release**: player and NPC prisoners alike are freed by the jailers' goal 211 below; Meitou has no other release of a served prisoner.
 - **Wardens' goals** (`WardenGoals`, [engine goals](#engine-goals); finders and states: [locks](game/locks.md#wardens-goals)): 211 police free prisoners
   (`[1, 110, 211]`), 155 Lock all the doors (`[163, 162, 155]`), 197 Lock all the doors - stay outside (`[199, 198, 197]`), 86 Opening up (`[82, 78, 72, 86]`)
