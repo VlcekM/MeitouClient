@@ -102,8 +102,8 @@ numbers from untraced runs.
 ## Play benchmark
 
 `MeitouClient --load <save> --play-bench <dir>` plays a scripted session in the real game (frame limit and VSync off) and quits
-(`PlayBench`). Segments: settle, idle, orbit, zoom to the farthest, pan, a 30 s travel at 3000 units/s, return, time x2
-and x5, talk, trade, container, doors, pick-up, paths (a squad or each member sent 20-200 m in a random direction every 0.5 s), walk,
+(`PlayBench`), the fps counter shown from the start (Shift+F9 hides it).
+Segments: settle, idle, orbit, zoom to the farthest, pan, a 30 s travel at 3000 units/s, return, time x2 and x5, talk, trade, container, doors, pick-up, paths (a squad or each member sent 20-200 m in a random direction every 0.5 s), walk,
 fight (six spawned enemies, `--scene-npc`), loot, the panels opened cold then warm (with limbs and build), a grazing horizon view, the overview, flights (each player character in turn, twice, 6 s each, as a double click on its portrait: a character flight when they are on).
 Each interaction targets the nearest candidate within 150 m and retries every 3 s; a modal message box is closed and logged.
 `MEITOU_BENCH_ONLY=settle,zoom` keeps only the named segments (the run is deterministic from the save, so a hitch comes back at its tick).
@@ -227,8 +227,7 @@ is the launcher's benchmark: the play bench machinery with a fixed workload, com
   `MEITOU_MODS_CFG` list (`ModList.NoMods`). The install's `settings.cfg` defaults (language, edge scroll, markers, camera) still apply. Before the device: a 1920x1080 window, the tier's texture quality, no GI and no ray queries unless the tier
   has traced switches (Ultra, Extreme), anti-aliasing Low's own (none at 0.83) or TAA at render scale 1. After the settings panel exists:
   the Meitou look, the tier, its traced switches, an upscaler (FSR, DLSS) turned TAA and render scale 1 (not Low). Frame limit, vsync and
-  HDR off, Vulkan only, default `--scene-npc`, `MEITOU_BENCH_ONLY` ignored, the fps counter shown (Shift+F9 hides it). Later options do not
-  override these.
+  HDR off, Vulkan only, default `--scene-npc`, `MEITOU_BENCH_ONLY` ignored. Later options do not override these.
 - Scenarios (`BenchmarkSpec.Scenarios`; `--benchmark-list <file>` writes them with their groups and measured seconds):
   - `bases` (default): the whole play bench script on save `bench-bases-2026-10-27` (`--load` required). Groups: camera (idle, orbit,
     zoom, pan), streaming (travel, return), simulation (speed-x2 to loot), ui (panels, panels-warm), views (horizon, overview, flights: the first 6 player characters, twice each, 72 s).

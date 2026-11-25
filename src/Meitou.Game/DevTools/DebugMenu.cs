@@ -338,9 +338,10 @@ sealed class DebugMenu(GameHost host)
     internal bool StatsVisible;
 
     /// <summary>
-    /// The fps counter (Shift+F9), an overlay the menu's tool rows switch, also on its own key; shown from the start in a launcher benchmark run.
+    /// The fps counter (Shift+F9), an overlay the menu's tool rows switch, also on its own key; shown from the start in a play bench run
+    /// (<c>--play-bench</c>, also the launcher's <c>--benchmark</c>).
     /// </summary>
-    internal bool FpsVisible = host.GameOptions.Benchmark is not null;
+    internal bool FpsVisible = host.GameOptions.PlayBench is not null;
 
     /// <summary>
     /// The frame profiler (F12) the Profiler and VRAM pie rows switch; null without one.
