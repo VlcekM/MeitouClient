@@ -49,11 +49,13 @@ public class VramGuardTests
         Assert.True(r.Guard.RangeScale < 0.6f && r.Guard.RangeScale > 0.4f, $"scale {r.Guard.RangeScale}");
         Assert.Contains("streaming paused", r.Guard.Status);
 
-        // Down to the floor and no further.
-        r.Run(60, 0.95);
+        // Steps that leave the use where it was stop after FutileSteps: the memory is not the ranges' (#1429).
+        r.Run(60, 0.92);
 
-        Assert.Equal(VramGuard.MinScale, r.Guard.RangeScale, 4);
-        Assert.Equal(VramGuard.MinScale, r.Guard.LowestScale, 4);
+        float futile = MathF.Pow(VramGuard.StepDown, VramGuard.FutileSteps);
+
+        Assert.Equal(futile, r.Guard.RangeScale, 4);
+        Assert.Equal(futile, r.Guard.LowestScale, 4);
     }
 
     [Fact]
