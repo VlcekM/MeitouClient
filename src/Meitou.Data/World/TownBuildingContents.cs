@@ -171,6 +171,7 @@ sealed class TownBuildingContents
                 NodeType = node ? item.Building.GetInt("node type") : -1,
                 Record = k == HomeSpotKind.Bed ? item.Building.StringId : null,
                 Marker = k == HomeSpotKind.Bed ? WorldObjectLayout.PositionMarker(db, item.Building, at, rotation) : null,
+                Rotation = k == HomeSpotKind.Bed ? rotation : null,
             });
             return true;
         }

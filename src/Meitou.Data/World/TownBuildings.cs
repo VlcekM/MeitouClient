@@ -96,6 +96,10 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
     /// </summary>
     public Vector3? Marker { get; init; }
     /// <summary>
+    /// A bed's whole placed rotation, the host building's tilt included (its use nodes and the sleeper's lean follow it); null for other spots.
+    /// </summary>
+    public Quaternion? Rotation { get; init; }
+    /// <summary>
     /// The <see cref="TownLayoutBuilding.Id"/> of the interior layout object a throne, dummy or workstation of <see cref="TownBuilding.Furniture"/>
     /// is; null for any other spot and for a building standing alone as one.
     /// </summary>

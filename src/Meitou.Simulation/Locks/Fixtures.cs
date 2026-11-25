@@ -391,7 +391,7 @@ public sealed class Fixture
     /// </summary>
     public bool Cavernous { get; init; }
     /// <summary>
-    /// Doors and beds standing on their own: the building's whole placement turn, tilt included, where it is known (null: a turn of
+    /// Doors and beds: the building's (an interior bed: its own placed) whole placement turn, tilt included, where it is known (null: a turn of
     /// <see cref="Yaw"/> about +Y); it places the leaf (<see cref="FixtureRegistry.DoorSpotOf"/>) and leans the sleeper
     /// (<see cref="FixtureRegistry.LeanOf"/>). Derived from the data, not hashed or saved.
     /// </summary>

@@ -1131,12 +1131,19 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// The bed the first character named like <paramref name="name"/> lies in: its record, yaw and use node yaws, the lie spot and the sleeper's own
-    /// place and yaw as loaded, in degrees (#718: a sleeper lying across a one-node bed).
+    /// The bed each character named like <paramref name="name"/> lies in: its record, yaw and use node yaws, the lie spot, the bed's tilt and lean
+    /// and the sleeper's own place and yaw as loaded, in degrees (#718: a sleeper lying across a one-node bed; #1420: a tilted house's beds).
     /// </summary>
     static void Sleeper(ProbeWorld probe, string name)
     {
-        int who = probe.Named(name)[0];
+        foreach (int who in probe.Named(name)) Sleeper(probe, who);
+    }
+
+    /// <summary>
+    /// One sleeper's bed: as <see cref="Sleeper(ProbeWorld, string)"/>.
+    /// </summary>
+    static void Sleeper(ProbeWorld probe, int who)
+    {
         var c = probe.Characters.Cold(who)!;
         var me = probe.Characters.Next[who];
         Console.WriteLine($"{probe.Who(who)} inWhat={c.InWhat} at {me.Position:F1} yaw={Degrees(me.Yaw):F1}");
@@ -1150,7 +1157,9 @@ static class SaveProbe
         var (spot, yaw) = FixtureRegistry.LieSpot(bed, me.Position, probe.World.GameHours);
         Console.WriteLine($"bed {bed.Id} '{probe.Db.Find(bed.RecordId)?.Name}' at {bed.Position:F1} marker={bed.Marker:F1} yaw={Degrees(bed.Yaw):F1} "
             + $"clip={bed.Bed.Clip} nodes=[{nodes}]");
-        Console.WriteLine($"lie spot {spot:F1} yaw={Degrees(yaw):F1}");
+        float up = bed.Rotation is { } whole ? Vector3.Transform(Vector3.UnitY, whole).Y : 1;
+        Console.WriteLine($"lie spot {spot:F1} yaw={Degrees(yaw):F1} tilt={Degrees(MathF.Acos(Math.Clamp(up, -1, 1))):F1} "
+            + $"lean={FixtureRegistry.LeanOf(bed)?.ToString() ?? "none"}");
     }
 
     /// <summary>
