@@ -1394,8 +1394,15 @@ inputs in list order as the finder does, takes storages before producers and ski
 - **Auto-Haul order** (152 without Shift, **Verified**, [order pops](ai-tasks.md#finished-tests)): leaves once the machine's output holds nothing
   a storage takes (Meitou's hauler carries it there first).
 - **Storage pick** (**Verified**, `FUN_14059acd0`, also called by the 242 ditch finder `FUN_1405a59a0`): the candidates are the current town's
-  buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, whose slot `0x4a0`
-  takes the item; the nearest to the character by squared 3D distance wins, within the AI's range-mode bound (ROAM_FAR 4.246733e7).
+  buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, other than the served
+  machine (the third argument; the ditch finder passes its target's) and of another record (vfunc `0x18`), whose slot `0x4a0`
+  takes the item; the nearest to the character by squared 3D distance wins, within the AI's range-mode bound (ROAM_FAR 4.246733e7). Slot `0x4a0`
+  by class (**Verified**, decompile): a storage `FUN_1402988c0` (type limit and `limit inventory`, the AI rule under **Storage**); a production building
+  `FUN_1402989b0` (`ProductionBuilding::canHaveSomeOfThese`): its first input entry (`+0x480` list, the one `FUN_140299d00` walks) of the item holds
+  fewer than its max (`+0x8` above 0; else the input section's room test); a crafting bench `FUN_140298a80` the same, only while its vfunc `0x5d8`
+  holds (KenshiLib name `hasCraftingQueued`, **Observed**). So refineries, generators and benches whose input takes the item are candidates as
+  storages are, and a miner's output goes to the nearest of a storage and, say, a stone processor with room. Meitou: `ProductionSystem.StorageFor`
+  (`TakesOutput`), the operator's haul and the 152 finder; a machine target gets the carried output in its inputs (#1406).
 - **Observed** (the original 1.0.68, no mods, 2026-11-23): an operator's job 87 at an empty machine fetches nothing. A Copper Alloy Bench with
   its Copper input emptied by hand and a General Storage Chest in the same room holding Iron Plates (listed first) and 11 Copper: the operator,
   with jobs on and nothing else to do, stayed Aimless beside the bench for two game hours and never went to the chest.

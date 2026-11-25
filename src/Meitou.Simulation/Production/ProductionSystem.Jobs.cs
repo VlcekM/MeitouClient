@@ -838,11 +838,10 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The output has room, or with AutoHaul a storage <paramref name="cold"/> uses takes it.
+    /// The output has room, or with AutoHaul a storage or machine <paramref name="cold"/> uses takes it (<see cref="StorageFor"/>).
     /// </summary>
     bool Room(World world, BuildSite site, Machine m, CharacterCold cold) =>
-        m.Output is { } o && (!o.Full || Settings.AutoHaul && _items.Create(o.Recipe.Item, 1) is { } one
-            && NearestStorage(world, site, cold, one.Record, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
+        m.Output is { } o && (!o.Full || Settings.AutoHaul && _items.Create(o.Recipe.Item, 1) is { } one && StorageFor(world, site, one, cold) is not null);
 
     /// <summary>
     /// A carried item a "Hauling to" job takes to its storage: a loose stack (not the character's own kit), that the storage takes and has room for,
