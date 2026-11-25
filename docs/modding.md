@@ -1140,7 +1140,8 @@ holds refuses the second mod.
   menu's `Name`, `Position`, and by kind `Character`, `GroundItem`, or the container's, door's or building's `Id` and `Record`) with the
   selection, cursor, `Shift`, `Tick` and `Enqueue`; it is asked only with a selection. Kinds: `Character` (after the character rows, same
   rules), `Container`, `Door` and `Building` (a player-built site, also a bed's or cage's, after the game's rows), `Furniture` (a cage that
-  is no player-built site, a town's or camp's: `Id` its fixture id, `Record` its BUILDING, after the cage's rows), `GroundItem` (the hold
+  is no player-built site, a town's or camp's: `Id` its fixture id, `Record` its BUILDING, after the cage's rows; a caged character's press opens
+  that menu and its `Character` one beside it), `GroundItem` (the hold
   menu Pick Up plus the rows; a quick click still picks up) and `WorldPoint` (the ground under the cursor, `Position` the point; an untitled
   menu of the rows; a quick click still moves there). A target that gets no rows behaves as without the mod. Engine API, not in the original.
   **Observed** headless (rows, faults; not the menus in a running game).
