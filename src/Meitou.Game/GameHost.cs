@@ -709,6 +709,7 @@ sealed partial class GameHost(
     void KeepWorldContent(WorldBoot boot, Meitou.Data.World.WorldLevelData? levels)
     {
         Nav = boot.Nav;
+        if (Nav is not null) Nav.Walkability.StreamsZones = true;   // LoadWantedZones streams in the zones routes ask for
         RagdollGeometry = boot.RagdollGeometry;
         CharacterRigs = boot.Rigs;
         AnimationLengths = boot.AnimationLengths;

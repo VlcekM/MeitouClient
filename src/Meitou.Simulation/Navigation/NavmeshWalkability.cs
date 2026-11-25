@@ -437,12 +437,49 @@ public sealed partial class NavmeshWalkability : IWalkability
         // The ground the nearest-point search covered. A nearest point within the goal's snap is the path's end as it is.
         long[] ground = key is null ? [] : NavQuery.LastSearchReached();
         var nearest = part.Points[^1];
-        bool arrives = Arrives(nearest, to);
+        bool arrives = Arrives(w, nearest, to);
+
+        // Not proven unreachable while both the walker's ground and the goal's go on into zones not loaded: they may meet there.
+        if (!arrives && key is { } goal && Unproven(w, goal.Item1, ground) is { Count: > 0 } open) return Provisional(part, to, open);
 
         // Also after a search cut short by its limit: the exact search would be cut short the same way, so the walker gets this same answer.
         if (key is { } found) Remember(found, new Unreachable(w, doors, nearest, arrives, ground, Volatile.Read(ref _tick)));
 
         return arrives ? part : PathResult.ShutOff;
+    }
+
+    /// <summary>
+    /// The zones not loaded that both <paramref name="ground"/> (the walker's, as the failed search covered it) and the goal polygon's ground
+    /// border (<see cref="NavFrontier"/>); empty when either is closed inside the loaded zones, which proves the goal unreachable. Observed (#1421
+    /// save): a hilltop in 28.46 whose only way down runs through 28.47 had no path while 28.47 was not loaded, so a move order to it was dropped.
+    /// Always empty when the host streams no zones in (<see cref="StreamsZones"/>); zones off the world's grid never load.
+    /// </summary>
+    HashSet<ZoneCoordinate> Unproven(NavWorld w, NavRef goal, long[] ground)
+    {
+        if (!StreamsZones) return [];
+
+        var fromGoal = NavFrontier.OfGoal(w, goal);
+        fromGoal.RemoveWhere(z => !z.IsInsideGrid);
+        if (fromGoal.Count == 0) return fromGoal;
+
+        var fromWalker = NavFrontier.OfGround(w, ground);
+        fromWalker.RemoveWhere(z => !z.IsInsideGrid);
+        if (fromWalker.Count == 0) return fromWalker;
+
+        fromGoal.UnionWith(fromWalker);
+        return fromGoal;
+    }
+
+    /// <summary>
+    /// The path to the nearest point reached, then on to the goal provisionally, with the <paramref name="open"/> zones asked for
+    /// (<see cref="RouteZones"/>): every walker asks again once they are live.
+    /// </summary>
+    PathResult Provisional(PathResult part, Vector3 to, HashSet<ZoneCoordinate> open)
+    {
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        foreach (var zone in open) _routeZones[zone] = now;
+
+        return new PathResult([.. part.Points, to]) { Exact = part.Points.Count };
     }
 
     /// <summary>
@@ -453,6 +490,21 @@ public sealed partial class NavmeshWalkability : IWalkability
     static bool Arrives(Vector3 end, Vector3 goal) =>
         Vector2.Distance(new(end.X, end.Z), new(goal.X, goal.Z)) <= NavQuery.GoalSnap
         && MathF.Abs(end.Y - goal.Y) <= NavQuery.GoalFloorSlack;
+
+    /// <summary>
+    /// Whether a path ending at <paramref name="end"/> has arrived at <paramref name="goal"/> (<see cref="Arrives(Vector3, Vector3)"/>), or, for
+    /// a goal off the mesh (no polygon within <see cref="NavQuery.GoalSnap"/>), at the mesh's point the goal snaps to
+    /// (<see cref="NavWorld.TryFindGoalPolygon"/>): a goal on a rock is reached at the rock's foot. Observed (#1421 save, 28.46, path-check): the
+    /// snap's polygon there joins its neighbour by an edge 2 units long, too narrow to pass, so the exact search failed and its nearest point, 19
+    /// short of the snapped point and 90 from the goal, ended no path.
+    /// </summary>
+    static bool Arrives(NavWorld w, Vector3 end, Vector3 goal)
+    {
+        if (Arrives(end, goal)) return true;
+        if (w.TryFindPolygon(goal, NavQuery.GoalSnap, out _, out _)) return false;
+
+        return w.TryFindGoalPolygon(goal, out _, out var snapped) && Arrives(end, snapped);
+    }
 
     /// <summary>
     /// The route to a goal just found unreachable (shut in, or a way in too narrow for the radius; <see cref="_unreachable"/>), for a walker whose
@@ -475,7 +527,7 @@ public sealed partial class NavmeshWalkability : IWalkability
 
         // The remembered point is the nearest to the goal asked for then. Within this goal's snap too it is the path's end; one that ended a path
         // then says nothing of where a path to another point of the polygon ends, so that is searched for.
-        bool arrives = Arrives(hit.Nearest, to);
+        bool arrives = Arrives(w, hit.Nearest, to);
         if (hit.Arrived && !arrives) return null;
 
         var near = new NavQuery(w, Doors).FindPath(from, hit.Nearest, agent, null, out _);
@@ -575,6 +627,12 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// reached it still building (#824).
     /// </summary>
     public float GameSpeed { get; set; } = 1;
+
+    /// <summary>
+    /// Whether the host streams in the zones routes ask for (<see cref="RouteZones"/>). False (a world made of the zones given, as in tests and
+    /// tools): the loaded zones are all there is, so a goal they do not reach is unreachable however its ground meets their borders.
+    /// </summary>
+    public bool StreamsZones { get; set; }
 
     /// <summary>
     /// When each zone without a mesh was last passed by a provisional route (a <see cref="System.Diagnostics.Stopwatch"/> timestamp),

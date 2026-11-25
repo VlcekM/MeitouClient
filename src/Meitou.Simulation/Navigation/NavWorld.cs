@@ -386,11 +386,15 @@ public sealed class NavWorld
     /// unless that one is on another floor (more than <see cref="NavQuery.GoalFloorSlack"/> above or below the goal) and a polygon on the goal's own
     /// floor lies nearer the goal in 3D, within <see cref="NavQuery.GoalFloorReach"/> on the XZ plane. The original takes the goal face as the
     /// closest point in 3D (docs/game/pathfinding.md, "Geometry and queries"), so a floor straight overhead loses to the goal's own floor beside it, as
-    /// at a row of prisoner cages that cuts the ground floor's mesh under them (#1108).
+    /// at a row of prisoner cages that cuts the ground floor's mesh under them (#1108). With none within <see cref="NavQuery.GoalSnap"/>, the
+    /// nearest within <see cref="NavQuery.GoalFloorReach"/> (the original's goal box, 300 each way): a move order on ground the mesh leaves out (a
+    /// steep slope, a rock) walks to its edge instead of being dropped (#1421).
     /// </summary>
     public bool TryFindGoalPolygon(Vector3 goal, out NavRef polygon, out Vector3 snapped)
     {
-        if (!TryFindPolygon(goal, NavQuery.GoalSnap, out polygon, out snapped)) return false;
+        if (!TryFindPolygon(goal, NavQuery.GoalSnap, out polygon, out snapped)
+                && !TryFindPolygon(goal, NavQuery.GoalFloorReach, out polygon, out snapped, heightSlack: NavQuery.GoalFloorReach))
+            return false;
         if (MathF.Abs(snapped.Y - goal.Y) <= NavQuery.GoalFloorSlack) return true;
 
         // On another floor: a polygon on the goal's own floor wins while it is nearer the goal than the other floor's point.
