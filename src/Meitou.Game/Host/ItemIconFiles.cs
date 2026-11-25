@@ -49,17 +49,36 @@ sealed class ItemIconFiles(GameHost host)
     }
 
     /// <summary>
-    /// The item icons of the install: the files records name, then the images the game saved under <c>data/icons</c>, then the ones Meitou saved
-    /// (<see cref="IconSaveDirectory"/>); supersampled (<paramref name="enhanced"/>), only Meitou's supersampled ones, the game's pictures being
-    /// drawn its way (null without game data).
+    /// The item icons of the install: the files records name, then the images the game saved under <c>data/icons</c>, then the pictures the enabled
+    /// mods ship in their <c>Icons</c> folders (<see cref="ModIconFolders"/>), then the ones Meitou saved (<see cref="IconSaveDirectory"/>);
+    /// supersampled (<paramref name="enhanced"/>), the game's saved pictures left out, those being drawn its way (null without game data).
     /// </summary>
     ItemIcons? ItemIconsOfInstall(bool enhanced)
     {
         if (host.Scene.Database is not { } db) return null;
         string own = IconSaveDirectory(enhanced);
         ClearOldIcons(own);
-        return new(db, name => host.Assets.FindInGroup(name, "Icons"),
-            enhanced ? new ItemIconCache(own) : new ItemIconCache(Path.Combine(host.Install.DataDirectory, "icons"), own));
+
+        string[] mods = ModIconFolders();
+        string[] folders = enhanced ? [.. mods, own] : [Path.Combine(host.Install.DataDirectory, "icons"), .. mods, own];
+        return new(db, name => host.Assets.FindInGroup(name, "Icons"), new ItemIconCache(folders));
+    }
+
+    /// <summary>
+    /// The enabled mods' folders in the <c>Icons</c> resource group (a mod's <c>icons</c> folder, as <c>data/icons</c> is in resources.cfg), in
+    /// the order the game registers them. The game takes a picture named as its saved ones from that group before drawing the item, so a mod's
+    /// <c>icons/&lt;item&gt;.&lt;material&gt;.png</c> is the item's icon.
+    /// </summary>
+    string[] ModIconFolders()
+    {
+        string data = Path.GetFullPath(host.Install.DataDirectory) + Path.DirectorySeparatorChar;
+        return
+        [
+            .. host.Assets.Configured.Locations
+                .Where(l => l.Group == "Icons" && l.Type == "FileSystem")
+                .Select(l => Path.GetFullPath(l.Path))
+                .Where(p => !p.StartsWith(data, StringComparison.OrdinalIgnoreCase))
+        ];
     }
 
     /// <summary>
