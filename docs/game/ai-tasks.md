@@ -2023,7 +2023,12 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
     same gain as the operating XP (`0.02 x dt x exp gain mult x 2.0 x race[stat]`) through the core curve with that cap, ((cap - stat) / cap)^2, so the stat approaches the cap without reaching it.
     The cap is **Observed** to be the BUILDING's `output rate` (MkI 6, II 11, III 16; lock 11/21/31; assassin 10/20/30; the descriptions promise levels 5/10/15, the displayed level being the whole part);
     the field +0x1a4 itself was not traced to the record. The bar shows the stat's fraction (+0x3a4). Meitou reads it as the stat's fractional part (`TrainBar`; **Observed**). The row's conditions are 38 `hasOneWorkingArm`, 73, `isAtLocation`.
-    The XP is the user's own stat, not the injured one. Meitou: [simulation](../simulation.md#job-lists).
+    The XP is the user's own stat, not the injured one; it trains no weapon skill. Weapon in hand (**Verified**, the start `FUN_1403513a0`): at a dummy whose `stat used` is 2
+    (Melee Attack: Training Dummy MkI-III, whose `animation` is `chop down static`) the first item of `back`, else of `hip`, that AI slot 0x68 `FUN_1409991d0` passes (a
+    WEAPON or CROSSBOW the arms can wield, [arms](combat.md#arms)) goes to Character vfunc 0x3d8, so a crossbow first in `back` is drawn too; with none the hand stays as it
+    was; at any other dummy (locks, assassination, thief boxes, the Training Turrets of function 7) vfunc 0x2d0 puts the weapon away. The end (slot 3) sheathes nothing.
+    Meitou: `ProductionSystem.HoldForTraining` every update at the dummy (a back one-arm weapon with the left arm out gives the hip one, as `Fighter.Weapon`; engine
+    choice), and the player's sheathing at work (`CombatSystem` Act) leaves a 97 user alone. [simulation](../simulation.md#job-lists).
 - **UI** (strings, `FUN_14072b540` JobsPanel): "No jobs assigned", "To add jobs, hold shift key when giving an order", the Jobs toggle "If this is
   disabled then the character won't do any of the jobs listed."; tutorial: jobs are reordered by dragging and removed with X.
   Row text: [Jobs list](ui-screens.md#4-hud-mainbargui).

@@ -445,9 +445,44 @@ public sealed partial class ProductionSystem
     void Train(ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt)
     {
         if (n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = MathF.Atan2(site.Position.X - n.Position.X, site.Position.Z - n.Position.Z);
+        HoldForTraining(cold, m.Data.Stat);
         m.Operators++;
         cold.Operating = true;
         TrainingXp(cold, m.Data, dt);
+    }
+
+    /// <summary>
+    /// The weapon a dummy's user holds (<c>Task_UseTrainingDummy</c>'s start <c>FUN_1403513a0</c>, <b>Verified</b> by decompile): at a Melee Attack
+    /// dummy the first item of <c>back</c>, else of <c>hip</c>, that the arms can wield (a crossbow included), with nothing wieldable the hand as it
+    /// was; at any other dummy the weapon put away. Set every update at the dummy, as the operator's tool is.
+    /// </summary>
+    static void HoldForTraining(CharacterCold cold, int stat)
+    {
+        if (stat != (int)Meitou.Data.Gameplay.Bodies.StatsEnumerated.MeleeAttack)
+        {
+            cold.DrawnWeapon = WeaponKinds.None;
+            return;
+        }
+
+        if (cold.Fighter is not { } f) return;
+
+        var held = TrainingWeapon(f, cold.Medical is not { BothArmsWork: false });
+        if (held != WeaponKinds.None) cold.DrawnWeapon = held;
+    }
+
+    /// <summary>
+    /// The hold of the weapon <see cref="HoldForTraining"/> draws (AI slot 0x68 <c>FUN_1409991d0</c>: a crossbow, category 6, needs both arms):
+    /// the back crossbow, the back melee weapon, the hip crossbow, the hip melee weapon. Meitou's hand weapon is <see cref="Fighter.Weapon"/>, so a
+    /// back one-arm weapon with the left arm out gives the hip one (engine choice).
+    /// </summary>
+    static WeaponKinds TrainingWeapon(Fighter f, bool bothArms)
+    {
+        var bow = HandHold.OfCategory((int)Meitou.Data.Gameplay.Combat.WeaponCategory.Bow).Weapon;
+        if (bothArms && f.Crossbow is { AtBack: true }) return bow;
+        if (f.WeaponIsBack) return CombatSystem.MeleeDrawn(f);
+        if (bothArms && f.Crossbow is { AtBack: false }) return bow;
+
+        return CombatSystem.MeleeDrawn(f);
     }
 
     /// <summary>
