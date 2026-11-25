@@ -931,8 +931,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>: it walks the watcher's sensed list, masks 0x60 / 0x110):
     /// the nearest (engine choice; the original takes the first) live character within sight range that the watcher senses
     /// (<see cref="CharacterFacts.Perceives"/>: one it has not seen or heard, a sneaking one or one in another building, is none, #649), in slave
-    /// state 1 or 2, free (not carried, caged or held), no animal, not another job's, and <see cref="NeedsProcessing"/>. No distance
-    /// bound, no cage. -1: none.
+    /// state 1 or 2, not carried, free or caged (the list's prisoner bit 9 is not masked out, so a caged slave in sight is taken wherever its cage
+    /// stands; one in a bed is left out, engine choice), no animal, not another job's, and <see cref="NeedsProcessing"/>. No distance bound. -1:
+    /// none.
     /// </summary>
     internal int FreeSlaveToProcess(World world, int slot, CharacterCold me)
     {
@@ -942,7 +943,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         {
             var table = st.World.Characters;
             if (v == st.Self || !table.Next[v].Alive || table.Cold(v) is not { SlaveState: not 0, Medical: { Dead: false }, Race: not null } c
-                    || !c.CarriedBy.IsNone || c.InSomething != HeldState.None
+                    || !c.CarriedBy.IsNone || c.InSomething is not (HeldState.None or HeldState.Imprisoned)
                 || c.Fighter is { IsAnimal: true } || c.Appearance?.Animal is not null) return;
             var id = table.IdOf(v);
             if (st.System.Busy(id) || !st.System.NeedsProcessing(st.Me, c)) return;
