@@ -726,8 +726,9 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         TaskType.CaptureNewSlaves => LooseJob(world, ask, cold, target, CaptiveJobKind.Capture),
         TaskType.CarryWoundedSlaves => captives.Kidnap is null || !CarrySystem.CanCarry(world, cold, ask.Type) ? null
             : LooseJob(world, ask, cold, target, CaptiveJobKind.Carry),
-        TaskType.GatherSlavesFromCages or TaskType.GatherSlavesFromCagesIfFemaleOrBeast or TaskType.GatherSlavesFromCagesIfItsAnExportTown =>
+        TaskType.GatherSlavesFromCages or TaskType.GatherSlavesFromCagesIfFemaleOrBeast =>
             CagedJob(world, ask, cold, target, CaptiveJobKind.Gather, claims: ask.Type == TaskType.GatherSlavesFromCagesIfFemaleOrBeast),
+        TaskType.GatherSlavesFromCagesIfItsAnExportTown => ExportJob(world, ask, cold, target),
         TaskType.WorkTheSlaves => LooseJob(world, ask, cold, target, CaptiveJobKind.Shout),
         TaskType.GoToSomewhereForDeliveringSlaves => PickOf(ask) is { Found.Site: >= 0 } trip
             ? New(ask, cold, CaptiveJobKind.Deliver, CharacterId.None, "", trip.Found.Site, target) : null,
@@ -773,6 +774,18 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
 
         if (claims && (captives.Taken(cage.Id) || captives.Busy(captive))) return null;
         return New(ask, cold, kind, captive, cage.Id, cage.Site, target);
+    }
+
+    /// <summary>
+    /// 217's job on a caged captive that passes its finder's squad claims at the start (<see cref="CaptiveSystem.ExportClaimed"/>): a squad mate's
+    /// job started since the pick was looked at keeps the cage to itself, so the gatherers of one squad do not race for the same cage.
+    /// </summary>
+    CaptiveJob? ExportJob(World world, in DutyAsk ask, CharacterCold cold, in PlanTarget target)
+    {
+        if (CagedJob(world, ask, cold, target, CaptiveJobKind.Gather, claims: false) is not { } job) return null;
+        if (world.Fixtures.Find(job.Cage) is not { } cage) return null;
+
+        return CaptiveSystem.ExportClaimed(SquadGoals.Of(world), ask.Id, cold, cage, job.Captive) ? null : job;
     }
 
     /// <summary>

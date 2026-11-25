@@ -1696,7 +1696,9 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   245: its faction's, the first in finder order (no distance sort) whose occupant is a woman or of another race, with no test of the occupant being a player character, down or busy; 217: any but the player's). The captive becomes the gatherer's faction's slave (state 1), owned by
   the gatherer's squad, and stays in its own squad: `Task_GetSlave`'s queued message is replayed as `setChainedMode` only (`FUN_1407b65b0` kind 5 ->
   `FUN_14032e590`, **Verified**: no squad change), so it plans with the owner squad's Slave AI Goals (job 187, `AiSystem.ObeyedRoles`), mostly 171
-  Follow slavemaster or 189 Worker. The cage is opened and the captive steps to its exit spot ([locks](game/locks.md#cages-and-beds)). Player captives are gathered too: 173's finder excludes player-owned cages, not player occupants
+  Follow slavemaster or 189 Worker. The cage is opened and the captive steps to its exit spot ([locks](game/locks.md#cages-and-beds)). 217's finder runs at
+  the choice with the cage limit 0 (`FUN_1408cc600`, **Verified**): a cage a squad mate works is out, so its job's start asks the squad's claims again
+  (`CaptiveSystem.ExportClaimed`) and one squad's gatherers no longer race for one cage from picks looked at on earlier ticks. Player captives are gathered too: 173's finder excludes player-owned cages, not player occupants
   (`FUN_1408db680` -> `FUN_1408db510`, **Observed**, 1.0.68 decompile); 217 still excludes player occupants (engine choice).
   **Observed** (KenshiOracle hold, Rebirth, 2026-11-09): the original's gathered slaves keep their squads all hour (Pao 40, Mu 44).
   **Observed** (probe): the Slave Farm's workmasters take the caged slaves out by day; at night their slaves' 172 puts them back.
@@ -1709,6 +1711,9 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   owner (`FUN_140330600`; Meitou's master is the resident squad of the cage's building, `FixtureRegistry.CageMaster`, kept when none is loaded), so 194 hands over
   only the rest. **Observed** (same run): 3 of 4 changed hands by caging; the 4th, in a cage whose building had no loaded squad, by DA 24.
 - **Get in the cage** (172, a Slave AI Goal): a slave not held walks to the nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in.
+  Every cage job (172, the gatherers, the fate goals, the liberators) walks onto the cage's floor and is at the cage only on its level: row 107's
+  `isAtLocation` for a building is `AI::isWithinChoppingRange` (`FUN_14059c6d0`, **Verified**: flat distance and the same floor), and `Task_UseCage`'s
+  start (`FUN_140358040`, **Verified**) teleports the character in wherever it stands, so a flat test put a slave under an upper-storey cage into it.
   A cage a squad mate works on or the slave ignores is passed over; another squad's work does not count (172 and 245, `FUN_1408db510` with limit 0 on the squad's own
   blackboard, `FUN_1402690e0`, **Verified**).
 - **Packages** (`PackageClass` 8 to 11, rules in `AiSystem.Captives.cs` as the facts): cannibal retreat (1, 25; it ends when the effective leader's status town is of the squad's faction, so a wiped

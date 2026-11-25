@@ -171,21 +171,27 @@ public sealed partial class CaptiveSystem
         var asker = table.IdOf(slot);
 
         // 173 claims nothing (FUN_1408db510 with the finder limit 0x100): gatherers of any squad may head for the same cage, the first lifts.
-        if (export ? goals!.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0 : unholy && SquadClaimed(world, goals!, asker, cold, f)) return false;
+        if (unholy && SquadClaimed(world, goals!, asker, cold, f)) return false;
         if (!export && f.Owner != cold.Faction || OccupantSlot(world, f) is not (>= 0 and var s)) return false;
         c = table.Cold(s)!;
         if (Spared(cold, c)) return false;
 
-        // 217 (FUN_1408cc600): dropped for a down or crippled occupant, or one two squad mates already work.
-        if (export)
-        {
-            return !(c.IsPlayer || c.Medical is { Incapacitated: true } || CombatSystem.IsCrippled(c)
-                || goals!.Working(cold.SquadId, asker, GoalTarget.Of(table.IdOf(s))) >= 2);
-        }
+        // 217 (FUN_1408cc600): dropped for a down or crippled occupant, or one its squad mates' claims rule out.
+        bool unfit = c.IsPlayer || c.Medical is { Incapacitated: true } || CombatSystem.IsCrippled(c);
+        if (export) return !unfit && !ExportClaimed(goals!, asker, cold, f, table.IdOf(s));
 
         if (unholy) return c.Appearance is { Female: true } || c.Race?.StringId != cold.Race?.StringId;
         return c.Medical is not { Incapacitated: true };
     }
+
+    /// <summary>
+    /// 217's squad claims (<c>FUN_1408cc600</c>, <b>Verified</b>): its <c>BuildingFinder_Cages</c> has the finder limit 0 (<c>+0x3c</c>), so a cage a
+    /// squad mate of the asker works is out (<c>FUN_1408db510</c> -> <c>FUN_1402690e0</c> on the squad's own blackboard), and so is an occupant two
+    /// squad mates already work. The finder runs at the choice, so the job's start asks again (<see cref="CaptiveGoals"/>): picks looked at on
+    /// earlier ticks do not see the jobs started since.
+    /// </summary>
+    internal static bool ExportClaimed(SquadGoals goals, CharacterId asker, CharacterCold cold, Fixture f, CharacterId occupant) =>
+        goals.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0 || goals.Working(cold.SquadId, asker, GoalTarget.Of(occupant)) >= 2;
 
     /// <summary>
     /// The cage and the captive of every job, in the squad's goal list the finders ask (<see cref="SquadGoals"/>).

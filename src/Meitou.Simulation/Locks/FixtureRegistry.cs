@@ -2058,12 +2058,16 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Puts a character leaving <paramref name="cage"/> at its <see cref="ExitSpot"/>, facing as it did; it stays where it is when the cage has no
-    /// use node.
+    /// Puts a character leaving <paramref name="cage"/> at its <see cref="ExitSpot"/>, facing as it did, standing through the start path as
+    /// <see cref="Hold"/> does (a cage keeps whatever task its occupant came in or was loaded with, <see cref="HoldCaged"/>); it stays where it is
+    /// when the cage has no use node.
     /// </summary>
     static void StepOut(CharacterTable table, int slot, Fixture cage)
     {
-        if (ExitSpot(cage) is { } at) table.Place(slot, at, table.Next[slot].Yaw);
+        if (ExitSpot(cage) is not { } at) return;
+
+        table.Place(slot, at, table.Next[slot].Yaw);
+        TaskStart.Step(table, slot, CharacterTask.Idle);   // the teleport stands it
     }
 
     /// <summary>
