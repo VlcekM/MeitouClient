@@ -2,6 +2,11 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.21.3
+
+- The Mods page offers more endorsed RE_Kenshi ports from the wishlist and recognizes either endorsed Sparring port when installed.
+- The Benchmark page lists every known scenario before the first run, including Shark fly-by.
+
 ## v1.21.2
 
 - Tooltips open beside the mouse pointer, never under it, so they no longer swallow a click on Main menu, Continue or other buttons near the bottom of the screen
