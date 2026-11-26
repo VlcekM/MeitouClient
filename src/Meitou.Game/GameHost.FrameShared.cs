@@ -174,7 +174,7 @@ sealed partial class GameHost
             {
                 if (world.Characters.IsAlive(k.Attacker) && world.Characters.Cold(k.Attacker.Slot) is { IsPlayer: true } attacker)
                 {
-                    string name = Player.ShownName("character", attacker.RecordId, attacker.Name);
+                    string name = Player.ShownName("character", attacker.RecordId, attacker.Name, attacker.LastingId.Value, ShownPlace.Notice);
                     Player.Notice($"{name}: {Loc.Tr(k.Success ? "*Thunk*" : "Failed!")}{(k.NoXp ? Loc.Tr(" (No XP)") : "")} "
                         + $"({Math.Clamp(k.Chance, 0, 100):0}%)", !k.Success);
                 }

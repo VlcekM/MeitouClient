@@ -160,10 +160,10 @@ sealed class ScreenRouter(PlayerInterface player)
     /// </summary>
     string CharacterWindowCaption(string id, CharacterSnapshot? lead) => id switch
     {
-        "stats" => player.ShownLeadName(lead) ?? "CHARACTER STATS",
+        "stats" => player.ShownLeadName(lead, ShownPlace.Panel) ?? "CHARACTER STATS",
         "bag" => player.ShownBackpackName(lead) ?? "BACKPACK",
         "limbs" => "LIMBS",
-        _ => player.ShownLeadName(lead) ?? "INVENTORY",
+        _ => player.ShownLeadName(lead, ShownPlace.Panel) ?? "INVENTORY",
     };
 
     /// <summary>

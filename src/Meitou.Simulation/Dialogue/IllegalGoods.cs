@@ -38,6 +38,6 @@ sealed class IllegalGoods(PopulationData data)
         if (dryRun || (_smugglingPosted.TryGetValue((carrierId, record), out double last) && world.GameHours - last < 1)) return;
         _smugglingPosted[(carrierId, record)] = world.GameHours;
         string item = data.Db.Find(record) is { } r ? r.ShownName() : record;
-        world.Post(Loc.Tr("{1} has been discovered smuggling {2}", world.ShownName(carrier), item));
+        world.Post(Loc.Tr("{1} has been discovered smuggling {2}", world.ShownName(carrier, ShownPlace.Notice), item));
     }
 }

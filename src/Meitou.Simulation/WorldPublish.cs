@@ -940,7 +940,7 @@ public sealed partial class World
         return InventoryItemView.Of(index, item) with
         {
             StolenFrom = stolen ? item.StolenFrom : -1,
-            StolenOwner = stolen ? ShownOwnerNameOf(item.Owner) : null,
+            StolenOwner = stolen ? ShownOwnerNameOf(item.Owner, ShownPlace.Tooltip) : null,
             StealChance = steal?.Invoke(item)
         };
     }

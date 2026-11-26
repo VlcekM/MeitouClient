@@ -1000,7 +1000,11 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var table = world.Characters;
         if (table.Next[g].Task != (byte)CharacterTask.Attack) Attack(world, g, t);
         if (table.Cold(t)!.IsPlayer && !FoughtByOther(arrest))
-            world.Post(Loc.Tr("{1} is arresting {2}!", world.ShownName(table.Cold(g)!), world.ShownName(table.Cold(t)!)));
+        {
+            string guardName = world.ShownName(table.Cold(g)!, ShownPlace.Notice);
+            string targetName = world.ShownName(table.Cold(t)!, ShownPlace.Notice);
+            world.Post(Loc.Tr("{1} is arresting {2}!", guardName, targetName));
+        }
         Note(world, ArrestEventKind.Arrest, arrest.Guard, arrest.Target, arrest.Faction,
             table.Cold(t)!.Bounties?.BookedAmount(Crimes.Factions.Relations, arrest.Faction) ?? 0);
     }
@@ -1305,7 +1309,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         else if (tc.IsPlayer)
         {
             string by = world.ShownFaction(a.Faction, Crimes.Factions.NameOf(a.Faction));
-            world.Post(Loc.Tr("{1} has been imprisoned by {2}", world.ShownName(tc), by));
+            world.Post(Loc.Tr("{1} has been imprisoned by {2}", world.ShownName(tc, ShownPlace.Notice), by));
         }
         return End(world, a, ArrestEventKind.Jailed);
     }

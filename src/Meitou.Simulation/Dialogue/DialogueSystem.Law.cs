@@ -49,7 +49,7 @@ public sealed partial class DialogueSystem
         {
             // the button shows the prisoner's name as the mods' text sources show it
             string cost = $" (c.{price.ToString("N0", CultureInfo.InvariantCulture)})";
-            c.Choices.Add((null, name + cost, ShownText.Any ? world.ShownName(prisoner) + cost : null));
+            c.Choices.Add((null, name + cost, ShownText.Any ? world.ShownName(prisoner, ShownPlace.Dialogue) + cost : null));
         }
         c.Choices.Add((null, LeaveChoice, null));
         if (offers.Count == 0) world.Post(Loc.Tr("Nobody here to bail out."));

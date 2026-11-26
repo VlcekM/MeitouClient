@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Meitou.Localisation;
 
-using Asked = (ShownTextKind Kind, string Key, string Text, string Tag, string Field);
+using Asked = (ShownTextKind Kind, string Key, string Text, string Tag, string Field, ulong Character, ShownPlace Place);
 
 /// <summary>
 /// What kind of text a mod's text source is asked about (<see cref="ShownText"/>, docs/modding.md "Shown text").
@@ -43,10 +43,74 @@ public enum ShownTextKind : byte
 }
 
 /// <summary>
-/// What a mod's text source gets: the kind of text, its key, the text it would show (the game's, or an earlier source's), a tag and a field, whose
-/// meanings each <see cref="ShownTextKind"/> gives.
+/// Where a character's name is being shown (<see cref="ShownTextContext.Place"/>), so a source can give a name one way in some places and another
+/// way, or leave it, in others (a title on the head label but not in dialogue).
 /// </summary>
-public sealed record ShownTextContext(ShownTextKind Kind, string Key, string Text, string Tag, string Field);
+public enum ShownPlace : byte
+{
+    /// <summary>
+    /// Not said: anything other than a character's name, and a caller that does not tell.
+    /// </summary>
+    Unknown,
+
+    /// <summary>
+    /// The name above a character's head in the world.
+    /// </summary>
+    Label,
+
+    /// <summary>
+    /// The squad bar's portraits and the squad lists.
+    /// </summary>
+    Squad,
+
+    /// <summary>
+    /// The character's own panels and windows: the selected character's status panel, its inventory and stats windows, its jobs list.
+    /// </summary>
+    Panel,
+
+    /// <summary>
+    /// Other windows that name characters: trade, slaves and animals for sale, crafting, prospecting, faction information and the rest.
+    /// </summary>
+    Window,
+
+    /// <summary>
+    /// A tooltip (an item's owner, a crafter).
+    /// </summary>
+    Tooltip,
+
+    /// <summary>
+    /// The right-click menu's title.
+    /// </summary>
+    Menu,
+
+    /// <summary>
+    /// The game's notices and messages, the floaters over the world and the event log.
+    /// </summary>
+    Notice,
+
+    /// <summary>
+    /// Conversation: the dialogue window and its log, speech bubbles, dialogue choices, and a name a line's token fills in (<c>/YOURNAME/</c>).
+    /// </summary>
+    Dialogue,
+}
+
+/// <summary>
+/// What a mod's text source gets: the kind of text, its key, the text it would show (the game's, or an earlier source's), a tag and a field, whose
+/// meanings each <see cref="ShownTextKind"/> gives; for a character's name also which character and where it is shown.
+/// </summary>
+public sealed record ShownTextContext(ShownTextKind Kind, string Key, string Text, string Tag, string Field)
+{
+    /// <summary>
+    /// For a character's name, the character's lasting id (<c>LastingId.Value</c>, docs/modding.md "Character ids"); 0 for any other text and for
+    /// a character no mod has given an id. A source that names one character alone gives it an id first and answers by it.
+    /// </summary>
+    public ulong Character { get; init; }
+
+    /// <summary>
+    /// For a character's name, where it is shown; <see cref="ShownPlace.Unknown"/> for any other text.
+    /// </summary>
+    public ShownPlace Place { get; init; }
+}
 
 /// <summary>
 /// The mods' text sources (docs/modding.md "Shown text"): asked when the game shows a message, a record's text, a name or a dialogue line, each in
@@ -180,19 +244,28 @@ public static class ShownText
     /// one item tagged <paramref name="tag"/> ("" none); see <see cref="ShownTextKind.Record"/>.
     /// </summary>
     public static string Record(string record, string text, string field = RecordName, string tag = "") =>
-        s_sources.Length == 0 ? text : Of(ShownTextKind.Record, record, text, tag, field);
+        s_sources.Length == 0 ? text : Ask((ShownTextKind.Record, record ?? "", text, tag ?? "", field ?? "", 0, ShownPlace.Unknown));
 
     /// <summary>
     /// The name of a <paramref name="what"/> (<c>character</c>, <c>squad</c>, <c>outpost</c>, <c>faction</c>, <c>place</c>) made from
     /// <paramref name="record"/> ("" none) whose record is called <paramref name="recordName"/>, as shown: a name that is still its record's is
     /// asked as that record's name (<see cref="ShownTextKind.Record"/>), any other as a <see cref="ShownTextKind.Name"/>.
     /// </summary>
-    public static string Name(string what, string record, string recordName, string name)
+    public static string Name(string what, string record, string recordName, string name) =>
+        Name(what, record, recordName, name, 0, ShownPlace.Unknown);
+
+    /// <summary>
+    /// As <see cref="Name(string, string, string, string)"/>, for the name of one character: <paramref name="character"/> its lasting id (0: none
+    /// given), <paramref name="place"/> where it is shown. Answers are kept per character and place.
+    /// </summary>
+    public static string Name(string what, string record, string recordName, string name, ulong character, ShownPlace place)
     {
         if (s_sources.Length == 0) return name;
-        return record.Length > 0 && string.Equals(name, recordName, StringComparison.Ordinal)
-            ? Of(ShownTextKind.Record, record, name, "", RecordName)
-            : Of(ShownTextKind.Name, record, name, "", what);
+
+        bool asRecord = record.Length > 0 && string.Equals(name, recordName, StringComparison.Ordinal);
+        return asRecord
+            ? Ask((ShownTextKind.Record, record, name, "", RecordName, character, place))
+            : Ask((ShownTextKind.Name, record, name, "", what, character, place));
     }
 
     /// <summary>
@@ -202,11 +275,15 @@ public static class ShownText
     /// source that throws is dropped and reported through <see cref="Dropped"/>. With no source, or a blank <paramref name="text"/>, the text as it
     /// is.
     /// </summary>
-    public static string Of(ShownTextKind kind, string key, string text, string tag = "", string field = "")
-    {
-        if (s_sources.Length == 0 || s_inside || string.IsNullOrWhiteSpace(text)) return text;
+    public static string Of(ShownTextKind kind, string key, string text, string tag = "", string field = "") =>
+        s_sources.Length == 0 ? text : Ask((kind, key ?? "", text, tag ?? "", field ?? "", 0, ShownPlace.Unknown));
 
-        Asked asked = (kind, key ?? "", text, tag ?? "", field ?? "");
+    /// <summary>
+    /// The text shown for <paramref name="asked"/> (<see cref="Of"/>): the answer kept, else each source asked.
+    /// </summary>
+    static string Ask(Asked asked)
+    {
+        if (s_sources.Length == 0 || s_inside || string.IsNullOrWhiteSpace(asked.Text)) return asked.Text;
         if (Answers.TryGetValue(asked, out var known)) return known;
 
         lock (Asking)
@@ -245,7 +322,7 @@ public static class ShownText
     /// </summary>
     static string AskSource(object host, string owner, Func<ShownTextContext, string?> source, Asked asked, string shown)
     {
-        var context = new ShownTextContext(asked.Kind, asked.Key, shown, asked.Tag, asked.Field);
+        var context = new ShownTextContext(asked.Kind, asked.Key, shown, asked.Tag, asked.Field) { Character = asked.Character, Place = asked.Place };
         try
         {
             string? given = source(context);

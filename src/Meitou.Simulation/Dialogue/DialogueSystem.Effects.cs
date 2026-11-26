@@ -759,11 +759,11 @@ public sealed partial class DialogueSystem
         switch (token)
         {
             case "MYNAME":
-                if (showing) swapped = world.ShownName(me);
+                if (showing) swapped = world.ShownName(me, ShownPlace.Dialogue);
                 return NameOf(world, me);
             case "YOURNAME":
                 if (Cold(world, other) is not { } you) return "you";
-                if (showing) swapped = world.ShownName(you);
+                if (showing) swapped = world.ShownName(you, ShownPlace.Dialogue);
                 return you.Name;
             case "TARGETFACTION":
                 if (Cold(world, other) is not { } o || !_data.Relations.Contains(o.Faction)) return "you";

@@ -66,7 +66,8 @@ sealed class BountyBook
         crimes.Note(world, CrimeEventKind.Booked, culprit, p.Code, faction, entry.Amount, witness);
         if (c.IsPlayer)
         {
-            world.Post(Loc.Tr("{1} is wanted by {2} for {3}: bounty c.{4}", world.ShownName(c), world.ShownFaction(entry.Faction, entry.FactionName),
+            string wantedName = world.ShownName(c, ShownPlace.Notice);
+            world.Post(Loc.Tr("{1} is wanted by {2} for {3}: bounty c.{4}", wantedName, world.ShownFaction(entry.Faction, entry.FactionName),
                 CrimeTable.Name(p.Code), entry.Amount));
         }
 
@@ -93,7 +94,10 @@ sealed class BountyBook
             crimes.Note(world, CrimeEventKind.Expired, slot, CrimeCode.None, e.Faction, e.Amount, CharacterId.None);
             world.SystemOf<Dialogue.DialogueSystem>()?.ForgiveBookingFaction(world, e.Faction, world.Characters.IdOf(slot));
             if (c.IsPlayer)
-                world.Post(Loc.Tr("{1} is no longer wanted by {2}", world.ShownName(c), world.ShownFaction(e.Faction, e.FactionName)));
+            {
+                string clearedName = world.ShownName(c, ShownPlace.Notice);
+                world.Post(Loc.Tr("{1} is no longer wanted by {2}", clearedName, world.ShownFaction(e.Faction, e.FactionName)));
+            }
         }
         if (ledger.Count == 0) c.Bounties = null;
     }
