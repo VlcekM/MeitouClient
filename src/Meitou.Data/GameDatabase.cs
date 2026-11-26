@@ -63,9 +63,15 @@ public sealed class GameDatabase
     /// <paramref name="record"/> ("" none) and called <paramref name="name"/>, as the mods' text sources show it
     /// (<see cref="ShownText.Name"/>: still its record's name, asked as the record's; else as a name of its own). Display only.
     /// </summary>
-    public string ShownName(string what, string record, string name) =>
+    public string ShownName(string what, string record, string name) => ShownName(what, record, name, 0, ShownPlace.Unknown);
+
+    /// <summary>
+    /// As <see cref="ShownName(string, string, string)"/>, for one character's name: <paramref name="character"/> its lasting id (0: none),
+    /// <paramref name="place"/> where it is shown (<see cref="ShownText.Name(string, string, string, string, ulong, ShownPlace)"/>).
+    /// </summary>
+    public string ShownName(string what, string record, string name, ulong character, ShownPlace place) =>
         !ShownText.Any ? name
-            : ShownText.Name(what, record ?? "", record is { Length: > 0 } && Find(record) is { } r ? r.Name : "", name);
+            : ShownText.Name(what, record ?? "", record is { Length: > 0 } && Find(record) is { } r ? r.Name : "", name, character, place);
 
     /// <summary>
     /// Every record of <paramref name="type"/>, in no defined order (a scan of all records each call).

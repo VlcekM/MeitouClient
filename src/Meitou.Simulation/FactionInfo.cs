@@ -83,6 +83,6 @@ public sealed partial class World
             return Buildings.FindTown(board.ContractTown.PlayerTown) is { } town ? ShownName(town) : null;
 
         var table = Characters;
-        return table.TryResolveNext(board.MissionTarget, out int slot) && table.Cold(slot) is { } c ? ShownName(c) : null;
+        return table.TryResolveNext(board.MissionTarget, out int slot) && table.Cold(slot) is { } c ? ShownName(c, ShownPlace.Window) : null;
     }
 }

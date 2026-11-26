@@ -153,7 +153,7 @@ sealed class StealthView(PlayerInterface player)
             if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;
             if (player.Project(TagAnchor(anchor, feet)) is not { } head) continue;
 
-            string name = player.ShownName(c), caption = c.Selected ? $"[{name}]" : name;
+            string name = player.ShownName(c, ShownPlace.Label), caption = c.Selected ? $"[{name}]" : name;
             float width = player.ShowNames ? PanelWidth(caption, layoutWidth, icons) : layoutWidth;
             float x = head.X - width / 2;
             float y = head.Y - 4 * scale - height - (carried ? height : 0);

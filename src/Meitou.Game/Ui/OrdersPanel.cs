@@ -264,7 +264,7 @@ sealed class OrdersPanel(PlayerInterface player)
         if (!job.Character.IsNone && Simulation.Production.PermaJobs.PerTarget(job.Type)
             && player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == job.Character) is { Name.Length: > 0 } target)
         {
-            return text + ": " + player.ShownName(target);
+            return text + ": " + player.ShownName(target, ShownPlace.Panel);
         }
 
         return text;

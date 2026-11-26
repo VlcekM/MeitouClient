@@ -442,7 +442,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         // The order check (FUN_1405d1940, order 12): a character whose record says dumb refuses to talk to people.
         if (_data.Db.Find(pc.RecordId)?.GetBool("dumb") == true)
         {
-            world.Post(Loc.Tr("{1} can't talk to people", world.ShownName(pc)));
+            world.Post(Loc.Tr("{1} can't talk to people", world.ShownName(pc, ShownPlace.Notice)));
             return;
         }
         if (!Talkable(table, n) || SleepsThrough(table, n, DialogueEvents.PlayerTalkToMe)) return;
@@ -578,7 +578,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (picked is not { } p)
         {
             world.DialogueLines.Line(world, "talk", $"{pair}: nothing to say (from {from})");
-            if (!quiet) world.Post($"{world.ShownName(nc)} has nothing to say.");
+            if (!quiet) world.Post($"{world.ShownName(nc, ShownPlace.Notice)} has nothing to say.");
             return;
         }
 
@@ -698,7 +698,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         string cost = MoneySuffix(line);
         string text = said + cost;
         c.Text = shown + cost;
-        string name = world.ShownName(speaker);
+        string name = world.ShownName(speaker, ShownPlace.Dialogue);
         c.Log.Add($"{name}: {c.Text}");
         world.Said(name, c.Text, false);
         world.DialogueLines.Line(world, "say", $"{EventLog.Who(world, speaker)} to {EventLog.Who(world, c.Player)}: \"{text}\" "
@@ -768,7 +768,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         DialogueNode? from = c.Line;
         if (reply is not null)
         {
-            string name = world.ShownName(c.Player);
+            string name = world.ShownName(c.Player, ShownPlace.Dialogue);
             c.Log.Add($"{name}: {chosen ?? text}");
             world.Said(name.Length > 0 ? name : "Player", chosen ?? text, true);
             world.DialogueLines.Line(world, "reply", $"{EventLog.Who(world, c.Player)} to {EventLog.Who(world, c.Npc)}: \"{text}\" "
@@ -877,8 +877,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             _view = null;
             return;
         }
-        var speaker = world.ShownName(c.Speaker.IsNone ? c.Npc : c.Speaker);
-        _view = new ConversationView(c.Npc, c.Player, c.Speaker, speaker, world.ShownName(c.Player), c.Text,
+        var speaker = world.ShownName(c.Speaker.IsNone ? c.Npc : c.Speaker, ShownPlace.Dialogue);
+        _view = new ConversationView(c.Npc, c.Player, c.Speaker, speaker, world.ShownName(c.Player, ShownPlace.Dialogue), c.Text,
             [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money) { PlayerStarted = c.PlayerStarted };
     }
 

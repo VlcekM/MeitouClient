@@ -26,21 +26,29 @@ public sealed partial class World
             : ShownData is { } db ? db.ShownName(what, record, name) : ShownText.Name(what, record, "", name);
 
     /// <summary>
-    /// Character <paramref name="c"/>'s name as shown.
+    /// Character <paramref name="c"/>'s name as shown at <paramref name="place"/>, asked with its lasting id.
     /// </summary>
-    internal string ShownName(CharacterCold c) => !ShownText.Any ? c.Name : ShownName("character", c.RecordId, c.Name);
+    internal string ShownName(CharacterCold c, ShownPlace place)
+    {
+        if (!ShownText.Any) return c.Name;
+
+        ulong id = c.LastingId.Value;
+        return ShownData is { } db
+            ? db.ShownName("character", c.RecordId, c.Name, id, place)
+            : ShownText.Name("character", c.RecordId, "", c.Name, id, place);
+    }
 
     /// <summary>
-    /// The name of the character <paramref name="id"/> as shown; empty when the id no longer resolves.
+    /// The name of the character <paramref name="id"/> as shown at <paramref name="place"/>; empty when the id no longer resolves.
     /// </summary>
-    internal string ShownName(CharacterId id) =>
-        Characters.TryResolveNext(id, out int slot) && Characters.Cold(slot) is { } c ? ShownName(c) : "";
+    internal string ShownName(CharacterId id, ShownPlace place) =>
+        Characters.TryResolveNext(id, out int slot) && Characters.Cold(slot) is { } c ? ShownName(c, place) : "";
 
     /// <summary>
-    /// The name of an item's owner <paramref name="owner"/> as shown (<see cref="CharacterTable.OwnerNameOf"/>): null for none, empty when the id no
-    /// longer resolves.
+    /// The name of an item's owner <paramref name="owner"/> as shown at <paramref name="place"/> (<see cref="CharacterTable.OwnerNameOf"/>): null
+    /// for none, empty when the id no longer resolves.
     /// </summary>
-    internal string? ShownOwnerNameOf(CharacterId owner) => owner.IsNone ? null : ShownName(owner);
+    internal string? ShownOwnerNameOf(CharacterId owner, ShownPlace place) => owner.IsNone ? null : ShownName(owner, place);
 
     /// <summary>
     /// Squad <paramref name="squad"/>'s name as shown (made from its SQUAD_TEMPLATE, or the player's own).

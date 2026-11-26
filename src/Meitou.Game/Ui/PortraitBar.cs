@@ -313,7 +313,8 @@ sealed class PortraitBar(PlayerInterface player)
                 controls.Add(PortraitImage($"portrait-front-overlay-{i}", At(6, 6, 124, 123), "FrontOverlay", front) with { Clip = page });
 
             var nameProperties = new Dictionary<string, string> { ["TextAlign"] = "HCenter Bottom", ["TextColour"] = "1 1 1", ["TextShadow"] = "true" };
-            controls.Add(new($"portrait-name-{i}", "TextBox", At(4, 4, 128, 126), player.ShownName(m), "", "Kenshi_TextboxStandardText", true,
+            string name = player.ShownName(m, ShownPlace.Squad);
+            controls.Add(new($"portrait-name-{i}", "TextBox", At(4, 4, 128, 126), name, "", "Kenshi_TextboxStandardText", true,
                 nameProperties, Vector4.Zero, Pickable: false, Clip: page));
             var frameProperties = new Dictionary<string, string> { ["Checked"] = m.Selected ? "true" : "false" };
             controls.Add(new($"member-{i}", "Button", At(0, 0, 136, 136), "", "meitou:member", "Kenshi_PortraitFrameSkin", true,

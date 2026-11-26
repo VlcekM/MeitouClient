@@ -443,7 +443,7 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
 
         kidnap.Note(world, KidnapEventKind.Lifted, act.Id, act.Victim, carrier.Faction);
         if (table.TryResolveNext(act.Victim, out int v) && table.Cold(v) is { IsPlayer: true } victim)
-            world.Post($"{world.ShownName(carrier)} is carrying {world.ShownName(victim)} away");
+            world.Post($"{world.ShownName(carrier, ShownPlace.Notice)} is carrying {world.ShownName(victim, ShownPlace.Notice)} away");
 
         _lifts[slot] = new Lift(act.Id, act.Victim, carrier.Faction);
     }
@@ -483,7 +483,7 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
 
         victim.Kidnapped = cage.Owner == lift.Faction;
         if (victim.IsPlayer)
-            world.Post($"{world.ShownName(victim)} has been kidnapped by {World.ShownName(data.Factions[lift.Faction])}");
+            world.Post($"{world.ShownName(victim, ShownPlace.Notice)} has been kidnapped by {World.ShownName(data.Factions[lift.Faction])}");
         kidnap.Note(world, KidnapEventKind.Caged, lift.Carrier, lift.Victim, lift.Faction);
     }
 

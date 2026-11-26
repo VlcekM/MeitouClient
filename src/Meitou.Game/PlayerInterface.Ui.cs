@@ -308,14 +308,23 @@ sealed partial class PlayerInterface
         ShownText.Any && PopulationOf?.Invoke() is { } d ? d.Db.ShownName(what, record, name) : name;
 
     /// <summary>
-    /// Character <paramref name="c"/>'s name as shown (<see cref="ShownName(string, string, string)"/>, with the record it was made from).
+    /// As <see cref="ShownName(string, string, string)"/>, for one character's name: <paramref name="character"/> its lasting id (0: none known),
+    /// <paramref name="place"/> where it is shown.
     /// </summary>
-    internal string ShownName(CharacterSnapshot c) => ShownName("character", c.RecordId, c.Name);
+    internal string ShownName(string what, string record, string name, ulong character, ShownPlace place) =>
+        ShownText.Any && PopulationOf?.Invoke() is { } d ? d.Db.ShownName(what, record, name, character, place) : name;
 
     /// <summary>
-    /// <paramref name="lead"/>'s name as shown (<see cref="ShownName(CharacterSnapshot)"/>); null when there is no character.
+    /// Character <paramref name="c"/>'s name as shown at <paramref name="place"/> (<see cref="ShownName(string, string, string)"/>, with the record
+    /// it was made from and its lasting id).
     /// </summary>
-    internal string? ShownLeadName(CharacterSnapshot? lead) => lead is null ? null : ShownName(lead);
+    internal string ShownName(CharacterSnapshot c, ShownPlace place) => ShownName("character", c.RecordId, c.Name, c.LastingId.Value, place);
+
+    /// <summary>
+    /// <paramref name="lead"/>'s name as shown at <paramref name="place"/> (<see cref="ShownName(CharacterSnapshot, ShownPlace)"/>); null when
+    /// there is no character.
+    /// </summary>
+    internal string? ShownLeadName(CharacterSnapshot? lead, ShownPlace place) => lead is null ? null : ShownName(lead, place);
 
     /// <summary>
     /// The name of the backpack <paramref name="lead"/> wears (the item in its <c>backpack_attach</c> section) as shown
@@ -663,7 +672,7 @@ sealed partial class PlayerInterface
         b.Text["MoneyAmountText"] = "c." + Session.World.Player.Money.ToString("N0", CultureInfo.InvariantCulture);
 
         // The name bar draws its own lines over the widget (HudPanels).
-        b.Text["NameText"] = lead is null ? "No character selected" : ShownName(lead);
+        b.Text["NameText"] = lead is null ? "No character selected" : ShownName(lead, ShownPlace.Panel);
         b.Properties["NameText"] = new Dictionary<string, string> { ["SkipCaption"] = "true" };
         b.Text["hunger"] = lead?.Body is { } hungry ? $"Hunger {hungry.Hunger:0.00} / 3" : "";
         b.Text["condition"] = lead?.Body is { } status
@@ -705,7 +714,7 @@ sealed partial class PlayerInterface
         {
             if (!c.IsPlayer) continue;
 
-            if (count < 8) b.Text[RosterNameKeys[count]] = ShownName(c);
+            if (count < 8) b.Text[RosterNameKeys[count]] = ShownName(c, ShownPlace.Squad);
             count++;
         }
 

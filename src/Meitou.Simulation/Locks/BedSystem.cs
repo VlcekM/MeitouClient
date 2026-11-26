@@ -222,7 +222,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (!CanWalk(c)) return OrderCheck.Blocked();
         return BedFor(world, slot, order) is { Kind: FixtureKind.Bed }
             ? OrderCheck.Run
-            : OrderCheck.Blocked(c.IsPlayer ? $"{world.ShownName(c)}: no free bed nearby" : null, posted: true);
+            : OrderCheck.Blocked(c.IsPlayer ? $"{world.ShownName(c, ShownPlace.Notice)}: no free bed nearby" : null, posted: true);
     }
 
     /// <inheritdoc/>
@@ -425,7 +425,10 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             if (t.Fixed || carrying || world.Fixtures.FindBed(world, s, data.Relations, f => Reserved(f, t.Character)) is not { } other)
             {
                 if (c.IsPlayer)
-                    world.Post(carrying ? $"{world.ShownName(c)}: no free bed nearby" : $"{world.ShownName(c)}: the bed is taken");
+                {
+                    string sleeperName = world.ShownName(c, ShownPlace.Notice);
+                    world.Post(carrying ? $"{sleeperName}: no free bed nearby" : $"{sleeperName}: the bed is taken");
+                }
                 if (!carrying) TaskStart.Stand(table, s);
                 return false;
             }
@@ -455,7 +458,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             {
                 world.Fixtures.MarkUnreachable(world, bed, c.Faction);
                 FixtureRegistry.MarkBadNode(world, bed, n.Position);
-                if (c.IsPlayer) world.Post($"{world.ShownName(c)} cannot get to the bed");
+                if (c.IsPlayer) world.Post($"{world.ShownName(c, ShownPlace.Notice)} cannot get to the bed");
                 if (!carrying) TaskStart.Stand(table, s);
                 return false;
             }
@@ -527,7 +530,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (!table.TryResolveNext(body, out int b) || table.Cold(b) is not { } bc) return false;
         if (!FixtureRegistry.IsFree(table, bed))
         {
-            if (c.IsPlayer) world.Post($"{world.ShownName(c)}: no free bed nearby");
+            if (c.IsPlayer) world.Post($"{world.ShownName(c, ShownPlace.Notice)}: no free bed nearby");
             return false;
         }
 
@@ -538,7 +541,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (!Pay(world, s, bed, cost)) return Refused(world, c, bed);
         Carry!.LetGo(world, s);
         if (world.Fixtures.EnterBed(world, body, bed)) SettleNpcRent(world, s, bed, cost);
-        else if (c.IsPlayer) world.Post($"{world.ShownName(c)} could not put {world.ShownName(bc)} in the bed");
+        else if (c.IsPlayer) world.Post($"{world.ShownName(c, ShownPlace.Notice)} could not put {world.ShownName(bc, ShownPlace.Notice)} in the bed");
 
         return false;
     }

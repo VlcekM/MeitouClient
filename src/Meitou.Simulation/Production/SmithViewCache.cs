@@ -98,7 +98,8 @@ sealed class SmithViewCache(GameDatabase db)
                 continue;
             }
 
-            var view = new CraftSmithView(world.ShownName(cold), (int)level, penalty, Predictions(m, bench, state, level)) { Stat = m.Data.Stat };
+            string smithName = world.ShownName(cold, ShownPlace.Window);
+            var view = new CraftSmithView(smithName, (int)level, penalty, Predictions(m, bench, state, level)) { Stat = m.Data.Stat };
             _fresh.Add((m.Site, new Entry(m, m.Smith, cold.Name, level, penalty, [.. state.Queue.Select(j => j.Option)], view)));
             changed = true;
         }

@@ -290,12 +290,13 @@ public sealed partial class LockSystem
                     // The sound of the original's drop onto the armour slot (the interface's Item_Drop); only the player's order has one.
                     if (c.IsPlayer)
                     {
-                        world.Post(Loc.Tr("{1} put {2} on {3}", world.ShownName(c), item.ShownName(), world.ShownName(wearer)));
+                        string putterName = world.ShownName(c, ShownPlace.Notice), wearerName = world.ShownName(wearer, ShownPlace.Notice);
+                        world.Post(Loc.Tr("{1} put {2} on {3}", putterName, item.ShownName(), wearerName));
                         world.EmitSound(SoundKind.ShacklesOn, s, next[s].Position, item.Record);
                     }
                 }
                 else if (c.IsPlayer)
-                    world.Post(Loc.Tr("{1} already wears something in that slot", world.ShownName(wearer)));
+                    world.Post(Loc.Tr("{1} already wears something in that slot", world.ShownName(wearer, ShownPlace.Notice)));
                 break;
             case ShackleWork.Pick:
                 switch (PickShackles(world, s, c, job.Wearer, item))

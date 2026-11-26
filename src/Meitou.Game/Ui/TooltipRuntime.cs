@@ -1355,7 +1355,7 @@ sealed class TooltipRuntime(PlayerInterface player)
 
         if (t.Crafter.Length > 0)
         {
-            string faction = player.PlayerFactionName?.Invoke() ?? "", crafter = player.ShownName("character", "", t.Crafter);
+            string faction = player.PlayerFactionName?.Invoke() ?? "", crafter = player.ShownName("character", "", t.Crafter, 0, ShownPlace.Tooltip);
             lines.Add(new(" "));
             lines.Add(new(Loc.Tr("[Crafted by {1}]", crafter), "", TooltipTone.Title));
             lines.Add(new(t.Level >= 70 ? Loc.Tr("High quality armour crafted by the renowned smith {1} of {2}.", crafter, faction)
@@ -1566,7 +1566,7 @@ sealed class TooltipRuntime(PlayerInterface player)
 
         if (t.Crafter.Length > 0)
         {
-            string faction = player.PlayerFactionName?.Invoke() ?? "", crafter = player.ShownName("character", "", t.Crafter);
+            string faction = player.PlayerFactionName?.Invoke() ?? "", crafter = player.ShownName("character", "", t.Crafter, 0, ShownPlace.Tooltip);
             yield return new("[" + Loc.Tr("Crafted by {1}", crafter) + "]", "", TooltipTone.Main);
             yield return new(t.Level >= 45 ? Loc.Tr("A masterful weapon crafted by the renowned smith {1} of {2}.", crafter, faction)
                 : Loc.Tr("Crafted by the smith {1} of {2}.", crafter, faction), "", TooltipTone.Ink, Paragraph: true);

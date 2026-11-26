@@ -2008,7 +2008,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                 Charges = item.Charges,
                 MaxCharges = item.MaxCharges,
                 StolenFrom = stolen ? item.StolenFrom : -1,
-                StolenOwner = stolen ? world.ShownOwnerNameOf(item.Owner) : null,
+                StolenOwner = stolen ? world.ShownOwnerNameOf(item.Owner, ShownPlace.Tooltip) : null,
                 Unique = item.Unique,
                 FenceChance = odds is { } shown ? Math.Clamp(shown, 0, 1) : null,
                 FenceOdds = odds is < 1 ? Math.Max(odds.Value, 0) : null,
@@ -2022,7 +2022,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             goodsOf[world.Characters.IdOf(seller)] = Goods(world.Characters.Cold(seller)!, item => View(item.Item, item.Index, true, seller));
 
         var held = HeldView(world, goodsOf, (item, sell, seller) => View(item, -1, sell, seller), c);
-        string name = world.ShownName(world.Characters.Cold(t)!);
+        string name = world.ShownName(world.Characters.Cold(t)!, ShownPlace.Window);
         return new TradeView(_customer, _trader, name, squad.Money, world.Player.Money, shop.Window.Width, shop.Window.Height, stock,
             goodsOf[_customer], shop.Terms.BuysStolen, shop.Terms.BuysIllegal)
         {

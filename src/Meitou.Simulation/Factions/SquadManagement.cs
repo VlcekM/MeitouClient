@@ -460,7 +460,7 @@ public static class SquadManagement
                 dead.Members.Add(id);
                 cold.SquadId = dead.Id;
                 moved = true;
-                world.Post(DeathMessage(cold, world.ShownName(cold)));
+                world.Post(DeathMessage(cold, world.ShownName(cold, ShownPlace.Notice)));
             }
             if (moved) Relead(table, squad);
         }

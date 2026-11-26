@@ -1301,14 +1301,21 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   - `Name`: a name of its own rather than its record's, where the game shows it: a character's (rolled from a name list, or given by the
     player), a squad's, an outpost's, the player's faction's once he renames it. `Field` says what it names (`character`, `squad`, `outpost`,
     `faction`, `place`), `Key` is the record it was made from ("" none). Put on one line and cut to 80 characters.
+  - A character's name, asked as either kind, also says which character and where: `Character` is its lasting id's value (Character ids,
+    below; 0 when no mod has given it one, and for every other text) and `Place` a `ShownPlace`: `Label` (above its head), `Squad` (the squad
+    bar and lists), `Panel` (its own panels: the status panel, inventory, stats, the jobs list), `Window` (trade, slaves for sale, crafting,
+    prospecting, faction information, a confirm), `Tooltip`, `Menu` (the right-click menu's title), `Notice` (notices, floaters, the event
+    log), `Dialogue` (the conversation window and log, bubbles, choices, a name a token fills in), `Unknown` otherwise. So a mod gives one
+    character a title ("Captain {n} of Stoat") by giving it a lasting id, keeping the title under that id and answering for that `Character`
+    in the places it picks; every other character's name is untouched. A name passed only as text (a crafter in a tooltip) has `Character` 0.
   - `DialogueLine`: a dialogue line's text, in speech bubbles, the conversation window (the line, the choice buttons and the log) and the
     message log. `Key` is the line's record string id and `Text` the text it was given (one of its texts, picked as the game picks it), before its
     tokens: return a text with the tokens you want (`/YOURNAME/`, a word swap's `/NAME/`), and each takes the value the game's own text got for
     the token of that name (in order; a token the game's text did not have is empty). A word swap's line is asked too, under its own id. The
     game's text still decides everything: whether a choice is offered, how long a bubble stays, the dialogue log. A character's name built from
     tokens is not asked; the names tokens fill in (`/MYNAME/`, `/YOURNAME/`, `/TARGETFACTION/`, `/PLAYERFACTION/`) are asked on their own, as a `Record` or `Name`.
-  Display only: records, saves, the state hash and every decision keep the game's text. The answer for a kind, key, text, tag and field is kept until
-  `registration.RefreshText()`, which a mod calls when its answers change (a word learned, an item identified, a save loaded whose state its
+  Display only: records, saves, the state hash and every decision keep the game's text. The answer for a kind, key, text, tag, field, character and
+  place is kept until `registration.RefreshText()`, which a mod calls when its answers change (a word learned, an item identified, a save loaded whose state its
   answers read); text already handed out (a line said, a notice posted) keeps what it got. So a source runs once per text shown, not per frame,
   but it may be asked on any thread (messages and dialogue are made on the simulation's threads), one call at a time (other text waits meanwhile, so
   keep it quick and never wait on the game): read only the context and the mod's own state, safely across threads. Texts other than names are cut to 4,000 characters. A source that throws is reported once

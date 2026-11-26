@@ -73,7 +73,7 @@ public static class ContainerAccess
         {
             if (own)
             {
-                world.Post($"{world.ShownName(walker)}: It's locked.");
+                world.Post($"{world.ShownName(walker, ShownPlace.Notice)}: It's locked.");
                 return;
             }
 

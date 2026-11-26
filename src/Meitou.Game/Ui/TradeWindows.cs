@@ -843,7 +843,7 @@ sealed class TradeWindows(PlayerInterface player)
         var body = LootBody();
         string caption = id == "loot-bag"
             ? player.ShownBackpackName(body) ?? "BACKPACK"
-            : player.ShownLeadName(body) ?? "INVENTORY";
+            : player.ShownLeadName(body, ShownPlace.Window) ?? "INVENTORY";
         b.Text["Root"] = caption.ToUpperInvariant();
 
         if (id == "loot-bag")

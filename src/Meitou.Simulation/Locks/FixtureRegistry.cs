@@ -2166,7 +2166,7 @@ public sealed partial class FixtureRegistry
             c.SlaveOwner = releaserFaction;
 
         if (jailer && c.IsPlayer && c.SlaveState == 0)
-            world.Post(Loc.Tr("{1} has been released from prison.", world.ShownName(c)));
+            world.Post(Loc.Tr("{1} has been released from prison.", world.ShownName(c, ShownPlace.Notice)));
         return true;
     }
 
@@ -2430,7 +2430,7 @@ public sealed partial class FixtureRegistry
     {
         byte before = c.SlaveState;
         if (c.SlaveState == 0 && state == 1 && (c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction))
-            world.Post(Loc.Tr("{1} has been enslaved", world.ShownName(c)));
+            world.Post(Loc.Tr("{1} has been enslaved", world.ShownName(c, ShownPlace.Notice)));
 
         if (state == 2) c.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;
         if (state > 1 && before != state) c.SlaveSince = world.GameHours;
