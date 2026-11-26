@@ -54,6 +54,7 @@
    * The legacy kit (benchmark version 0) is always the last item.
    */
   const RANGES = [
+    { bench: 1, since: "0.24.0" },
     { bench: 1, since: "" }
   ];
 
@@ -281,22 +282,29 @@
 
   /**
    * The ranges that hold a session, newest first, each with its benchmark version and its builds oldest first; every entry gets its range's
-   * index. A range's start is compared by publish time, as versions don't sort by text (a nightly of 0.22.2 is older than 0.23.0).
+   * index. A range's start is compared by publish time, as versions don't sort by text (a nightly of 0.22.2 is older than 0.23.0); a range
+   * whose first build is not published yet holds nothing.
    */
   function rangeList(entries, known, ordered) {
-    const defs = RANGES.map((r) => ({ bench: r.bench, start: r.since && known[r.since] ? known[r.since].time : "" }))
-      .concat([{ bench: 0, start: "" }]);
+    const defs = RANGES.map((r) => rangeDef(r, known)).concat([{ bench: 0, start: "" }]);
     const time = dict();
     ordered.forEach((t) => { time[t.id] = t.time; });
     const used = defs.map(() => []);
     entries.forEach((e) => {
-      const i = defs.findIndex((d) => d.bench === e.version && time[e.target] >= d.start);
+      const i = defs.findIndex((d) => d.start !== null && d.bench === e.version && time[e.target] >= d.start);
       if (i < 0) return;
       e.range = i;
       if (used[i].indexOf(e.target) < 0) used[i].push(e.target);
     });
     return defs.map((d, i) => ({ index: i, bench: d.bench, builds: ordered.filter((t) => used[i].indexOf(t.id) >= 0) }))
       .filter((r) => r.builds.length);
+  }
+
+  /** A RANGES item's benchmark version and start time: "" for every older build, null while its first build is not published. */
+  function rangeDef(r, known) {
+    if (!r.since) return { bench: r.bench, start: "" };
+
+    return { bench: r.bench, start: known[r.since] ? known[r.since].time : null };
   }
 
   /** Every machine+platform line, in order of first appearance, so its colour stays the same whatever is selected. */

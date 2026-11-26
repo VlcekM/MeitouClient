@@ -3,6 +3,42 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.24.0
+
+- Much lower VRAM use: texture quality split by kind, compressed formats and buffers, aliased render targets, leaner ray tracing and streaming
+- VRAM guard keeps characters' textures, foliage within 3000 and draw distances on small cards instead of dropping them (#1424, #1429, #1439, #1440)
+- macOS: Metal global illumination, ray-traced shadows, characters and grass, GTAO, water foam and reflections, tuned presets, an app bundle
+- SMAA uses the reference lookup tables; anti-aliasing and render scale rows follow the chosen upscaler
+- FSR 3 frame generation works on RADV, and Linux FSR no longer smears still scenes on AMD (#1423, #1425)
+- Optional 2D skybox cloud layers
+- KenshiLua compatibility runtime for Lua mods, with HUD overlays
+- Extra Extensions: dialogue variable conditions, set/add effects and world state lists, DCs 1000-1006 (Quests & Contracts, Better Banking) (#1442)
+- Combat stats, dodge and XP read as the original's; a blow that beats a whole squad triggers arrests as the original
+- Arrests and bounty spotting use the full enemy test, and downed bounty holders are spotted
+- A member stands in for a knocked-out or carried squad leader, and followers follow it (#1441, #1453)
+- Chasers lead fleeing targets and keep melee targets during chases; packs spread out (#1419, #1507, #1509)
+- Slave traders honour restraints; caged NPC captives leave their squads; shackle fixes and pick chances shown (#1459, #1503, #1504, #1511)
+- Guards no longer juggle corpses, and intruder carry-outs resume after a fight (#1426, #1480)
+- Shops lock up before bed and keep open doors passable; refused trades say so (#1506, #1512, #1521)
+- Navmesh fixes: ruins, watershed slopes, uncovered tiles and Admag's longhouse stair are meshed; zone 14.35 no longer hangs loads (#1430, #1474, #1495)
+- Move orders to ground off the navmesh walk there instead of being dropped (#1421)
+- Buildings: basements and tall buildings keep their floors, shared beds take several sleepers, turrets stand on wall walkways (#1444, #1498, #1500)
+- Building: wall lines and snaps follow the original, wall ramps get built, outposts extend past their radius (#1432, #1447, #1522)
+- Builders, operators and machine outputs take materials and goods sensibly (#1481, #1484, #1487)
+- Blows no longer damage gate buildings or open gate leaves (#1496)
+- Medic button treats patient after patient (#1469)
+- Talk: lines with no replies end the conversation as a bubble; squad searches use what the speaker sensed (#1428)
+- Craft tab lists only your and your allies' stations; Offer Inventory on every own machine with one (#1445)
+- Items dragged out of a loot window can drop on the ground (Advanced setting); ground bags offer Pick Up, Steal and Loot (#1470, #1489)
+- Inventory pauses its character while open; tooltips name the mods a record comes from
+- UI: squad frames reorder by drag again; numpad keybinds work; CJK mod text shows (#1435, #1443, #1455, #1515, #1516, #1520)
+- Container and cage panels show lock state and complexity (#1502)
+- Body skeletons follow their animation links, so mod finger skeletons and carried bodies animate; legacy body files load (#1418, #1436)
+- Beds in tilted buildings tilt their sleepers; animals sleep on the ground; worn fist weapons can hide hands (#1420, #1438, #1450)
+- Imported saves keep faction rank and relations; the launcher reads edited saves' mod lists (#1433, #1490)
+- Mod API: per-mod character tags, mod item icons, shown text per character, screen click positions; removed API now fails the build (#1478, #1508)
+- Benchmarks page: one version range at a time; this release starts a new range for the VRAM changes
+
 ## v0.23.2
 
 - Town NPCs no longer cut a stair's foot across the ground beside it or into the storey below their goal (#1414)
