@@ -249,8 +249,13 @@ sealed class SquadPanel(PlayerInterface player)
             var bounds = c.Bounds with { X = c.Bounds.X + box.X, Y = c.Bounds.Y + box.Y };
             var own = c.Clip is { } inner ? (inner with { X = inner.X + box.X, Y = inner.Y + box.Y }).Intersect(clip) : clip;
             var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { ["SquadOf"] = squadId };
-            if (root) properties[SquadCellProperty] = squadId;
-            root = false;
+            if (root)
+            {
+                properties[SquadCellProperty] = squadId;
+
+                // MyGUI's list supplies the hit area around the mouse-disabled cell root.
+                properties["NeedMouse"] = "true";
+            }
 
             // The box is dragged by its frame and panels: anything but the name box, DELETE and their skins' parts.
             if (c.Type is not ("EditBox" or "Button") && c.Action.Length == 0
@@ -260,7 +265,8 @@ sealed class SquadPanel(PlayerInterface player)
             }
 
             string name = c.Name == "SquadNameText" ? nameBox : c.Name.Length > 0 ? $"squad-{squadId}-{c.Name}" : c.Name;
-            controls.Add(c with { Name = name, Bounds = bounds, Clip = own, Properties = properties });
+            controls.Add(c with { Name = name, Bounds = bounds, Clip = own, Properties = properties, Pickable = root ? true : c.Pickable });
+            root = false;
             if (c.Name == "PortraitsPanel") portraitsArea = bounds;
         }
 
