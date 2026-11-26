@@ -724,7 +724,7 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool NoLootGuilt { get; internal set; }
     /// <summary>
-    /// Wears locked armour (shackles, <see cref="Items.ItemInstance.IsLocked"/>): the portrait's <c>Slave</c> overlay.
+    /// Wears shackles (<see cref="Items.ItemInstance.IsLocked"/>) in the boots or armour section, locked or not: the portrait's <c>Slave</c> overlay.
     /// </summary>
     public bool Shackled { get; internal set; }
     /// <summary>
@@ -732,6 +732,11 @@ public sealed class CharacterSnapshot
     /// Strength. Set for a selected, inspected or pointed character only (<see cref="PlayerState.Pointed"/>).
     /// </summary>
     public bool ShacklesLocked { get; internal set; }
+    /// <summary>
+    /// A player character wearing open shackles (<see cref="Locks.LockSystem.OpenShackles"/>): the context menu offers Take off Shackles. Pointed
+    /// only, as <see cref="ShacklesLocked"/>.
+    /// </summary>
+    public bool ShacklesOpen { get; internal set; }
     /// <summary>
     /// Alive, down or caged and wearing no shackles (<see cref="Locks.LockSystem.CanBeShackled"/>): the context menu offers Put on Shackles to a
     /// selection that carries some. Pointed only, as <see cref="ShacklesLocked"/>.

@@ -5814,3 +5814,6 @@ msgstr "Donnez au bâtiment un nom à vous, affiché sur son panneau, son invent
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "Laissez vide pour le nom d'origine du bâtiment."
+
+msgid "Take off Shackles"
+msgstr "Retirer les fers"

@@ -43,6 +43,13 @@ public sealed record ShackleJob(CharacterId Wearer, ShackleWork Work);
 public sealed record PutShacklesOrder(IReadOnlyList<CharacterId> Characters, CharacterId Wearer) : OrderCommand;
 
 /// <summary>
+/// Take <see cref="Wearer"/>'s open shackles off (picked, cut or broken, still worn): a player character's go into its inventory, else onto the
+/// ground. <b>Engine</b> stand-in for the original's drag out of its boots or armour slot in its inventory window: as instant, and the Slave
+/// portrait overlay goes with them (#1459).
+/// </summary>
+public sealed record TakeOffShacklesOrder(CharacterId Wearer) : OrderCommand;
+
+/// <summary>
 /// Work on <see cref="Wearer"/>'s locked shackles: the first of the characters (the selection when empty) who may, walking to the wearer unless it is
 /// its own.
 /// </summary>
@@ -68,6 +75,18 @@ public sealed partial class LockSystem
     /// The worn locked shackles of a character (null: none).
     /// </summary>
     public static Items.ItemInstance? WornShackles(CharacterCold? c) => c?.Inventory?.Items.FirstOrDefault(i => i.LockedOn);
+
+    /// <summary>
+    /// The sections the original's shackle reads look at (<b>Verified</b>): boots (item slot 9) and body armour (5). The portrait's Slave overlay
+    /// (<c>FUN_1405c8a10</c>, docs/game/ui-screens.md) and 219 Removing Shackles (<c>Task_TakeOffCuffs</c>) test only these.
+    /// </summary>
+    public static bool CuffSection(string section) => section is "boots" or "armour";
+
+    /// <summary>
+    /// Worn shackles whose lock is open (picked, cut or broken): nothing keeps them on (null: none).
+    /// </summary>
+    public static Items.ItemInstance? OpenShackles(CharacterCold? c) =>
+        c?.Inventory?.Items.FirstOrDefault(i => i.IsLocked && CuffSection(i.Section) && i.Lock is not { EffectivelyLocked: true });
 
     /// <summary>
     /// The chained flag (<c>Character+0x320</c>, <c>setChainedMode</c>): wears a piece with a lock, locked or not. The original's equip and unequip
@@ -155,6 +174,21 @@ public sealed partial class LockSystem
         }
 
         world.Post("No one selected carries shackles.");
+    }
+
+    /// <summary>
+    /// The take-off order: a live player character's open shackles come off (<see cref="TakeOff"/>), with the sound of the original's drop into
+    /// the inventory grid.
+    /// </summary>
+    void TakeOffShacklesInput(World world, TakeOffShacklesOrder order)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(order.Wearer, out int w) || !table.Next[w].Alive) return;
+        if (table.Cold(w) is not { IsPlayer: true } c || OpenShackles(c) is not { } cuffs) return;
+
+        var at = table.Next[w].Position;
+        TakeOff(world, c, cuffs, at);
+        world.EmitSound(SoundKind.ShacklesOff, w, at, cuffs.Record);
     }
 
     /// <summary>

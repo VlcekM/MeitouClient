@@ -116,7 +116,16 @@ public sealed partial class LockSystem
         if (c.Inventory is not { } inv) return;
         var cuffs = inv.Items.FirstOrDefault(i => i.IsLocked && i.Section == "boots")
                 ?? inv.Items.FirstOrDefault(i => i.IsLocked && i.Section == "armour");
-        if (cuffs is null) return;
+        if (cuffs is not null) TakeOff(world, c, cuffs, at);
+    }
+
+    /// <summary>
+    /// Worn shackles leave the equipment: into the wearer's inventory, else onto the ground at <paramref name="at"/> (engine choice, as
+    /// <see cref="TakeOffCuffs"/>).
+    /// </summary>
+    internal void TakeOff(World world, CharacterCold c, Items.ItemInstance cuffs, Vector3 at)
+    {
+        var inv = c.Inventory!;
         inv.Items.Remove(cuffs);
         cuffs.Section = "main";
         if (!inv.Add(cuffs)) world.GroundItems.Drop(cuffs, at, 0);
