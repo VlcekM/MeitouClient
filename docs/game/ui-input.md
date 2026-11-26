@@ -116,8 +116,8 @@ character_next / prev. Left click queues the ghost. A right click over the world
 
 Meitou's game view (`GameHotkeys`, `InputBindings`): every event action above is an `InputAction` with the table's default
 (select_0..9 are `SelectMember1..10`), rebindable on the settings' Controls page; Medic and Rescue also keep H and J, and Meitou adds Rest (L)
-Put Down (K) and Photo Mode (P, [viewer](../viewer.md#photo-mode)). `toggle_help` (F1, `InputAction.ToggleHelp`) opens or closes the Tutorials window (event 7, section 6). A numpad key bound to one of these
-actions is the game's, not the cinema camera's ([viewer](../viewer.md#cinematic-camera)), unless Ctrl is held or the cinema's editor is open;
+Put Down (K) and Photo Mode (P, [viewer](../viewer.md#photo-mode)). `toggle_help` (F1, `InputAction.ToggleHelp`) opens or closes the Tutorials window (event 7, section 6). A numpad key bound to any action
+outside the build map (these, the time controls or any other) is the game's, not the cinema camera's ([viewer](../viewer.md#cinematic-camera)), unless Ctrl is held or the cinema's editor is open;
 `--duel` keeps the whole numpad for the cinema. The orders hotkeys are not given from the free camera (engine choice). Code mods' key actions
 follow the game's rows and share its rule of one action per key ([modding](../modding.md), "Key actions").
 

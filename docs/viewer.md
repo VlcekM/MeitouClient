@@ -55,7 +55,7 @@ headless and settles streaming. User and cinematic bindings are separate.
 ## Cinematic camera
 
 Cinema/CameraPath stores viewer keys in %LOCALAPPDATA%/Meitou/viewer-shots.json; game keys separate.
-Ctrl+numpad1..9 saves; numpad1..9 cuts (in the game, outside --duel, a numpad digit bound to a game hotkey, NUM0..NUM8 by default, is the hotkey unless Ctrl is held or the F6 editor is open: [ui-input](game/ui-input.md#4-action-table)). Enter play/stop,0 loop,+/- timing*1.25,/ time-follow (viewer; game: squad tour),
+Ctrl+numpad1..9 saves; numpad1..9 cuts (in the game, outside --duel, a numpad key bound to a game action, the orders hotkeys NUM0..NUM8 by default, is the game's unless Ctrl is held or the F6 editor is open: [ui-input](game/ui-input.md#4-action-table)). Enter play/stop,0 loop,+/- timing*1.25,/ time-follow (viewer; game: squad tour),
 . list,Ctrl+. delete (editor Delete-all requires second click3s). PageUp/Down FOV±2.5deg,
 10..100,Home50 (viewer and --duel; elsewhere in the game PageUp/Down are floor_up/down).
 F6 editor supports scrub/retime0.05s/reorder/ease, add/update/delete and recording.
