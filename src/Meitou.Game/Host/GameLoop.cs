@@ -152,6 +152,10 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     IReadOnlyList<Silk.NET.Input.IMouse> _mice = [];
     /// <summary>
+    /// The temporary X11 pointer grab for Alt-clicks on ground item labels.
+    /// </summary>
+    X11PointerGrab? _itemLabelGrab;
+    /// <summary>
     /// The headless run's clipboard (no keyboard to hold one).
     /// </summary>
     string? _headlessClipboard;
@@ -751,6 +755,7 @@ sealed class GameLoop(GameHost host)
         _silkInput = _window is null ? null : Silk.NET.Input.InputWindowExtensions.CreateInput(_window);
         _keyboards = _silkInput is null ? [] : _silkInput.Keyboards;
         _mice = _silkInput is null ? [] : _silkInput.Mice;
+        _itemLabelGrab = X11PointerGrab.ForWindow(_window);
         host.Player.ClipboardRead = () => _keyboards.Count > 0 ? ClipboardText.Read(_keyboards[0]) : _headless ? _headlessClipboard : null;
         host.Player.ClipboardWrite = text =>
         {
@@ -775,6 +780,8 @@ sealed class GameLoop(GameHost host)
             {
                 _highlightHeld = false;
                 host.Session.Input.ReleaseAll();
+                _itemLabelGrab?.Update(false);
+                host.Player.GroundItemPicks.LabelPress = null;
             }
         };
         host.Session.Ticked += OnTicked;
@@ -959,6 +966,7 @@ sealed class GameLoop(GameHost host)
                 host.Session.Input.SetKey(key, false);
                 host.Player.Build.BuildKeyUp(key);
             }
+            if (_itemLabelGrab is { Active: true } && !ItemLabelModifierHeld()) _itemLabelGrab.Update(false);
         };
         kb.KeyChar += (_, value) => OnKeyChar(value);
     }
@@ -1394,6 +1402,7 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     void OnMouseMove(Silk.NET.Input.IMouse m, Vector2 p)
     {
+        UpdateItemLabelGrab(m, Pixels(p));
         if (_orbitAnchor is not null)
         {
             // Locked: p is GLFW's virtual position, only its movement counts, and not under a loading screen or the interface (as below).
@@ -1439,6 +1448,7 @@ sealed class GameLoop(GameHost host)
             _orbitAnchor = _lastMouse;
             host.Session.Input.SetMousePosition(_lastMouse!.Value.X, _lastMouse.Value.Y);
             _cursorBeforeOrbit = _windowCursor;
+            _itemLabelGrab?.Update(false);
             m.Cursor.CursorMode = _windowCursor = Silk.NET.Input.CursorMode.Disabled;
             _lastMouse = m.Position;
             return;
@@ -1501,6 +1511,7 @@ sealed class GameLoop(GameHost host)
         if (_display.BeginFrame(size.X, size.Y)) DrawFrame(size, pointer, takeFile);
         else if (host is { ScreenshotRequested: true, AgentChannel.ShotPath: not null } && ++host.ShotNoFrame >= 30)
             host.AgentChannel.ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
+        if (pointer.Mouse is { } mouse) UpdateItemLabelGrab(mouse, pointer.At);
         UpdateStats(dt);
         _totalFrames++;
         if (host.GameOptions.QuitAfter is { } quitAfter && now >= quitAfter)
@@ -1721,6 +1732,30 @@ sealed class GameLoop(GameHost host)
         Outline(takeFile, highlighting, pointerWorld);
         return new FramePointer(pointerMouse, pointerAt, pointerWorld, freeLook);
     }
+
+    /// <summary>
+    /// Cinnamon's Alt-drag can take the mouse press before GLFW gets it. Grab over the label while Alt and Highlight are held, retaining the
+    /// grab through a label press so the normal release handler can finish it even if the pointer moves off the label.
+    /// </summary>
+    void UpdateItemLabelGrab(Silk.NET.Input.IMouse mouse, Vector2 at)
+    {
+        if (_itemLabelGrab is not { } grab) return;
+
+        var labels = host.Player.GroundItemPicks;
+        bool enabled = _windowFocused && !host.Covered && PanelLive() && !host.GameOptions.NoPopulation && !_photo.Active
+            && _orbitAnchor is null && !host.MouseLook() && _panel?.Modal != true && !host.Player.ModalOpen && !host.Player.TitleOpen
+            && labels.HighlightFocus is not null && ItemLabelModifierHeld();
+        bool overLabel = enabled && labels.LabelAt(at) is not null && _panel?.Contains(at) != true && !_cinema.Contains(at)
+            && !host.Player.OverHud(at);
+
+        grab.Update(overLabel && (grab.Active || !mouse.SupportedButtons.Any(mouse.IsButtonPressed))
+            || enabled && grab.Active && labels.LabelPress is not null);
+    }
+
+    /// <summary>
+    /// A physical Alt key is down and the player's bound Highlight action is held.
+    /// </summary>
+    bool ItemLabelModifierHeld() => host.HighlightHeld() && Held(SilkKey.AltLeft, SilkKey.AltRight);
 
     /// <summary>
     /// Headless: the pointer is the control channel's <c>mouse &lt;x&gt; &lt;y&gt;</c> (none until it is given).
@@ -2477,6 +2512,7 @@ sealed class GameLoop(GameHost host)
             Console.WriteLine($"paths     {paths.Searches} searches, {paths.Expanded / paths.Searches} polygons each on average, "
                 + $"{paths.Exhausted} ran to the limit of {Simulation.Navigation.NavQuery.MaxIterations}");
         }
+        _itemLabelGrab?.Update(false);
         host.DebugMenu.Profiler?.Dispose();
         host.Player.DisposeUi();
         host.EndLoadingScreen();

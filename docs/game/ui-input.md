@@ -380,6 +380,11 @@ label whose item is of a pickable kind (hand type 2, 3, 4, 0x2e, 0x56, 0x66, 0x6
 right click on the item (`FUN_1407fc440`). A stolen item (label flag +0xc0) without Alt held (`DAT_142133462`) shows "Hold down the ALT key to steal items" and gives no order (the world
 right click gives that hint and a move, order 29/0x1d). Meitou: a left release over a label, pressed on it, picks the item up
 for the selection (`PlayerInterface.LabelPickUp`); the label exists only while Highlight is held, so the steal hint cannot arise; the right click on a label stays as on the item (an extra).
+
+**Observed** ([#1505](https://github.com/VlcekM/MeitouClient/issues/1505)): Cinnamon's Alt-drag shortcut intercepts the click.
+**Verified** (Meitou on Xvfb with a Cinnamon-style XInput2 button grab): while Alt and Highlight are held, Meitou temporarily grabs the pointer
+over a clickable item label on X11. The click picks up the item and the window manager receives clicks away from labels.
+
 **Observed** (decompile: ctor `FUN_1401649e0`, hover `FUN_140162950`, colour `FUN_1401628e0` / `FUN_1401625c0`, colour load `FUN_140162e60`) colours, plate = root tint, text = `ItemNameText`:
 
 | state | plate | text |
