@@ -49,13 +49,17 @@ sealed class InventoryLayout(PlayerInterface player)
     void BindCharacterGeometry(string id, UiBindings bindings, InventoryView grid, bool animal)
     {
         // The stock human and animal layouts expect different widths for their equipment columns at the same cell size.
-        int referenceWidth = animal ? 1920 : 2048;
-        int layoutWidth = Math.Max(player.Width, (int)MathF.Ceiling(referenceWidth * player.Height / 1080f));
+        int layoutWidth = WidthAtReferenceAspect(animal ? 1920 : 2048);
         var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), layoutWidth, player.Height, player.InterfaceScale, player.UiScale);
         if (!animal) geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCellHeight));
 
         geometry.Bind(bindings);
     }
+
+    /// <summary>
+    /// Keeps real-position widgets at least as wide relative to the viewport height as the stock layout expects.
+    /// </summary>
+    int WidthAtReferenceAspect(int referenceWidth) => Math.Max(player.Width, (int)MathF.Ceiling(referenceWidth * player.Height / 1080f));
 
     /// <summary>
     /// Places the bag window: in the window row while a loot or linked container window is open (<see cref="InWindowRow"/>), else beside the
@@ -373,7 +377,9 @@ sealed class InventoryLayout(PlayerInterface player)
     /// </summary>
     internal void BindContainerGeometry(string id, UiBindings bindings, int columns, int rows, bool fixedTop = false)
     {
-        var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
+        // The fixed backpack's centred ARRANGE button keeps its layout width when the frame grows to fit the grid.
+        int layoutWidth = fixedTop ? WidthAtReferenceAspect(1920) : player.Width;
+        var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), layoutWidth, player.Height,
             player.InterfaceScale, player.UiScale);
         geometry.FitContainer(new(columns * player.InventoryCell, rows * player.InventoryCellHeight), fixedTop);
         geometry.Bind(bindings);

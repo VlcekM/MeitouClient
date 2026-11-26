@@ -936,6 +936,7 @@ fixed backpack grids centre horizontally and retain their top offset. No 80%-of-
 (`FUN_140155d30`) uses `Kenshi_InventoryGenericFixedWindow`; Meitou uses it for player, pinned and looted bags. Ordinary containers use the generic
 storage layout, with ARRANGE for unrestricted grids, rather than the research layout. Meitou preserves the frame's natural dimensions even when
 larger than the viewport; visible pixels remain clipped to the screen.
+The fixed backpack layout uses a horizontal canvas at least 1920 px wide per 1080 lines so ARRANGE retains room for its caption on narrow screens.
 
 Character main-grid alignment (**Verified**, `FUN_14014eee0`): after setting section dimensions, keep `main`'s original bottom edge by shifting its
 top and `InventoryMainTitle` together. The character frame keeps its layout size. Meitou applies this before drawing the cells, including pinned
