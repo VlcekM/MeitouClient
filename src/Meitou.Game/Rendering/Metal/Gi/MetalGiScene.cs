@@ -378,6 +378,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
         if (geometries.Count == 0) return null;
 
         var structure = _builds.Bottom(name, geometries);
+        foreach (var g in geometries) g.Dispose();
         resident.Insert(0, structure.NativePtr);
         var entry = new MetalBottomLevel(structure, [.. records], [.. parts], [.. resident.Distinct()], []) { Sources = sources, LastUsed = _frame };
         _meshes[key] = entry;
@@ -694,6 +695,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
             Usage = MTLAccelerationStructureUsage.PreferFastIntersection,
         };
         _builds.Top(slot.Top, descriptor, slot.Scratch);
+        descriptor.Dispose();   // it holds every bottom level it lists: one never released kept the dropped ones allocated
         slot.Built = bytes.ToArray();
         slot.BuiltFrame = _frame;
     }
@@ -776,6 +778,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
                 Usage = MTLAccelerationStructureUsage.PreferFastIntersection,
             };
             var sizes = ctx.Device.AccelerationStructureSizes(sizing);
+            sizing.Dispose();
             Top = ctx.Device.NewAccelerationStructure(sizes.accelerationStructureSize);
             Top.Label = (NSString)"metal gi top";
             Scratch = ctx.Device.NewBuffer(Math.Max(sizes.buildScratchBufferSize, 1), MTLResourceOptions.ResourceStorageModePrivate);

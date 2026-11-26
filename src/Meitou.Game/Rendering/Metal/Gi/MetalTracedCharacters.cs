@@ -162,11 +162,13 @@ sealed unsafe class MetalTracedCharacters(MetalContext ctx) : IDisposable
         public int Refits;
 
         /// <summary>
-        /// Releases the structure, its scratch and its vertices.
+        /// Releases the structure, its descriptors, its scratch and its vertices.
         /// </summary>
         public void Dispose()
         {
             Structure?.Dispose();
+            if (Descriptor.NativePtr != IntPtr.Zero) Descriptor.Dispose();
+            foreach (var g in Geometries) g.Dispose();
             if (RefitScratch.NativePtr != IntPtr.Zero) RefitScratch.Dispose();
             Vertices.Dispose();
         }
@@ -507,10 +509,11 @@ sealed unsafe class MetalTracedCharacters(MetalContext ctx) : IDisposable
     {
         if (entry.Structure is { } old)
         {
-            var scratch = entry.RefitScratch;
+            var (scratch, descriptor) = (entry.RefitScratch, entry.Descriptor);
             ctx.DeferDelete(() =>
             {
                 old.Dispose();
+                descriptor.Dispose();
                 scratch.Dispose();
             });
         }

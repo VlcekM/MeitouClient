@@ -134,6 +134,7 @@ sealed unsafe class MetalTerrainGrid(MetalContext ctx, string name, int cells, f
             Opaque = true,
         };
         var structure = builds.Bottom(name, [geometry]);
+        geometry.Dispose();
         var record = new GeometryRecord { Vertices = vertices.GpuAddress, Indices = _indices.GpuAddress, Stride = 12, Kind = GeometryRecord.Terrain };
 
         if (Bottom is { } old) ctx.DeferDelete(old.Dispose);

@@ -136,11 +136,13 @@ sealed unsafe class MetalTracedGrass(MetalContext ctx) : IDisposable
         public long Bytes => (long)Vertices.Length + (Structure is { } s ? (long)s.Size : 0);
 
         /// <summary>
-        /// Releases the structure, its scratch and the vertices.
+        /// Releases the structure, its descriptors, its scratch and the vertices.
         /// </summary>
         public void Dispose()
         {
             Structure?.Dispose();
+            if (Descriptor.NativePtr != IntPtr.Zero) Descriptor.Dispose();
+            Geometry.Dispose();
             if (RefitScratch.NativePtr != IntPtr.Zero) RefitScratch.Dispose();
             Vertices.Dispose();
         }

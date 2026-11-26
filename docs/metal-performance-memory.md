@@ -222,6 +222,17 @@ RSS alone is not enough: it includes native, GPU, driver and compressed pages th
 - Use `MTLHeap`/purgeable resources for large transient targets if the driver keeps freed allocations; verify with
   `MTLDevice.CurrentAllocatedSize`, not RSS.
 
+### Acceleration-structure descriptors
+
+SharpMetal's descriptor constructors `alloc`/`init` (owned: release with `Dispose`), and Metal's descriptors hold their buffers and structures
+strongly. Released after encoding: a bottom level's primitive descriptor (`MetalBuilds.Bottom`), its geometries (`MetalGiScene.Keep`,
+`MetalTerrainGrid`), the top level's instance descriptor (`BuildTop`, it lists every bottom level). A refittable structure's descriptor and
+geometries go with its entry (`MetalTracedCharacters`, `MetalTracedGrass`). Before, none was released: each top-level build kept every bottom
+level it listed, and each geometry its mesh's vertex and index buffers, so evicted meshes stayed allocated. **Observed** (M6, 24 GB, a save
+moved through five towns 3 s apart, Ultra): GPU memory outside the context's tracked textures and buffers grew from 0.6 to 1.5 GB and stayed;
+in play the guard stayed in pressure (above 80%) and memory kept rising with the camera still, to 116% of the budget, while streaming
+showed no buildings or trees. With the releases: 0.46 GB after the same moves, and no pressure.
+
 ### B3. GC and pools
 
 - Do not rely on ordinary `GC.Collect` to lower RSS: it does not compact the LOH by default and server GC does not

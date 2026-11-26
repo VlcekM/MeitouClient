@@ -666,6 +666,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         d.Usage = usage;
         d.ResourceOptions = gpuOnly ? MTLResourceOptions.ResourceStorageModePrivate : MTLResourceOptions.ResourceStorageModeShared;
         var image = Device.NewTexture(d);
+        d.Dispose();
         if (desc.Name.Length > 0) image.Label = (NSString)desc.Name;
 
         var texture = new MetalTexture { Image = image, Desc = desc };

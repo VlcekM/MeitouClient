@@ -84,7 +84,9 @@ sealed class MetalBuilds(MetalContext ctx)
     public void Begin() => Count = 0;
 
     /// <summary>
-    /// A new bottom level of <paramref name="geometries"/>, recorded into the frame's encoder.
+    /// A new bottom level of <paramref name="geometries"/>, recorded into the frame's encoder. The geometries stay the caller's to release: a
+    /// descriptor holds its buffers strongly, so one never released keeps them allocated after they are freed (docs/metal-performance-memory.md
+    /// "Acceleration-structure descriptors").
     /// </summary>
     public MTLAccelerationStructure Bottom(string name, IReadOnlyList<MTLAccelerationStructureTriangleGeometryDescriptor> geometries)
     {
@@ -99,6 +101,7 @@ sealed class MetalBuilds(MetalContext ctx)
         var scratch = ctx.Device.NewBuffer(Math.Max(sizes.buildScratchBufferSize, 1), MTLResourceOptions.ResourceStorageModePrivate);
         Encoder().BuildAccelerationStructure(structure, descriptor, scratch, 0);
         ctx.DeferDelete(scratch.Dispose);
+        descriptor.Dispose();
         Count++;
         Bytes += (long)sizes.accelerationStructureSize;
         return structure;
@@ -106,7 +109,7 @@ sealed class MetalBuilds(MetalContext ctx)
 
     /// <summary>
     /// A new bottom level of <paramref name="geometries"/> that can be refitted (<see cref="Refit"/>; built fast, as it is rebuilt now and then),
-    /// with its descriptor and refit scratch.
+    /// with its descriptor (the caller's to release with the structure) and refit scratch.
     /// </summary>
     public (MTLAccelerationStructure Structure, MTLPrimitiveAccelerationStructureDescriptor Descriptor, MTLBuffer RefitScratch) Refittable(string name,
         IReadOnlyList<MTLAccelerationStructureTriangleGeometryDescriptor> geometries)
