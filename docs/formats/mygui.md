@@ -124,7 +124,11 @@ Sources: the configured Kenshi install's `data/gui/`, the existing
   Latin-1; the rest on demand. Lines wrap at spaces and between CJK characters.
   Fallback fonts (`UiFontFallbacks`, added by mods, [modding](../modding.md)): a character the font cannot draw comes from the
   face itself when only its `Codes` leave it out (Faithful), else from the first added file that has it, before the substitute, at the font's
-  size and hinting mode. None by default. Meitou's, not in the original.
+  size and hinting mode. In Meitou mode the Kenshi folder's `Kenshi_StandardFont_Medium` files of `locale/zh_CN`, `ja_JP` and `ko_KR`
+  (`kenshi_fonts.xml`; `TTZhongYuanJ.ttf`, `ume-pgs5.ttf`, `SourceHanSerifK-Regular.otf`) follow the mods' ones, so Chinese, Japanese and
+  Korean mod text draws in an English game; a language folder that is missing is left out. Faithful mode asks only the mods' and otherwise
+  draws the `.notdef` box, as the original. **Observed** (scratch program, Exo2-Medium 20 px, Meitou mode): `无限翼王`, a mod race's name,
+  drew '?' for each character before and 20 px glyphs from `TTZhongYuanJ.ttf` after. Meitou's, not in the original.
 - Main in-game UI applies a user-requested minimum of 16 em pixels at 1080 lines,
   scaled with viewport height, including resource fonts and explicit pixel sizes.
   Larger headings retain their sizes. Short captions centre the line box and clip

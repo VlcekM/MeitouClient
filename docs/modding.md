@@ -1073,7 +1073,8 @@ holds refuses the second mod.
   (its own hinting failures do not change the font's); the line height and baseline stay the font's own, and no kerning applies between
   fallback glyphs. False when the file does not exist or was added already; a file FreeType cannot open, or one with no outlines, is skipped
   for every font and logged once. Text drawn before is drawn again with it. Kept for the process. Cost: once per character and font size the first time it is drawn, nothing for characters
-  the game's font has. With none added nothing changes. Engine API, not in the original.
+  the game's font has. In Meitou mode the Kenshi folder's language fonts follow the added ones ([mygui](formats/mygui.md)); in Faithful mode
+  only the added ones are asked, and with none nothing changes. Engine API, not in the original.
 - **Interface actions:** `context.Interface` (`ModInterface`) acts on the game's screens from the host's thread (a UI action, key action, menu
   row, hit feed): `OpenScreen(ModScreen kind, ScreenTarget target)` opens `CharacterEditor` (a recruit's edit, free with race and gender kept,
   of `target.Characters`; false while no listed character is in the snapshot yet, so a mod opening it on a character made this tick tries again

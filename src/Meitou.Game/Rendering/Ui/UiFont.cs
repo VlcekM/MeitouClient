@@ -88,10 +88,10 @@ internal sealed unsafe class UiFont : IDisposable
     readonly uint _dpi;
 
     /// <summary>
-    /// The fallback fonts (<see cref="UiFontFallbacks"/>) at this font's size, in their order, each opened the first time a character this face
+    /// The fallback fonts (<see cref="UiFontFallbacks"/>) at this font's size by full path, each opened the first time a character this face
     /// lacks reaches it; null until then.
     /// </summary>
-    List<FallbackFace>? _fallbacks;
+    Dictionary<string, FallbackFace>? _fallbacks;
 
     /// <summary>
     /// The <see cref="UiFontFallbacks.Version"/> the glyphs were made under.
@@ -399,7 +399,8 @@ internal sealed unsafe class UiFont : IDisposable
         uint index;
         lock (FreeTypeFace.Gate) index = Index(codePoint);
         if (index != 0) return ForIndex(index);
-        if (UiFontFallbacks.Paths.Length > 0)
+        var fallbackPaths = UiFontFallbacks.For(_faithful);
+        if (fallbackPaths.Length > 0)
         {
             // With fallback fonts the face's own glyph comes first, also outside the resource's Codes (Faithful), so the font's letters keep
             // its style.
@@ -409,7 +410,7 @@ internal sealed unsafe class UiFont : IDisposable
                 if (index != 0) return ForIndex(index);
             }
 
-            if (FromFallback(codePoint) is { } fallback) return fallback;
+            if (FromFallback(fallbackPaths, codePoint) is { } fallback) return fallback;
         }
 
         return ForIndex(Substitute());
@@ -437,19 +438,21 @@ internal sealed unsafe class UiFont : IDisposable
     }
 
     /// <summary>
-    /// The glyph of a code point this face cannot draw from the first fallback font that has it (<see cref="UiFontFallbacks"/>, their own
-    /// glyphs, not limited by the resource's <c>Codes</c>), rasterised once at this font's size and hinting; null when none has it. The line's
-    /// height and baseline stay this font's.
+    /// The glyph of a code point this face cannot draw from the first of fallback fonts <paramref name="paths"/> that has it
+    /// (<see cref="UiFontFallbacks"/>, their own glyphs, not limited by the resource's <c>Codes</c>), rasterised once at this font's size and
+    /// hinting; null when none has it. The line's height and baseline stay this font's.
     /// </summary>
-    Glyph? FromFallback(int codePoint)
+    Glyph? FromFallback(string[] paths, int codePoint)
     {
-        var paths = UiFontFallbacks.Paths;
         _fallbacks ??= [];
-        for (int i = 0; i < paths.Length; i++)
+        foreach (var path in paths)
         {
-            // The list only grows, so a fallback's place in it never changes.
-            if (i == _fallbacks.Count) _fallbacks.Add(OpenFallback(paths[i]));
-            var fallback = _fallbacks[i];
+            if (!_fallbacks.TryGetValue(path, out var fallback))
+            {
+                fallback = OpenFallback(path);
+                _fallbacks[path] = fallback;
+            }
+
             if (fallback.Face is null) continue;
 
             uint index;
@@ -722,7 +725,7 @@ internal sealed unsafe class UiFont : IDisposable
         _byIndex.Clear();
         if (_fallbacks is not null)
         {
-            foreach (var fallback in _fallbacks) fallback.ByIndex.Clear();
+            foreach (var fallback in _fallbacks.Values) fallback.ByIndex.Clear();
         }
 
         _tab = -1;
@@ -815,7 +818,7 @@ internal sealed unsafe class UiFont : IDisposable
             FT_Done_Size(_size);
             if (_fallbacks is not null)
             {
-                foreach (var fallback in _fallbacks)
+                foreach (var fallback in _fallbacks.Values)
                 {
                     if (fallback.Size != null) FT_Done_Size(fallback.Size);
                 }
