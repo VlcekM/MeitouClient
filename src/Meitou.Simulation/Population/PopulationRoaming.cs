@@ -831,7 +831,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The squad's effective leader (<c>FUN_140792b90</c>, <b>Verified</b>): its leader while standing, else the cached <see cref="Squad.Backup"/>
-    /// while standing, else the first member (in list order) that is not down and stands in an active zone, which is cached as the backup; else the
+    /// while standing and still in the squad, else the first member (in list order) that is not down and stands in an active zone, which is cached as
+    /// the backup; else the
     /// leader itself, down or not. The member scan is skipped while the leader is in a bed or cage: the original tests the <i>leader's</i> bed or
     /// cage state there, not the member's (<b>Verified</b> by the decompile; possibly a slip of the original).
     /// </summary>
@@ -863,7 +864,9 @@ public sealed partial class PopulationSystem
         scanned = false;
         var table = world.Characters;
         if (Standing(table, squad.Leader)) return squad.Leader;
-        if (Standing(table, squad.Backup)) return squad.Backup;
+
+        // A backup that has left the squad since it was cached (split off, recruited, moved) is passed over (engine guard).
+        if (Standing(table, squad.Backup) && squad.Members.Contains(squad.Backup)) return squad.Backup;
         if (table.TryResolveNext(squad.Leader, out int ls) && table.Cold(ls) is { InSomething: not Locks.HeldState.None }) return squad.Leader;
         foreach (var m in squad.Members)
         {

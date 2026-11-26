@@ -174,7 +174,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         if (cold is not { IsPlayer: false, Ai: { Player: false, Squad: { Ai: { } board } squad } mind }) return null;
 
         var obeyed = AiSystem.ObeyedRoles(world, squad, cold);
-        var roles = obeyed ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(s), cold)];
+        var roles = obeyed ?? board.Roles[(int)AiSystem.RoleOf(world, squad, world.Characters.IdOf(s), cold)];
         return (squad, board, roles, mind.RaceGoals, obeyed is not null);
     }
 

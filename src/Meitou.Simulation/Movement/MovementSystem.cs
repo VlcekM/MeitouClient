@@ -1261,11 +1261,15 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         var squad = cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId) : null;
         var leader = Followed(world, squad, cold);
 
-        if (leader.IsNone || leader.Slot == i || !table.IsAlive(leader))
+        if (leader.IsNone || !table.IsAlive(leader) || leader.Slot == i && squad?.Leader == table.IdOf(i))
         {
             TaskStart.Step(table, i, CharacterTask.Wander);
             return;
         }
+
+        // It stands in for its leader, who is down (carried, often by itself): it follows nobody and waits for its think to give it the leader's
+        // goals.
+        if (leader.Slot == i) return;
 
         // It carries its leader: the squad follows it, it does not follow itself. Nor does the original's: a carried character is down (isDown), the
         // follow rows need it standing (state 7), so no Task_Follow runs and no hold point is written.
