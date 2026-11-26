@@ -96,5 +96,10 @@ int cmd_track(Command* c);
 // ---- dev.c: tools for working on the harness itself ---------------------------------------------------------------------
 
 int cmd_peek(Command* c);
+int cmd_machines(Command* c);
+int cmd_finders(Command* c);
+int cmd_goals(Command* c);
+int cmd_plans(Command* c);
+int cmd_scores(Command* c);
 int cmd_sym(Command* c);
 int cmd_fault(Command* c);

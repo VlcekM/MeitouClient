@@ -320,19 +320,44 @@ public sealed partial class AiSystem
             var target = GoalTarget(row);
             if (row.Is(TaskDataFlags.NeedsTarget) && !row.Is(TaskDataFlags.Finder) && target.IsNone) return false;
 
-            // A goal whose list A holds is done (FUN_14060f570) when a fresh task of its class says it is finished (slot 4, FUN_14050df10). The scorer
-            // asks it of a goal that is not the current one only.
-            if (!current && row.Done.Length > 0 && TaskFinished.Fresh(_world, _slot, type, CharacterId.None)
-                && Array.TrueForAll(row.Done, c => Holds(c, target)))
-            {
-                return false;
-            }
+            // A goal whose results hold is done when a fresh task of its class says it is finished (slot 4, FUN_14050df10). The scorer asks it of
+            // a goal that is not the current one only.
+            if (!current && TaskFinished.Fresh(_world, _slot, type, CharacterId.None) && ResultsHold(row, target)) return false;
             if (TaskPlanner.Local.Plan(row, desire, target, this, _mind.Plan, _scratch) <= 0) return false;
             if (_scratch[0].Type != type && !Carried(_scratch[0].Type) && _duty?.Acts(_scratch[0].Type) != true) return false;
             if (_duty is not null && GivesNothing(row)) return false;
             _mind.Plan.Clear();
             _mind.Plan.AddRange(_scratch);
             return true;
+        }
+
+        /// <summary>
+        /// <c>TaskData::isResultsComplete</c> (<c>FUN_14060f570</c>, docs/game/ai-tasks.md "Desire and commitment") of a fresh candidate: every entry
+        /// of list A holds; with an empty list A and an effect, its finder finds nothing, or (TaskData +0x120) its effect holds; with neither, false.
+        /// </summary>
+        bool ResultsHold(TaskDataRow row, in PlanTarget target)
+        {
+            if (row.Done.Length == 0) return row.Effect is { } effect && EffectResultsHold(row, effect, target);
+
+            foreach (var c in row.Done)
+            {
+                if (!Holds(c, target)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// The results of a row with an empty list A and an effect (<c>FUN_14060f570</c>): they hold when its finder finds nothing, else only with
+        /// TaskData +0x120 set and its effect holding (<b>Verified</b> in the original 1.0.65 through the Kenshi harness on 137 Corpse disposal, +0x120
+        /// set: they hold for a guard carrying nothing and not for one carrying a body, its finder having found the disposal both times).
+        /// </summary>
+        bool EffectResultsHold(TaskDataRow row, TaskCondition effect, in PlanTarget target)
+        {
+            bool found = row.Is(TaskDataFlags.Finder) && !Find(row, target).IsNone;
+            if (!found) return true;
+
+            return row.Is(TaskDataFlags.EffectFinderUnasked) && Holds(effect, target);
         }
 
         /// <summary>

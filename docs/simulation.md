@@ -1604,7 +1604,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   - **106** (plan `[1, 99, 106]`): `BedSystem.PutInDesire` (2.0 for a body the carrier would lay in a bed, [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders))
     times the bed search's (`BedSystem.FindForCarrier`); the bed system walks the carrier and lays the body in (`BedSystem.PutIn`, row 106, `TaskSource.Goal`).
   - **137** (list B 99 a dead body carried; plan `[1, 136, 137]`, else `[67, 68, 138, 137]`): desire 1.0 (slot 43, **Verified**) times the disposal finder's (`FUN_1408d1090`:
-    `CorpseDisposal.Find`, skipping one whose operator places other errands hold or whose walk failed, 20 s). A member carrying no corpse lifts row 138's first; the plan ends
+    `CorpseDisposal.Find`, skipping one whose operator places other errands hold or whose walk failed, 20 s). A member carrying no corpse does not take it up fresh (its results hold, [finished tests](game/ai-tasks.md#finished-tests)); as the current goal it lifts row 138's first; the plan ends
     with the lift and 137 is weighed again with it on the shoulder. At the disposal the body is fed in (removed with its items, the machine's label floats up). Disposals: the
     player's function-11 machines, the registered towns' placed function-11 buildings and their interiors' (`TownBuilding.Disposals`); chosen by the cage finder's rules (town
     reach, `canIUseThisBuilding`, weight x100 own / home, x1e-5 police in a private building). **Verified** desires and finders: [ai-tasks](game/ai-tasks.md#perma-jobs).

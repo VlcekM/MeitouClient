@@ -48,6 +48,10 @@ taskbar entry, the launcher dialog included) and muted; a hidden game still rend
 | `window back [handle]`, `window front` | Gives away or takes the keyboard focus (a hidden window cannot take it) |
 | `window hide\|show` | Hides the window or shows it again (without taking the focus) |
 | `sound off\|on` | Mutes or unmutes the game in Windows' mixer |
+| `goals <character>` | The AI's member type and its Blackboard role lists (Leader, Squad, Squad2): each entry's goal type |
+| `plans <character> [priority] [--plan] [--as=@address]` | The goals of a priority tier (default 2): type, score, weight, crowd; `--plan` also runs the planner on each and the scorer's three drop tests (finished, results, sub); `--as` scores them for another character |
+| `scores <character>` | The last look's candidate map: each candidate's key and goal type |
+| `machines <character> [function] [mask]`, `finders <character>` | The local machines the AI sees (users, capacity, complete, path impossible); what the corpse and corpse-disposal finders pick |
 | `peek <address> [bytes]`, `sym <dll> <export>`, `fault` | For working on the harness: memory dump (`peek ou+580*+2B0 24`), an export's address, the fault guard's test |
 
 `--stall=<seconds>` (any command): how long the game may render no frame before the command fails (default 30).

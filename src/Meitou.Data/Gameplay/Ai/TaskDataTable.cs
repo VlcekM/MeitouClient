@@ -12,7 +12,7 @@ public readonly record struct TaskCondition(StateType State, bool Holds);
 /// <see cref="NeedsTarget"/> Verified).
 /// </summary>
 [Flags]
-public enum TaskDataFlags : byte
+public enum TaskDataFlags : ushort
 {
     /// <summary>
     /// A task of its own the plan can end in (+0x134): set by the registration, cleared by an effect.
@@ -50,6 +50,13 @@ public enum TaskDataFlags : byte
     /// A job without it that can run, acts not and has no effect is skipped (docs/game/ai-tasks.md "Perma-jobs").
     /// </summary>
     KeepsJob = 128,
+
+    /// <summary>
+    /// The effect test and the results test do not ask the finder (+0x120, <b>Verified</b>: the registrations that write 1 there,
+    /// <c>FUN_140319a60</c>, <see cref="TaskDataTable.EffectFinderUnaskedRows"/>): with an empty list A the row's results hold when its effect holds,
+    /// even with a target its finder would find (<c>FUN_14060f570</c>, docs/game/ai-tasks.md "Desire and commitment").
+    /// </summary>
+    EffectFinderUnasked = 256,
 }
 
 /// <summary>
@@ -71,6 +78,16 @@ public sealed record TaskDataRow(
 /// </summary>
 public static class TaskDataTable
 {
+    /// <summary>
+    /// The rows whose registration writes 1 at TaskData +0x120 (<c>FUN_140319a60</c>, <b>Verified</b> by decompile; 137 checked in the original
+    /// 1.0.65 through the Kenshi harness): <see cref="TaskDataFlags.EffectFinderUnasked"/>. Declared before <see cref="Rows"/>, which reads it.
+    /// </summary>
+    public static readonly IReadOnlySet<int> EffectFinderUnaskedRows = new HashSet<int>
+    {
+        8, 19, 20, 24, 32, 37, 38, 47, 55, 84, 85, 94, 106, 112, 113, 115, 122, 131, 132, 135, 137, 139, 142, 149, 152, 153, 157, 168, 172, 177,
+        189, 190, 194, 214, 218, 222, 230, 232, 233, 234, 237, 239, 243, 255, 259, 268, 270, 277, 279, 281, 282,
+    };
+
     /// <summary>
     /// Every row in the original's registration order, transcribed from docs/game/ai-tasks.md "TaskData registry" (state lists as StateType ids,
     /// <c>!</c> wanting false).
@@ -414,8 +431,12 @@ public static class TaskDataTable
     /// A row from its type number, text, category bits, flags and its lists written as space-separated StateType ids (<c>!</c> for false); the effect
     /// is the first entry of its list, null when none is given.
     /// </summary>
-    static TaskDataRow R(int type, string text, int category, TaskDataFlags flags, string done, string needs, string? effect = null) =>
-        new((TaskType)type, text, category, flags, List(done), List(needs), effect is null ? null : List(effect)[0]);
+    static TaskDataRow R(int type, string text, int category, TaskDataFlags flags, string done, string needs, string? effect = null)
+    {
+        if (EffectFinderUnaskedRows.Contains(type)) flags |= TaskDataFlags.EffectFinderUnasked;
+
+        return new((TaskType)type, text, category, flags, List(done), List(needs), effect is null ? null : List(effect)[0]);
+    }
 
     /// <summary>
     /// Parses a space-separated list of StateType ids, a leading <c>!</c> wanting the state false.
