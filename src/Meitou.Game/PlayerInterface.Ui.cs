@@ -1520,6 +1520,13 @@ sealed partial class PlayerInterface
     /// <summary>
     /// A key to the interface: the camera grid, Esc, an edit box, the open screens, then the window hotkeys; false when it did not take it.
     /// </summary>
+    /// <summary>Built-in Lua HUD overlay binder, attached when KenshiLua mods are active.</summary>
+    internal Action<UiBindings>? LuaHudBind;
+    /// <summary>Built-in Lua HUD overlay event handler, attached when KenshiLua mods are active.</summary>
+    internal Action<MyGuiEvent>? LuaHudEvent;
+    /// <summary>Built-in Lua key-down listener, attached when KenshiLua mods are active.</summary>
+    internal Action<Key>? LuaKeyDown;
+
     public bool UiKey(Key key, bool ctrl = false, bool shift = false)
     {
         UiInput++;
@@ -1536,6 +1543,7 @@ sealed partial class PlayerInterface
         if (key == Key.Escape && LevelEditorPanel.LevelEscape()) return true;
         if (key == Key.Escape) return EscapeKey();
         if (FaithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
+        if (!FaithfulScreens.HasKeyboardFocus) LuaKeyDown?.Invoke(key);
         if (WorldMap.ModMapKey(key, ctrl, shift)) return true;
         if (GameHotkeys.Bound(InputAction.RotateItem, key) && InventoryWindows.RotateAt(Mouse)) return true;
         if (ScreenKey(key, shift) is { } screenTook) return screenTook;

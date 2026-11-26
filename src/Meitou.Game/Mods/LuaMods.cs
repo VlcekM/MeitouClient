@@ -2,6 +2,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Game;
 using Meitou.Game.Host;
+using Meitou.Game.Host.Input;
 using Meitou.Lua;
 using Meitou.Simulation;
 
@@ -14,14 +15,17 @@ namespace Meitou.Modding;
 sealed class LuaMods
 {
     readonly SimulationLuaBridge _bridge;
-    readonly LuaHudState _hud = new();
+    readonly LuaHudState _hud;
+    readonly LuaHudOverlay _overlay;
     readonly KenshiLuaHost _host;
     World? _lastWorld;
 
-    LuaMods(SimulationLuaBridge bridge, KenshiLuaHost host)
+    LuaMods(SimulationLuaBridge bridge, LuaHudState hud, KenshiLuaHost host)
     {
         _bridge = bridge;
+        _hud = hud;
         _host = host;
+        _overlay = new LuaHudOverlay(hud, host.DispatchHudClick);
     }
 
     /// <summary>Exposes the bounded HUD overlay state for <c>MyGUI.*</c> widgets.</summary>
@@ -65,7 +69,20 @@ sealed class LuaMods
         if (started.Count == 0) return null;
 
         Console.WriteLine($"lua       started {started.Count} KenshiLua mod(s): {string.Join(", ", started)}");
-        return new LuaMods(bridge, luaHost);
+        return new LuaMods(bridge, hud, luaHost);
+    }
+
+    /// <summary>Connects the Lua HUD overlay and non-typing key forwarding to <paramref name="ui"/>.</summary>
+    public void AttachUi(PlayerInterface ui)
+    {
+        _overlay.EnsureRegistered(ui.FaithfulScreens);
+        ui.LuaHudBind = b => _overlay.Bind(b, ui.Width, ui.Height);
+        ui.LuaHudEvent = _overlay.HandleEvent;
+        ui.LuaKeyDown = k =>
+        {
+            int vk = MapVirtualKey(k);
+            if (vk != 0) _host.NotifyKeyDown(vk);
+        };
     }
 
     /// <summary>
@@ -81,6 +98,7 @@ sealed class LuaMods
         }
         if (host.Player is { } ui)
         {
+            _bridge.SetViewSize(ui.Width, ui.Height);
             string? selName = null;
             IReadOnlyList<CharacterId> selected = ui.SelectedIds();
             if (selected.Count > 0 && host.Session?.World is { } w
@@ -89,9 +107,22 @@ sealed class LuaMods
                 selName = w.Characters.Cold(slot)?.Name;
             }
             _bridge.SetSelectedName(selName);
+            _host.Tick();
+            _overlay.SyncOpen(ui.FaithfulScreens);
+            return;
         }
         _host.Tick();
     }
+
+    static int MapVirtualKey(Key k) => k switch
+    {
+        >= Key.A and <= Key.Z => 0x41 + (k - Key.A),
+        >= Key.D0 and <= Key.D9 => 0x30 + (k - Key.D0),
+        Key.Space => 0x20,
+        Key.Tab => 0x09,
+        Key.Escape => 0x1B,
+        _ => 0,
+    };
 
     /// <summary>Forwards a non-typing key-down virtual key code to running Lua mods.</summary>
     public void NotifyKeyDown(int vk) => _host.NotifyKeyDown(vk);

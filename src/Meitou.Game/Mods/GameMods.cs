@@ -196,6 +196,7 @@ sealed class GameMods(GameHost host)
     internal void ConnectModUi(PlayerInterface ui)
     {
         foreach (var notice in _builtInNotices) ui.Notice(notice);
+        Lua?.AttachUi(ui);
         if (Mods is null) return;
         Mods.RegisterUi((extension, folder, texts) => ui.RegisterUiExtension(extension, folder, texts));
         Mods.AttachInterface(new Game.Ui.PlayerModInterface(ui));
