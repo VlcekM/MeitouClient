@@ -1457,7 +1457,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
         if (Goal(world, cold, n.Task, site) is not { } goal)
         {
-            BackToSite(world.Characters, i, cold);
+            FetchFailed(world, i, cold, site);
             return;
         }
 
@@ -1501,7 +1501,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The path of a worker ended short of its target (<c>FUN_14059c6d0</c>, "Task impossible: X can't get to Y"): the site, or the loose item it
     /// fetches, is ignored for <see cref="UnreachableSeconds"/> (readers: <see cref="EngineerWork"/>, <see cref="Source"/>). A fetcher of a loose
-    /// item goes back to its site, which picks another source; a worker of the site itself ends the work, as the plan step ends a task whose target
+    /// item picks another source (<see cref="FetchFailed"/>); a worker of the site itself ends the work, as the plan step ends a task whose target
     /// the movement cannot reach (<c>FUN_14050d970</c>, <b>Verified</b>, docs/game/combat.md), so the engineer job picks another site. True when the
     /// worker left its goal.
     /// </summary>
@@ -1512,7 +1512,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (key is null) return false;
         cold.NoteUnreachable(key, world.Tick + (long)MathF.Ceiling(UnreachableSeconds / world.TickSeconds));
 
-        if (fetch) BackToSite(world.Characters, slot, cold);
+        if (fetch) FetchFailed(world, slot, cold, site);
         else End(world, slot);
         return true;
     }
@@ -1599,7 +1599,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
         if (Goal(world, cold, n.Task, site) is not { } goal)
         {
-            BackToSite(world.Characters, i, cold);
+            FetchFailed(world, i, cold, site);
             return;
         }
 
@@ -2018,6 +2018,20 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         TaskStart.Step(table, slot, CharacterTask.Build);
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
         n.TaskTime = 0;
+    }
+
+    /// <summary>
+    /// A fetcher whose source failed (its walk ended short, or the source is gone) decides again where it stands, as the planner replans the
+    /// building row from the failed 247 (docs/game/buildings-production.md "Material delivery"): back to the site when the site is not stalled any
+    /// more or it carries a material for it, else to another source (the failed loose item is ignored now), else the work ends. Walking back to
+    /// the site empty-handed only sent it for the same material again (#1487).
+    /// </summary>
+    void FetchFailed(World world, int slot, CharacterCold cold, BuildSite site)
+    {
+        ClearFetch(cold);
+        if (!site.Stalled || Carries(cold, site)) BackToSite(world.Characters, slot, cold);
+        else if (Source(world, slot, cold, site) is { } source) Fetch(world, slot, cold, source);
+        else End(world, slot);
     }
 
     /// <summary>
