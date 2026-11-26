@@ -34,6 +34,18 @@ internal static class NavTileBuilder
     const float MaxHeightCells = 60000;
 
     /// <summary>
+    /// The finer simplification errors, as fractions of <see cref="NavBuildSettings.MaxSimplificationError"/>, a tile whose polygons leave contour
+    /// area uncovered is outlined with again, in order (engine choice; docs/game/pathfinding.md, "Search cost", uncovered contours).
+    /// </summary>
+    static readonly float[] FinerOutlines = [0.9f, 0.8f, 0.7f, 0.6f, 0.5f, 0.4f];
+
+    /// <summary>
+    /// How many times the tile's polygons a finer outline may give (engine choice): the polygons grow fast as the error falls (a tile of 172 had
+    /// 1,282 to cover 1.5 square cells), and a search expands each.
+    /// </summary>
+    const int FinerOutlineGrowth = 2;
+
+    /// <summary>
     /// The tile's mesh (null when it has none) from the triangles <paramref name="tris"/> and the volumes that touch it, and its polygons' height
     /// samples in <paramref name="detail"/>.
     /// </summary>
@@ -134,29 +146,45 @@ internal static class NavTileBuilder
     }
 
     /// <summary>
+    /// The tile's polygons (<see cref="PartitionRegions"/>); when they still leave part of its contours uncovered, the regions are outlined again
+    /// more finely (<see cref="OutlineAgain"/>).
+    /// </summary>
+    static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<NavSideSteps.StepLink> steps)
+    {
+        var mesh = PartitionRegions(ctx, chf, s, ticks, steps, out long uncovered);
+        return uncovered > 0 ? OutlineAgain(ctx, chf, s, ticks, mesh!, uncovered) : mesh;
+    }
+
+    /// <summary>
     /// The tile's polygons over watershed regions: chunky polygons, where monotone partitioning cuts open ground into long strips (a fifth more
     /// polygons for a search to expand; docs/game/pathfinding.md "Search cost"). DotRecast refuses some watershed contours that Recast only warns
     /// about (a region winding round a hole with two outlines, an outline simplified into a bad one), and throws on some polygon steps (a vertex
     /// removal whose hole has fewer than three corners: its triangulation indexes a third one): such a tile is partitioned monotone. So is a
     /// tile whose watershed polygons leave part of its contours uncovered, when the monotone ones leave less (docs/game/pathfinding.md, "Search
-    /// cost", uncovered contours). A tile refused monotone too is left without polygons rather than failing the zone's build.
+    /// cost", uncovered contours). A tile refused monotone too is left without polygons rather than failing the zone's build. The field keeps
+    /// the regions of the mesh answered; <paramref name="uncovered"/> is what that mesh leaves uncovered.
     /// </summary>
-    static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<NavSideSteps.StepLink> steps)
+    static RcPolyMesh? PartitionRegions(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks,
+        List<NavSideSteps.StepLink> steps, out long uncovered)
     {
-        if (s.Watershed && TryPartition(ctx, chf, s, ticks, steps, watershed: true, out var mesh, out long uncovered))
+        if (s.Watershed && TryPartition(ctx, chf, s, ticks, steps, watershed: true, out var mesh, out uncovered))
         {
             if (uncovered <= 0) return mesh;
 
             bool built = TryPartition(ctx, chf, s, ticks, steps, watershed: false, out var monotone, out long monotoneUncovered);
-            if (built && monotoneUncovered < uncovered) return monotone;
+            if (built && monotoneUncovered < uncovered)
+            {
+                uncovered = monotoneUncovered;
+                return monotone;
+            }
 
             // The heights are sampled by the field's regions, so the watershed ones are built again.
-            TryPartition(ctx, chf, s, ticks, steps, watershed: true, out mesh, out _);
+            TryPartition(ctx, chf, s, ticks, steps, watershed: true, out mesh, out uncovered);
             return mesh;
         }
 
         // Refused monotone too: the tile is left without polygons rather than failing the zone's build.
-        return TryPartition(ctx, chf, s, ticks, steps, watershed: false, out mesh, out _) ? mesh : null;
+        return TryPartition(ctx, chf, s, ticks, steps, watershed: false, out mesh, out uncovered) ? mesh : null;
     }
 
     /// <summary>
@@ -166,20 +194,57 @@ internal static class NavTileBuilder
     static bool TryPartition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<NavSideSteps.StepLink> steps,
         bool watershed, out RcPolyMesh? mesh, out long uncovered)
     {
-        mesh = null;
-        uncovered = 0;
         long t0 = Stopwatch.GetTimestamp();
         NavSideSteps.Cut(chf, steps);
         NavTileRegions.Build(ctx, chf, s.MinRegionArea, s.MergeRegionArea, watershed);
 
         NavSideSteps.Relink(chf, steps);
-        long t1 = Stopwatch.GetTimestamp();
-        Interlocked.Add(ref ticks.Regions, t1 - t0);
+        Interlocked.Add(ref ticks.Regions, Stopwatch.GetTimestamp() - t0);
 
+        return TryOutline(ctx, chf, s, ticks, s.MaxSimplificationError, out mesh, out uncovered);
+    }
+
+    /// <summary>
+    /// The field's regions outlined with each of <see cref="FinerOutlines"/> until a mesh covers its contours whole: the finer mesh leaving least
+    /// uncovered, of at most <see cref="FinerOutlineGrowth"/> times <paramref name="mesh"/>'s polygons, or <paramref name="mesh"/> when none leaves
+    /// less than <paramref name="uncovered"/>. A simplified outline of a slit between two arms of one region (a ramp's side beside the ground it
+    /// rises from) can cross itself, and its triangulation then stops short.
+    /// </summary>
+    static RcPolyMesh OutlineAgain(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, RcPolyMesh mesh, long uncovered)
+    {
+        int most = mesh.npolys * FinerOutlineGrowth;
+        var best = mesh;
+        foreach (float fraction in FinerOutlines)
+        {
+            if (!TryOutline(ctx, chf, s, ticks, s.MaxSimplificationError * fraction, out var finer, out long finerUncovered)) continue;
+
+            // The polygons grow as the error falls (Observed in the six tiles of the doc), so no finer outline is within the bound either.
+            if (finer is null || finer.npolys > most) break;
+
+            if (finerUncovered >= uncovered) continue;
+
+            best = finer;
+            uncovered = finerUncovered;
+            if (uncovered <= 0) break;
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Builds the contours of the field's regions with <paramref name="maxError"/> and their polygons, and twice the area in square cells of the
+    /// contours the polygons leave uncovered (<see cref="NavUncoveredArea"/>); false when DotRecast refused the contours or the polygons.
+    /// </summary>
+    static bool TryOutline(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, float maxError, out RcPolyMesh? mesh,
+        out long uncovered)
+    {
+        mesh = null;
+        uncovered = 0;
+        long t1 = Stopwatch.GetTimestamp();
         RcContourSet contours;
         try
         {
-            contours = RcContours.BuildContours(ctx, chf, s.MaxSimplificationError, s.MaxEdgeLength, 1);
+            contours = RcContours.BuildContours(ctx, chf, maxError, s.MaxEdgeLength, 1);
         }
         catch (Exception)
         {

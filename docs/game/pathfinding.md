@@ -1097,7 +1097,16 @@ two points on the tile line x -57600; the triangle across the pinch came out inv
 whose signed area summed whole. Its half-plane test left a band of ground (z 8062..8108, 143 samples the original's tile has) off the mesh. The
 path search still crossed it and every step into it was refused, so the player's squad walked back and forth below the band. Built monotone, the tile
 covers the band (417 samples both) and the walk goes on up the slope. Over the 10 zones above and 19.33 (base data), 4 watershed tiles held a non-convex
-polygon (19.33 one, 27.22 one, 18.39 two) and their monotone builds none, so each is built monotone. A walker shut out of its goal whose own polygon is the reachable one
+polygon (19.33 one, 27.22 one, 18.39 two) and their monotone builds none, so each is built monotone. A tile still left with area uncovered
+has its regions outlined again with the simplification error at 0.9, 0.8 … 0.4 of 1.3 cells, keeping the first mesh that covers its contours whole
+(else the one leaving least), while it has at most twice the tile's polygons; the polygons grow fast as the error falls (a tile of 172 had 1,282 at
+0.5 to cover 1.5 square cells). **Observed** (#1495, zone 12.35 with UWE's Longhouse `104116-Universal Wasteland Expansion-INGAME`, `navmesh --probe`):
+the ground region rising up its steps' 44° ramp wraps round the ramp's side, and the 1.3-cell outline of that slit crossed itself; both partitionings
+left 56 square cells uncovered, a strip of ground and ramp beside the tile line x -88704 (z 14290..14350) that showed as a wedge of no mesh from the
+stair foot. At 0.9 the tile is covered whole (337 → 353 polygons). Over the 10 zones above, 19.33 and base 12.35, five watershed tiles are left
+uncovered: 18.35 (296 square cells, 216 → 345 polygons at 0.7) and 19.33 (74, 78 → 135 at 0.6) are covered whole; 23.22 (16), 18.39 (1.5) and
+19.33 (26.5) need more than twice their polygons and stay. `--compare`: 18.35 ours-only 8,977 → 9,027, original-only 1,022 → 1,021; 19.33
+original-only 1,557 → 1,555. A walker shut out of its goal whose own polygon is the reachable one
 nearest the goal walks across it to the point nearest the goal; before, it got no path (`NavigationTests`: a gate's closed door, the polygon up to the wall).
 
 ## Gate codes
