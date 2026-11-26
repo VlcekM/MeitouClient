@@ -57,12 +57,31 @@ public static class SaveModList
     {
         using var stream = new FileStream(Path.Combine(folder, "quick.save"), FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16);
         using var r = new BinaryReader(stream);
-        if (r.ReadInt32() != 15) throw new InvalidDataException("quick.save is not an FCS type 15 file.");
+        SkipHeader(r);
         r.ReadInt32(); // next id
         for (int n = ReadCount(r); n > 0; n--)
             if (ReadRecordMods(r, out var mods))
                 return mods is null ? null : [.. mods.Where(m => m != "base" && !ModList.CoreModNames.Contains(m))];
         return null;
+    }
+
+    /// <summary>
+    /// Skips the file type and the header: none in type 15 (what the game writes), version and four strings in 16, a declared length in 17
+    /// (an edited save can carry either, #1490); the game's save reader takes all three (docs/formats/save.md "File format").
+    /// </summary>
+    static void SkipHeader(BinaryReader r)
+    {
+        int type = r.ReadInt32();
+        if (type == 15) return;
+        if (type == 17)
+        {
+            SkipString(r); // header length, then the header
+            return;
+        }
+        if (type != 16) throw new InvalidDataException($"quick.save has the unknown FCS file type {type}.");
+
+        r.ReadInt32(); // version
+        for (int n = 0; n < 4; n++) SkipString(r); // author, description, dependencies, references
     }
 
     /// <summary>

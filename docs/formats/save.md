@@ -8,8 +8,9 @@ SaveFileSystem, GameDataContainer and named binary functions in the evidence/tab
 ## File format
 
 Usual header: int32 type15, nextId, recordCount, ordinary FCS records; no mod metadata/checksum.
-The CAMERA `version` string is game version. Type17 editor-written platoon files also occur;
-accept their real header/sizes/flags rather than forcing type15. [FCS layout](fcs-mod.md).
+The CAMERA `version` string is game version. Type17 editor-written platoon files also occur, and a `quick.save`
+edited in an editor can carry a type 16/17 header (**Observed**, #1490: not type 15, yet Meitou's 15..17 reader loads it); every reader (the launcher's
+`SaveModList` included) accepts 15..17 with their real header/sizes/flags rather than forcing type15. [FCS layout](fcs-mod.md).
 
 **Verified/Observed in later saves:** preserve invalid UTF-8 bytes (every FCS string is lossless,
 [fcs-mod](fcs-mod.md#strings)), and exact NaN/denormal float bits. TERRAIN_DECALS IDs can be binary int32
