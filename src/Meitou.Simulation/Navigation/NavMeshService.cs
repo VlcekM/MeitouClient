@@ -346,6 +346,8 @@ internal sealed class NavMeshService : IDisposable
             }
             catch (Exception e)
             {
+                // Logged: the zone stays without a mesh, so its characters stand frozen (#1493 had nothing in its log).
+                Console.Error.WriteLine($"nav       zone {zone.X}.{zone.Y} failed to build: {e.GetBaseException()}");
                 if (_pending.TryRemove(zone, out var tcs)) tcs.TrySetException(e);
             }
         }
