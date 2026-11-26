@@ -169,7 +169,8 @@ public sealed partial class ProductionSystem
 
         /// <summary>
         /// Whether carrying job <paramref name="k"/> can run: a corpse job as <see cref="CorpseCanRun"/>; an intruder job under way runs on while its
-        /// carrying out can (<see cref="DeliveryReady"/>), else its finder must find a body to lift.
+        /// carrying out can (<see cref="DeliveryReady"/>); with a body carried and none under way it starts one again (<see cref="CarriedOut"/>), else
+        /// its finder must find a body to lift.
         /// </summary>
         public DecisionCheck CanRun(World world, int slot, int k)
         {
@@ -185,6 +186,7 @@ public sealed partial class ProductionSystem
                 return cold.Carrying.IsNone || DeliveryReady(cold, kind) ? DecisionCheck.Runs : DecisionCheck.No("nothing to deliver to");
             }
 
+            if (!cold.Carrying.IsNone) return CarriedOut(world, slot, k, cold, kind);
             if (!Free(world, cold)) return DecisionCheck.No("cannot carry");
             return Found(world, slot, k, owner.FindIntruder(world, slot, cold, Lifted(world, cold.SquadId, table.IdOf(slot)), kind));
         }
@@ -225,7 +227,24 @@ public sealed partial class ProductionSystem
         }
 
         /// <summary>
-        /// Lifts the body <see cref="CanRun"/> found this tick and starts the errand, or, for 137 with a corpse carried, starts its delivery.
+        /// An intruder job of a character that carries a body with no carrying out under way (it was broken off, or the body was lifted otherwise):
+        /// the desire of 224 / 274 is 2.0 for any carried character the carrier does not regard as friendly (<c>FUN_1405a13a0</c>, <b>Verified</b>),
+        /// so the carrying out starts again from where the carrier stands (<see cref="CarryOutGoal"/>).
+        /// </summary>
+        DecisionCheck CarriedOut(World world, int slot, int k, CharacterCold cold, ErrandKind kind)
+        {
+            var table = world.Characters;
+            if (!DeliveryReady(cold, kind)) return DecisionCheck.No("nothing to deliver to");
+            if (!table.TryResolveNext(cold.Carrying, out int b) || table.Cold(b) is not { } body) return DecisionCheck.No("carrying");
+            if (owner.Carry!.Friendly(cold, body)) return DecisionCheck.No("carrying a friend");
+
+            _found = (world.Tick, slot, k, cold.Carrying, owner.CarryOutGoal(world, slot, kind));
+            return DecisionCheck.Run;
+        }
+
+        /// <summary>
+        /// Lifts the body <see cref="CanRun"/> found this tick and starts the errand, or, with a body carried (137's corpse, an intruder's carrying
+        /// out started again), starts its delivery.
         /// </summary>
         public void Start(World world, int slot, int k)
         {
@@ -237,7 +256,7 @@ public sealed partial class ProductionSystem
             var id = table.IdOf(slot);
             if (!cold.Carrying.IsNone)
             {
-                var delivery = new Errand { Kind = kind, Body = cold.Carrying, Delivering = true, Job = type };
+                var delivery = new Errand { Kind = kind, Goal = _found.Goal, Body = cold.Carrying, Delivering = true, Job = type };
                 owner._errands[id] = delivery;
                 owner.StepErrand(world, slot, cold, delivery);
                 return;
@@ -714,6 +733,19 @@ public sealed partial class ProductionSystem
         }
 
         return best is { } found ? (found, OutsideTownGoal(world, town, at)) : null;
+    }
+
+    /// <summary>
+    /// The goal of a carrying out started again by a carrier already holding the body: outside the player's building or town it stands in, as the
+    /// finders' goals; where it stands when it is in none, so the body is let go at once (engine choice: Meitou's home building is the one the
+    /// carrier stands in).
+    /// </summary>
+    Vector2 CarryOutGoal(World world, int slot, ErrandKind kind)
+    {
+        var at = world.Characters.Next[slot].Position;
+        var here = new Vector2(at.X, at.Z);
+        if (kind == ErrandKind.OutOfTown) return PlayerTownAt(world, at) is { } town ? OutsideTownGoal(world, town, at) : here;
+        return EnclosedAt(world, at) is { } site ? OutsideGoal(world, site, at, kind) : here;
     }
 
     /// <summary>
