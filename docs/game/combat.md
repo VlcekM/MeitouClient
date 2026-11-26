@@ -256,7 +256,9 @@ HitMaterialType: `HIT_MISSED` dodged 0.2 s, `HIT_SWORD` blocked 0.3 s, flesh or 
   or the current target; also a slave (slave state 1) that is not the attacker's ally, when the attacker's faction is not the player's (+0x250
   `isPlayer` null) and not anti-slavery (faction +8). Of the buildings in the box only walls (`WallBuilding`) and doors (`DoorStuff`) take the
   blow, f = 2 × blunt + 0.5 × cut of the powered packet: a door loses clamp(f, 20, 60) × 0.015 of its construction progress (Building +0x164,
-  via `getBuildState`; a broken door nothing), a wall clamp(f / 2, 10, 60) × 0.003, destroyed at 0 (**Observed**).
+  via `getBuildState`; a broken door nothing), a wall clamp(f / 2, 10, 60) × 0.003, destroyed at 0 (**Observed**). A gate building is no wall
+  (slot 62 a no-op, [damage](buildings-production.md)); the door's hit tests only its broken flag, not whether it is open, but the query finds its
+  leaf where it slid to, so a lifted gate is out of reach (Meitou: `ZoneBuildings`, the closed centre plus the full slide times the open amount).
 - Per target the attacker frees that one's attack slot (`AttackSlotManager::freeSlotH`), and after a hit or block takes it off its own engaged
   list (`removeAttackerH`, [attack slots](#attack-slots-and-circling)).
 

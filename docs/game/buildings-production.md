@@ -214,8 +214,8 @@ same build work and ends once complete and `progress / target >= 1` (`FUN_140547
 (`FUN_14054a3f0` tests only incomplete ones), so repairing takes no materials.
 
 Damage (**Verified**, slot 62 `hitByMeleeAttack`, KenshiLib 1ce4a16 names): only melee blows lower a complete building's
-progress. The Building/`UseableStuff` body (`1402972c0`) returns 1 and changes nothing; only `WallBuilding` (`14029d560`, gates
-included) and `DoorStuff` (`14029d690`) override it (formulas: [combat](combat.md#attack-zone)). No ranged slot exists beside
+progress. The Building/`UseableStuff` body (`1402972c0`) returns 1 and changes nothing; only `WallBuilding` (`14029d560`; not gates:
+GatewayBuilding's slot 62 is the no-op `1400d20b0`, vtable `1416eb2e8`, so a gate takes blows only on its door) and `DoorStuff` (`14029d690`) override it (formulas: [combat](combat.md#attack-zone)). No ranged slot exists beside
 62 on RootObject. In play the destroyed setter (slot 104) is called with 1 only by the wall hit (the "Wall termites" drain
 also calls it, but never runs, below); a destroyed wall takes the destroyed transition above (`WallBuilding` slot 70 calls the Building one first).
 

@@ -32,7 +32,9 @@ sealed class ZoneBuildings
     }
 
     /// <summary>
-    /// Adds the doors of the level's fixtures that the zone reaches and that are not broken.
+    /// Adds the doors of the level's fixtures that the zone reaches and that are not broken. The physics query finds a leaf where it is, so an
+    /// opening or open leaf is tested at its closed centre moved by its open amount along its full slide (exact for a leaf that only slides; a
+    /// step-out leaf is taken on the straight line between its ends, engine reading): a lifted gate is out of the box.
     /// </summary>
     static void CollectDoors(World world, CombatSystem.Zone zone, Locks.LockSystem? locks,
         List<(float Key, string? Door, Construction.BuildSite? Wall)> found)
@@ -41,10 +43,12 @@ sealed class ZoneBuildings
 
         foreach (var pick in world.Fixtures.DoorPicks)
         {
-            var d = new Vector2(pick.Position.X, pick.Position.Z) - zone.Centre;
-            float reach = zone.Deep + zone.Half + 30;
-            if (d.LengthSquared() > reach * reach || MathF.Abs(pick.Position.Y - zone.Y) > zone.High + 20) continue;
             if (world.Fixtures.Find(pick.Id) is not { DoorBroken: false } door || world.Fixtures.DoorSpotOf(door) is not { } spot) continue;
+
+            var leaf = spot.Centre + spot.Slide * door.OpenAmount;
+            var d = new Vector2(leaf.X, leaf.Z) - zone.Centre;
+            float reach = zone.Deep + zone.Half + 30;
+            if (d.LengthSquared() > reach * reach || MathF.Abs(leaf.Y - zone.Y) > zone.High + 20) continue;
 
             float along = MathF.Abs(Vector2.Dot(d, zone.Forward));
             float across = MathF.Abs(d.X * zone.Forward.Y - d.Y * zone.Forward.X);
@@ -55,7 +59,8 @@ sealed class ZoneBuildings
     }
 
     /// <summary>
-    /// Adds the walls of the construction system that the zone reaches.
+    /// Adds the walls of the construction system that the zone reaches. A gate is no wall: its building's hit (slot 62 of the GatewayBuilding
+    /// vtable, <c>FUN_1400d20b0</c>) does nothing, only its door takes blows (<b>Verified</b>, kenshi_x64).
     /// </summary>
     static void CollectWalls(World world, CombatSystem.Zone zone, Construction.ConstructionSystem? construction,
         List<(float Key, string? Door, Construction.BuildSite? Wall)> found)
@@ -64,7 +69,7 @@ sealed class ZoneBuildings
 
         foreach (var site in world.Buildings.All)
         {
-            if (site.Destroyed || site.Progress <= 0 || construction.Data(site.Record) is not { LinksTogether: true }) continue;
+            if (site.Destroyed || site.Progress <= 0 || !construction.IsWallPiece(site.Record)) continue;
 
             float best = float.MaxValue;
             for (int n = -1; n <= 1; n++)
