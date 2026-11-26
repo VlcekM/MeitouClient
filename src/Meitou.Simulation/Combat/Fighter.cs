@@ -219,7 +219,7 @@ public sealed class Fighter
     public float DexterityMult => Naked ? NakedBonus : _dexterity;
 
     /// <summary>
-    /// Product of the pieces' <c>dodge mult</c> (the gear's dodge value for <see cref="DefenceFormulas.DodgeSkill"/>, x 100); 1.1
+    /// Product of the pieces' <c>dodge mult</c> (CharStats <c>+0x38</c>, the gear's term of <see cref="CombatSystem.EffectiveDodge"/>); 1.1
     /// when <see cref="Naked"/>.
     /// </summary>
     public float DodgeMult => Naked ? NakedBonus : _dodgeMult;

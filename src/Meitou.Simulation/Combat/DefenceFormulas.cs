@@ -82,9 +82,4 @@ public static class DefenceFormulas
 
         return r1 * a < r2 * b;
     }
-
-    /// <summary>
-    /// The dodge skill (<c>FUN_140885ce0</c>): 0.01 x (0.6 x the gear's dodge value + 0.4 x dexterity x scale).
-    /// </summary>
-    public static float DodgeSkill(float equipmentDodge, float dexterity) => 0.01f * (0.6f * equipmentDodge + 0.4f * dexterity);
 }

@@ -38,8 +38,8 @@ x (e + l - 1), e the encumbrance factor in [0.4, 1], l the leg factor in [0.5, 1
 (**Verified**, disassembly; Meitou `CombatSystem.DodgeRating`). The initiative roll (`FUN_140666a30`) contests both attack ratings (`FUN_140885e40`, the same sum as `FUN_140884ee0`; **Observed**, decompile). **Observed** outcome: block5 if matching block
 past50% animation; dodge0 within progress0.1..0.98; otherwise hit2. Skill roll r1*A<r2*B,
 A=1+0.05*max(0,s2-s1), B=1+0.05*max(0,s1-s2). Derived chance with k=B/A is1-1/(2k) ifk>=1,
-elsek/2. General skill blend0.01*(0.6*stat+0.4*dexterity*m) feeds dodge/reload, with stat/gear
-and injury variants.
+elsek/2. The skill blend `FUN_140885ce0` (0.01 x (0.6 x the getter's stat + 0.4 x dexterity as the packet reads it)) feeds the crossbow and turret
+reloads ([the stat getter](character-stats.md#the-stat-getter)).
 
 ### Indoors
 

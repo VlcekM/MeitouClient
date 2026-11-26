@@ -67,7 +67,7 @@ fitted-limb and gear terms (no light, no dust); perception (the worn gear's `per
 with every term; every other stat stored x the multiplier with every term (no scale). The multiplier's six flags, in argument order: hunger,
 limbs, light, fitted limbs, dust, gear factor. Meitou: `StatGetter.Get` (stealth through `Orders.Stealth`).
 
-Combat's readers (**Verified**, disassembly, 1.0.68). The modified getter (third argument 0) serves the ranged and turret code: the deviation
+Combat's readers (**Verified**, disassembly and decompile, 1.0.68). The modified getter (third argument 0) serves the ranged and turret code: the deviation
 `FUN_140435160` (skill and perception), the gunner's skill `FUN_140437ce0`, the shot `FUN_14043a730` (skill, perception, friendly fire, which so
 takes the gear's `ranged skill mult`), the friendly-fire avoidance `FUN_140440300` and the skill blend `FUN_140885ce0`. The damage packet and the
 play rates inline the strength and dexterity branches (`FUN_140338090`, `FUN_140883a80`, `FUN_140883ba0`, `FUN_140883c60`, `FUN_140883d10`).
@@ -103,7 +103,7 @@ gear totals (`FUN_140887030`, **Verified**): its `combat skill bonus` starts bot
 class column +0x10) x `athletics mult`, 1 for `slot` 3, 5 and 8; column +0x10 is GEAR_CLOTH and LIGHT 1..1,
 MEDIUM 0.85..1, HEAVY 0.8..0.95. `perception bonus` is an int (ARMOUR +0x254); the effective perception
 `FUN_140884ac0(0x18, 0)` is (trained + CharStats +0x30) x the stat multiplier. Meitou: `Fighter.AthleticsFactor`,
-`Fighter.PerceptionBonus` (added in `CombatSystem.Eff`), `ArmourPiece.AthleticsOf`. A piece's combat speed factor (ARMOUR +0x258,
+`Fighter.PerceptionBonus` (added in `StatGetter.Get`), `ArmourPiece.AthleticsOf`. A piece's combat speed factor (ARMOUR +0x258,
 **Verified**: `FUN_140898e90` stores it next to +0x248 and `FUN_140887030` multiplies it into the product above) is lerp(t, class column) x
 `combat speed mult`, forced to 1 for a hat (`slot` 3, whatever its mult); the class column is **Observed** by elimination (the one column the
 athletics and stealth blocks leave unused): heavy 0.9..1, else 1 (the tooltip's "Combat speed effect"). Meitou: `ArmourPiece.CombatSpeed`,
