@@ -447,13 +447,21 @@ grain 0.6 together darken the corners, tint the picture and show the grain.
 
 ## SMAA
 
-Meitou's non-temporal alternative to FXAA (`--smaa`, or anti-aliasing "SMAA" in settings). It runs on the
-composite's LDR picture instead of FXAA, before the heat haze, and only when no upscaler runs. Passes
-(`PostProcessShaders.Smaa*`): luma edges (threshold 0.1, local contrast adaptation 2); blending weights;
-neighbourhood blend. The weights use SMAA 1x's orthogonal L/U/Z revectorization (16-pixel search per side,
-U shapes smoothed below 32 pixels). Unlike reference SMAA, it computes areas analytically instead of using
-AreaTex/SearchTex. It has no diagonal or corner patterns, as SMAA's low/medium presets.
-**Observed**: 0.6 ms at 1280×720 on the low-end laptop; smooths the stair-steps on The Hub's walls and ridges.
+Meitou's non-temporal alternative to FXAA (`--smaa`, or anti-aliasing "SMAA" in settings): SMAA 1x as
+reference SMAA computes it, ported from the Dust framework's D3D11 passes. It runs on the composite's LDR
+picture instead of FXAA, before the heat haze, and only when no upscaler runs. Passes
+(`PostProcessShaders.Smaa*`, lookup textures in `SmaaLookup`):
+- edges: luma (Rec. 709 weights) steps to the left and top neighbour of at least 0.1 (SMAA's high preset;
+  Dust's 0.05 also marked ground-texture detail: 9.1 % of The Hub's pixels changed against 6.4 %, the
+  extra ones texture blur, no extra edge smoothing; **Observed**, viewer at 2560×1440) and at least half
+  the largest step round the pixel (local contrast adaptation 2);
+- weights: each edge searched both ways, 2 pixels per bilinear fetch, up to 16 fetches; SearchTex (64×16 R8)
+  corrects the last fetch to the edge's end, AreaTex (160×560 RG8, orthogonal part, subsample row 0) gives the
+  coverage from the two ends' crossing edges and the square-rooted distances. No diagonal or corner patterns
+  (as SMAA's low/medium presets). The edges target is sampled bilinearly here;
+- neighbourhood blend: the axis with the larger weight, two bilinear taps moved by the weights.
+The tables are the bytes of SMAA's `AreaTex.h` / `SearchTex.h` (MIT), embedded from `assets/smaa`; the
+engine has no RG8 format, so AreaTex is widened to RGBA8 on upload.
 
 ## Tried: UI depth stamp (removed)
 

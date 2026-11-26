@@ -123,6 +123,10 @@ sealed class PostComposite : IDisposable
     /// </summary>
     readonly SmaaPasses _smaa;
     /// <summary>
+    /// SMAA's area and search textures.
+    /// </summary>
+    readonly SmaaLookup _smaaLookup;
+    /// <summary>
     /// The heat haze pass.
     /// </summary>
     readonly HeatHazePass _haze;
@@ -238,6 +242,7 @@ sealed class PostComposite : IDisposable
         _fxaa = new FxaaPass(ctx, vertex);
         _stretch = new StretchPass(ctx, vertex);
         _smaa = new SmaaPasses(ctx, vertex);
+        _smaaLookup = new SmaaLookup(ctx);
         _haze = new HeatHazePass(ctx, vertex);
         _particleDepthP = new ParticleDepthPass(ctx, vertex);
         _particleCompositeP = new ParticleCompositePass(ctx, vertex);
@@ -500,7 +505,9 @@ sealed class PostComposite : IDisposable
         var s = _smaa;
         s.Edges.Bind(s.EdgesImage, _plainSampler with { View = _ldr!.View() });
         Fullscreen(cmd, s.Edges, _smaaEdges!, _displayWidth, _displayHeight);
-        s.Weights.Bind(s.WeightsEdges, _pointSampler with { View = _smaaEdges!.View() });
+        s.Weights.Bind(s.WeightsEdges, _plainSampler with { View = _smaaEdges!.View() });
+        s.Weights.Bind(s.WeightsArea, _smaaLookup.Area);
+        s.Weights.Bind(s.WeightsSearch, _smaaLookup.Search);
         Fullscreen(cmd, s.Weights, _smaaWeights!, _displayWidth, _displayHeight);
         s.Blend.Bind(s.BlendImage, _plainSampler with { View = _ldr!.View() });
         s.Blend.Bind(s.BlendWeights, _pointSampler with { View = _smaaWeights!.View() });
@@ -950,6 +957,7 @@ sealed class PostComposite : IDisposable
             _ldrFxaa = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, _displayWidth, _displayHeight,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post ldr fxaa"));
         }
+        if (!temporal && o.Smaa) _smaaLookup.Ensure();
         if (!temporal && o.Smaa && _smaaEdges is null)
         {
             _smaaEdges = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, _displayWidth, _displayHeight,
@@ -1128,6 +1136,7 @@ sealed class PostComposite : IDisposable
         _fxaa.P.Dispose();
         _stretch.P.Dispose();
         _smaa.Dispose();
+        _smaaLookup.Dispose();
         _haze.P.Dispose();
         _particleDepthP.P.Dispose();
         _particleCompositeP.P.Dispose();
@@ -1404,9 +1413,10 @@ sealed class PostComposite : IDisposable
         /// </summary>
         public readonly LegacyProgram Edges, Weights, Blend;
         /// <summary>
-        /// The samplers: the edges pass's <c>uImage</c>, the weights pass's <c>uEdges</c>, the blend pass's <c>uImage</c> and <c>uWeights</c>.
+        /// The samplers: the edges pass's <c>uImage</c>, the weights pass's <c>uEdges</c>, <c>uArea</c> and <c>uSearch</c>, the blend pass's
+        /// <c>uImage</c> and <c>uWeights</c>.
         /// </summary>
-        public readonly SamplerSlot EdgesImage, WeightsEdges, BlendImage, BlendWeights;
+        public readonly SamplerSlot EdgesImage, WeightsEdges, WeightsArea, WeightsSearch, BlendImage, BlendWeights;
         /// <summary>
         /// Compiles the three programs and resolves their samplers.
         /// </summary>
@@ -1416,8 +1426,10 @@ sealed class PostComposite : IDisposable
             Weights = LegacyProgram.Create(ctx, vertex, PostProcessShaders.SmaaWeights, "post smaa weights");
             Blend = LegacyProgram.Create(ctx, vertex, PostProcessShaders.SmaaBlend, "post smaa blend");
             (EdgesImage, WeightsEdges) = (Edges.Sampler("uImage"), Weights.Sampler("uEdges"));
+            (WeightsArea, WeightsSearch) = (Weights.Sampler("uArea"), Weights.Sampler("uSearch"));
             (BlendImage, BlendWeights) = (Blend.Sampler("uImage"), Blend.Sampler("uWeights"));
         }
+
         /// <summary>
         /// Frees the three programs.
         /// </summary>
