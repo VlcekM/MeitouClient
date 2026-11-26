@@ -28,7 +28,7 @@ sealed class DebugItemsWindow(PlayerInterface player)
     #region State
 
     /// <summary>
-    /// How many characters a search needs, and how many cells the stock fills at most.
+    /// How many characters a search needs, and how many cells its results fill at most.
     /// </summary>
     const int SearchMinLength = 1, SearchLimit = 100;
 
@@ -283,8 +283,7 @@ sealed class DebugItemsWindow(PlayerInterface player)
     #region Stock
 
     /// <summary>
-    /// Makes the stock again for what is shown: a search's matches, the whole picked category (its "all items" row) or the picked item, up to
-    /// <see cref="SearchLimit"/> cells.
+    /// Makes the stock again for what is shown: up to <see cref="SearchLimit"/> cells for a search, or every cell for the picked category or item.
     /// </summary>
     void Rebuild()
     {
@@ -294,24 +293,24 @@ sealed class DebugItemsWindow(PlayerInterface player)
 
         if (Searching)
         {
-            AddEntries(data, _catalog.Matching(data.Db, _query));
+            AddEntries(data, _catalog.Matching(data.Db, _query), SearchLimit);
             return;
         }
 
         if (_item is { } picked) AddCells(data, picked, int.MaxValue);
-        else if (_group is { } group) AddEntries(data, _catalog.InCategory(data.Db, group, _sub));
+        else if (_group is { } group) AddEntries(data, _catalog.InCategory(data.Db, group, _sub), int.MaxValue);
     }
 
     /// <summary>
-    /// Adds a cell for each of <paramref name="entries"/> at every quality it has, until the stock holds <see cref="SearchLimit"/> cells.
+    /// Adds a cell for each of <paramref name="entries"/> at every quality it has, until the stock holds <paramref name="limit"/> cells.
     /// </summary>
-    void AddEntries(PopulationData data, IEnumerable<DebugItemEntry> entries)
+    void AddEntries(PopulationData data, IEnumerable<DebugItemEntry> entries, int limit)
     {
         foreach (var entry in entries)
         {
-            if (_stock.Count >= SearchLimit) return;
+            if (_stock.Count >= limit) return;
 
-            AddCells(data, entry, SearchLimit);
+            AddCells(data, entry, limit);
         }
     }
 
@@ -421,8 +420,8 @@ sealed class DebugItemsWindow(PlayerInterface player)
         b.WindowPosition = _origin;
         b.Positions[DebugItemsLayout.Root] = new(0, 0, _size.X, _size.Y);
         b.Text[DebugItemsLayout.SearchLabel] = "Search by item name";
-        b.Text[DebugItemsLayout.HelpText] = "Drag an item onto a character's portrait or to the world, hold [shift] for x5. "
-            + "Note: items inventory displays only up to 100 items at once.";
+        b.Text[DebugItemsLayout.HelpText] = "Drag an item onto a character's portrait or to the world, hold [shift] for x5.";
+        if (Searching) b.Text[DebugItemsLayout.HelpText] += " Note: items inventory displays only up to 100 items at once.";
 
         BindClear(b);
         BindQuality(b);
@@ -582,6 +581,8 @@ sealed class DebugItemsWindow(PlayerInterface player)
             var view = _stock[i].View;
             var at = new UiRect(grid.Bounds.X + _slots[i].X * cell, grid.Bounds.Y + _slots[i].Y * cellHeight, view.Width * cell,
                 view.Height * cellHeight);
+            if (grid.Clip is { } clip && at.Intersect(clip) is { Width: <= 0 } or { Height: <= 0 }) continue;
+
             player.ItemCells.AddItemCell(controls, $"debug-stock-{i}", at, view.Record, view.Material, view.Name, view.Quantity,
                 TooltipRuntime.ItemTip.Of(view), DebugItemsLayout.CellProperty, i, grid.Clip, charge: view.Charge, colour: view.Colour,
                 rotated: view.Rotated, tipAtPointer: true);

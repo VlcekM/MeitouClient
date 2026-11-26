@@ -743,7 +743,7 @@ there), so the portraits stay free to drop on; the title bar moves it.
   as the trader window's) and a help line. Categories are the item groups (Weapons, Crossbows, Armour, Items, Containers, Limb replacements, Blueprints, Maps),
   capitalised, each with the record's own categories indented under it where it has them ([item categories](../formats/fcs-mod.md#item-categories)). An
   empty list says "Pick a category" or "No items".
-- The items list starts with "--- ALL ITEMS ---", picked with the category: the whole category fills the stock, up to 100 cells. Picking an item shows it at
+- The items list starts with "--- ALL ITEMS ---", picked with the category: the whole category fills the scrollable stock. Picking an item shows it at
   every quality it has, worst first (armour, crossbows, limbs: the six grades; a weapon: every model any WEAPON_MANUFACTURER lists, once each, by level,
   Rebirth's Meitou included); an item without a quality is one cell. Cells are packed as a trader's stock (each footprint in the first free spot, row by row),
   made by `DebugGiveItem.Make` as giving does and shown through `InventoryItemView.Of`; the tooltip stands at the pointer (`TooltipRuntime.PointerAnchor`),
