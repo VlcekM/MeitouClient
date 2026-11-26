@@ -5817,3 +5817,11 @@ msgstr "Дайте зданию своё имя: оно видно на его �
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "Оставьте пустым, чтобы вернуть зданию исходное имя."
+
+#. machine-translated
+msgid "Mod: {1}"
+msgstr "Мод: {1}"
+
+#. machine-translated
+msgid "Mods: {1}"
+msgstr "Моды: {1}"
