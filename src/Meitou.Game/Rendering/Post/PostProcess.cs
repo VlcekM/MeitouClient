@@ -372,6 +372,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         /// </summary>
         public readonly SamplerSlot EdgesImage, WeightsEdges, WeightsArea, WeightsSearch, BlendImage, BlendWeights;
         /// <summary>
+        /// The edges pass's <c>uThreshold</c> and the weights pass's <c>uMaxSteps</c>.
+        /// </summary>
+        public readonly UniformHandle Threshold, MaxSteps;
+        /// <summary>
         /// Compiles the three programs and resolves their samplers.
         /// </summary>
         public SmaaPasses(GpuContext gpu)
@@ -381,6 +385,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             Blend = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, PostProcessShaders.SmaaBlend, "post smaa blend");
             (EdgesImage, WeightsEdges) = (Edges.Sampler("uImage"), Weights.Sampler("uEdges"));
             (WeightsArea, WeightsSearch) = (Weights.Sampler("uArea"), Weights.Sampler("uSearch"));
+            (Threshold, MaxSteps) = (Edges.Uniform("uThreshold"), Weights.Uniform("uMaxSteps"));
             (BlendImage, BlendWeights) = (Blend.Sampler("uImage"), Blend.Sampler("uWeights"));
         }
 
@@ -1278,7 +1283,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             _postColour = RunUpscale();
             Stamp("upscale");
         }
-        else ActiveUpscaler = "off";
+        else ActiveUpscaler = Options.Smaa ? "SMAA" : Options.Fxaa ? "FXAA" : "off";
         _postColour = RunDepthOfField(_postColour);
         bool auto = AutoExposure is not null && _luminance is not null;
         if (auto) RunExposure();
@@ -1430,6 +1435,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void RunSmaa(bool haze, PassTargets final)
     {
         var s = _smaaPasses;
+        s.Edges.Set(s.Threshold, Options.SmaaThreshold);
+        s.Weights.Set(s.MaxSteps, Options.SmaaSearchSteps);
         Bind(s.Edges, s.EdgesImage, _ldr);
         Draw(s.Edges, _smaaEdges!);
         Bind(s.Weights, s.WeightsEdges, _smaaEdges);

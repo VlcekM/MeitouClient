@@ -1447,14 +1447,16 @@ static class PostProcessShaders
     /// <summary>
     /// SMAA 1x (Jimenez et al., "SMAA: Enhanced Subpixel Morphological Antialiasing"; MIT, THIRD_PARTY_NOTICES.md) on the final LDR picture, Meitou's
     /// alternative to the game's FXAA (docs/render-post.md "SMAA"), pass 1 of 3: luma edges. R marks a pixel's left edge, G its top edge, where the
-    /// luma step to that neighbour passes the threshold and is at least half of the largest step round it (SMAA's local contrast adaptation).
+    /// luma step to that neighbour passes the threshold (<c>uThreshold</c>, <see cref="PostOptions.SmaaThreshold"/>) and is at least half of the
+    /// largest step round it (SMAA's local contrast adaptation).
     /// </summary>
     public const string SmaaEdges = """
         #version 330 core
         in vec2 vUv;
         out vec4 fragColour;
         uniform sampler2D uImage;
-        const float THRESHOLD = 0.1, CONTRAST_ADAPTATION = 2.0;
+        uniform float uThreshold;
+        const float CONTRAST_ADAPTATION = 2.0;
         ivec2 size;
 
         float luma(ivec2 p) { return dot(texelFetch(uImage, clamp(p, ivec2(0), size - 1), 0).rgb, vec3(0.2126, 0.7152, 0.0722)); }
@@ -1465,7 +1467,7 @@ static class PostProcessShaders
             ivec2 p = ivec2(vUv * vec2(size));
             float l = luma(p), left = luma(p + ivec2(-1, 0)), top = luma(p + ivec2(0, -1));
             vec2 delta = abs(l - vec2(left, top));
-            vec2 edges = step(THRESHOLD, delta);
+            vec2 edges = step(uThreshold, delta);
             if (edges.x + edges.y == 0.0) { fragColour = vec4(0.0); return; }
             vec2 maxDelta = max(delta, abs(l - vec2(luma(p + ivec2(1, 0)), luma(p + ivec2(0, 1)))));
             maxDelta = max(maxDelta, abs(vec2(left, top) - vec2(luma(p + ivec2(-2, 0)), luma(p + ivec2(0, -2)))));
@@ -1476,7 +1478,8 @@ static class PostProcessShaders
 
     /// <summary>
     /// SMAA pass 2: blending weights from the orthogonal patterns (no diagonal or corner patterns, as SMAA's low and medium presets). Each edge of a
-    /// pixel is searched both ways, two pixels a step (one bilinear fetch of the edges reads two), up to 16 steps; SearchTex turns the last fetch
+    /// pixel is searched both ways, two pixels a step (one bilinear fetch of the edges reads two), up to <c>uMaxSteps</c> steps
+    /// (<see cref="PostOptions.SmaaSearchSteps"/>); SearchTex turns the last fetch
     /// into the exact end. The crossing edges at the two ends (read bilinearly, so 0, ¼, ½, ¾ or 1 code which side they lie on) and the square
     /// roots of the two distances index AreaTex, which holds the coverage SMAA's revectorized L, Z and U shapes give the pixel: R / G for the top
     /// edge (this pixel, the one above), B / A for the left edge (this pixel, the one to the left). uEdges is sampled bilinearly.
@@ -1486,7 +1489,8 @@ static class PostProcessShaders
         in vec2 vUv;
         out vec4 fragColour;
         uniform sampler2D uEdges, uArea, uSearch;
-        const float MAX_SEARCH_STEPS = 16.0, AREA_MAX_DISTANCE = 16.0;
+        uniform float uMaxSteps;
+        const float AREA_MAX_DISTANCE = 16.0;
         const vec2 AREA_PIXEL = 1.0 / vec2(160.0, 560.0), SEARCH_SIZE = vec2(66.0, 33.0), SEARCH_PACKED_SIZE = vec2(64.0, 16.0);
         vec4 metrics;   // 1 / size, size
 
@@ -1560,7 +1564,7 @@ static class PostProcessShaders
             // The searches start a quarter pixel in, so each bilinear fetch reads the edge of two pixels and the crossing edge beside them.
             vec4 off0 = metrics.xyxy * vec4(-0.25, -0.125, 1.25, -0.125) + uv.xyxy;
             vec4 off1 = metrics.xyxy * vec4(-0.125, -0.25, -0.125, 1.25) + uv.xyxy;
-            vec4 off2 = metrics.xxyy * vec4(-2.0, 2.0, -2.0, 2.0) * MAX_SEARCH_STEPS + vec4(off0.xz, off1.yw);
+            vec4 off2 = metrics.xxyy * vec4(-2.0, 2.0, -2.0, 2.0) * uMaxSteps + vec4(off0.xz, off1.yw);
             vec4 w = vec4(0.0);
 
             // The top edge: searched left and right.

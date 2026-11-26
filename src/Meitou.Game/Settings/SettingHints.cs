@@ -89,6 +89,7 @@ static class SettingHints
         "Light shafts air" => "Air scattering density; zero removes air scattering.",
         "Light shafts air at dawn and dusk" => "Scale air scattering around sunrise and sunset.",
         "Light shafts quality" => "Lower is cheaper and softer.",
+        "SMAA quality" => "Higher finds fainter and longer edges and costs more; Ultra also softens texture detail.",
         "Weather particles: 0 off 1 quarter 2 half 3 auto 4 full" => "Rendering resolution for rain, dust and other weather particles.",
         "Particle density multiplier" => "Scale the number of weather particles emitted.",
         "Tone map" => "Choose how bright scene colours fit the display range.",

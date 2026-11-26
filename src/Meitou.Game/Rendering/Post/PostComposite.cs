@@ -366,7 +366,7 @@ sealed class PostComposite : IDisposable
         if (fxaaOn) picture = RunFxaa(cmd, picture, target, hazeOn);
         if (smaaOn)
         {
-            RunSmaa(cmd, target, hazeOn);
+            RunSmaa(cmd, target, hazeOn, o);
             picture = hazeOn ? _ldrFxaa! : target;
         }
         if (hazeOn) RunHeatHaze(cmd, depth, target, picture, o, inputs);
@@ -500,9 +500,11 @@ sealed class PostComposite : IDisposable
     /// <summary>
     /// SMAA on the composite's LDR picture: edges, blending weights, then the blend into the heat haze's input or the target.
     /// </summary>
-    void RunSmaa(IGpuCommandList cmd, GpuTexture target, bool haze)
+    void RunSmaa(IGpuCommandList cmd, GpuTexture target, bool haze, PostOptions o)
     {
         var s = _smaa;
+        s.Edges.Set(s.Threshold, o.SmaaThreshold);
+        s.Weights.Set(s.MaxSteps, o.SmaaSearchSteps);
         s.Edges.Bind(s.EdgesImage, _plainSampler with { View = _ldr!.View() });
         Fullscreen(cmd, s.Edges, _smaaEdges!, _displayWidth, _displayHeight);
         s.Weights.Bind(s.WeightsEdges, _plainSampler with { View = _smaaEdges!.View() });
@@ -1418,6 +1420,10 @@ sealed class PostComposite : IDisposable
         /// </summary>
         public readonly SamplerSlot EdgesImage, WeightsEdges, WeightsArea, WeightsSearch, BlendImage, BlendWeights;
         /// <summary>
+        /// The edges pass's <c>uThreshold</c> and the weights pass's <c>uMaxSteps</c>.
+        /// </summary>
+        public readonly UniformHandle Threshold, MaxSteps;
+        /// <summary>
         /// Compiles the three programs and resolves their samplers.
         /// </summary>
         public SmaaPasses(IGpuContext ctx, string vertex)
@@ -1427,6 +1433,7 @@ sealed class PostComposite : IDisposable
             Blend = LegacyProgram.Create(ctx, vertex, PostProcessShaders.SmaaBlend, "post smaa blend");
             (EdgesImage, WeightsEdges) = (Edges.Sampler("uImage"), Weights.Sampler("uEdges"));
             (WeightsArea, WeightsSearch) = (Weights.Sampler("uArea"), Weights.Sampler("uSearch"));
+            (Threshold, MaxSteps) = (Edges.Uniform("uThreshold"), Weights.Uniform("uMaxSteps"));
             (BlendImage, BlendWeights) = (Blend.Sampler("uImage"), Blend.Sampler("uWeights"));
         }
 
