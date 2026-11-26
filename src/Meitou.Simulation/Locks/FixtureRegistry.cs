@@ -1967,7 +1967,19 @@ public sealed partial class FixtureRegistry
     /// carried or carrying. Every caging is kept for its tick (<see cref="CagingsOf"/>) and raised as <see cref="Caged"/>: the hook of the bounty
     /// claim.
     /// </summary>
-    public bool Imprison(World world, CharacterId prisoner, Fixture cage, float prisonTime = 1, CharacterId? carrier = null)
+    public bool Imprison(World world, CharacterId prisoner, Fixture cage, float prisonTime = 1, CharacterId? carrier = null) =>
+        Imprison(world, prisoner, cage, prisonTime, carrier, splitSquad: true);
+
+    /// <summary>
+    /// Sets the initial fixture of a town template's pre-existing prisoners and slaves, who spawn as a captive squad.
+    /// </summary>
+    internal bool ImprisonAtSpawn(World world, CharacterId prisoner, Fixture cage) =>
+        Imprison(world, prisoner, cage, prisonTime: 1, carrier: null, splitSquad: false);
+
+    /// <summary>
+    /// Claims the cage and applies the prisoner's held state, then separates a newly captured squad member when requested.
+    /// </summary>
+    bool Imprison(World world, CharacterId prisoner, Fixture cage, float prisonTime, CharacterId? carrier, bool splitSquad)
     {
         var table = world.Characters;
         if (cage.Kind != FixtureKind.Cage || !IsFree(table, cage) || !table.TryResolveNext(prisoner, out int s))
@@ -1991,6 +2003,7 @@ public sealed partial class FixtureRegistry
         }
 
         Hold(table, s, c, cage.Position, cage.Yaw);
+        if (splitSquad) world.SystemOf<PopulationSystem>()?.SplitOnImprisonment(world, c);
         SetSentence(world, c, cage, prisonTime);
 
         // FUN_140330600 assigns the cage's owner handle as well as slave state 1. The resident squad stands in for that handle here.

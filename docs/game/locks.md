@@ -385,7 +385,8 @@ the act-out is a round on the one target, done once worked; 111's inner point is
   cage has one (all cages do). A prisoner with an owner handle (`+0x330` not 11: a slave, escaped slave or ex-slave) becomes the cage owner's slave (owner
   `FUN_14032e430`, state 1) when the cage's building owner resolves and the cage's building (its parent's, `FUN_1400d5fa0`) designation `+0xc4` is not 7, the police
   station (**Observed** by decompile; Meitou `FixtureRegistry.TakesSlave`). **Observed**: prisoners with a bounty for the cage owner get a sentence ([economy](economy.md#115-bail-and-sentence)).
-  Unique characters are recorded separately.
+  Unique characters are recorded separately. On the transition to state 2, `FUN_140330600` runs the [captive squad split](factions-squads-towns.md#captive-squad-split)
+  before assigning the cage's owner (**Verified**, decompile). Meitou runs it from `FixtureRegistry.Imprison`.
 - **Facing in a cage** (**Verified** by decompile, `kenshi_x64.exe` 1.0.68): entering sets no orientation. The character update (`FUN_1405cf130`, every frame while
   `Character+0x2f8 != 0`) resolves the prison handle (`FUN_1402676e0`) and, for state 2 (cage, pole, peeler: one path), places the character at the building's position
   (vfunc 0x40, `FUN_1400d1e00`: Building+0x48) with the building's own orientation quaternion (vfunc 0xc0, `FUN_1400d1f00`: Building+0xb0) through `FUN_1405b1a30`, which

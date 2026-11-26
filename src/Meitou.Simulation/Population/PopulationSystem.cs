@@ -1527,7 +1527,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
             int pick = Rng.Int(Rng.Hash(world.Seed, homeKey, RngPurpose.Spawn, SeedSalts.PrisonerCage + (ulong)picks++), cages.Count);
             var cage = cages[pick];
             cages.RemoveAt(pick);
-            if (world.Fixtures.Imprison(world, id, cage)) table.Cold(id.Slot)!.SentenceLength = SpawnSentence;
+            if (world.Fixtures.ImprisonAtSpawn(world, id, cage)) table.Cold(id.Slot)!.SentenceLength = SpawnSentence;
         }
     }
 
@@ -1582,7 +1582,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
                 _assembly.MatchShave(c);
                 if (cages.Count == 0) continue;
                 int pick = Rng.Int(Rng.Hash(world.Seed, ownerKey, RngPurpose.Spawn, SeedSalts.SlaveCage + (ulong)picks++), cages.Count);
-                world.Fixtures.Imprison(world, id, cages[pick]);
+                world.Fixtures.ImprisonAtSpawn(world, id, cages[pick]);
                 cages.RemoveAt(pick);
             }
         }

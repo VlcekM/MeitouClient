@@ -34,20 +34,38 @@ public sealed partial class PopulationSystem
         SplitCaptives(world, squad, new SplitFrom(p.Origin, p.TemplateId, p.Faction, p.Key, PersistentPlatoon(p)));
 
     /// <summary>
+    /// Entering a cage also runs the captive split (<c>FUN_140330600</c> → <c>FUN_14079c1c0</c>) so the squad can carry on immediately.
+    /// Player squads keep their membership, and a lone captive has no squad mates to separate from.
+    /// </summary>
+    internal void SplitOnImprisonment(World world, CharacterCold captive)
+    {
+        if (captive.IsPlayer || world.Squads.Find(captive.SquadId) is not { Members.Count: > 1 } squad) return;
+        if (squad.Faction >= 0 && squad.Faction == PlayerFactionOf(world)) return;
+
+        var from = world.Platoons.Find(squad.PlatoonId) is { } p
+            ? new SplitFrom(p.Origin, p.TemplateId, p.Faction, p.Key, PersistentPlatoon(p))
+            : new SplitFrom(squad.Town, squad.TemplateId, squad.Faction, 0, squad.Pinned);
+
+        SplitCaptives(world, squad, from, unloading: false);
+    }
+
+    /// <summary>
     /// The split at unload (<c>FUN_14079c1c0</c>, <b>Verified</b>; a squad with 2 or more members): each imprisoned member, and each one carried
     /// away (<see cref="CarriedAway"/>) or, under <see cref="KeepDowned"/>, left knocked out in the loaded zones (<see cref="LeftDown"/>), goes into a squad and platoon of its own, same faction and template, at its place, loaded (it then keeps or
     /// loses its zone by its own test), with the captured NPC package (the slave-only one for a slave); persistent when the old platoon is or the
-    /// member is unique. A persistent platoon left with just that member keeps it (reused). The original's skip of a chained slave whose owner exists
-    /// is not modelled. Serial.
+    /// member is unique. A persistent platoon left with just that member keeps it (reused). At caging, read the current positions, skip slaves with a
+    /// loaded master and leave downed members alone unless they are also captives. Serial.
     /// </summary>
-    void SplitCaptives(World world, Squad squad, SplitFrom from)
+    void SplitCaptives(World world, Squad squad, SplitFrom from, bool unloading = true)
     {
         var table = world.Characters;
         foreach (var id in squad.Members.ToArray())
         {
             if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
-            var at = table.Previous[slot].Position;
-            if (!cold.IsImprisoned && !CarriedAway(world, cold) && !LeftDown(cold, at)) continue;
+            if (!unloading && cold.SlaveState == 1 && Kidnap.ObedientSlave.OwnerOf(world, cold) is not null) continue;
+
+            var at = unloading ? table.Previous[slot].Position : table.Next[slot].Position;
+            if (!cold.IsImprisoned && !CarriedAway(world, cold) && !(unloading && LeftDown(cold, at))) continue;
             if (squad.Members.Count == 1 && from.Persistent) break;
 
             SplitOff(world, squad, from, id, cold, at);
