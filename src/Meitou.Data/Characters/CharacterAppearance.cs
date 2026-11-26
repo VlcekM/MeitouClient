@@ -1423,13 +1423,20 @@ public sealed class CharacterAppearance
 
     /// <summary>
     /// Hair colour: body file sliders <c>Hair Colour</c>, <c>Hair Saturation</c>, <c>Hair Brightness</c> (each × 0.01) as
-    /// hue, saturation, brightness (Ogre's ColourValue::setHSB). Without a body file: the race's likeliest
-    /// <c>hair colors</c> COLOR_DATA <c>color 1</c> (viewer choice; the game's randomiser was not traced).
+    /// hue, saturation, brightness (Ogre's ColourValue::setHSB), a slider the file lacks at the default appearance's 50 (a legacy body has no
+    /// <c>Hair Colour</c>). Without a body file: the race's likeliest <c>hair colors</c> COLOR_DATA <c>color 1</c> (viewer choice; the game's
+    /// randomiser was not traced).
     /// </summary>
     static Vector3 HairColourOf(GameDatabase db, GameRecord race, AppearanceFile? body, Random? random)
     {
-        if (body is not null && body.Floats.ContainsKey("Hair Colour"))
-            return FromHsb(body.Get("Hair Colour") * 0.01f, body.Get("Hair Saturation") * 0.01f, body.Get("Hair Brightness") * 0.01f);
+        // The game lays a body file over a default appearance (FUN_140072c50) whose three hair sliders are 50.
+        const float defaultSlider = 50;
+        if (body is not null)
+        {
+            float hue = body.Get("Hair Colour", defaultSlider) * 0.01f;
+            return FromHsb(hue, body.Get("Hair Saturation", defaultSlider) * 0.01f, body.Get("Hair Brightness", defaultSlider) * 0.01f);
+        }
+
         var colours = race.GetReferences("hair colors").Select(r => (Item: db.Find(r.TargetStringId),
                 Weight: r.Values.Value0)).Where(c => c.Item is not null).ToList();
         if (colours.Count == 0) return new Vector3(0.3f, 0.22f, 0.15f);

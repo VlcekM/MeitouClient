@@ -89,9 +89,19 @@ traceability. Tests check our factories/readers; screenshots cover named appeara
 CHARACTER `body` names a body file ("Leave blank for random body", fcs.def). **Verified** (FcsReader on the
 files, `CharacterAppearanceTests`): a `.bod2` is an ordinary FCS file (no header in type 15) holding one
 record of type 66, CHARACTER_APPEARANCE, typically named `default` with id `1--INGAME`. Of the 80
-CHARACTER records (merged load order) that name a body file, 60 point at type 15 and 4 at type 16 files (read by `AppearanceFile`); 14 at
+CHARACTER records (merged load order) that name a body file, 60 point at type 15 and 4 at type 16 files; 14 at
 legacy layouts (types 5, 8, 9, 10, 13: the `.body` files and three `.bod2`), and 2 at files that don't ship
 (`Crow Face.bod2`, `Cat.bod2`). Observed fields (Ruka.bod2, Beep.bod2):
+
+Legacy body files (**Verified**, decompile): the game's loader (`FUN_1406c0b50`) reads formats 8 to 17, a body load (`FUN_1406c3a70`) takes the
+file's first record of type 66 and lays it over a default appearance (`FUN_140072c50`: `Hair Colour`, `Hair Saturation`, `Hair Brightness` 50,
+`Age` 25, `head` empty), then `FUN_1400765e0` erases the old keys (floats `a`, `b`, `c`, `blue 1`, `green 1`, `brightness 1`, `contrast 1`,
+`Breasts`, `Hair Color Red`/`Green`/`Blue`, `Hair Contrast`; files `face`, `hair`, `skintone`; ints `hair bright`, `hair contrast`,
+`hair saturation`, `hair style`; string `Nickname`) and fills an empty `head` from the race. Old type numbers are kept as stored, so a legacy
+file whose record is type 15 (the `.body` files, `humax`, `humin`) has no type 66 record and the character is generated. The seven legacy `.bod2`
+with a type 66 record (format 13: `oldman` (Crumblejon), `Default`, `Ethal`, `Jaffar28`, `Mr Logan `, `Sing`, `Steyerfast`) keep their sliders,
+beard and hair style; Crumblejon's saturation 0 and brightness 168 give white hair (#1436). Meitou: `AppearanceFile.Read` (`FcsLegacyReader`),
+hair sliders missing from a body at 50 (`CharacterAppearance.HairColourOf`).
 
 | Kind | Fields |
 | --- | --- |
@@ -109,7 +119,7 @@ player squad, floor(weirdness x 10) goes into the generated morph mesh's name (w
 CHARACTER `race` overrides the body file's race (fcs.def "will override race in .body file"; the viewer
 follows this, not traced). The candidates (`Faction::chooseARace` `FUN_1407ff1a0`, **Verified** in outline): the squad template's
 `race override` (7 templates) when one is given, else the CHARACTER's `race`, else the faction's `races` (the faction the character is made for: a squad member's is its squad's, the template's `faction` else the town's, which `createRandomSquad` `FUN_140583a10` hands every member and a `slaves` squad its own template's, **Verified** decompile; so the `UC town racists` (template faction United Heroes League) draw from its Greenlander-only `races` in any town, #1050); a weighted draw by the reference value, where an entry of value 0 or less is never drawn (**Verified** for the faction list, `FUN_1407fe270`). The body file is not consulted for the race (**Verified**: `FUN_140581770` calls `chooseARace` with the CHARACTER and fills the chosen race's appearance from the body afterwards, `FUN_1406c3a70` has no race read); Meitou uses the body file's race only after
-when all of those give none (engine fallback; the 19 base-game CHARACTERs with a body and no race list either have an unreadable old-format body or are mod characters). With no candidate the original logs "Missing race" and uses RACE `17-gamedata.quack` (Greenlander) **by id**
+when all of those give none (engine fallback; the 19 base-game CHARACTERs with a body and no race list either have an old-format body without a type 66 record or are mod characters). With no candidate the original logs "Missing race" and uses RACE `17-gamedata.quack` (Greenlander) **by id**
 (`FUN_140074f00`, `FUN_140538360`, **Verified** read), so a translation mod that renames it changes nothing.
 
 The body file's `head` is kept only when the race lists it. **Verified** (read, `AppearanceHuman::updateCharaterTexture` `FUN_140533b50`, a vtable slot): a `head` that names no HEAD record, or one missing from the
