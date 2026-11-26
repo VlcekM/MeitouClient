@@ -796,6 +796,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 FarTickPeriod = GameHost.FarTickPeriod,
             },
             systems: systems, walkability: walkability);
+        if (host.RagdollGeometry is not null) host.RagdollGeometry.InsideCutInterior = p => host.Session.World.Sight.InsideCutRoom(p);
         host.Session.World.BenchFacingFix = host.Config.FixBenchFacing;
         host.Session.World.SeatBedFix = host.Config.FixSeatBeds;
         host.Session.World.PrisonPoseFix = host.Config.FixPrisonPose;

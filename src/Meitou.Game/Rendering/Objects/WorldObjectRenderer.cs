@@ -1721,7 +1721,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// (<see cref="IndoorFurniture"/>), though most of it is seen from the street.
     /// </summary>
     bool ViewedShell(PlacedMesh p) =>
-        p.Kind == PlacedKind.BuildingPart && !p.Interior && p.ParentPlacementId is null
+        p.Kind == PlacedKind.BuildingPart && !p.Interior && p.ParentPlacementId is null && p.Floor >= 0
         && InteriorView.TryGetValue(p.PlacementId, out int shown) && (p.Floor <= shown || p.DoorIndex >= 0);
 
     /// <summary>
@@ -1860,8 +1860,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (InteriorDebug.HideMesh is { } hide && p.Kind == PlacedKind.BuildingPart && p.MeshPath.Contains(hide, StringComparison.OrdinalIgnoreCase))
             return true;
         if (p.Kind != PlacedKind.BuildingPart) return false;
-        if (p.DoorIndex >= 0 && !p.Interior) return false;
-        if (InteriorView.Count == 0 || !p.Interior && (p.Floor == 0 || AllFloors)) return p.Interior;
+        if (p.DoorIndex >= 0 && !p.Interior)
+            return InteriorView.TryGetValue(p.ParentPlacementId ?? p.PlacementId, out int doorFloor)
+                && doorFloor < 0 && p.Floor > doorFloor && !AllFloors;
+        if (InteriorView.Count == 0 || !p.Interior && (p.IsBottomFloor || AllFloors)) return p.Interior;
 
         // Layout objects (signs, furniture) go with their building.
         if (!InteriorView.TryGetValue(p.ParentPlacementId ?? p.PlacementId, out int floor)) return p.Interior;

@@ -651,6 +651,7 @@ sealed partial class GameHost(
         var bounds = (Scene.X0, Scene.Z0, Scene.X1, Scene.Z1);
         Session = new WorldSession(Scene.Focus, bounds, Gpu.Terrain.HeightAt, WorldOptions.Hour, Config.TickRate,
             clock: clock, simulation: settings, systems: systems, walkability: walkability);
+        if (RagdollGeometry is not null) RagdollGeometry.InsideCutInterior = p => Session.World.Sight.InsideCutRoom(p);
 
         Session.World.BenchFacingFix = Config.FixBenchFacing;
         Session.World.SeatBedFix = Config.FixSeatBeds;

@@ -38,9 +38,8 @@ sealed partial class GameHost
     /// </summary>
     internal void ApplyForcedInteriorView(Meitou.Game.Rendering.Objects.WorldObjectRenderer objects)
     {
-        if (_forcedViewFloor is not { } floor) return;
+        if (_forcedViewFloor is null) return;
 
-        Interiors.ViewedFloor = floor;
         for (float dy = 0; dy < 600; dy += 20)
         {
             if (objects.InteriorAt(Camera.Target + new Vector3(0, dy, 0), InteriorView.InsideMargin) is { } room)
@@ -48,7 +47,20 @@ sealed partial class GameHost
                 Interiors.AddViewed(room);
                 return;
             }
+            if (dy > 0 && objects.InteriorAt(Camera.Target - new Vector3(0, dy, 0), InteriorView.InsideMargin) is { } below)
+            {
+                Interiors.AddViewed(below);
+                return;
+            }
         }
+    }
+
+    /// <summary>
+    /// Applies <see cref="_forcedViewFloor"/> after floor bounds have been computed from all viewed and held-open buildings.
+    /// </summary>
+    internal void ApplyForcedFloor()
+    {
+        if (_forcedViewFloor is { } floor) Interiors.SetForcedFloor(floor);
     }
 
     /// <summary>
@@ -77,7 +89,7 @@ sealed partial class GameHost
     /// </summary>
     internal void RegisterControlInteriorCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add)
     {
-        add("interior-view", "interior-view <floor 0..3 | off>", "hold the interior view of the building over the camera target at a floor, with no "
+        add("interior-view", "interior-view <floor | off>", "hold the interior view of the building at the camera target at a floor, with no "
             + "character inside (off: back to the characters' own view); state lists the view", ControlInteriorView);
         add("interior-hide", "interior-hide <mesh text | off>", "debug: building parts whose mesh path contains the text count as hidden by the floor "
             + "view (colour and shadow passes), to find which part draws a surface", ControlInteriorHide);
@@ -100,7 +112,7 @@ sealed partial class GameHost
     {
         if (args.Count != 1)
         {
-            con.Error("usage: interior-view <floor 0..3 | off>");
+            con.Error("usage: interior-view <floor | off>");
             return;
         }
 
@@ -111,9 +123,9 @@ sealed partial class GameHost
             return;
         }
 
-        if (!int.TryParse(args[0], out int f) || f < 0 || f > 3)
+        if (!int.TryParse(args[0], out int f))
         {
-            con.Error("usage: interior-view <floor 0..3 | off>");
+            con.Error("usage: interior-view <floor | off>");
             return;
         }
 

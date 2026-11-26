@@ -36,7 +36,7 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
     /// <summary>
     /// The bar in the interior view with every floor shown, so its inner walls, furniture and roof are drawn.
     /// </summary>
-    static readonly Dictionary<string, int> EditorBarView = new(StringComparer.Ordinal) { [EditorBar.Key] = 3 };
+    static readonly Dictionary<string, int> EditorBarView = new(StringComparer.Ordinal) { [EditorBar.Key] = Data.World.FloorSurfaces.AllFloors };
 
     /// <summary>
     /// The hour the bar is drawn at: night, its lamps lit.

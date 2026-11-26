@@ -210,7 +210,7 @@ public sealed class BuildingLayouts
                 var state = StateOf(i, type);
                 yield return new LayoutItem(i.Id, b, i.Position, i.Rotation)
                 {
-                    Floor = state is not null ? Math.Clamp(state.GetInt("floornum"), 0, 3) : 0,
+                    Floor = state is not null ? state.GetInt("floornum") : 0,
 
                     // Only `flags`: the older bool `is outside` of a layout state does not reach the object made from it.
                     Outside = state is not null && (state.GetInt("flags") & 1) != 0,

@@ -92,7 +92,9 @@ not the game speed, so the camera works while the game is paused. Several inputs
   zones searched within 2100) are the pivot's ground, a ruin's on its `destroyed collision` as the game's ray meets it ([collision](collision.md);
   without them close zoom put the eye inside a ruin's raised base, issue #483), and a building in the interior view's parts up to the viewed
   floor (others stay at floor 0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep
-  or the eye's lowering ray. Engine: the eye keeps above those floors too (the game's eye sank into raised building bases). The map features
+  or the eye's lowering ray. When viewing a negative (basement) floor of an opened building, the pivot's ground uses that building's floor
+  (including stairs, ignoring buried map features) so the pivot can descend below the surrounding terrain while the eye still stays above the
+  terrain or sea under it (`CameraRig.BasementFloors`, `StrategyCamera.InBasement`). Engine: the eye keeps above those floors too (the game's eye sank into raised building bases). The map features
   (`features.dat` placements whose record has a `collision`, placed in the point's zone and its eight neighbours) are the group-14 ray: the highest
   feature surface at or under 100 above the pivot raises the pivot's ground (engine: also over a building, and no walkable foliage). Engine:
   the eye's group-14 ray starts 100 above the eye and at the eye's own (x, z), so the eye keeps out of a feature beside the pivot too. Placing the

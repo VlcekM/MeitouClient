@@ -388,6 +388,7 @@ public sealed class SightMap
         Array.Resize(ref _light, size);
         Array.Resize(ref _wanted, size);
         Array.Resize(ref _floorOf, size);
+        _floorOf.AsSpan(was).Fill(UnsetFloor);
         Array.Resize(ref _probed, size);
         Array.Resize(ref _low, size);
         Array.Resize(ref _player, size);
@@ -421,7 +422,7 @@ public sealed class SightMap
             _onTop[s] = false;
             if (_place[s] != was)
             {
-                _floorOf[s] = -1;
+                _floorOf[s] = UnsetFloor;
                 _probed[s] = default;
             }
         }
@@ -434,7 +435,7 @@ public sealed class SightMap
             if (r != was || _probed[s] != key)
             {
                 // A building that enforces its ceiling has nobody on top above its ground floor; elsewhere the overhead query decides.
-                _floorOf[s] = _rooms[r].EnforcesCeiling ? _rooms[r].Volume.FloorAt(at) : -1;
+                _floorOf[s] = _rooms[r].EnforcesCeiling ? _rooms[r].Volume.FloorAt(at) : UnsetFloor;
                 _onTop[s] = OnTop(_rooms[r], at, _floorOf[s]);
                 _probed[s] = key;
             }
@@ -494,7 +495,7 @@ public sealed class SightMap
     float _brightest = 1;
 
     /// <summary>
-    /// Where a character's overhead and floor queries were last made (<see cref="SightMap._floorOf"/> -1: not asked yet there).
+    /// Where a character's overhead and floor queries were last made (<see cref="SightMap._floorOf"/> <see cref="UnsetFloor"/>: not asked yet there).
     /// </summary>
     readonly record struct Probe(Vector3 At, int Room, int Generation);
     /// <summary>
@@ -514,7 +515,11 @@ public sealed class SightMap
     /// </summary>
     float[] _facing = [];
     /// <summary>
-    /// Each character's floor in its room (-1: not known yet, worked out when needed).
+    /// Sentinel in <see cref="_floorOf"/> meaning a character's floor has not been worked out yet at its current probe.
+    /// </summary>
+    const int UnsetFloor = int.MinValue;
+    /// <summary>
+    /// Each character's floor in its room (<see cref="UnsetFloor"/>: not known yet, worked out when needed).
     /// </summary>
     int[] _floorOf = [];
     /// <summary>
@@ -569,6 +574,14 @@ public sealed class SightMap
     }
 
     /// <summary>
+    /// Whether <paramref name="at"/> lies inside an intact basement building whose interior mask cuts the terrain (not a buried ruin whose mask
+    /// holds its ground, and never a vanilla building without negative floors). Used so sight, fire, weather and ragdolls ignore the terrain inside
+    /// a basement.
+    /// </summary>
+    public bool InsideCutRoom(Vector3 at) =>
+        RoomAt(at) is var r and >= 0 && _rooms[r].Volume is { BottomFloor: < 0, MaskMeshes.Count: > 0, MaskHoldsGround: false };
+
+    /// <summary>
     /// The full light at <paramref name="at"/>: 1 above <see cref="LitDaylight"/>, else 2 x daylight plus the building lamps, the player buildings'
     /// lamps and the carried lights (an NPC keeps the bare daylight from <see cref="NpcDaylight"/>).
     /// </summary>
@@ -582,7 +595,7 @@ public sealed class SightMap
         if (!lamped && !sited && _carried.Count == 0) return sum;
         bool inside = Inside(slot);
         int floor = 0;
-        if (inside && (floor = _floorOf[slot]) < 0) floor = _floorOf[slot] = _rooms[_place[slot]].Volume.FloorAt(at);
+        if (inside && (floor = _floorOf[slot]) == UnsetFloor) floor = _floorOf[slot] = _rooms[_place[slot]].Volume.FloorAt(at);
         foreach (int k in lamped ? list! : []) sum += Gain(_lamps[k], slot, at, inside, floor);
         foreach (int k in sited ? siteList! : []) sum += Gain(_siteLamps[k], slot, at, inside, floor);
         foreach (var (owner, l, p) in _carried)
@@ -773,7 +786,7 @@ public sealed class SightMap
     public int FloorOf(int slot, Vector3 at)
     {
         if (Outdoors(slot)) return 0;
-        if (_floorOf[slot] < 0) _floorOf[slot] = _rooms[_place[slot]].Volume.FloorAt(at);
+        if (_floorOf[slot] == UnsetFloor) _floorOf[slot] = _rooms[_place[slot]].Volume.FloorAt(at);
         return _floorOf[slot];
     }
 

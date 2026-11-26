@@ -11,12 +11,17 @@ namespace Meitou.Game.Host.WorldSync;
 sealed class InteriorView(GameHost host)
 {
     /// <summary>
-    /// The value behind <see cref="ViewedFloor"/>, 0..3.
+    /// The value behind <see cref="ViewedFloor"/> (0..3 for vanilla buildings; wider when an open or followed building reaches below 0 or above 3).
     /// </summary>
     internal int ViewedFloorValue;
     /// <summary>
-    /// The buildings in the interior view this frame and the floor each shows (3, every floor, for one held open), by placement id; handed to the
-    /// object renderer.
+    /// The viewed floor bounds this frame: at least 0..3, widened to the lowest bottom floor and highest top floor among the viewed, furnished,
+    /// held-open and followed buildings.
+    /// </summary>
+    int _minFloor, _maxFloor = 3;
+    /// <summary>
+    /// The buildings in the interior view this frame and the floor each shows (<see cref="FloorSurfaces.AllFloors"/> for one held open), by
+    /// placement id; handed to the object renderer.
     /// </summary>
     internal readonly Dictionary<string, int> InteriorFloors = new(StringComparer.Ordinal);
     /// <summary>
@@ -67,9 +72,13 @@ sealed class InteriorView(GameHost host)
     /// </summary>
     CharacterId? _floorFollow;
     /// <summary>
-    /// The floor <see cref="_floorFollow"/> was last seen on (game: PI+0x290); -1 without one.
+    /// Sentinel for <see cref="_followedFloor"/> when no character is followed.
     /// </summary>
-    int _followedFloor = -1;
+    const int NoFloor = int.MinValue;
+    /// <summary>
+    /// The floor <see cref="_floorFollow"/> was last seen on (game: PI+0x290); <see cref="NoFloor"/> without one.
+    /// </summary>
+    int _followedFloor = NoFloor;
     /// <summary>
     /// The floor shown per building for <see cref="CameraFloor"/> (0 for a building not in the view); made once.
     /// </summary>
@@ -80,14 +89,14 @@ sealed class InteriorView(GameHost host)
     internal const float InsideMargin = 2;
 
     /// <summary>
-    /// The viewed floor, 0..3 (the game's global floor): 0 at the start, stepped by PageUp / PageDown (<see cref="StepFloor"/>), and set to the
-    /// followed character's floor when the camera starts following it or that character changes floor. Every building in the interior view hides what
-    /// is above it.
+    /// The viewed floor (the game's global floor): 0 at the start, stepped by PageUp / PageDown (<see cref="StepFloor"/>), and set to the
+    /// followed character's floor when the camera starts following it or that character changes floor. Clamped to <c>[_minFloor, _maxFloor]</c>
+    /// (0..3 for vanilla buildings; wider when an open or followed building has basements or floors above 3).
     /// </summary>
     internal int ViewedFloor
     {
         get => ViewedFloorValue;
-        set => ViewedFloorValue = Math.Clamp(value, 0, 3);
+        set => ViewedFloorValue = Math.Clamp(value, _minFloor, _maxFloor);
     }
 
     /// <summary>
@@ -99,7 +108,20 @@ sealed class InteriorView(GameHost host)
     }
 
     /// <summary>
-    /// The game's floor_up / floor_down (PageUp / PageDown): one floor up or down, clamped to 0..3.
+    /// Holds the viewed floor for the agent channel's <c>interior-view</c>, widening bounds to the viewed buildings first.
+    /// </summary>
+    internal void SetForcedFloor(int floor)
+    {
+        foreach (var room in _viewed)
+        {
+            if (room.BottomFloor < _minFloor) _minFloor = room.BottomFloor;
+            if (room.TopFloor > _maxFloor) _maxFloor = room.TopFloor;
+        }
+        ViewedFloor = floor;
+    }
+
+    /// <summary>
+    /// The game's floor_up / floor_down (PageUp / PageDown): one floor up or down, clamped to the active floor bounds.
     /// </summary>
     internal void StepFloor(int step) => ViewedFloor = ViewedFloorValue + step;
 
@@ -117,14 +139,19 @@ sealed class InteriorView(GameHost host)
         _furnished.Clear();
         HiddenIndoors.Clear();
         var characters = host.Session.CurrentSnapshot.Characters;
-        FollowFloor(objects);
         foreach (var c in characters)
             if (c.IsPlayer && objects.InteriorAt(host.DrawnPosition(c), InsideMargin) is { } building
-                    && InteriorFloors.TryAdd(building.PlacementId, ViewedFloorValue))
+                    && InteriorFloors.TryAdd(building.PlacementId, 0))
                 _viewed.Add(building);
         OpenForFurniture(objects);
         host.ApplyForcedInteriorView(objects);
         HoldLeftOpen(objects);
+        UpdateFloorBounds(objects);
+        FollowFloor(objects);
+        host.ApplyForcedFloor();
+        ViewedFloorValue = Math.Clamp(ViewedFloorValue, _minFloor, _maxFloor);
+        foreach (var room in _viewed) InteriorFloors[room.PlacementId] = Math.Max(ViewedFloorValue, room.BottomFloor);
+        foreach (var room in _furnished) InteriorFloors[room.PlacementId] = Math.Max(ViewedFloorValue, room.BottomFloor);
         PublishShown();
         objects.InteriorView = InteriorFloors;
         objects.CutIntoViewed = host.Config.FixPartsInBuildings;
@@ -132,6 +159,7 @@ sealed class InteriorView(GameHost host)
         objects.KeepHeldGround = host.Config.FixRuinGround;
         objects.HiddenItems = host.GroundItemSync.HiddenGroundKeys;
         host.Session.Camera.Floors ??= CameraFloor;
+        host.Session.Camera.BasementFloors ??= CameraBasementFloor;
         host.Session.Camera.Features ??= CameraFeature;
         foreach (var c in characters)
         {
@@ -139,9 +167,58 @@ sealed class InteriorView(GameHost host)
             if (ViewedAt(at) is not { } inView) continue;
 
             int shown = InteriorFloors[inView.PlacementId];
-            if (shown < 3 && inView.FloorAt(at) > shown) HiddenIndoors.Add(c.Id);
+            if (shown < inView.TopFloor && inView.FloorAt(at) > shown) HiddenIndoors.Add(c.Id);
         }
         host.GroundItemSync.UpdateGroundVisibility();
+    }
+
+    /// <summary>
+    /// Computes <see cref="_minFloor"/> and <see cref="_maxFloor"/> from the viewed, furnished, held-open and followed buildings (at least 0..3).
+    /// </summary>
+    void UpdateFloorBounds(Rendering.Objects.WorldObjectRenderer objects)
+    {
+        int min = 0, max = 3;
+        void Include(InteriorVolume room)
+        {
+            if (room.BottomFloor < min) min = room.BottomFloor;
+            if (room.TopFloor > max) max = room.TopFloor;
+        }
+        foreach (var room in _viewed) Include(room);
+        foreach (var room in _furnished) Include(room);
+        foreach (var room in _held) Include(room);
+        if (host.Player?.Follow is { } id)
+        {
+            foreach (var c in host.Session.CurrentSnapshot.Characters)
+            {
+                if (c.Id != id) continue;
+                if (objects.InteriorAt(host.DrawnPosition(c), InsideMargin) is { } followed) Include(followed);
+                break;
+            }
+        }
+        _minFloor = min;
+        _maxFloor = max;
+    }
+
+    /// <summary>
+    /// When viewing a floor below 0 over a basement building's footprint, returns that building's floor height so the strategy camera pivot can
+    /// descend into the basement; null otherwise.
+    /// </summary>
+    float? CameraBasementFloor(float x, float z)
+    {
+        if (ViewedFloorValue >= 0) return null;
+        float? best = null;
+        void Check(List<InteriorVolume> list)
+        {
+            foreach (var room in list)
+            {
+                if (!InteriorFloors.TryGetValue(room.PlacementId, out int shown) || shown >= 0 || !room.ContainsGround(x, z)) continue;
+                float h = room.HighestFloorUpTo(x, z, shown, includeStairs: true) ?? room.YMin;
+                if (best is null || h > best) best = h;
+            }
+        }
+        Check(_viewed);
+        Check(_furnished);
+        return best;
     }
 
     /// <summary>
@@ -236,7 +313,7 @@ sealed class InteriorView(GameHost host)
     /// the game tests it), else on the floor of where it stands.
     /// </summary>
     internal bool FloorAboveViewed(System.Numerics.Vector3 at, int? floor) => ViewedAt(at) is { } inView
-        && InteriorFloors[inView.PlacementId] is var shown && shown < 3 && (floor ?? inView.FloorAt(at)) > shown;
+        && InteriorFloors[inView.PlacementId] is var shown && shown < inView.TopFloor && (floor ?? inView.FloorAt(at)) > shown;
 
     /// <summary>
     /// Whether a layout object on <paramref name="floor"/> of <paramref name="building"/> (its placement id) is not drawn, as the object renderer
@@ -244,7 +321,7 @@ sealed class InteriorView(GameHost host)
     /// one.
     /// </summary>
     internal bool FloorHidden(string building, int floor, bool outside) =>
-        InteriorFloors.TryGetValue(building, out int shown) ? shown < 3 && floor > shown : !outside;
+        InteriorFloors.TryGetValue(building, out int shown) ? shown < FloorSurfaces.AllFloors && floor > shown : !outside;
 
     /// <summary>
     /// The viewed or held-open building <paramref name="at"/> is in (a loop: a lambda here made a closure and a delegate per character per frame).
@@ -311,7 +388,7 @@ sealed class InteriorView(GameHost host)
                 _expired.Add(id);
             else
             {
-                InteriorFloors.Add(id, 3);
+                InteriorFloors.Add(id, FloorSurfaces.AllFloors);
                 _held.Add(room);
             }
         }
@@ -341,7 +418,7 @@ sealed class InteriorView(GameHost host)
         var follow = host.Player?.Follow;
         if (follow is not { } id || host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c)
         {
-            (_floorFollow, _followedFloor) = (null, -1);
+            (_floorFollow, _followedFloor) = (null, NoFloor);
             return;
         }
         var at = host.DrawnPosition(c);
@@ -352,10 +429,14 @@ sealed class InteriorView(GameHost host)
 
     /// <summary>
     /// The highest building floor at (x, z) that the strategy camera's pivot rides on, or null (docs/formats/camera.md "Height"): every building's
-    /// ground floor, and a building in the interior view's floors up to the viewed one, so a followed character's floor stays the view's centre when
-    /// panning lets go of it.
+    /// ground floor, and a building in the interior view's floors up to the viewed one (never <see cref="FloorSurfaces.AllFloors"/> for a held-open
+    /// building, which would snap the camera to the roof when leaving), so a followed character's floor stays the view's centre when panning lets go
+    /// of it.
     /// </summary>
-    float? CameraFloor(float x, float z) => host.ActiveObjects?.FloorHeightAt(x, z, _cameraFloorOf ??= key => InteriorFloors.GetValueOrDefault(key));
+    float? CameraFloor(float x, float z) => host.ActiveObjects?.FloorHeightAt(x, z, _cameraFloorOf ??= key =>
+        InteriorFloors.TryGetValue(key, out int shown)
+            ? (shown < FloorSurfaces.AllFloors ? shown : Math.Max(0, ViewedFloorValue))
+            : 0);
 
     /// <summary>
     /// The highest map feature surface at (x, z) at or under a height, or null: the camera's group-14 ray (docs/formats/camera.md "Height").
@@ -386,8 +467,11 @@ sealed class InteriorView(GameHost host)
                 var at = new System.Numerics.Vector3(p.X, h, p.Z);
                 // Inside the rooms only under a ceiling: an open deck or roof walk is picked here, unless its building is opened with that floor
                 // hidden above the viewed one.
-                if (host.ActiveObjects?.InteriorAt(at, InsideMargin) is not { } room
-                    || !room.Covered(at) && !(InteriorFloors.ContainsKey(room.PlacementId) && room.FloorAt(at) > ViewedFloorValue)) return at;
+                if (host.ActiveObjects?.InteriorAt(at, InsideMargin) is not { } room) return at;
+                if (!room.Covered(at) && (!InteriorFloors.TryGetValue(room.PlacementId, out int shown)
+                        || (shown >= FloorSurfaces.AllFloors ? room.FloorAt(at) <= ViewedFloorValue
+                            : room.SurfaceUnder(at) is not { } hit || hit.Floor <= shown)))
+                    return at;
             }
             previousY = p.Y;
         }

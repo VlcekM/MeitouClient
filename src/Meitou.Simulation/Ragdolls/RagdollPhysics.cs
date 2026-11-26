@@ -672,6 +672,10 @@ public interface IRagdollEnvironment
     /// </summary>
     float GroundHeight(float x, float z, float nearY);
     /// <summary>
+    /// Whether <paramref name="point"/> lies inside an intact building whose interior mask cuts the terrain (a basement or sunken room).
+    /// </summary>
+    bool IsInsideCutInterior(Vector3 point) => false;
+    /// <summary>
     /// Changes whenever the buildings' collision changed (a building placed, removed or ruined at run time): tiles built from an older one are built
     /// again.
     /// </summary>

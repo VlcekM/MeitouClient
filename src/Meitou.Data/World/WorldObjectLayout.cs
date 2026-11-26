@@ -46,10 +46,15 @@ public sealed record PlacedMesh(
     public GameRecord? Material { get; init; }
 
     /// <summary>
-    /// For building parts: the part's <c>building floor</c>, clamped to 0..3 as the game clamps it; in the interior view a part above the
-    /// viewed floor is hidden (docs/formats/zones.md, "Interior view").
+    /// For building parts: the part's <c>building floor</c>, clamped to the building's floor range (at least 0..3; wider when standable collision
+    /// reaches below 0 or above 3); in the interior view a part above the viewed floor is hidden (docs/formats/zones.md, "Interior view").
     /// </summary>
     public int Floor { get; init; }
+
+    /// <summary>
+    /// Whether this part sits on the building's bottom floor (floor 0 for buildings without a basement): never hidden by the interior floor view.
+    /// </summary>
+    public bool IsBottomFloor { get; init; }
 
     /// <summary>
     /// A part of the building's <c>interior</c> list (inner walls, floors, inner stairs): drawn only in the interior view.
@@ -326,13 +331,109 @@ public static class WorldObjectLayout
         state ??= new BuildingState();
         var result = new List<PlacedMesh>();
         AddBuilding(db, building, placementId, worldPosition, rotation, state, result, lights, effects);
+        var (bottom, top) = StampBuildingFloors(building, result, state.Destroyed);
 
         // Doors: one building per "doors" entry at the parent's position, rotation and scale (the door's own scale is not used: Defensive
         // Gate III/IV are 0.85, their doors 1), not for destroyed buildings (game: Building::createPhysical).
+        int doorStart = result.Count;
         if (!state.Destroyed && !building.GetBool("is node"))
             AddDoors(db, building, placementId, worldPosition, rotation, state, result, lights, effects);
+        for (int i = doorStart; i < result.Count; i++)
+        {
+            var p = result[i];
+            int clamped = Math.Clamp(p.Source.GetInt("building floor"), bottom, top);
+            result[i] = p with { Floor = clamped, IsBottomFloor = clamped == bottom };
+        }
 
         return result;
+    }
+
+    /// <summary>
+    /// Whether a building can supply standable floor collision (same exclusions as <see cref="FloorSurfaces"/>: not path-mode IGNORE and not
+    /// furniture).
+    /// </summary>
+    internal static bool HasStandableFloors(GameRecord building) =>
+        building.GetInt("path mode", 2) != 0 && !building.GetBool("is exterior furniture") && !building.GetBool("is interior furniture");
+
+    /// <summary>
+    /// Stamps each of <paramref name="building"/>'s own parts in <paramref name="parts"/> with its floor clamped to the building's standable
+    /// floor range (<c>[bottom, top]</c>, at least <c>0..3</c>) and marks parts on <c>bottom</c> with <see cref="PlacedMesh.IsBottomFloor"/>.
+    /// </summary>
+    static (int Bottom, int Top) StampBuildingFloors(GameRecord building, List<PlacedMesh> parts, bool destroyed)
+    {
+        int bottom = 0, top = 3;
+        if (HasStandableFloors(building))
+        {
+            foreach (var p in parts)
+            {
+                if (p.Owner != building || p.Source.GetBool("passable") || p.Source.GetBool("is unwalkable roof")) continue;
+                if (p.CollisionPath(destroyed).Length == 0) continue;
+
+                int raw = p.Source.GetInt("building floor");
+                if (raw < bottom) bottom = raw;
+                if (raw > top) top = raw;
+            }
+        }
+
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var p = parts[i];
+            int maxPartFloor = p.Source.GetBool("is unwalkable roof") && top > 3 ? top + 1 : top;
+            int clamped = Math.Clamp(p.Source.GetInt("building floor"), bottom, maxPartFloor);
+            bool isBottom = clamped == bottom;
+            if (p.Floor != clamped || p.IsBottomFloor != isBottom)
+                parts[i] = p with { Floor = clamped, IsBottomFloor = isBottom };
+        }
+
+        return (bottom, top);
+    }
+
+    /// <summary>
+    /// The floor range (<c>Bottom &lt;= 0</c>, <c>Top &gt;= 3</c>) already stamped onto <paramref name="parts"/> of <paramref name="building"/>.
+    /// </summary>
+    public static (int Bottom, int Top) FloorRange(GameRecord building, IReadOnlyList<PlacedMesh> parts)
+    {
+        int bottom = 0, top = 3;
+        foreach (var p in parts)
+        {
+            if (p.Owner != building || p.Source.GetBool("is unwalkable roof")) continue;
+            if (p.Floor < bottom) bottom = p.Floor;
+            if (p.Floor > top) top = p.Floor;
+        }
+        return (bottom, top);
+    }
+
+    /// <summary>
+    /// The floor range (<c>Bottom &lt;= 0</c>, <c>Top &gt;= 3</c>) of <paramref name="building"/>'s standable parts (including child parts).
+    /// </summary>
+    public static (int Bottom, int Top) FloorBounds(GameDatabase db, GameRecord building, bool destroyed = false)
+    {
+        int bottom = 0, top = 3;
+        if (!HasStandableFloors(building)) return (bottom, top);
+
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        void Walk(GameRecord holder, string list)
+        {
+            foreach (var r in holder.GetReferences(list))
+            {
+                if (!visited.Add(r.TargetStringId) || db.Find(r.TargetStringId) is not { Type: FcsRecordType.BuildingPart } part) continue;
+                if (!part.GetBool("passable") && !part.GetBool("is unwalkable roof"))
+                {
+                    string col = destroyed && part.GetPath("destroyed collision") is { Length: > 0 } dc ? dc : part.GetPath("xml collision");
+                    if (col.Length > 0)
+                    {
+                        int raw = part.GetInt("building floor");
+                        if (raw < bottom) bottom = raw;
+                        if (raw > top) top = raw;
+                    }
+                }
+                Walk(part, "parts");
+            }
+        }
+
+        Walk(building, "parts");
+        if (!destroyed) Walk(building, "interior");
+        return (bottom, top);
     }
 
     /// <summary>

@@ -13,6 +13,7 @@ public sealed partial class FloorSurfaces
     /// </summary>
     public (float Distance, Vector3 Position)? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
+        floor = Math.Max(floor, BottomFloor);
         (float Distance, Vector3 Position)? best = null;
 
         foreach (var s in _surfaces)
@@ -50,6 +51,7 @@ public sealed partial class FloorSurfaces
     /// </summary>
     public float? FaceHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
+        floor = Math.Max(floor, BottomFloor);
         float nearest = maxDistance;
         bool face = false;
 
@@ -107,6 +109,7 @@ public sealed partial class FloorSurfaces
     /// </summary>
     public Vector3? NormalBelow(Vector3 point, int floor, float reach)
     {
+        floor = Math.Max(floor, BottomFloor);
         var origin = point + new Vector3(0, reach, 0);
         float nearest = float.MaxValue;
         Vector3? normal = null;
@@ -140,6 +143,7 @@ public sealed partial class FloorSurfaces
     /// </summary>
     Vector3? FloorBelow(Vector3 point, int floor)
     {
+        floor = Math.Max(floor, BottomFloor);
         Vector3? best = null;
         const float wallReach = 4;
 
