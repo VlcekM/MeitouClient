@@ -230,11 +230,12 @@ public sealed class VramGuard
 
     /// <summary>
     /// Whether what lies within <see cref="NearReach"/> may start loading: always, but under pressure only while the held use (<see
-    /// cref="HeldFraction"/>) is under <see cref="PriorityCeiling"/>; each allocation is still checked against the driver's figure. Measured by the
-    /// driver's figure, the holes a reload leaves in our blocks (300 to 380 MB) kept it at 94.6 to 96.1% with 88% held: nothing near was loaded to
-    /// fill them, and the vegetation round the camera stayed away (#1440).
+    /// cref="HeldFraction"/>) is under <see cref="PriorityCeiling"/> and the driver's figure under the budget (<see cref="BudgetBytes"/>, the reserve
+    /// for the other programs already taken off): mesh uploads ask nothing else. Measured by the driver's figure against the ceiling, the holes a
+    /// reload leaves in our blocks (300 to 380 MB) kept it at 94.6 to 96.1% with 88% held: nothing near was loaded to fill them, and the vegetation
+    /// round the camera stayed away (#1440).
     /// </summary>
-    public bool StreamsNear => !_pressure || HeldFraction < PriorityCeiling;
+    public bool StreamsNear => !_pressure || HeldFraction < PriorityCeiling && Fraction < 1;
 
     /// <summary>
     /// The last sample, as a fraction of the budget.
