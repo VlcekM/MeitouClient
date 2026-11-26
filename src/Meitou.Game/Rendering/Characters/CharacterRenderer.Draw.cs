@@ -785,6 +785,9 @@ internal sealed unsafe partial class CharacterRenderer
 
         if (!part.IsBody) return flags;
         flags |= (uint)look.HiddenLimbs << 12 | (uint)(look.HiddenParts & 0x3FF) << 18;
+
+        // The body has no collapsed side: bits 16-17 are its hidden hands (CharacterContent.BodyMark).
+        flags |= (uint)(look.HiddenHands & 3) << 16;
         return flags;
     }
 

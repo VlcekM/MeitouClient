@@ -446,6 +446,12 @@ public sealed class CharacterAppearance
     public int HiddenParts { get; private set; }
 
     /// <summary>
+    /// The hands whose body vertices are hidden, bit 0 the left and bit 1 the right: both when a worn unarmed weapon's <c>hide hands</c> is
+    /// true (engine extension, docs/characters.md "Worn unarmed weapons").
+    /// </summary>
+    public int HiddenHands { get; private set; }
+
+    /// <summary>
     /// The head is shaven: no hair, and a mesh with <c>bone_horns_top_short</c> has its horns cut (<see cref="CharacterOptions.Shaved"/>, else the
     /// CHARACTER's <c>shaved</c>).
     /// </summary>
@@ -1146,7 +1152,7 @@ public sealed class CharacterAppearance
 
     /// <summary>
     /// A worn unarmed weapon (<see cref="IsWornWeapon"/>): its <c>mesh</c> (by gender) skinned to the body's skeleton like armour, shown whether
-    /// the character fights or not, in its grade's model.
+    /// the character fights or not, in its grade's model; with <c>hide hands</c>, the body's hands are hidden (<see cref="HiddenHands"/>).
     /// </summary>
     void AddWornWeapon(GameRecord weapon, bool female, GameRecord? model)
     {
@@ -1166,6 +1172,7 @@ public sealed class CharacterAppearance
             Slot = AttachSlot.Weapon,
             Material = model,
         });
+        if (weapon.GetBool("hide hands")) HiddenHands = 3;
     }
 
     /// <summary>
@@ -1286,6 +1293,7 @@ public sealed class CharacterAppearance
             HairColour = HairColour,
             HiddenLimbs = HiddenLimbs,
             HiddenParts = HiddenParts,
+            HiddenHands = HiddenHands,
             Headless = Headless,
         };
         copy.Parts.AddRange(Parts);

@@ -71,7 +71,10 @@ sealed unsafe class TracedCharacters : IDisposable
             hidden = ((marks & (f >> 12u) & 15u) | ((marks >> 4u) & (f >> 18u) & 1023u) | ((marks >> 14u) & (f >> 28u) & 1u)) != 0u;
             if ((f & {{CharacterShaders.HeadOnly}}u) != 0u) hidden = (marks & {{CharacterContent.HeadBit}}u) == 0u;
             uint side = (f >> 16u) & 3u;
-            if ((side == 1u && position.x >= 0.0) || (side == 2u && position.x < 0.0)) hidden = true;
+            // On the body, bits 16-17 are its hidden hands (CharacterContent.BodyMark, HandShift); elsewhere the boots' collapsed side.
+            bool bodyVertex = (marks & {{CharacterContent.BodyMark}}u) != 0u;
+            if (bodyVertex && ((marks >> {{CharacterContent.HandShift}}u) & side) != 0u) hidden = true;
+            if (!bodyVertex && ((side == 1u && position.x >= 0.0) || (side == 2u && position.x < 0.0))) hidden = true;
             return (model * sk * vec4(local, 1.0)).xyz;
         }
 
