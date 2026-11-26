@@ -23,7 +23,7 @@ flipped above the pointer near the screen's bottom covered the cursor and took t
   token a tag or release (HTTP 403 "Resource not accessible by integration") on a commit whose `.github/workflows/` files differ from
   the current master, as it lacks the `workflows` permission. So pushing a workflow edit while a release runs fails its release step;
   re-run it from a new dispatch, or publish the run's artifacts by hand with `gh release create` (launcher 1.1.1 was).
-- Nightlies: `nightly.yml` runs twice a day (05:00 UTC "nightly", 16:00 UTC "daily", or by hand) and publishes
+- Nightlies: `nightly.yml` runs twice a day (05:00 UTC "nightly", 17:00 UTC "daily", or by hand) and publishes
   `v<X.Y.Z+1>-nightly.<yyyymmdd>`, a second build on the same UTC day `….<yyyymmdd>.2`
   (patch after the newest full release) as a pre-release without a changelog section; its notes list every
   commit since the newest game tag (GitHub's generated notes cover only merged pull requests, so nightlies don't use them). It is skipped when nothing

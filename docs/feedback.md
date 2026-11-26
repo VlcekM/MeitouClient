@@ -27,7 +27,7 @@ legacy, data jsonb, summary). A session is one scenario at one tier benchmarked 
 - `GET /bench/data` → `{sessions: [{id, at, handle, machine, platform, scenario, target, tier, version, fingerprint, legacy, data}]}`, newest
   first, cached 60 s (a write clears it).
 - `GET /bench/targets` → `{targets: [{tag, version, kind, publishedAt}]}`, newest first: every full release (`release`) and every nightly
-  whose notes start with `Daily build` (`daily`, the 16:00 UTC run of nightly.yml); `503 {error}` while GitHub was never read. The benchmarks
+  whose notes start with `Daily build` (`daily`, the 17:00 UTC run of nightly.yml); `503 {error}` while GitHub was never read. The benchmarks
   page hides sessions on other builds (off target) until its Builds toggle is set to All builds; legacy kit commits are always shown.
 - The benchmarks page (`site/src/scripts/bench.js`) shows one version range at a time: `RANGES`, kept by hand newest first, each a
   benchmark version and its first build (`since`, compared by publish time); a performance regression or optimisation, or a new benchmark

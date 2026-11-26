@@ -47,7 +47,7 @@ sealed class Releases(HttpClient http, Config config, GithubAuth github, ILogger
     const int MaxPages = 10;
 
     /// <summary>
-    /// How the notes of a nightly from the scheduled 16:00 UTC run start (nightly.yml); manual and 05:00 runs say <c>Nightly build</c>.
+    /// How the notes of a nightly from the scheduled 17:00 UTC run start (nightly.yml); manual and 05:00 runs say <c>Nightly build</c>.
     /// </summary>
     const string DailyNotes = "Daily build";
 

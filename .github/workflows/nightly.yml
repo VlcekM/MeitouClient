@@ -1,4 +1,4 @@
-# Nightly pre-release twice a day (05:00 nightly, 16:00 daily, UTC) or by hand, when there are game changes since the last v* tag: the same
+# Nightly pre-release twice a day (05:00 nightly, 17:00 daily, UTC) or by hand, when there are game changes since the last v* tag: the same
 # zips as release.yml (tools/scripts/package-release.ps1), tagged v<X.Y.Z+1>-nightly.<yyyymmdd>[.<n>], never marked Latest (docs/launcher.md).
 name: Nightly
 
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 5 * * *" # nightly, 05:00 UTC: after the late-evening work
-    - cron: "0 16 * * *" # daily, 16:00 UTC: the morning's work, before the evening
+    - cron: "0 17 * * *" # daily, 17:00 UTC: the morning's work, before the evening
 
 permissions:
   contents: write
@@ -32,7 +32,7 @@ jobs:
         id: version
         shell: pwsh
         env:
-          KIND: ${{ github.event.schedule == '0 16 * * *' && 'Daily' || 'Nightly' }}
+          KIND: ${{ github.event.schedule == '0 17 * * *' && 'Daily' || 'Nightly' }}
         run: |
           # Skipped when nothing the game zips are built from changed since the newest game tag, nightly or full.
           $last = git tag -l "v[0-9]*" --sort=-creatordate | Select-Object -First 1
