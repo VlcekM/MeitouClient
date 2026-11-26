@@ -3248,11 +3248,14 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.Gpu.ParticleDensity = 0.3f;
             host.Gpu.WeatherParticles = true;
         }
+
+        // The title's animation runs on real time; the world's (and the editor bar's) on the shown game time, still while paused, as on Vulkan.
+        float time = titleLook ? (float)now / 600f : host.ShownGameTime();
         if (host.TickAhead) host.Session.BeginTickAhead();
         try
         {
             // Photo mode draws its own hour; the weather schedule keeps the game's.
-            WorldFrame.Draw(host.Gpu, host.Scene, host.Camera, host.Render, size.X, size.Y, host.PhotoHour ?? hour, (float)now / 600f,
+            WorldFrame.Draw(host.Gpu, host.Scene, host.Camera, host.Render, size.X, size.Y, host.PhotoHour ?? hour, time,
                 host.WorldOptions.FogDistance, weatherHour: hour);
         }
         finally
