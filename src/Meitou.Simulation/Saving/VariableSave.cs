@@ -25,7 +25,9 @@ public static class VariableSave
     public static void Write(SaveGame game, World world, GameDatabase db)
     {
         int n = SaveBuilder.NextNumber(game.Quick);
-        foreach (var variable in db.OfType((FcsRecordType)VariableData.RecordType).OrderBy(r => r.StringId, StringComparer.Ordinal))
+        var variables = db.OfType((FcsRecordType)VariableData.RecordType)
+            .OrderBy(r => r.StringId, StringComparer.Ordinal);
+        foreach (var variable in variables)
         {
             var record = new FcsRecord { Type = VariableData.RecordType, Id = n, Name = variable.Name, StringId = variable.StringId };
             CopyFields(variable, record);

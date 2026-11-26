@@ -260,8 +260,8 @@ Quests & Contracts (workshop 3797459646) gates its barman and trader replies wit
 every such reply passes, 254 replies under a Tech Hunter trader's `trader1` (#1442). Better Banking (workshop 3651996394) keeps an account balance
 in one VARIABLE (`BankBalance`) with 18 `add to variable` lines and 125 conditions. Meitou (`DialogueSystem.VariablesHold`,
 `WorldVariables`, per world) runs the lists and effects whether or not the plugin's mod is enabled. Not built: the plugin's DCs 1000-1006
-(`DC_IS_SLEEPING` .. `DC_ARMOUR_LEVEL`) fail as unknown codes, and its `take item`, `take item from squad`, `destroy item` and
-`destroy item from squad` do nothing.
+(`DC_IS_SLEEPING` .. `DC_ARMOUR_LEVEL`) reach `ModCondition` as unclaimed mod codes, which pass when val0 <= 0 whatever the comparison; its
+`take item`, `take item from squad`, `destroy item` and `destroy item from squad` do nothing.
 
 #### Retargeting
 

@@ -111,5 +111,7 @@ public static class VariableData
     /// A line's <paramref name="list"/> (<c>set variable</c> or <c>add to variable</c>): every reference whose record has a <c>value</c>, in order.
     /// </summary>
     public static IReadOnlyList<VariableChange> Changes(GameDatabase db, GameRecord record, string list) =>
-        [.. record.GetReferences(list).Where(r => HasValue(db, r.TargetStringId)).Select(r => new VariableChange(r.TargetStringId, r.Values.Value0))];
+        [.. record.GetReferences(list)
+            .Where(r => HasValue(db, r.TargetStringId))
+            .Select(r => new VariableChange(r.TargetStringId, r.Values.Value0))];
 }

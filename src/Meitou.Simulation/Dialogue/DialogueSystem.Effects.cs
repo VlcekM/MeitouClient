@@ -39,7 +39,8 @@ public sealed partial class DialogueSystem
     /// </summary>
     void RunEffects(World world, Conversation c, DialogueNode line, CharacterId me)
     {
-        if (line.SetVariables.Count + line.AddToVariables.Count > 0) world.Variables.Apply(_data.Db, line.SetVariables, line.AddToVariables);
+        if (line.SetVariables.Count + line.AddToVariables.Count > 0)
+            world.Variables.Apply(_data.Db, line.SetVariables, line.AddToVariables);
 
         var mc = Cold(world, me);
         if (mc is not null) RunLocks(c, line, mc);
