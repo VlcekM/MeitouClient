@@ -834,6 +834,7 @@ public sealed partial class AiSystem
             // without the public test.
             StateType.StrangersInHouseP => _system.StrangersInHouseP(_world, _board, _slot),
             StateType.StrangersInHouse => _system.StrangersInHouse(_world, _board, _slot),
+            StateType.AllDoorsLocked => Locks.WardenGoals.AllDoorsLocked(_world, _slot, cold, _board),
             StateType.AtPackageTarget => AtPackageTarget(),
             // 76 (FUN_140792190): its announcement was delivered in the town it stands in and it says nothing now (129's list A).
             StateType.IsMessageDelivered => _system.MessageDelivered(_world, _slot),
@@ -858,7 +859,7 @@ public sealed partial class AiSystem
                 or StateType.MachineHasFreeOperatorSlot or StateType.IsReadyForAction
                 or StateType.DoorIsOpen or StateType.DoorIsOpenHere or StateType.AtLocationBuildingDoor or StateType.AtCurrentLocationBuildingDoor
                 or StateType.AtLocationBuildingDoorInside or StateType.AtLocationBuildingDoorOutside or StateType.LocationIsAccessible or StateType.DestinationNotBlockedByFortifications or StateType.AtLocationFortificationGate
-                or StateType.DoorIsLockedAndImInside or StateType.DoorIsLockedAndImOutside or StateType.AllDoorsLocked or StateType.IsObjectMine
+                or StateType.DoorIsLockedAndImInside or StateType.DoorIsLockedAndImOutside or StateType.IsObjectMine
                 or StateType.IsAlly or StateType.CrowdLimit8 or StateType.TargetStandingStill
                 or StateType.IsMachineOutputEmpty or StateType.HasBuildingMaterials or StateType.BuildingHasBuildingMaterials => true,
             _ => false,
