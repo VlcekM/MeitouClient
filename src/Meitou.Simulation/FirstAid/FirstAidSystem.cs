@@ -154,8 +154,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
 
     /// <summary>
     /// The Medic button (<c>FUN_1407fac20</c>, <b>Verified</b>; docs/game/ui-input.md): Medic 58 for the characters, and Robotics 57 too when the
-    /// active squad has a robot (<see cref="SquadNeedsRobotics"/>). With Shift each becomes a job (58 first); else one look for a patient, with the
-    /// Robotics finder when 57 was given (its finder takes everyone the Medic's does, robots too).
+    /// active squad has a robot (<see cref="SquadNeedsRobotics"/>). With Shift each becomes a job (58 first); else one order that looks for a
+    /// patient after each treatment (<see cref="IOrderOwner.Repeats"/>), with the Robotics finder when 57 was given (its finder takes everyone the
+    /// Medic's does, robots too).
     /// </summary>
     void PressMedic(World world, MedicJobCommand job)
     {
@@ -168,7 +169,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             {
                 var detail = robotics ? RoboticsButton : MedicButton;
 
-                // the button: one look for a patient
+                // the button: a look for a patient after each treatment
                 PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = detail }, job.Queued);
                 continue;
             }
@@ -264,6 +265,19 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// </summary>
     bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) =>
         order.Row == TaskType.Rest || HasWorkingArm(world.Characters.Cold(slot)!);
+
+    /// <summary>
+    /// The Medic button's order (58, with 57) stays at the front after each treatment while its finder still gives a patient: the original pops a
+    /// front order only once it is done (58's effect, <c>!needsFirstAid</c>) or its desire x finder is 0 (docs/game/ai-tasks.md "Precedence"),
+    /// so the button treats patient after patient, as its tooltip says ("heal everyone else in the squad").
+    /// </summary>
+    bool IOrderOwner.Repeats(World world, int slot, OrderEntry order)
+    {
+        if (order.Detail != MedicButton && order.Detail != RoboticsButton) return false;
+
+        bool robotics = order.Detail == RoboticsButton;
+        return FindPatient(world, slot, SquadGoals.Of(world), robotics, ordered: true).Slot >= 0;
+    }
 
     /// <summary>
     /// The characters an order names, else the player's selection.
