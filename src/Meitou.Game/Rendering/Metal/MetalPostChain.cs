@@ -449,6 +449,85 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     }
 
     /// <summary>
+    /// The lamps' traced shadows (made on first use) and their apply and floor passes.
+    /// </summary>
+    Gi.MetalLampShadows? _lampShadows;
+
+    /// <summary>
+    /// See <see cref="_lampShadows"/>.
+    /// </summary>
+    (Gi.MetalGiResolve.Pass Pass, SamplerSlot Lost, SamplerSlot Total, SamplerSlot Total1, SamplerSlot Plain, SamplerSlot Specular,
+        UniformHandle SpecularOn)? _lampApply;
+
+    /// <summary>
+    /// See <see cref="_lampShadows"/>.
+    /// </summary>
+    Gi.MetalGiResolve.Pass? _lampFloor;
+
+    /// <summary>
+    /// The scene minus the source, red, green and blue (what occluded lamps gave is taken back); then the larger of the two (no pixel below black).
+    /// </summary>
+    static readonly BlendState LampTakeBack = new(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.ReverseSubtract),
+        LampFloor = new(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max);
+
+    /// <summary>
+    /// The lamps' traced shadows after the GI resolve (docs/render-lights.md "Traced lamp shadows"): what occluded lamps gave a surface is taken back
+    /// off the scene.
+    /// </summary>
+    internal void RunLampShadows(Gi.MetalGiScene scene, Objects.WorldLamps lamps, Matrix4x4 sceneToEye, uint skinTable)
+    {
+        if (!Options.LampShadows || GiResolve <= 0 || _sceneColour is null || !_haveScene || scene.Top is null || lamps.Grid.W <= 0) return;
+
+        int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        float tanY = MathF.Tan(_fov * 0.5f);
+        var rot = _view with { M41 = 0, M42 = 0, M43 = 0 };
+        var view = new Gi.MetalLampShadows.View(new Vector3(rot.M11, rot.M21, rot.M31), new Vector3(rot.M12, rot.M22, rot.M32),
+            ViewWindow.BackFor(rot, _fov, _aspect), _eye, new Vector2(_nearPlane, _farPlane), ViewWindow.Tan(tanY * _aspect, tanY), width, height,
+            2 * tanY / height);
+        var inverse = Matrix4x4.CreateScale(1, -1, 1) * sceneToEye;
+        _lampShadows ??= new Gi.MetalLampShadows(_ctx, Probes!.Sun);
+        _lampShadows.Run(scene, lamps, _ctx.Depth, _ctx.Albedo, view, inverse, skinTable);
+        if (_lampShadows.Result is { } result) ApplyLampShadows(result.Filtered, result.Total, result.Total1, width, height);
+    }
+
+    /// <summary>
+    /// The filtered lost light times the albedo and the haze off the scene (<see cref="Rendering.Gi.LampShadowShaders.Apply"/>), then the floor.
+    /// </summary>
+    void ApplyLampShadows(GpuTexture filtered, GpuTexture total, GpuTexture total1, int width, int height)
+    {
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        var resolve = _giResolve;
+        var a = _lampApply ??= MakeLampApply(resolve);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        resolve.SetView(a.Pass, _ctx.Depth, _ctx.Albedo, view, width, height, 1);
+        foreach (var (slot, texture) in (ReadOnlySpan<(SamplerSlot, GpuTexture)>)[(a.Lost, filtered), (a.Total, total), (a.Total1, total1),
+            (a.Plain, total), (a.Specular, total)])
+        {
+            a.Pass.P.Bind(slot, new SampledTexture(resolve.Point, texture.View()));
+        }
+
+        a.Pass.P.Set(a.SpecularOn, 0f);
+        a.Pass.P.ApplyGlobals();
+        var floor = _lampFloor ??= resolve.Program(Rendering.Gi.LampShadowShaders.Floor, "metal lamp shadow floor");
+        var cmd = (MetalCommandList)_ctx.BeginNative("lamp shadows apply");
+        resolve.Fullscreen(cmd, a.Pass.P, _sceneColour!, LampTakeBack, load: true);
+        resolve.Fullscreen(cmd, floor.P, _sceneColour!, LampFloor, load: true);
+        _ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The lamp shadows' apply pass and its handles.
+    /// </summary>
+    static (Gi.MetalGiResolve.Pass, SamplerSlot, SamplerSlot, SamplerSlot, SamplerSlot, SamplerSlot, UniformHandle) MakeLampApply(
+        Gi.MetalGiResolve resolve)
+    {
+        var pass = resolve.Program(Rendering.Gi.LampShadowShaders.Apply, "metal lamp shadows");
+        var p = pass.P;
+        return (pass, p.Sampler("uLost"), p.Sampler("uTotal"), p.Sampler("uTotal1"), p.Sampler("uPlain"), p.Sampler("uSpecular"),
+            p.Uniform("uSpecularOn"));
+    }
+
+    /// <summary>
     /// The probes the GI resolve's radiance cache traces with (null: no GI).
     /// </summary>
     internal Gi.MetalProbeGi? Probes { get; set; }
@@ -671,6 +750,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     {
         _depthOfField?.Dispose();
         _giResolve?.Dispose();
+        _lampShadows?.Dispose();
         _tracedTerm?.Dispose();
         _sceneColour?.Dispose();
         foreach (var low in _lowTargets)

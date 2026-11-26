@@ -639,11 +639,13 @@ static partial class WorldFrame
             probeGi.Active = gpu.GiActive;
             probeGi.Rays = f.Post.Options.GiMoreRays ? GiProbes.MaxRays : GiProbes.DefaultRays;
             probeGi.CloudShadows = f.Post.Options.GiCloudShadowing;
-            probeGi.SetCasters(gpu.Traced, GiCasterRange(ref f), f.Render.TerrainPixelScale);
+            bool lampShadows = f.Post.Options.LampShadows && f.Post.GiResolve > 0 && gpu.Lamps is { Grid.W: > 0 };
+            probeGi.SetCasters(gpu.Traced || lampShadows, GiCasterRange(ref f), f.Render.TerrainPixelScale);
             if (gpu.GiActive)
             {
                 var foliage = gpu.Foliage is { Enabled: true } shown ? shown : null;
-                probeGi.Update(f.Eye, gpu.Terrain.Snapshot(), objects, foliage, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
+                var focus = gpu.Objects?.GiInteriorFocus(f.Camera.Target);
+                probeGi.Update(f.Eye, gpu.Terrain.Snapshot(), objects, foliage, gpu.Lamps, gpu.FogVolumes, focus, gpu.Characters);
                 if (gpu.Traced && gpu.Shadow is { TracedVolume: not null } volumeShadow) probeGi.TraceSunVolume(volumeShadow);
                 StageClock.Sub("gi metal");
             }
@@ -666,7 +668,7 @@ static partial class WorldFrame
         }
 
         // With the lamps traced the rays stop their light at the walls: the room's hull would only trim the wall round a door into a dark polygon.
-        bool tracedLamps = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 };
+        bool tracedLamps = gpu.PostChain is { Options.LampShadows: true, GiResolve: > 0 };
         if (gpu.Lamps is { } hull) hull.RoomMargin = tracedLamps ? WorldLamps.TracedRoomMargin : WorldLamps.RoomSurfaceMargin;
 
         // The lamps' visibility cache: while their shadows are on and the traced scene exists.
@@ -1015,7 +1017,8 @@ static partial class WorldFrame
         DrawSceneLate(ref f, s);
         if (projectedBlood) DrawSurfaceBlood(ref f, s);
         DrawSceneCharacters(ref f, s);
-        if (lampReceivers) gpu.Probes!.LampReceivers = false;
+        if (lampReceivers && gpu.Probes is { } receivers) receivers.LampReceivers = false;
+        if (lampReceivers && gpu.ProbeGi is { } metalReceivers) metalReceivers.LampReceivers = false;
         DrawSkyBehind(ref f);
         if (traced) TraceSun(ref f, s);
         if (apart) RunContactSunApart(ref f);
@@ -1071,6 +1074,15 @@ static partial class WorldFrame
         bool lampReceivers = gpu.Gi is { Top: not null } && gpu.Probes is not null
             && (lampShadows || gpu.Post is { CharacterOcclusionWanted: true });
         if (lampReceivers) gpu.Probes!.LampReceivers = true;
+
+        // Metal's probes: their own scene and flag (no character occlusion pass there yet).
+        bool metalShadows = gpu.PostChain is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
+        if (metalShadows && gpu.ProbeGi is { TracedReady: true } probeGi)
+        {
+            probeGi.LampReceivers = true;
+            lampReceivers = true;
+        }
+
         return lampReceivers;
     }
 
@@ -1448,6 +1460,7 @@ static partial class WorldFrame
         StageClock.Lap(14, "gi resolve");
 
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
+        gpu.ProbeGi?.FinishScene(post, gpu.Lamps, gpu.Characters?.SkinTable ?? 0);
         gpu.Post?.RunCharacterOcclusion(gpu.Probes, gpu.GiActive ? gpu.Gi : null);
         gpu.Post?.RunRoomMask(gpu.GiActive ? gpu.Gi : null, gpu.Objects?.EyeIndoors(f.Eye) == true);
         StageClock.Lap(StageClock.LampShadows);

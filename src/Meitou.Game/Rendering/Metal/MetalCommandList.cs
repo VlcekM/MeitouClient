@@ -840,14 +840,20 @@ public sealed class MetalCommandList : IGpuCommandList
     /// Tells the open encoder, in one call, the textures the argument buffer's entries hold (the first <paramref name="count"/> native pointers of
     /// <paramref name="textures"/>): the shaders read them through the table, not through a binding the encoder could see.
     /// </summary>
-    internal unsafe void UseResources(nint[] textures, int count)
+    internal unsafe void UseResources(nint[] textures, int count) => UseResources(textures, count, MTLResourceUsage.Read);
+
+    /// <summary>
+    /// Tells the open encoder, in one call, resources it reaches by address with <paramref name="usage"/> (a write declared, the encoders after it that
+    /// read them are ordered after it).
+    /// </summary>
+    internal unsafe void UseResources(nint[] resources, int count, MTLResourceUsage usage)
     {
         var encoder = _render.NativePtr != IntPtr.Zero ? _render.NativePtr : _compute.NativePtr;
         if (count == 0 || encoder == IntPtr.Zero) return;
 
-        fixed (nint* resources = textures)
+        fixed (nint* list = resources)
         {
-            UseResourcesMessage(encoder, UseResourcesSelector.SelPtr, resources, (ulong)count, (ulong)MTLResourceUsage.Read);
+            UseResourcesMessage(encoder, UseResourcesSelector.SelPtr, list, (ulong)count, (ulong)usage);
         }
     }
 

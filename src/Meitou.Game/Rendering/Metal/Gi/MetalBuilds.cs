@@ -105,6 +105,36 @@ sealed class MetalBuilds(MetalContext ctx)
     }
 
     /// <summary>
+    /// A new bottom level of <paramref name="geometries"/> that can be refitted (<see cref="Refit"/>; built fast, as it is rebuilt now and then),
+    /// with its descriptor and refit scratch.
+    /// </summary>
+    public (MTLAccelerationStructure Structure, MTLPrimitiveAccelerationStructureDescriptor Descriptor, MTLBuffer RefitScratch) Refittable(string name,
+        IReadOnlyList<MTLAccelerationStructureTriangleGeometryDescriptor> geometries)
+    {
+        var descriptor = new MTLPrimitiveAccelerationStructureDescriptor
+        {
+            GeometryDescriptors = ArrayOf(geometries.Select(g => g.NativePtr)),
+            Usage = MTLAccelerationStructureUsage.Refit | MTLAccelerationStructureUsage.PreferFastBuild,
+        };
+        var sizes = ctx.Device.AccelerationStructureSizes(descriptor);
+        var structure = ctx.Device.NewAccelerationStructure(sizes.accelerationStructureSize);
+        structure.Label = (NSString)name;
+        var scratch = ctx.Device.NewBuffer(Math.Max(sizes.buildScratchBufferSize, 1), MTLResourceOptions.ResourceStorageModePrivate);
+        var refitScratch = ctx.Device.NewBuffer(Math.Max(sizes.refitScratchBufferSize, 1), MTLResourceOptions.ResourceStorageModePrivate);
+        Encoder().BuildAccelerationStructure(structure, descriptor, scratch, 0);
+        ctx.DeferDelete(scratch.Dispose);
+        Count++;
+        Bytes += (long)sizes.accelerationStructureSize;
+        return (structure, descriptor, refitScratch);
+    }
+
+    /// <summary>
+    /// <paramref name="structure"/> refitted in place over its geometries' new positions.
+    /// </summary>
+    public void Refit(MTLAccelerationStructure structure, MTLPrimitiveAccelerationStructureDescriptor descriptor, MTLBuffer scratch) =>
+        Encoder().RefitAccelerationStructure(structure, descriptor, structure, scratch, 0);
+
+    /// <summary>
     /// Builds <paramref name="descriptor"/> into <paramref name="top"/> with <paramref name="scratch"/>, in an encoder after the bottom levels'.
     /// </summary>
     public void Top(MTLAccelerationStructure top, MTLInstanceAccelerationStructureDescriptor descriptor, MTLBuffer scratch)

@@ -126,11 +126,24 @@ sealed unsafe class MetalTracedSun(MetalContext ctx) : IDisposable
         EnsureTargets(width, height);
         var cmd = (MetalCommandList)ctx.BeginNative("traced sun");
         Trace(cmd, scene, depth, surface, term, inverse, eye, toSun, pixelSlope, width, height);
-        Planes(cmd, depth, inverse, pixelSlope, width, height);
-        Filter(cmd, depth, surface, _mask!, _scratch!, inverse, pixelSlope, 0, width, height);
-        Filter(cmd, depth, surface, _scratch!, _filtered!, inverse, pixelSlope, 1, width, height);
+        Penumbra(cmd, depth, surface, _mask!, _scratch!, _filtered!, inverse, pixelSlope, named: false);
         cmd.EndCompute();
         ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The penumbra filter (<see cref="PenumbraFilter"/>) from <paramref name="raw"/> through <paramref name="scratch"/> into
+    /// <paramref name="filtered"/>, the depth's planes made first; <paramref name="named"/>: the blue channel names what the others hold (the lamps').
+    /// </summary>
+    internal void Penumbra(MetalCommandList cmd, GpuTexture depth, GpuTexture surface, GpuTexture raw, GpuTexture scratch, GpuTexture filtered,
+        in Matrix4x4 inverse, float pixelSlope, bool named)
+    {
+        int width = raw.Desc.Width, height = raw.Desc.Height;
+        Make();
+        EnsurePlanes(width, height);
+        Planes(cmd, depth, inverse, pixelSlope, width, height);
+        Filter(cmd, depth, surface, raw, scratch, inverse, pixelSlope, 0, named, width, height);
+        Filter(cmd, depth, surface, scratch, filtered, inverse, pixelSlope, 1, named, width, height);
     }
 
     /// <summary>
@@ -178,11 +191,12 @@ sealed unsafe class MetalTracedSun(MetalContext ctx) : IDisposable
     /// One filter pass from <paramref name="input"/> into <paramref name="output"/>: along rows (<paramref name="pass"/> 0) or columns (1).
     /// </summary>
     void Filter(MetalCommandList cmd, GpuTexture depth, GpuTexture surface, GpuTexture input, GpuTexture output, in Matrix4x4 inverse,
-        float pixelSlope, int pass, int width, int height)
+        float pixelSlope, int pass, bool named, int width, int height)
     {
         var p = new FilterParams
         {
-            Inverse = inverse, Size = new Vector4(width, height, pixelSlope, pass), Area = new Vector4(0, 0, width, height),
+            Inverse = inverse, Size = new Vector4(width, height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, 0, 0, 0),
+            Area = new Vector4(0, 0, width, height),
         };
         cmd.BindPipeline(_filterPass.Pipeline);
         var e = cmd.ComputeEncoder();
@@ -279,6 +293,16 @@ sealed unsafe class MetalTracedSun(MetalContext ctx) : IDisposable
         _mask = Target(width, height, "metal traced sun mask");
         _scratch = Target(width, height, "metal traced sun penumbra");
         _filtered = Target(width, height, "metal traced sun filtered");
+    }
+
+    /// <summary>
+    /// The depth's planes at <paramref name="width"/> x <paramref name="height"/> (made again when it changes).
+    /// </summary>
+    void EnsurePlanes(int width, int height)
+    {
+        if (_planes is { } made && made.Desc.Width == width && made.Desc.Height == height) return;
+
+        if (_planes is { } old) ctx.DeferDelete(() => ctx.ReleaseTexture(old));
         _planes = Target(width, height, "metal penumbra planes");
     }
 
@@ -312,9 +336,9 @@ sealed unsafe class MetalTracedSun(MetalContext ctx) : IDisposable
     /// </summary>
     void Release()
     {
-        foreach (var t in (ReadOnlySpan<GpuTexture?>)[_mask, _scratch, _filtered, _planes])
+        foreach (var t in (ReadOnlySpan<GpuTexture?>)[_mask, _scratch, _filtered])
             if (t is { } texture) ctx.DeferDelete(() => ctx.ReleaseTexture(texture));
-        _mask = _scratch = _filtered = _planes = null;
+        _mask = _scratch = _filtered = null;
     }
 
     /// <summary>
@@ -323,6 +347,7 @@ sealed unsafe class MetalTracedSun(MetalContext ctx) : IDisposable
     public void Dispose()
     {
         Release();
+        if (_planes is { } planes) ctx.ReleaseTexture(planes);
         if (_made) _noLists.Dispose();
     }
 

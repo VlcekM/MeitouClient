@@ -298,6 +298,19 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     public bool Traced { get; set; }
 
     /// <summary>
+    /// True while the characters draw as the traced lamps' receivers (<c>uGiParams.z</c> bit 16, with <see cref="Resolve"/>).
+    /// </summary>
+    public bool LampReceivers { get; set; }
+
+    /// <summary>
+    /// The lamps' traced shadows over <paramref name="post"/>'s scene (<see cref="MetalPostChain.RunLampShadows"/>).
+    /// </summary>
+    public void FinishScene(Post.IWorldPostChain post, WorldLamps? lamps, uint skinTable)
+    {
+        if (post is MetalPostChain chain && lamps is not null && _updated) chain.RunLampShadows(_scene, lamps, SceneToEye, skinTable);
+    }
+
+    /// <summary>
     /// The scene's casters for the traced sun (<see cref="MetalGiScene.Casters"/>).
     /// </summary>
     public void SetCasters(bool casters, float range, float pixelsPerRadian)
@@ -379,7 +392,7 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// <summary>
     /// <c>uGiParams</c>: x on and filled, y the strength, z bits 1 the resolve and 4 the traced sun, w the indoor gain (0 bypasses indoor GI).
     /// </summary>
-    Vector4 Params => new(Enabled && Active && Shade && _updated ? 1 : 0, Strength, (Resolve ? 1 : 0) + (Resolve && Traced ? 4 : 0),
+    Vector4 Params => new(Enabled && Active && Shade && _updated ? 1 : 0, Strength, (Resolve ? 1 : 0) + (Resolve && Traced ? 4 : 0) + (Resolve && LampReceivers ? 16 : 0),
         InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
 
     /// <summary>
@@ -402,9 +415,9 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// the probe passes.
     /// </summary>
     public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, FoliageRenderer? foliage, WorldLamps? lamps,
-        FogVolumes? fog, Vector3? interiorFocus)
+        FogVolumes? fog, Vector3? interiorFocus, Characters.CharacterRenderer? characters)
     {
-        _scene.Update(eye, heights, objects, foliage, lamps);
+        _scene.Update(eye, heights, objects, foliage, lamps, characters);
         if (_scene.Top is null || !(Enabled && Active && Shade)) return;
 
         _slot = _ctx.Frame.Slot;

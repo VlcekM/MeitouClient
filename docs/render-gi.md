@@ -208,7 +208,11 @@ a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`Prob
   table ends at 15, so sampler indices are made dense in binding order (`MslTranslator.DenseSamplers`, `MetalProgram.SamplerSlot`). spirv-cross's
   bare `ray(...)` is qualified `raytracing::ray(`: the trace's GLSL local `ray` hid the type. Ray queries, buffer references and
   `get_committed_user_instance_id` translate as they are. The distance atlas is RGBA16F (Vulkan RG16F): the blend reads and writes it, and Metal has
-  no read-write access to two-channel formats.
+  no read-write access to two-channel formats. A bindless compute program's table takes the graphics stages' flattened ids (set x `SetStride` +
+  binding, `SpirvPatch.RemapBindings`): without them `MetalTableLayout` found no arrays and every colour and cut-out map a trace read was empty
+  (**Verified**, the traced sun's debug view on save `111`: no leaf or bush cast before, both after). A scalar buffer reference to one vector
+  (`Position`, `TexCoord`, `Triangle`) becomes a packed MSL vector (`MslTranslator.ReferenceVector`): spirv-cross's aligned `uint3`/`float2` were read
+  at 12-byte and 44-byte-stride offsets.
 - **Scene** (`MetalGiScene`, as `GiScene`): terrain 512² quads 8 apart along `SmoothHeightAt` and 256² 160 apart, sampled on a worker, rebuilt when
   the eye leaves the middle eighth; objects within `GiScene.ProbeRange` (eye snapped to 128), 32 bottom levels built a frame, dropped after 600
   unused; the foliage block (radius >= 150, range 4000, rebuilt every 120 updates or 250 units); records with this frame's textures, emitters and
@@ -222,8 +226,20 @@ a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`Prob
   defaults (strength 1, indoor gain 1.25) as `GiProbes`. The resolve (`MetalPostChain.RunGiResolve`) draws `GiResolveShaders`' two passes; the
   surface target is RGBA32UI, stored only while the resolve runs (`MetalContext.StoreSurface`); Metal's targets keep row 0 at the top, so the
   reconstruction's NDC y is turned round. Relocation runs with the resolve and the Hybrid GI's relocation row, as on Vulkan.
-- **Not on Metal** (Vulkan has them): the radiance cache, characters and grass in the scene, the traced sun, lamp shadows, GI traced on characters,
-  reflections' rays.
+- **Hybrid GI's cache** (`MetalGiCache`): `GiCache`'s passes and shaders, its trace taking the probe update's constants and hit inputs, run by
+  `MetalPostChain.RunGiResolve` before the resolve; its positions turn y round as the resolve's.
+- **Traced sun** (`MetalTracedSun`, `MetalPostChain.RunTracedSun`): the mask kernel, the penumbra planes and filter, the sun map
+  (`TracedSunVolume.Source`) and the add pass; the scene target gets the RGBA32F term as its third attachment (Metal's `RenderingDesc.Extra2`). The
+  kernels compute NDC with row 0 at the bottom, so the inverse they take has y turned round first. While traced the scene holds the casters
+  (`MetalGiScene.Casters`): objects to the shadows' range, the small foliage by size on screen, cut parts as candidates, and the characters
+  (`MetalTracedCharacters`: `TracedCharacters.Skin`, its push block renamed `Push`; a refittable bottom level each, the skinned buffers declared
+  written so their builds wait for the kernel).
+- **Lamp shadows** (`MetalLampShadows`, `MetalPostChain.RunLampShadows`, after the resolve): Vulkan's full-screen trace (every lamp of a pixel's
+  cell; no tile cache on Metal, so the per-lamp passes do not run), the shared penumbra filter (`named`), the apply (reverse subtract) and floor (max)
+  passes. While on, the scene holds the casters and the characters draw as the lamps' receivers (`uGiParams.z` bit 16).
+- **Not on Metal** (Vulkan has them): grass in the scene, GI traced on characters (it needs GTAO, which the Metal chain lacks), reflections' rays.
+  The Metal panel has no rows for the Hybrid GI, traced sun or lamp shadows switches: `--meitou gihybrid,traced,lampshadows` and `--gi-hybrid`
+  turn them on.
 - **Observed** (Apple M6, macOS 27.2, play bench settle and orbit on `bench-bases-2026-10-27`, 1920x1080 scene, probes + resolve + relocation, one run
   each): orbit 58 fps, frame p50 15.1 ms, GPU 15.5 ms against 70, 12.7 and 13.4 with `--no-gi`. Against the same branch on Vulkan (Windows, Radeon
   8060S, 21:33 in game) the cut-away buildings' insides are dark on both and the walls' and ground's tones match.

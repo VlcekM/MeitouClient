@@ -62,6 +62,17 @@ internal interface IProbeGi : IDisposable
     void SetCasters(bool casters, float range, float pixelsPerRadian);
 
     /// <summary>
+    /// True while the characters draw as the traced lamps' receivers (<c>uGiParams.z</c> bit 16, with the resolve).
+    /// </summary>
+    bool LampReceivers { get; set; }
+
+    /// <summary>
+    /// After the GI resolve, over <paramref name="post"/>'s scene: the lamps' traced shadows (when their switch is on). <paramref name="skinTable"/>:
+    /// the characters' skin scattering table's bindless index.
+    /// </summary>
+    void FinishScene(IWorldPostChain post, WorldLamps? lamps, uint skinTable);
+
+    /// <summary>
     /// Whether the traced scene is ready for the sun's rays this frame.
     /// </summary>
     bool TracedReady { get; }
@@ -93,10 +104,11 @@ internal interface IProbeGi : IDisposable
 
     /// <summary>
     /// Updates the traced scene and the probes for the eye at <paramref name="eye"/> from the terrain heights, the objects, the foliage, the lamps and
-    /// the fog volumes; the first cascade is the interior grid round <paramref name="interiorFocus"/> when set.
+    /// the fog volumes; the first cascade is the interior grid round <paramref name="interiorFocus"/> when set; <paramref name="characters"/> go into
+    /// the traced scene while it holds the casters.
     /// </summary>
     void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, FoliageRenderer? foliage, WorldLamps? lamps, FogVolumes? fog,
-        Vector3? interiorFocus);
+        Vector3? interiorFocus, Characters.CharacterRenderer? characters);
 
     /// <summary>
     /// A line describing the probes' layout and state, for the log.

@@ -71,7 +71,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
     /// <summary>
     /// The objects' share of the instances: the rest is the foliage's, small foliage included.
     /// </summary>
-    const int ObjectInstances = MaxInstances - FoliageReserve - SmallFoliageInstances;
+    const int ObjectInstances = MaxInstances - FoliageReserve - SmallFoliageInstances - TracedCharacters.MaxCharacters;
 
     /// <summary>
     /// True while the sun is traced: the scene holds the casters too (the objects to <see cref="Range"/>, the small foliage, the cut parts' maps).
@@ -199,7 +199,8 @@ internal sealed unsafe class MetalGiScene : IDisposable
     /// This frame's scene for <paramref name="eye"/>: the terrain grids, the objects and foliage near it (new bottom levels within the frame's budget),
     /// and the slot's top level when its instances changed.
     /// </summary>
-    public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, FoliageRenderer? foliage, WorldLamps? lamps)
+    public void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, FoliageRenderer? foliage, WorldLamps? lamps,
+        Characters.CharacterRenderer? characters)
     {
         _frame++;
         _builds.Begin();
@@ -213,6 +214,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
         AddTerrain(eye, heights);
         if (objects is not null) AddObjects(eye, objects, lamps);
         if (foliage is not null) AddFoliageBlock(eye, foliage);
+        UpdateCharacters(eye, characters);
         Evict();
 
         var slot = _slots[_ctx.Frame.Slot];
@@ -582,6 +584,32 @@ internal sealed unsafe class MetalGiScene : IDisposable
 
     #endregion
 
+    #region Characters
+
+    /// <summary>
+    /// The characters the traced sun and lamps see (made the first time the casters are wanted).
+    /// </summary>
+    MetalTracedCharacters? _people;
+
+    /// <summary>
+    /// The characters while the scene holds the casters: skinned, their structures refitted, their instances last; dropped otherwise.
+    /// </summary>
+    void UpdateCharacters(Vector3 eye, Characters.CharacterRenderer? characters)
+    {
+        if (!Casters || characters is null)
+        {
+            _people?.Release();
+            return;
+        }
+
+        _people ??= new MetalTracedCharacters(_ctx);
+        _people.Update(_builds, characters, eye, Range, CasterAngle);
+        _people.Emit((level, world, mask, options) => Add(level, world, mask, options), _records, Origin, MaxInstances, MaxRecords,
+            () => _instances.Count);
+    }
+
+    #endregion
+
     #region Top level
 
     /// <summary>
@@ -591,7 +619,8 @@ internal sealed unsafe class MetalGiScene : IDisposable
     void BuildTop(Slot slot)
     {
         var bytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(_instances));
-        bool same = slot.Built is { } built && built.Length == bytes.Length && bytes.SequenceEqual(built) && _frame - slot.BuiltFrame < TopRebuildEvery;
+        bool same = slot.Built is { } built && built.Length == bytes.Length && bytes.SequenceEqual(built) && _frame - slot.BuiltFrame < TopRebuildEvery
+            && !(_people?.Moved ?? false);
         if (same) return;
 
         bytes.CopyTo(new Span<byte>((void*)slot.Instances.Contents, MaxInstances * InstanceBytes));
@@ -732,7 +761,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
     /// </summary>
     public string Describe() =>
         $"{InstanceCount} instances ({FoliageInstances} foliage), {_meshes.Count} structures ({_builds.Bytes / (1024 * 1024)} MB built), "
-        + $"terrain {string.Join(" + ", _terrain.Select(t => t.Describe()))}";
+        + $"terrain {string.Join(" + ", _terrain.Select(t => t.Describe()))}{(_people is { } p ? ", " + p.Describe() : "")}";
 
     /// <summary>
     /// Frees the grids, the structures and the slots.
@@ -740,6 +769,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
     public void Dispose()
     {
         foreach (var t in _terrain) t.Dispose();
+        _people?.Dispose();
         foreach (var e in _meshes.Values) e.Dispose();
         _meshes.Clear();
         foreach (var s in _slots) s.Dispose();

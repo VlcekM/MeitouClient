@@ -40,7 +40,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     /// <summary>
     /// The pipelines by program and target format.
     /// </summary>
-    readonly Dictionary<(GpuProgram, InternalFormat, bool), GraphicsPipelineDesc> _pipelines = [];
+    readonly Dictionary<(GpuProgram, InternalFormat, BlendState?), GraphicsPipelineDesc> _pipelines = [];
 
     /// <summary>
     /// The nearest clamped sampler every input is read with.
@@ -150,7 +150,14 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/>; <paramref name="blend"/> adds it to the target's red,
     /// green and blue.
     /// </summary>
-    internal void Fullscreen(MetalCommandList cmd, LegacyProgram program, GpuTexture target, bool blend, bool load = false)
+    internal void Fullscreen(MetalCommandList cmd, LegacyProgram program, GpuTexture target, bool blend, bool load = false) =>
+        Fullscreen(cmd, program, target, blend ? AddBlend : null, load);
+
+    /// <summary>
+    /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/>'s red, green and blue with <paramref name="blend"/> (none:
+    /// written as it is).
+    /// </summary>
+    internal void Fullscreen(MetalCommandList cmd, LegacyProgram program, GpuTexture target, BlendState? blend, bool load)
     {
         int w = target.Desc.Width, h = target.Desc.Height;
         var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);
@@ -158,11 +165,11 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
         if (!_pipelines.TryGetValue(key, out var desc))
         {
             var state = DrawState.For(formats, false);
-            if (blend) state = state with { Blend = AddBlend, ColourMask = DrawState.Rgb };
+            if (blend is { } b) state = state with { Blend = b, ColourMask = DrawState.Rgb };
             _pipelines[key] = desc = state.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles, formats, program.Name);
         }
 
-        var loadOp = blend || load ? LoadOp.Load : LoadOp.DontCare;
+        var loadOp = blend is not null || load ? LoadOp.Load : LoadOp.DontCare;
         cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), loadOp, default), default, w, h));
         cmd.SetViewport(new PixelViewport(0, 0, w, h, 0, 1));
         cmd.SetScissor(new PixelRect(0, 0, (uint)w, (uint)h));
@@ -198,7 +205,8 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     /// <summary>
     /// A fullscreen GI pass of <paramref name="fragment"/> (its reconstruction's y turned round), for passes over the GI surfaces beside the resolve.
     /// </summary>
-    internal Pass Program(string fragment, string name) => new(ctx, Flip(fragment), name);
+    internal Pass Program(string fragment, string name) => new(ctx, fragment.Contains(NdcLine, StringComparison.Ordinal) ? Flip(fragment) : fragment,
+        name);
 
     /// <summary>
     /// The nearest clamped sampler the passes read their inputs with.
