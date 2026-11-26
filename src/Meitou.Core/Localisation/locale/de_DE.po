@@ -5881,3 +5881,18 @@ msgstr "Mod: {1}"
 #. machine-translated
 msgid "Mods: {1}"
 msgstr "Mods: {1}"
+
+msgid "SMAA quality"
+msgstr "SMAA-Qualität"
+
+#. machine-translated
+msgid "Higher finds fainter and longer edges and costs more; Ultra also softens texture detail."
+msgstr "Höher findet schwächere und längere Kanten und kostet mehr; Ultra macht auch Texturdetails weicher."
+
+#. machine-translated
+msgid "Native"
+msgstr "Nativ"
+
+#. machine-translated
+msgid "Native AA"
+msgstr "Natives AA"

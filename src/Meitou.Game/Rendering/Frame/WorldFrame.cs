@@ -411,7 +411,7 @@ static partial class WorldFrame
         WaterReflectionSlider = "Water reflection 0-4 (game)", ShadowDistanceSlider = "Shadow distance (game 1k-9k, 0 off)",
         ShadowMapSlider = "Shadow map size (game quality 0-2)", GroundReliefQualitySlider = "Ground relief quality",
         ShaftQualitySlider = "Light shafts quality", GtaoQualitySlider = "Ambient occlusion quality (GTAO)",
-        ShadowCascadesSlider = "Shadow cascades (Meitou)";
+        ShadowCascadesSlider = "Shadow cascades (Meitou)", SmaaQualitySlider = "SMAA quality";
 
     /// <summary>
     /// More of the Tab panel sliders' labels, kept as saved and as the launcher names them.
@@ -1029,6 +1029,7 @@ static partial class WorldFrame
             int i = (int)MathF.Round(v);
             post.Options.Smaa = i == 2;
             post.Options.Fxaa = i >= 1 && i != 2;   // 0: no anti-aliasing at all (FXAA off, no upscaler); FXAA stays the fallback of the upscalers
+            up.Spatial = i is 1 or 2;
             if (up.Kind != UpscalerKind.Off) up.Preferred = up.Kind;   // what the Meitou anti-aliasing switch turns back on
         }, "0"));
         sliders.Add(new Slider(UpscalerSliders[1], 0.33f, 1, () => up.EffectiveScale, v => up.Scale = MathF.Round(v * 100) / 100, "0.00", Text: v =>
@@ -1038,6 +1039,7 @@ static partial class WorldFrame
         }));
         sliders.Add(new Slider(UpscalerSliders[2], 0, 1, () => up.Sharpness, v => up.Sharpness = v, "0.00"));
         sliders.Add(DlssPresetSliderFor(up));
+        sliders.Add(SmaaQuality(post.Options));
 
         // The weather's particles (docs/render-post.md "Particles"): off, forced to a quarter or half of the render size, by sprite size (the Meitou
         // default), or all full size (as the game).
@@ -1108,6 +1110,13 @@ static partial class WorldFrame
         sliders.Add(ShaftQuality(options));
         sliders.Add(OcclusionQuality(options));
     }
+
+    /// <summary>
+    /// SMAA's quality row: Low, Medium, High, Ultra (<see cref="PostOptions.SmaaQuality"/>).
+    /// </summary>
+    static Slider SmaaQuality(PostOptions options) => new(SmaaQualitySlider, 0, PostOptions.MaxSmaaQuality, () => options.SmaaQuality,
+        v => options.SmaaQuality = Math.Clamp((int)MathF.Round(v), 0, PostOptions.MaxSmaaQuality), "0",
+        Text: v => QualityName((int)MathF.Round(v)));
 
     /// <summary>
     /// The light shafts' quality row (also the Metal panel's): Low, Medium, High, Ultra (<see cref="PostOptions.ShaftQuality"/>).

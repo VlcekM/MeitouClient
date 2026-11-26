@@ -2382,6 +2382,10 @@ msgid "High: keeps the most textures, terrain and objects resident. Best on a 16
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
+msgid "Higher finds fainter and longer edges and costs more; Ultra also softens texture detail."
+msgstr ""
+
+#: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Higher resolution gives sharper shadow detail."
 msgstr ""
 
@@ -3566,6 +3570,14 @@ msgstr ""
 msgid "Name A-Z"
 msgstr ""
 
+#: src/Meitou.Game/Settings/LauncherSchema.cs
+msgid "Native"
+msgstr ""
+
+#: src/Meitou.Game/Settings/LauncherSchema.cs
+msgid "Native AA"
+msgstr ""
+
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPlatform.cs
 msgid "Native Linux build"
 msgstr ""
@@ -4563,6 +4575,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "SETTINGS"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/SettingHints.cs
+msgid "SMAA quality"
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs

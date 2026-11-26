@@ -5878,3 +5878,18 @@ msgstr "모드: {1}"
 #. machine-translated
 msgid "Mods: {1}"
 msgstr "모드: {1}"
+
+msgid "SMAA quality"
+msgstr "SMAA 품질"
+
+#. machine-translated
+msgid "Higher finds fainter and longer edges and costs more; Ultra also softens texture detail."
+msgstr "높을수록 더 약하고 긴 가장자리를 찾지만 비용이 늘어납니다. Ultra는 텍스처 디테일도 부드럽게 만듭니다."
+
+#. machine-translated
+msgid "Native"
+msgstr "네이티브"
+
+#. machine-translated
+msgid "Native AA"
+msgstr "네이티브 AA"

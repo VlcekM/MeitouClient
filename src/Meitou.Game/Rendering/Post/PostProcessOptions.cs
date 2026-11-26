@@ -27,6 +27,27 @@ public sealed class PostOptions
     public bool Smaa;
 
     /// <summary>
+    /// SMAA's quality: 0 low, 1 medium, 2 high (the default), 3 ultra, SMAA's presets' edge threshold and search length without their diagonal and
+    /// corner patterns (docs/render-post.md "SMAA").
+    /// </summary>
+    public int SmaaQuality = 2;
+
+    /// <summary>
+    /// The highest <see cref="SmaaQuality"/>.
+    /// </summary>
+    public const int MaxSmaaQuality = 3;
+
+    /// <summary>
+    /// The luma step that makes an edge at <see cref="SmaaQuality"/>.
+    /// </summary>
+    public float SmaaThreshold => SmaaQuality switch { 0 => 0.15f, 3 => 0.05f, _ => 0.1f };
+
+    /// <summary>
+    /// The edge searches' bilinear fetches each way (2 pixels each) at <see cref="SmaaQuality"/>.
+    /// </summary>
+    public float SmaaSearchSteps => SmaaQuality switch { 0 => 4, 1 => 8, 3 => 32, _ => 16 };
+
+    /// <summary>
     /// Kenshi's heat haze after FXAA (its <c>HeatHaze=1</c> setting, on when the key is absent; docs/formats/post-processing.md).
     /// </summary>
     public bool HeatHaze = true;
@@ -734,6 +755,7 @@ public sealed class PostOptions
         Preset = other.Preset;
         Fxaa = other.Fxaa;
         Smaa = other.Smaa;
+        SmaaQuality = other.SmaaQuality;
         HeatHaze = other.HeatHaze;
         Ssao = other.Ssao;
         ContactShadows = other.ContactShadows;
