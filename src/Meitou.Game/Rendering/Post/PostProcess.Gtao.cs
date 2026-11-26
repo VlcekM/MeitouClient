@@ -188,8 +188,9 @@ public sealed unsafe partial class PostProcess
         _occlusion.B?.Texture.Dispose();
 
         using var batch = Gpu.Uploads.Begin();
-        _occlusion.A = Make(batch, w, h, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
-        _occlusion.B = Make(batch, w, h, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
+        var aoLife = new TransientLifetime(TransientPhase.FogAndAo, TransientPhase.PostUpscale);
+        _occlusion.A = Make(batch, w, h, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao", transient: aoLife);
+        _occlusion.B = Make(batch, w, h, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao", transient: aoLife);
     }
 
     /// <summary>
@@ -263,8 +264,11 @@ public sealed unsafe partial class PostProcess
         {
             _gtaoPacked?.Texture.Dispose();   // released after the frames in flight
             using var batch = Gpu.Uploads.Begin();
-            _gtaoPacked = Make(batch, _width, _height, InternalFormat.R32F, TextureMinFilter.Nearest, "post gtao depth", GtaoLevels + 1);
+            _gtaoPacked = Make(batch, _width, _height, InternalFormat.R32F, TextureMinFilter.Nearest, "post gtao depth", GtaoLevels + 1,
+                transient: TransientLifetime.Single(TransientPhase.FogAndAo));
         }
+
+        Gpu.BeginTransientPhase(TransientPhase.FogAndAo);
 
         var pack = _gtaoPack ??= new GtaoPackPass(Gpu);
         Bind(pack.P, pack.Depth, _sceneDepth);

@@ -45,6 +45,7 @@ sealed class GlassScene(IGpuContext gpu) : IDisposable
         _lastUsedAt = Environment.TickCount64;
         var cmd = gpu.BeginNative("glass scene copy");
         Ensure(vulkan, cmd, scene.Desc);
+        gpu.BeginTransientPhase(TransientPhase.SeeThrough);
         cmd.Blit(scene, _copy!, TextureMinFilter.Linear);
         gpu.EndNative(cmd);
 
@@ -71,7 +72,10 @@ sealed class GlassScene(IGpuContext gpu) : IDisposable
         if (_copy is { } c && c.Desc.Width == scene.Width && c.Desc.Height == scene.Height && c.Desc.Format == scene.Format) return;
 
         _copy?.Dispose();
-        _copy = vulkan.CreateTexture(new TextureDesc(scene.Format, scene.Width, scene.Height, Name: "glass scene"), ((CommandList)cmd).Handle);
+        _copy = vulkan.CreateTexture(new TextureDesc(scene.Format, scene.Width, scene.Height, Name: "glass scene")
+        {
+            Transient = TransientLifetime.Single(TransientPhase.SeeThrough),
+        }, ((CommandList)cmd).Handle);
     }
 
     /// <summary>

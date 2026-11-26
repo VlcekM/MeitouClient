@@ -832,6 +832,7 @@ static partial class WorldFrame
         if (gpu.ProbeGi is { } metalReflected) metalReflected.InReflection = reflecting;
         if (reflecting)
         {
+            f.Post.Context.BeginTransientPhase(TransientPhase.Reflection);
             bool anything = gpu.Objects is not null || gpu.Characters is not null || gpu.Foliage is not null;
             gpu.Reflection!.Render(f.Camera, f.RenderWidth, f.RenderHeight, gpu.Sky, f.Colours, light, gpu.Terrain, render,
                 anything ? (vp, e, frustum) => DrawReflectedScene(gpu, render, light, vp, e, frustum) : null);
@@ -937,6 +938,7 @@ static partial class WorldFrame
         else gpu.Sky.PrepareClouds(skyProjection, f.RenderWidth, f.RenderHeight, gpu.Sky.Eye, fogVolumes: gpu.FogVolumes is { UsedData: > 0 });
 
         RecordInteriorMask(ref f);
+        post.Context.BeginTransientPhase(TransientPhase.OpaqueScene);
 
         // Alpha 0: no character (the SSAO mask).
         var fog = f.Light.FogColour;
@@ -1355,6 +1357,7 @@ static partial class WorldFrame
         {
             // The visibility buffer (CharacterVisibility): its id pass and resolve run outside the scene's pass, which opens again after them.
             f.Host.Close();
+            f.Post.Context.BeginTransientPhase(TransientPhase.Characters);
             characters.DrawVisible(f.Post, StageClock.Characters, s.ViewProjection, f.Eye, s.Frustum, light.SunDirection, light.FogColour,
                 light.FogDistance, relative);
             f.Host.Open(StageClock.Characters, f.Post.WithShadingRate(f.Post.SceneTargets));
@@ -1466,12 +1469,15 @@ static partial class WorldFrame
         post.RunGiResolve();
         StageClock.Lap(14, "gi resolve");
 
+        post.Context.BeginTransientPhase(TransientPhase.LampShadows);
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
         gpu.ProbeGi?.FinishScene(post, gpu.Lamps, gpu.Characters?.SkinTable ?? 0);
+        post.Context.BeginTransientPhase(TransientPhase.CharacterOcclusion);
         gpu.Post?.RunCharacterOcclusion(gpu.Probes, gpu.GiActive ? gpu.Gi : null);
         gpu.Post?.RunRoomMask(gpu.GiActive ? gpu.Gi : null, gpu.Objects?.EyeIndoors(f.Eye) == true);
         StageClock.Lap(StageClock.LampShadows);
 
+        post.Context.BeginTransientPhase(TransientPhase.Reflections);
         gpu.Post?.RunReflections(gpu.GiActive ? gpu.Probes : null, gpu.Gi);
         StageClock.Lap(14, "reflections");
         DrawSeeThrough(ref f);

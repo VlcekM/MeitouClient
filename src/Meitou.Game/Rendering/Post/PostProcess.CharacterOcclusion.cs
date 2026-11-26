@@ -110,9 +110,10 @@ public sealed unsafe partial class PostProcess
         {
             using var batch = Gpu.Uploads.Begin();
             _characterGatherPooled = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post character gather pooled",
-                storage: true);
+                storage: true, transient: TransientLifetime.Single(TransientPhase.CharacterOcclusion));
         }
         CloseSegment();
+        Gpu.BeginTransientPhase(TransientPhase.CharacterOcclusion);
 
         // The characters' indirect light, gathered by rays (GiShaders.CharacterGather), a texel a pixel.
         float tanY = MathF.Tan(_fovNow * 0.5f);

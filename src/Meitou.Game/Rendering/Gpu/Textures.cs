@@ -67,6 +67,12 @@ public sealed record TextureDesc(InternalFormat Format, int Width, int Height, i
     /// Whether the format is a depth (or depth-stencil) format.
     /// </summary>
     public bool IsDepth => GlConventions.IsDepthFormat(Format);
+
+    /// <summary>
+    /// Optional intra-frame phase lifetime for transient render target memory aliasing on Vulkan (ignored on Metal,
+    /// where <c>MTLHeap</c> aliasing is not implemented).
+    /// </summary>
+    public TransientLifetime? Transient { get; init; }
 }
 
 /// <summary>

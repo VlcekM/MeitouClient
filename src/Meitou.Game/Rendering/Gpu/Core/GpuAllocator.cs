@@ -28,9 +28,17 @@ public enum MemoryKind
 public sealed class Allocation
 {
     /// <summary>
-    /// The block the range is carved from.
+    /// The block the range is carved from (null for transient aliased allocations).
     /// </summary>
-    internal MemoryBlock Block = null!;
+    internal MemoryBlock? Block;
+    /// <summary>
+    /// Backing memory for transient aliased allocations when <see cref="Block"/> is null.
+    /// </summary>
+    internal DeviceMemory TransientMemory;
+    /// <summary>
+    /// Memory type index for transient aliased allocations when <see cref="Block"/> is null.
+    /// </summary>
+    internal uint TransientMemoryTypeIndex;
     /// <summary>
     /// Set by the first free; a second free does nothing.
     /// </summary>
@@ -39,7 +47,7 @@ public sealed class Allocation
     /// <summary>
     /// The block's device memory.
     /// </summary>
-    public DeviceMemory Memory => Block.Memory;
+    public DeviceMemory Memory => Block is not null ? Block.Memory : TransientMemory;
     /// <summary>
     /// The range's offset in the block's memory, in bytes.
     /// </summary>
@@ -55,11 +63,11 @@ public sealed class Allocation
     /// <summary>
     /// The Vulkan memory type of the block.
     /// </summary>
-    public uint MemoryTypeIndex => Block.MemoryTypeIndex;
+    public uint MemoryTypeIndex => Block is not null ? Block.MemoryTypeIndex : TransientMemoryTypeIndex;
     /// <summary>
     /// Whether the block's memory is host coherent (no flush or invalidate needed).
     /// </summary>
-    public bool IsHostCoherent => Block.Coherent;
+    public bool IsHostCoherent => Block is not null && Block.Coherent;
 }
 
 /// <summary>
@@ -217,6 +225,14 @@ public sealed class ImageAllocation
     /// The kind of memory the image was asked with.
     /// </summary>
     public MemoryKind Kind { get; internal set; }
+    /// <summary>
+    /// Whether the image is bound inside <see cref="TransientImagePool"/>.
+    /// </summary>
+    internal bool Aliased;
+    /// <summary>
+    /// The transient slot owning this image when <see cref="Aliased"/> is set.
+    /// </summary>
+    internal TransientSlot? TransientSlot;
 }
 
 /// <summary>
@@ -320,6 +336,11 @@ public sealed unsafe class GpuAllocator : IDisposable
     const int SpareAfterMisses = 2;
 
     /// <summary>
+    /// Transient render target aliasing pool (shared device-local optimal-image blocks for disjoint intra-frame phases).
+    /// </summary>
+    internal TransientImagePool Transient { get; }
+
+    /// <summary>
     /// An allocator on the device's physical memory properties, with blocks of <paramref name="blockSize"/> bytes.
     /// </summary>
     internal GpuAllocator(VulkanDevice dev, ulong blockSize = DefaultBlockSize)
@@ -328,6 +349,7 @@ public sealed unsafe class GpuAllocator : IDisposable
         _vk = dev.Vk;
         this._blockSize = blockSize;
         _vk.GetPhysicalDeviceMemoryProperties(dev.PhysicalDevice, out _memProps);
+        Transient = new TransientImagePool(dev, this);
     }
 
     /// <summary>
@@ -337,15 +359,15 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// <summary>
     /// Bytes of device memory held in blocks.
     /// </summary>
-    public ulong TotalAllocatedBytes { get { lock (_gate) return _totalAllocated; } }
+    public ulong TotalAllocatedBytes { get { lock (_gate) return _totalAllocated + Transient.AllocatedBytes; } }
     /// <summary>
     /// Bytes handed out to allocations.
     /// </summary>
-    public ulong TotalUsedBytes { get { lock (_gate) return _totalUsed; } }
+    public ulong TotalUsedBytes { get { lock (_gate) return _totalUsed + Transient.UsedBytes; } }
     /// <summary>
     /// Blocks held.
     /// </summary>
-    public int BlockCount { get { lock (_gate) return _blockCount; } }
+    public int BlockCount { get { lock (_gate) return _blockCount + Transient.BlockCount; } }
     /// <summary>
     /// Allocations not yet freed.
     /// </summary>
@@ -358,7 +380,7 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// <summary>
     /// Buffers and images still alive (destroyed on dispose).
     /// </summary>
-    public int LiveResourceCount { get { lock (_gate) return _liveBuffers.Count + _liveImages.Count; } }
+    public int LiveResourceCount { get { lock (_gate) return _liveBuffers.Count + _liveImages.Count + Transient.ImageCount; } }
     /// <summary>
     /// Bytes of live upload buffers and images placed in device-local (resizable-BAR) memory.
     /// </summary>
@@ -402,6 +424,13 @@ public sealed unsafe class GpuAllocator : IDisposable
         {
             foreach (var b in _liveBuffers) Add(b.Name, b.Allocation);
             foreach (var i in _liveImages) Add(i.Name, i.Allocation);
+        }
+
+        int transientCount = Transient.ImageCount;
+        if (transientCount > 0)
+        {
+            ulong bytes = Transient.UsedBytes;
+            groups["transient render targets"] = (transientCount, bytes, bytes);
         }
 
         return groups.Select(g => (g.Key, g.Value.Count, g.Value.Bytes, g.Value.DeviceLocal)).OrderByDescending(g => g.Bytes).ToList();
@@ -449,6 +478,8 @@ public sealed unsafe class GpuAllocator : IDisposable
             foreach (var (key, list) in _pools) foreach (var b in list) Block(key.Type, b, false);
             foreach (var (key, b) in _spares) Block(key.Type, b, true);
         }
+
+        Transient.AppendReport(rows, blocks, Mb, t => _memProps.MemoryTypes[(int)t].PropertyFlags);
 
         w.WriteLine($"resources ({rows.Count}, MB  memory  what  name  [details]):");
         foreach (var (_, line) in rows.OrderByDescending(r => r.Bytes)) w.WriteLine(line);
@@ -600,6 +631,11 @@ public sealed unsafe class GpuAllocator : IDisposable
         const MemoryPropertyFlags f = MemoryPropertyFlags.DeviceLocalBit | MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit;
         return (t.PropertyFlags & f) == f && _memProps.MemoryHeaps[(int)t.HeapIndex].Size >= RebarMinHeap;
     }
+
+    /// <summary>
+    /// Exposes <see cref="Candidates"/> for <see cref="TransientImagePool"/>.
+    /// </summary>
+    internal List<uint> SelectMemoryTypes(uint typeBits, MemoryKind kind, ulong size) => Candidates(typeBits, kind, size);
 
     /// <summary>
     /// The memory types of <paramref name="typeBits"/> that suit the kind, best first: device-local prefers types not host visible; uploads prefer
@@ -1107,7 +1143,8 @@ public sealed unsafe class GpuAllocator : IDisposable
             }
 
             a.Freed = true;
-            var b = a.Block;
+            if (a.Block is not { } b) return;
+
             b.Used -= a.Size;
             _totalUsed -= a.Size;
             _allocationCount--;
@@ -1235,7 +1272,7 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// </summary>
     void Range(Allocation a, ulong offset, ulong size, bool invalidate)
     {
-        if (a.Block.Coherent || a.Block.Mapped == 0)
+        if (a.Block is not { } block || block.Coherent || block.Mapped == 0)
         {
             return;
         }
@@ -1244,7 +1281,7 @@ public sealed unsafe class GpuAllocator : IDisposable
         ulong start = a.Offset + offset;
         ulong len = size == Vk.WholeSize ? a.Size - offset : size;
         ulong alignedStart = start / atom * atom;
-        ulong end = Math.Min(AlignUp(start + len, atom), a.Block.Size);
+        ulong end = Math.Min(AlignUp(start + len, atom), block.Size);
         var range = new MappedMemoryRange
         {
             SType = StructureType.MappedMemoryRange,
@@ -1448,12 +1485,25 @@ public sealed unsafe class GpuAllocator : IDisposable
     }
 
     /// <summary>
+    /// A new transient aliased image bound inside <see cref="Transient"/> when aliasing is enabled, or a normal
+    /// device-local image when <c>MEITOU_NO_ALIAS=1</c>.
+    /// </summary>
+    public ImageAllocation CreateAliasedImage(in ImageCreateInfo info, TransientLifetime lifetime, ImageAspectFlags aspect, string? name = null) =>
+        Transient.Enabled ? Transient.CreateImage(in info, lifetime, aspect, name) : CreateImage(in info, MemoryKind.DeviceLocal, name);
+
+    /// <summary>
     /// Destroys an image and frees its memory; null or a second free does nothing.
     /// </summary>
     public void Free(ImageAllocation? i)
     {
         if (i == null)
         {
+            return;
+        }
+
+        if (i.Aliased)
+        {
+            Transient.Free(i);
             return;
         }
 
@@ -1497,6 +1547,7 @@ public sealed unsafe class GpuAllocator : IDisposable
 
         foreach (var b in bs) Free(b);
         foreach (var i in ims) Free(i);
+        Transient.Dispose();
 
         // Workers making spares or giving blocks back finish before the rest goes (a spare made after disposed was set frees itself).
         var wait = new SpinWait();

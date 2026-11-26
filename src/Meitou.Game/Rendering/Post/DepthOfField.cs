@@ -487,13 +487,14 @@ sealed class DepthOfField : IDisposable
         int tilesDown = Math.Max((halfHeight + TileSize - 1) / TileSize, 1);
 
         using var batch = _ctx.Uploads.Begin();
-        _prepared = Make(batch, InternalFormat.Rgba16F, halfWidth, halfHeight, "post dof prepared");
-        _tiles = Make(batch, InternalFormat.Rg16F, tilesAcross, tilesDown, "post dof tiles");
-        _dilated = Make(batch, InternalFormat.Rg16F, tilesAcross, tilesDown, "post dof dilated");
-        _farField = Make(batch, InternalFormat.Rgba16F, halfWidth, halfHeight, "post dof far");
-        _farSmooth = Make(batch, InternalFormat.Rgba16F, halfWidth, halfHeight, "post dof far smooth");
-        _nearField = Make(batch, InternalFormat.Rgba16F, halfWidth, halfHeight, "post dof near");
-        _output = Make(batch, InternalFormat.Rgba16F, width, height, "post dof");
+        var transient = TransientLifetime.Single(TransientPhase.PostUpscale);
+        _prepared = Make(batch, InternalFormat.Rgba16F, halfWidth, halfHeight, "post dof prepared", transient);
+        _tiles = Make(batch, InternalFormat.Rgba16F, tilesAcross, tilesDown, "post dof tiles", transient);
+        _dilated = Make(batch, InternalFormat.Rgba16F, tilesAcross, tilesDown, "post dof dilated", transient);
+        _farField = Make(batch, InternalFormat.Rgba16F, halfWidth, halfHeight, "post dof far", transient);
+        _farSmooth = Make(batch, InternalFormat.Rgba16F, halfWidth, halfHeight, "post dof far smooth", transient);
+        _nearField = Make(batch, InternalFormat.Rgba16F, halfWidth, halfHeight, "post dof near", transient);
+        _output = Make(batch, InternalFormat.Rgba16F, width, height, "post dof", transient);
         for (int i = 0; i < _focus.Length; i++) _focus[i] = Make(batch, InternalFormat.R32F, 1, 1, "post dof focus");
     }
 
@@ -501,8 +502,11 @@ sealed class DepthOfField : IDisposable
     /// A target a pass draws into and a later one samples, made through the upload batch (the transition into its layout is recorded there, not
     /// submitted at once).
     /// </summary>
-    static GpuTexture Make(IGpuUploadBatch batch, InternalFormat format, int width, int height, string name) =>
-        batch.Create(new TextureDesc(format, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: name));
+    static GpuTexture Make(IGpuUploadBatch batch, InternalFormat format, int width, int height, string name, TransientLifetime? transient = null) =>
+        batch.Create(new TextureDesc(format, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: name)
+        {
+            Transient = transient,
+        });
 
     /// <summary>
     /// Releases the targets and the autofocus texels (the textures go after the frames in flight); the next run starts the focus afresh.

@@ -210,7 +210,8 @@ public sealed unsafe partial class PostProcess
     Target2D MakeLampLost()
     {
         using var batch = Gpu.Uploads.Begin();
-        return Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post lamp shadows", storage: true);
+        return Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post lamp shadows", storage: true,
+            transient: TransientLifetime.Single(TransientPhase.LampShadows));
     }
 
     /// <summary>

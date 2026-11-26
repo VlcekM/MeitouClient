@@ -34,6 +34,13 @@ public interface IGpuContext
     void ReleaseTexture(GpuTexture texture);
 
     /// <summary>
+    /// Marks the start of an intra-frame transient phase: on Vulkan, transitions every live aliased image whose
+    /// <see cref="TransientLifetime.First"/> equals <paramref name="phase"/> from <c>UNDEFINED</c> to <c>GENERAL</c>
+    /// with an aliasing memory barrier (at most once per frame per phase). No-op on backends without transient aliasing.
+    /// </summary>
+    void BeginTransientPhase(TransientPhase phase) { }
+
+    /// <summary>
     /// A new device-local buffer of <paramref name="size"/> bytes.
     /// </summary>
     GpuBuffer CreateBuffer(ulong size, BufferUse use, string name);

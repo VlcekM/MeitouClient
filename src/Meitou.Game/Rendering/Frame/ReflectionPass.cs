@@ -450,7 +450,10 @@ public sealed class ReflectionPass : IDisposable
         while (_samples * 2 <= Samples && _samples * 2 <= maxSamples) _samples *= 2;
         if (_samples <= 1) _samples = 0;
         GpuTexture Target(InternalFormat format, TextureUse use, int count, string name, bool privateMemory) =>
-            Gpu.CreateTexture(new TextureDesc(format, w, h, Samples: Math.Max(count, 1), Use: use, Name: name, Private: privateMemory));
+            Gpu.CreateTexture(new TextureDesc(format, w, h, Samples: Math.Max(count, 1), Use: use, Name: name, Private: privateMemory)
+            {
+                Transient = TransientLifetime.Single(TransientPhase.Reflection),
+            });
         if (_samples == 0)
         {
             _depth = Target(InternalFormat.DepthComponent24, TextureUse.DepthTarget | TextureUse.Sampled, 1, "reflection depth", false);

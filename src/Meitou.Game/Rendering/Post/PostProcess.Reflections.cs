@@ -155,9 +155,10 @@ public sealed unsafe partial class PostProcess
         _ssrLowSky?.Texture.Dispose();
 
         using var batch = Gpu.Uploads.Begin();
-        _ssrHit = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr hit", storage: true);
-        _ssrLow = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr low");
-        _ssrLowSky = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr low sky");
+        var ssrPhase = TransientLifetime.Single(TransientPhase.Reflections);
+        _ssrHit = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr hit", storage: true, transient: ssrPhase);
+        _ssrLow = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr low", transient: ssrPhase);
+        _ssrLowSky = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post ssr low sky", transient: ssrPhase);
     }
 
     /// <summary>

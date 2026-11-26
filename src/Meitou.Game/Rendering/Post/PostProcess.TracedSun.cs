@@ -127,13 +127,19 @@ public sealed unsafe partial class PostProcess
         {
             // 32-bit floats: the alpha holds three packed levels (GiResolveShaders.WithAlbedo), exact up to 2^24.
             var desc = new TextureDesc(InternalFormat.Rgba32F, _width, _height, Use: TextureUse.Sampled | TextureUse.ColourTarget,
-                Name: "post traced sun term");
+                Name: "post traced sun term")
+            {
+                Transient = new TransientLifetime(TransientPhase.OpaqueScene, TransientPhase.TracedSun),
+            };
             _tracedTerm = new Target2D(batch.Create(desc), TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         }
         if (!TracedSun) return;
 
-        _tracedMask = Make(batch, _width, _height, InternalFormat.Rg16F, TextureMinFilter.Nearest, "post traced sun mask", storage: true);
-        _tracedScratch = Make(batch, _width, _height, InternalFormat.Rg16F, TextureMinFilter.Nearest, "post traced sun penumbra", storage: true);
+        var sunPhase = TransientLifetime.Single(TransientPhase.TracedSun);
+        _tracedMask = Make(batch, _width, _height, InternalFormat.Rg16F, TextureMinFilter.Nearest, "post traced sun mask", storage: true,
+            transient: sunPhase);
+        _tracedScratch = Make(batch, _width, _height, InternalFormat.Rg16F, TextureMinFilter.Nearest, "post traced sun penumbra", storage: true,
+            transient: sunPhase);
     }
 
     /// <summary>
@@ -146,6 +152,7 @@ public sealed unsafe partial class PostProcess
         if (_tracedTerm is null || _tracedMask is null || _tracedScratch is null) return;
         if (_giAlbedo is null || _sceneColour is null || _sceneDepth is null) return;
 
+        Gpu.BeginTransientPhase(TransientPhase.TracedSun);
         float pixelSlope = 2 * MathF.Tan(_fovNow * 0.5f) / _height;
         var targets = new Gi.TracedSunTargets(_sceneDepth.Texture, _giAlbedo.Texture, _tracedTerm.Texture, _tracedMask.Texture,
             _tracedScratch.Texture, _width, _height);

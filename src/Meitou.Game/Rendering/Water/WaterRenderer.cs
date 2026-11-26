@@ -2347,12 +2347,16 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (_refraction is not { } r || r.Desc.Width != w || r.Desc.Height != h || r.Desc.Format != sceneColour.Desc.Format)
         {
             _refraction?.Dispose();
-            _refraction = Gpu is GpuContext vk
-                ? vk.CreateTexture(new TextureDesc(sceneColour.Desc.Format, w, h, Name: "water refraction"), ((CommandList)cmd).Handle)
-                : Gpu.CreateTexture(new TextureDesc(sceneColour.Desc.Format, w, h,
-                    Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "water refraction"));
+            var desc = new TextureDesc(sceneColour.Desc.Format, w, h,
+                Use: Gpu is GpuContext ? TextureUse.Sampled | TextureUse.TransferDst : TextureUse.ColourTarget | TextureUse.Sampled,
+                Name: "water refraction")
+            {
+                Transient = TransientLifetime.Single(TransientPhase.Water),
+            };
+            _refraction = Gpu is GpuContext vk ? vk.CreateTexture(desc, ((CommandList)cmd).Handle) : Gpu.CreateTexture(desc);
         }
 
+        Gpu.BeginTransientPhase(TransientPhase.Water);
         cmd.Blit(sceneColour, _refraction, TextureMinFilter.Linear);
         _refractionFrame = Gpu.Frame.Number;
         _refractionLastUsedMs = Environment.TickCount64;
@@ -2370,10 +2374,14 @@ public sealed unsafe class WaterRenderer : IDisposable
         {
             _sceneDepthCopy?.Dispose();
             var desc = new TextureDesc(d.Format, d.Width, d.Height, Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget,
-                Name: "water scene depth");
+                Name: "water scene depth")
+            {
+                Transient = TransientLifetime.Single(TransientPhase.Water),
+            };
             _sceneDepthCopy = Gpu is GpuContext vk ? vk.CreateTexture(desc, ((CommandList)cmd).Handle) : Gpu.CreateTexture(desc);
         }
 
+        Gpu.BeginTransientPhase(TransientPhase.Water);
         if (Gpu is GpuContext vulkan) CopyDepthVulkan(vulkan, cmd, sceneDepth);
         else cmd.Blit(sceneDepth, _sceneDepthCopy!, TextureMinFilter.Nearest);
         (_sceneDepthFrame, _sceneDepthPlanes) = (Gpu.Frame.Number, new Vector2(near, far));

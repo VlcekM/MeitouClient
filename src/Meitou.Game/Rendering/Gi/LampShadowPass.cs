@@ -754,12 +754,19 @@ sealed unsafe class LampShadowPass : IDisposable
         _sliceExact?.Dispose();
         _sliceExact = null;
         var use = TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst;
+        var transient = TransientLifetime.Single(TransientPhase.LampShadows);
         GpuTexture Make(string name) =>
-            _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, sw, sh, Layers: layers, Kind: TextureKind.Texture2DArray, Use: use, Name: name));
+            _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, sw, sh, Layers: layers, Kind: TextureKind.Texture2DArray, Use: use, Name: name)
+            {
+                Transient = transient,
+            });
         (_sliceLost, _sliceScratch, _sliceFiltered) = (Make("lamp shadows flags"), Make("lamp shadows scratch"), Make("lamp shadows filtered"));
         if (half)
             _sliceExact = _ctx.CreateTexture(new TextureDesc(InternalFormat.R32Ui, sw, sh, Layers: layers, Kind: TextureKind.Texture2DArray, Use: use,
-                Name: "lamp shadows own rays"));
+                Name: "lamp shadows own rays")
+            {
+                Transient = transient,
+            });
     }
 
     /// <summary>

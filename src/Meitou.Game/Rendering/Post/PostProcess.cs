@@ -860,13 +860,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// compression.
     /// </summary>
     internal Target2D Make(IGpuUploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1,
-        bool storage = false)
+        bool storage = false, TransientLifetime? transient = null)
     {
         var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst
             | (GlConventions.IsDepthFormat(glFormat) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
         if (storage && SupportsStorage(glFormat))
             use |= TextureUse.Storage;
-        var texture = batch.Create(new TextureDesc(glFormat, w, h, levels, Use: use, Name: name));
+        var texture = batch.Create(new TextureDesc(glFormat, w, h, levels, Use: use, Name: name) { Transient = transient });
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
     }
 
@@ -1317,6 +1317,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (RoomMaskNow is { } roomPixels && _sceneColour is not null) _merged.InteriorGain(roomPixels, _sceneColour);
 
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
+        Gpu.BeginTransientPhase(TransientPhase.PostUpscale);
         _postColour = _sceneColour!;
         if (Temporal)
         {
@@ -1458,12 +1459,16 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         try
         {
             using var batch = Gpu.Uploads.Begin();
-            if (wantLdr) _ldr ??= Make(batch, _displayWidth, _displayHeight, format, TextureMinFilter.Linear, "post ldr");
-            if (wantSecond) _ldrFxaa ??= Make(batch, _displayWidth, _displayHeight, format, TextureMinFilter.Linear, "post ldr fxaa");
+            var postPhase = TransientLifetime.Single(TransientPhase.PostUpscale);
+            if (wantLdr) _ldr ??= Make(batch, _displayWidth, _displayHeight, format, TextureMinFilter.Linear, "post ldr", transient: postPhase);
+            if (wantSecond)
+                _ldrFxaa ??= Make(batch, _displayWidth, _displayHeight, format, TextureMinFilter.Linear, "post ldr fxaa", transient: postPhase);
             if (smaa && _smaaWeights is null)
             {
-                _smaaEdges ??= Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba8, TextureMinFilter.Linear, "post smaa edges");
-                _smaaWeights = Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba8, TextureMinFilter.Nearest, "post smaa weights");
+                _smaaEdges ??= Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba8, TextureMinFilter.Linear, "post smaa edges",
+                    transient: postPhase);
+                _smaaWeights = Make(batch, _displayWidth, _displayHeight, InternalFormat.Rgba8, TextureMinFilter.Nearest, "post smaa weights",
+                    transient: postPhase);
             }
         }
         catch (VulkanException e) when (e.Result is Vk.Result.ErrorOutOfDeviceMemory or Vk.Result.ErrorOutOfHostMemory) { }
@@ -2629,7 +2634,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the
         // probes' light can be below the sky's) with the view depth in alpha.
         _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, _width, _height,
-            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
+            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")
+        {
+            Transient = new TransientLifetime(TransientPhase.OpaqueScene, TransientPhase.FogAndAo),
+        }),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         _giLow = Make(batch, (_width + _giDivisor - 1) / _giDivisor, (_height + _giDivisor - 1) / _giDivisor, InternalFormat.Rgba16F,
             TextureMinFilter.Nearest, "post gi resolve");
@@ -2704,14 +2712,21 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             foreach (var t in (ReadOnlySpan<Target2D?>)[low.Accum, low.Depth, low.Soft, low.AccumFar, low.DepthFar,
                     low.SoftFar]) t?.Texture.Dispose();
             using var batch = Gpu.Uploads.Begin();
-            low.Accum = Make(batch, lw, lh, InternalFormat.Rgba16F, TextureMinFilter.Linear, $"post particle accumulation 1/{div}");
-            low.Depth = Make(batch, lw, lh, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, $"post particle depth 1/{div}");
-            low.Soft = Make(batch, lw, lh, InternalFormat.R32F, TextureMinFilter.Nearest, $"post particle soft depth 1/{div}");
-            low.AccumFar = Make(batch, lw, lh, InternalFormat.Rgba16F, TextureMinFilter.Linear, $"post particle accumulation far 1/{div}");
-            low.DepthFar = Make(batch, lw, lh, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, $"post particle depth far 1/{div}");
-            low.SoftFar = Make(batch, lw, lh, InternalFormat.R32F, TextureMinFilter.Nearest, $"post particle soft depth far 1/{div}");
+            var lowLife = new TransientLifetime(TransientPhase.Particles, TransientPhase.PostUpscale);
+            low.Accum = Make(batch, lw, lh, InternalFormat.Rgba16F, TextureMinFilter.Linear, $"post particle accumulation 1/{div}",
+                transient: lowLife);
+            low.Depth = Make(batch, lw, lh, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, $"post particle depth 1/{div}",
+                transient: lowLife);
+            low.Soft = Make(batch, lw, lh, InternalFormat.R32F, TextureMinFilter.Nearest, $"post particle soft depth 1/{div}", transient: lowLife);
+            low.AccumFar = Make(batch, lw, lh, InternalFormat.Rgba16F, TextureMinFilter.Linear, $"post particle accumulation far 1/{div}",
+                transient: lowLife);
+            low.DepthFar = Make(batch, lw, lh, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, $"post particle depth far 1/{div}",
+                transient: lowLife);
+            low.SoftFar = Make(batch, lw, lh, InternalFormat.R32F, TextureMinFilter.Nearest, $"post particle soft depth far 1/{div}",
+                transient: lowLife);
         }
         CloseSegment();
+        Gpu.BeginTransientPhase(TransientPhase.Particles);
         var d = _particleDepthPass;
         Bind(d.P, d.Depth, _sceneDepth);
         d.P.Set(d.FullSize, (float)_width, (float)_height);
@@ -2743,9 +2758,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         {
             _softDepth?.Texture.Dispose();
             using var batch = Gpu.Uploads.Begin();
-            _softDepth = Make(batch, _width, _height, InternalFormat.R32F, TextureMinFilter.Nearest, "post particle soft depth");
+            _softDepth = Make(batch, _width, _height, InternalFormat.R32F, TextureMinFilter.Nearest, "post particle soft depth",
+                transient: TransientLifetime.Single(TransientPhase.Particles));
         }
         CloseSegment();
+        Gpu.BeginTransientPhase(TransientPhase.Particles);
         Bind(_particleSoftDepthPass.P, _particleSoftDepthPass.Depth, _sceneDepth);
         Draw(_particleSoftDepthPass.P, _softDepth.Attachment with { Load = LoadOp.DontCare }, _softDepth.Format, _width, _height, _width, _height);
         CloseSegment();

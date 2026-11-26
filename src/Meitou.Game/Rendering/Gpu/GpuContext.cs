@@ -405,13 +405,37 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     internal GpuTexture CreateTexture(TextureDesc desc, CommandBuffer cmd)
     {
         var info = ImageInfo(desc);
-        var image = Device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, desc.Name.Length > 0 ? desc.Name : "native texture", desc.Streamed);
+        var aspect = GlConventions.VkAspect(desc);
+        string name = desc.Name.Length > 0 ? desc.Name : "native texture";
+        bool aliased = desc.Transient is not null && Device.Allocator.Transient.Enabled;
+        var image = aliased
+            ? Device.Allocator.CreateAliasedImage(in info, desc.Transient!.Value, aspect, name)
+            : Device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, name, desc.Streamed);
         bool immediate = cmd.Handle == 0;
         var cb = immediate ? Device.BeginImmediate() : cmd;
-        ToGeneral(Device.Vk, cb, image.Image, GlConventions.VkAspect(desc));
-        if (immediate) Device.EndImmediate(cb);
+        if (aliased && Frame.Open && cb.Handle == Frame.Commands.Handle.Handle)
+        {
+            Device.Allocator.Transient.RecordAcquireBarrier(cb, image.Image, aspect);
+        }
+        else
+        {
+            ToGeneral(Device.Vk, cb, image.Image, aspect);
+            if (immediate) Device.EndImmediate(cb);
+            if (aliased && Frame.Open) Device.Allocator.Transient.RecordAcquireBarrier(Frame.Commands.Handle, image.Image, aspect);
+        }
 
         return new GpuTexture(this, desc, Device.AddTexture(image.Image, image, owned: true, desc));
+    }
+
+    /// <summary>
+    /// Transitions every live aliased image whose <see cref="TransientLifetime.First"/> equals <paramref name="phase"/>
+    /// from <c>UNDEFINED</c> to <c>GENERAL</c> with a batched aliasing barrier on the frame's command buffer.
+    /// </summary>
+    public void BeginTransientPhase(TransientPhase phase)
+    {
+        if (!Frame.Open) return;
+
+        Device.Allocator.Transient.BeginPhase(Frame.Commands.Handle, phase, Frame.Number);
     }
 
     /// <inheritdoc/>

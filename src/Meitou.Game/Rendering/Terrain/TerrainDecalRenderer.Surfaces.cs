@@ -1018,9 +1018,13 @@ public sealed unsafe partial class TerrainDecalRenderer
             if (index != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, index);
             target?.Dispose();
             target = _gpu.CreateTexture(new TextureDesc(sceneDepth.Desc.Format, sceneDepth.Desc.Width, sceneDepth.Desc.Height,
-                Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget, Name: name));
+                Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget, Name: name)
+            {
+                Transient = TransientLifetime.Single(TransientPhase.OpaqueScene),
+            });
             index = _gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(NearestSampler(), target.View()));
         }
+        _gpu.BeginTransientPhase(TransientPhase.OpaqueScene);
         var cmd = _gpu.BeginNative(name);
         cmd.Order();
         cmd.Blit(sceneDepth, target, TextureMinFilter.Nearest);

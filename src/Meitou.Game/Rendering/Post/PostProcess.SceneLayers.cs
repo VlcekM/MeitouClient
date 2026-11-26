@@ -172,8 +172,11 @@ public sealed unsafe partial class PostProcess
         {
             _layerHalf?.Texture.Dispose();   // released after the frames in flight
             using var batch = Gpu.Uploads.Begin();
-            _layerHalf = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post layers half");
+            _layerHalf = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post layers half",
+                transient: TransientLifetime.Single(TransientPhase.FogAndAo));
         }
+
+        Gpu.BeginTransientPhase(TransientPhase.FogAndAo);
         var f = _layersHalfPass ??= new LayerPass(Gpu, PostProcessShaders.LayersHalf, "post layers half");
         SetLayerCommon(f, grid, !LateFogShadowOn);
         f.P.Set(f.Layers, shafts ? 1 : 0, fog ? 1 : 0, 0, 0);
@@ -205,8 +208,11 @@ public sealed unsafe partial class PostProcess
             {
                 _layerMask?.Texture.Dispose();   // released after the frames in flight
                 using var batch = Gpu.Uploads.Begin();
-                _layerMask = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post layers mask");
+                _layerMask = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post layers mask",
+                    transient: TransientLifetime.Single(TransientPhase.FogAndAo));
             }
+
+            Gpu.BeginTransientPhase(TransientPhase.FogAndAo);
             var l = _sceneLayersLean ??= new SceneLayersPass(Gpu, PostProcessShaders.SceneLayersLean, "post scene layers lean");
             SetLayerCommon(l, grid, !LateFogShadowOn);
             Bind(l.P, l.LayerHalfTexture, _layerHalf);

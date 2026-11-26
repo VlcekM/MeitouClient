@@ -531,11 +531,15 @@ sealed unsafe class PenumbraFilter : IDisposable
         {
             _planes?.Dispose();   // released after the frames in flight
             _planes = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, t.Width, t.Height, Use: TextureUse.Storage | TextureUse.Sampled,
-                Name: "penumbra planes"));
+                Name: "penumbra planes")
+            {
+                Transient = new TransientLifetime(TransientPhase.TracedSun, TransientPhase.LampShadows),
+            });
             _planesFrame = -1;
         }
         if (_planesFrame == _ctx.Frame.Number && _planesDepth == t.Depth) return;
 
+        _ctx.BeginTransientPhase(TransientPhase.TracedSun);
         (_planesFrame, _planesDepth) = (_ctx.Frame.Number, t.Depth);
         var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, 0) };
         var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);

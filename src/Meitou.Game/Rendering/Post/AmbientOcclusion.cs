@@ -133,9 +133,10 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
     /// </summary>
     public void Allocate(IGpuUploadBatch batch, int hw, int hh)
     {
-        A = post.Make(batch, hw, hh, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
-        B = post.Make(batch, hw, hh, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
-        Mask = post.Make(batch, hw, hh, InternalFormat.R8, TextureMinFilter.Linear, "post ssao mask");
+        var aoLife = new TransientLifetime(TransientPhase.FogAndAo, TransientPhase.PostUpscale);
+        A = post.Make(batch, hw, hh, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao", transient: aoLife);
+        B = post.Make(batch, hw, hh, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao", transient: aoLife);
+        Mask = post.Make(batch, hw, hh, InternalFormat.R8, TextureMinFilter.Linear, "post ssao mask", transient: aoLife);
     }
 
     /// <summary>
@@ -148,6 +149,7 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
     /// </summary>
     public void Run()
     {
+        post.Gpu.BeginTransientPhase(TransientPhase.FogAndAo);
         var a = A!;
         var b = B!;
         Generate(a);

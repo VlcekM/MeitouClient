@@ -41,7 +41,8 @@ public sealed partial class PostProcess
         {
             _terrainResolve?.Texture.Dispose();   // released after the frames in flight
             using var batch = Gpu.Uploads.Begin();
-            _terrainResolve = Make(batch, _width, _height, InternalFormat.Rgba32F, TextureMinFilter.Nearest, "post terrain resolve");
+            _terrainResolve = Make(batch, _width, _height, InternalFormat.Rgba32F, TextureMinFilter.Nearest, "post terrain resolve",
+                transient: TransientLifetime.Single(TransientPhase.OpaqueScene));
         }
 
         var held = _terrainResolve;

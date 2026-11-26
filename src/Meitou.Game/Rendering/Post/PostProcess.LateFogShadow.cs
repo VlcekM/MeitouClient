@@ -148,8 +148,11 @@ public sealed partial class PostProcess
         {
             _fogShadowHalf?.Texture.Dispose();   // released after the frames in flight
             using var batch = Gpu.Uploads.Begin();
-            _fogShadowHalf = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post fog shadow half");
+            _fogShadowHalf = Make(batch, hw, hh, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post fog shadow half",
+                transient: new TransientLifetime(TransientPhase.FogAndAo, TransientPhase.PostUpscale));
         }
+
+        Gpu.BeginTransientPhase(TransientPhase.FogAndAo);
 
         var p = _fogShadowHalfPass ??= new LayerPass(Gpu, PostProcessShaders.FogShadowHalf, "post fog shadow half");
         SetLayerCommon(p, grid);
@@ -247,7 +250,8 @@ public sealed partial class PostProcess
         if (needOut)
         {
             _lateFogOut?.Texture.Dispose();
-            _lateFogOut = Make(batch, targetWidth, targetHeight, output.Format, TextureMinFilter.Linear, "post late fog shadow out");
+            _lateFogOut = Make(batch, targetWidth, targetHeight, output.Format, TextureMinFilter.Linear, "post late fog shadow out",
+                transient: TransientLifetime.Single(TransientPhase.PostUpscale));
         }
     }
 

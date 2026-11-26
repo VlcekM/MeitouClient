@@ -143,7 +143,10 @@ sealed unsafe class CharacterVisibility : IDisposable
         FreeTargets();
         using var batch = _gpu.Uploads.Begin();
         var use = TextureUse.Sampled | TextureUse.ColourTarget;
-        _idTarget = batch.Create(new TextureDesc(InternalFormat.Rg32Ui, width, height, Use: use, Name: "characters visibility ids"));
+        _idTarget = batch.Create(new TextureDesc(InternalFormat.Rg32Ui, width, height, Use: use, Name: "characters visibility ids")
+        {
+            Transient = TransientLifetime.Single(TransientPhase.Characters),
+        });
         _idIndex = _gpu.Bindless.Register(BindlessKind.UintTexture2D, Sampled(_idTarget));
     }
 
