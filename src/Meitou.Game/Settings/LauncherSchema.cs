@@ -62,8 +62,12 @@ static class LauncherSchema
     /// </summary>
     static IEnumerable<SettingDescription> GraphicsSliders() =>
     [
-        Graphics(WorldFrame.TextureQualitySlider, 0, Data.Textures.TextureQuality.Maximum, 1, 0) with
-            { Name = "Texture quality", Labels = [.. Data.Textures.TextureQuality.Labels], Reversed = true },
+        Graphics(WorldFrame.CharacterTextureQualitySlider, 0, Data.Textures.TextureQuality.Maximum, 1, 0) with
+            { Labels = [.. Data.Textures.TextureQuality.Labels], Reversed = true },
+        Graphics(WorldFrame.TerrainTextureQualitySlider, 0, Data.Textures.TextureQuality.Maximum, 1, 0) with
+            { Labels = [.. Data.Textures.TextureQuality.Labels], Reversed = true },
+        Graphics(WorldFrame.ObjectTextureQualitySlider, 0, Data.Textures.TextureQuality.Maximum, 1, 0) with
+            { Labels = [.. Data.Textures.TextureQuality.Labels], Reversed = true },
         Graphics(WorldFrame.FilteringSlider, 0, 4, 1, 4) with { Name = "Texture filtering", Labels = ["1x", "2x", "4x", "8x", "16x"] },
         // The Vulkan renderer's anti-aliasing and upscaling; Metal has its own rows (MetalUpscalingSettings).
         Graphics(WorldFrame.UpscalerSliders[0], 0, 5, 1, 3) with

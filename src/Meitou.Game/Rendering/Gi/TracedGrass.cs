@@ -175,20 +175,21 @@ sealed unsafe class TracedGrass : IDisposable
     Vector3 _eye;
 
     /// <summary>
-    /// A patch's blades into its vertices, one group per 64: <c>blades[(first + b) * 5..]</c> is x, y, z, scale 0..1, yaw (<c>FoliageGrassField</c>,
-    /// as the blade program reads them), the card as that program places it with no sinking and with the sway of <c>sway</c> (length, phase,
-    /// frequency; a length of 0: at rest), relative to the corner. A blade whose foot or top is in a mask's box leaves no area.
+    /// A patch's blades into its vertices, one group per 64: <c>blades[(first + b) * 2..]</c> is 2 uints (4 ushorts: page-local UNORM16 x, y, z and
+    /// packed UNORM8 scale | yaw &lt;&lt; 8, as the blade program reads them), the card as that program places it with no sinking and with the sway of
+    /// <c>sway</c> (length, phase, frequency, pageSize; a length of 0: at rest), relative to the corner (<c>x0, yMin, z0, ySpan</c>). A blade whose
+    /// foot or top is in a mask's box leaves no area.
     /// </summary>
     public const string Expand = """
         #version 460
         layout(local_size_x = 64) in;
-        layout(set = 0, binding = 0, std430) readonly buffer Blades { float blades[]; };
+        layout(set = 0, binding = 0, std430) readonly buffer Blades { uint blades[]; };
         layout(set = 0, binding = 1, std430) writeonly buffer Vertices { float vertices[]; };
         layout(set = 0, binding = 2, std140) uniform Params
         {
             vec4 size;       // min width, max width, min height, max height
-            vec4 corner;     // what the vertices are relative to
-            vec4 sway;       // the top edge's sway: length, phase, frequency (the blade program's)
+            vec4 corner;     // page origin (x0, yMin, z0) the vertices are relative to, and height span (yMax - yMin) in w
+            vec4 sway;       // the top edge's sway: length, phase, frequency, and page size in w
             uvec4 counts;    // blades, cards a blade, mask boxes, the first blade
             mat4 toBox[32];
             vec4 boxMin[32];
@@ -209,14 +210,18 @@ sealed unsafe class TracedGrass : IDisposable
         {
             uint b = gl_GlobalInvocationID.x;
             if (b >= p.counts.x) return;
-            uint at = (p.counts.w + b) * 5u;
-            vec3 root = vec3(blades[at], blades[at + 1u], blades[at + 2u]);
-            float scale = blades[at + 3u];
+            uint at = (p.counts.w + b) * 2u;
+            uint w0 = blades[at], w1 = blades[at + 1u];
+            vec3 norm = vec3(float(w0 & 0xFFFFu), float(w0 >> 16u), float(w1 & 0xFFFFu)) * (1.0 / 65535.0);
+            vec3 root = p.corner.xyz + norm * vec3(p.sway.w, p.corner.w, p.sway.w);
+            uint sy = w1 >> 16u;
+            float scale = float(sy & 255u) * (1.0 / 255.0);
+            float baseYaw = float(sy >> 8u) * (6.2831853 / 255.0);
             float width = mix(p.size.x, p.size.y, scale), height = mix(p.size.z, p.size.w, scale);
             bool cut = inMask(root) || inMask(root + vec3(0.0, height, 0.0));
             for (uint q = 0u; q < p.counts.y; q++)
             {
-                float yaw = blades[at + 4u] + (q == 1u ? 1.5707963 : 0.0);
+                float yaw = baseYaw + (q == 1u ? 1.5707963 : 0.0);
                 vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
                 for (uint c = 0u; c < 4u; c++)
                 {
@@ -992,8 +997,8 @@ sealed unsafe class TracedGrass : IDisposable
         var parameters = new Params
         {
             Size = patch.Size,
-            Corner = new Vector4(patch.Corner, 0),
-            Sway = sway,
+            Corner = new Vector4(patch.Corner, patch.YSpan),
+            Sway = new Vector4(sway.X, sway.Y, sway.Z, FoliageRenderer.RayGrassPageSize),
             Blades = (uint)count,
             Cards = (uint)cards,
             Cuts = (uint)cuts.Count,

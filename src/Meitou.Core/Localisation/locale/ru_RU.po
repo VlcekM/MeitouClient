@@ -5911,3 +5911,15 @@ msgstr "• Выбранный уровень качества (стиль Meito
 #. machine-translated
 msgid "• No ray tracing: Low, Medium and High only"
 msgstr "• Без трассировки лучей: только Низкий, Средний и Высокий"
+
+#. machine-translated
+msgid "Character texture quality"
+msgstr "Качество текстур персонажей"
+
+#. machine-translated
+msgid "Terrain texture quality"
+msgstr "Качество текстур местности"
+
+#. machine-translated
+msgid "Object & foliage texture quality"
+msgstr "Качество текстур объектов и растительности"

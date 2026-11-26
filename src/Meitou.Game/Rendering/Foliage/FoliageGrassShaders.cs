@@ -156,7 +156,7 @@ public static partial class FoliageGrassShaders
             if (PageOccluded(vec3(slot.x0 - past, minY, slot.z0 - past), vec3(maxX + past, maxY, maxZ + past))) return;
             uint place = atomicAdd(counters[0], 1u);
             keys[place] = uvec4(floatBitsToUint(d), slot.tie, uint(shown), row);
-            firsts[place] = slot.firstBlade;
+            firsts[place] = s;
             atomicAdd(counters[1], uint(shown));
         }
         """;
@@ -171,6 +171,7 @@ public static partial class FoliageGrassShaders
     public static readonly string OrderCompute = Common + """
         layout(std430, set = 0, binding = 6) writeonly buffer Draws { Draw draws[]; };
         layout(std430, set = 0, binding = 7) readonly buffer Counters { uint counters[]; };
+        layout(std430, set = 0, binding = 10) writeonly buffer DrawBounds { vec4 drawBounds[]; };
         shared uvec2 tile[256];
         void main()
         {
@@ -195,7 +196,9 @@ public static partial class FoliageGrassShaders
                 barrier();
             }
             if (!valid) return;
-            draws[rank] = Draw(patches[mine.w].vertexCount, mine.z, mine.w << 4, firsts[s]);
+            Slot sl = slots[firsts[s]];
+            draws[rank] = Draw(patches[mine.w].vertexCount, mine.z, mine.w << 4, sl.firstBlade);
+            drawBounds[rank] = vec4(sl.x0, sl.yMin, sl.z0, sl.yMax - sl.yMin);
         }
         """;
 
@@ -221,6 +224,14 @@ public static partial class FoliageGrassShaders
         """;
 
     /// <summary>
+    /// The per-draw page bounds declaration in the vertex blade programs (set 0, binding 7, indexed by <c>gl_DrawID</c>).
+    /// </summary>
+    const string BoundsBlock = """
+        layout(std430, set = 0, binding = 7) readonly buffer GrassBounds { vec4 bounds[]; } grassBounds;
+
+        """;
+
+    /// <summary>
     /// The GLSL expression for <paramref name="member"/> of the draw's patch row.
     /// </summary>
     static string Row(string member) => $"grassPatches.rows[GRASS_ROW].{member}";
@@ -240,6 +251,8 @@ public static partial class FoliageGrassShaders
     {
         ["uSize"] = Row("size"),
         ["uColourBounds"] = Row("colourBounds"),
+        ["uPageBounds"] = "grassBounds.bounds[gl_DrawID]",
+        ["uPageSize"] = FoliageRenderer.PageSize.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
         ["uSway"] = Row("sway"),
         ["uRange"] = Row("range"),
         ["uFrequency"] = Row("frequency"),
@@ -259,15 +272,17 @@ public static partial class FoliageGrassShaders
     const string PreludeEnd = "#define gl_VertexID gl_VertexIndex\n";
 
     /// <summary>
-    /// A vertex program ported with the patch row taken from <c>gl_VertexIndex &gt;&gt; 4</c> (the draw's first vertex) and passed on, flat.
+    /// A vertex program ported with the patch row taken from <c>gl_VertexIndex &gt;&gt; 4</c> (the draw's first vertex) and passed on, flat, and
+    /// each draw's page bounds indexed by <c>gl_DrawID</c> (GLSL 460).
     /// </summary>
     static string Vertex(string legacy)
     {
         string text = NativeShaders.Port(legacy, NativeShaders.Map(Map), PushMembers);
         if (!text.Contains(PreludeEnd))
             throw new InvalidOperationException("FoliageGrassShaders: the native prelude changed");
+        text = text.Replace("#version 450\n", "#version 460\n");
         text = text.Replace(PreludeEnd,
-            $"#define gl_VertexID (gl_VertexIndex & 15)\n#define GRASS_ROW (uint(gl_VertexIndex) >> {RowShift})\nflat out uint vRow;\n{PatchBlock}");
+            $"#define gl_VertexID (gl_VertexIndex & 15)\n#define GRASS_ROW (uint(gl_VertexIndex) >> {RowShift})\nflat out uint vRow;\n{PatchBlock}{BoundsBlock}");
         var main = MainRegex().Match(text);
         if (!main.Success)
             throw new InvalidOperationException("FoliageGrassShaders: no main() in the blade vertex program");

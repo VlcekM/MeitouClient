@@ -6738,3 +6738,15 @@ msgstr "• 所选画质档位（Meitou 风格），不使用超分和抗锯齿"
 #. machine-translated
 msgid "• No ray tracing: Low, Medium and High only"
 msgstr "• 无光线追踪：仅限低、中、高档位"
+
+#. machine-translated
+msgid "Character texture quality"
+msgstr "角色贴图质量"
+
+#. machine-translated
+msgid "Terrain texture quality"
+msgstr "地形贴图质量"
+
+#. machine-translated
+msgid "Object & foliage texture quality"
+msgstr "物体与植被贴图质量"

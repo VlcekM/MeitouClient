@@ -187,7 +187,7 @@ sealed unsafe class RoomMaskPass : IDisposable
 
         layout(set = 0, binding = 0) uniform sampler2D uDepth;
         layout(set = 0, binding = 1) uniform usampler2D uSurface;
-        layout(set = 0, binding = 3, r32f) uniform writeonly image2D uOut;
+        layout(set = 0, binding = 3, r8) uniform writeonly image2D uOut;
         layout(set = 0, binding = 4) uniform accelerationStructureEXT uScene;
         {{GiShaders.GeometryStruct}}
         layout(set = 0, binding = 5, std430) readonly buffer Geometries { Geometry geometries[]; };

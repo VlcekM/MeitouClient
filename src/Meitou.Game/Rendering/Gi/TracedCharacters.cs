@@ -106,7 +106,7 @@ sealed unsafe class TracedCharacters : IDisposable
             for (int k = 0; k < 3; k++)
             {
                 // A triangle with a hidden corner is discarded where drawn: it collapses to a point, which no ray hits (and stays active for the refits).
-                uvec2 to = offsetBy(job.target, (t * 3u + uint(k)) * {{Stride}}u);
+                uvec2 to = offsetBy(job.target, (t * 3u + uint(k)) * 32u);
                 OutPosition(to).v = hidden ? p[0] : p[k];
                 OutUv(offsetBy(to, {{GpuVertex.UvOffset}}u)).v = uv[k];
             }
@@ -114,7 +114,88 @@ sealed unsafe class TracedCharacters : IDisposable
         """;
 
     /// <summary>
-    /// One mesh group's job as the kernel's <c>Job</c> reads it.
+    /// Indexed skinning kernel for Vulkan: one invocation per unique vertex over every job, writing skinned position at 0 (NaN when hidden, so
+    /// Vulkan RT treats any triangle with a hidden vertex as inactive) and texture coordinates at <see cref="GpuVertex.UvOffset"/> with stride
+    /// <see cref="Stride"/>. The mesh's own index buffer is bound directly to the BLAS and hit records.
+    /// </summary>
+    static readonly string SkinIndexed = $$"""
+        #version 460
+        #extension GL_EXT_buffer_reference : require
+        #extension GL_EXT_buffer_reference_uvec2 : require
+        #extension GL_EXT_scalar_block_layout : require
+        layout(local_size_x = 64) in;
+        layout(set = 0, binding = 0, std430) readonly buffer Palettes { mat4 bones[]; };
+        layout(set = 0, binding = 1, std430) readonly buffer Morphs { vec4 deltas[]; };
+        struct Job { mat4 model; uvec2 vertices; uvec2 target; uint vertexCount; uint boneBase; uint morphBase; uint flags; uint first; uint pad0; uint pad1; uint pad2; };
+        layout(set = 0, binding = 2, std430) readonly buffer Jobs { Job jobs[]; };
+        layout(push_constant) uniform Count { uint jobCount; uint vertexCount; } pc;
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Float3 { vec3 v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Float2 { vec2 v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Float4 { vec4 v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Word { uint v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer Words { uvec2 v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) writeonly buffer OutPosition { vec3 v; };
+        layout(buffer_reference, scalar, buffer_reference_align = 4) writeonly buffer OutUv { vec2 v; };
+        uvec2 offsetBy(uvec2 a, uint bytes) { uint lo = a.x + bytes; return uvec2(lo, a.y + (lo < a.x ? 1u : 0u)); }
+
+        // A vertex skinned as CharacterShaders.Vertex places it, relative to the character's anchor; hidden as its fragments would be discarded.
+        vec3 skinVertex(Job job, mat4 model, uint index, out vec2 uv, out bool hidden)
+        {
+            uvec2 at = offsetBy(job.vertices, index * {{GpuVertex.CharacterSize}}u);
+            vec3 position = Float3(at).v;
+            uv = Float2(offsetBy(at, 20u)).v;
+            vec4 colour = Float4(offsetBy(at, 36u)).v;
+            uint packedBones = Word(offsetBy(at, 52u)).v;
+            uvec2 packedWeights = Words(offsetBy(at, 56u)).v;
+            vec4 weights = vec4(packedWeights.x & 65535u, packedWeights.x >> 16u, packedWeights.y & 65535u, packedWeights.y >> 16u) / 65535.0;
+            mat4 sk = mat4(1.0);
+            if (dot(weights, vec4(1.0)) > 0.0)
+            {
+                uint b = job.boneBase;
+                sk = bones[b + (packedBones & 255u)] * weights.x + bones[b + ((packedBones >> 8u) & 255u)] * weights.y
+                   + bones[b + ((packedBones >> 16u) & 255u)] * weights.z + bones[b + (packedBones >> 24u)] * weights.w;
+            }
+            vec3 local = position;
+            uint slot = floatBitsToUint(colour.x);
+            if (job.morphBase != 0u && slot != 0u && slot < 0x1000000u) local += deltas[job.morphBase + slot].xyz;
+            uint f = job.flags, marks = uint(colour.y + 0.5);
+            hidden = ((marks & (f >> 12u) & 15u) | ((marks >> 4u) & (f >> 18u) & 1023u) | ((marks >> 14u) & (f >> 28u) & 1u)) != 0u;
+            if ((f & {{CharacterShaders.HeadOnly}}u) != 0u) hidden = (marks & {{CharacterContent.HeadBit}}u) == 0u;
+            uint side = (f >> 16u) & 3u;
+            // On the body, bits 16-17 are its hidden hands (CharacterContent.BodyMark, HandShift); elsewhere the boots' collapsed side.
+            bool bodyVertex = (marks & {{CharacterContent.BodyMark}}u) != 0u;
+            if (bodyVertex && ((marks >> {{CharacterContent.HandShift}}u) & side) != 0u) hidden = true;
+            if (!bodyVertex && ((side == 1u && position.x >= 0.0) || (side == 2u && position.x < 0.0))) hidden = true;
+            return (model * sk * vec4(local, 1.0)).xyz;
+        }
+
+        void main()
+        {
+            // One invocation a vertex over every job: the job is the last whose first vertex is at or before this one.
+            uint g = gl_GlobalInvocationID.x;
+            if (g >= pc.vertexCount) return;
+            uint lo = 0u, hi = pc.jobCount - 1u;
+            while (lo < hi)
+            {
+                uint mid = (lo + hi + 1u) / 2u;
+                if (jobs[mid].first <= g) lo = mid; else hi = mid - 1u;
+            }
+            Job job = jobs[lo];
+            uint v = g - job.first;
+            if (v >= job.vertexCount) return;
+            mat4 model = mat4(vec4(job.model[0].xyz, 0.0), vec4(job.model[1].xyz, 0.0), vec4(job.model[2].xyz, 0.0), vec4(job.model[3].xyz, 1.0));
+            vec2 uv;
+            bool hidden;
+            vec3 pos = skinVertex(job, model, v, uv, hidden);
+            uvec2 to = offsetBy(job.target, v * {{Stride}}u);
+            // A hidden vertex writes NaN: Vulkan RT treats any triangle with a NaN vertex as inactive (never hit; Flags is in Piece so changes rebuild).
+            OutPosition(to).v = hidden ? vec3(uintBitsToFloat(0x7FC00000u)) : pos;
+            OutUv(offsetBy(to, {{GpuVertex.UvOffset}}u)).v = uv;
+        }
+        """;
+
+    /// <summary>
+    /// One mesh group's job as <see cref="SkinIndexed"/> reads it.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Job
@@ -135,19 +216,14 @@ sealed unsafe class TracedCharacters : IDisposable
         public ulong Vertices;
 
         /// <summary>
-        /// Device address of the level's first index.
-        /// </summary>
-        public ulong Indices;
-
-        /// <summary>
-        /// Device address the skinned corners go to.
+        /// Device address the skinned vertices go to.
         /// </summary>
         public ulong Target;
 
         /// <summary>
-        /// Triangles the job skins.
+        /// Unique vertices the job skins.
         /// </summary>
-        public uint Triangles;
+        public uint VertexCount;
 
         /// <summary>
         /// The character's first bone in the palettes.
@@ -165,14 +241,14 @@ sealed unsafe class TracedCharacters : IDisposable
         public uint Flags;
 
         /// <summary>
-        /// The job's first triangle over every job.
+        /// The job's first vertex over every job.
         /// </summary>
         public uint First;
 
         /// <summary>
-        /// Padding to the kernel's layout.
+        /// Padding to the kernel's 16-byte std430 struct alignment.
         /// </summary>
-        public uint Pad1;
+        public uint Pad0, Pad1, Pad2;
     }
 
     /// <summary>
@@ -187,9 +263,9 @@ sealed unsafe class TracedCharacters : IDisposable
         public uint Jobs;
 
         /// <summary>
-        /// Triangles over every job.
+        /// Unique vertices over every job.
         /// </summary>
-        public uint Triangles;
+        public uint Vertices;
     }
 
     #endregion
@@ -222,14 +298,9 @@ sealed unsafe class TracedCharacters : IDisposable
     const int KeepFrames = 120;
 
     /// <summary>
-    /// Bytes of a skinned corner: its position at 0 and its texture coordinates at <see cref="GpuVertex.UvOffset"/>, as the hit records read them.
+    /// Bytes of a skinned vertex: its position at 0 and its texture coordinates at <see cref="GpuVertex.UvOffset"/> (20), as the hit records read them.
     /// </summary>
-    const int Stride = 32;
-
-    /// <summary>
-    /// Most triangles of one mesh group (a larger one traces its first ones): the shared index buffer's size.
-    /// </summary>
-    const int MaxGroupTriangles = 1 << 17;
+    const int Stride = 28;
 
     /// <summary>
     /// What a piece's model may differ by from the skinned one and count as the same: its place in world units.
@@ -287,19 +358,14 @@ sealed unsafe class TracedCharacters : IDisposable
     readonly List<long> _stale = [];
 
     /// <summary>
-    /// The index buffer every geometry shares: 0, 1, 2, ... for its corners in order.
-    /// </summary>
-    readonly DeviceBuffer _sequence;
-
-    /// <summary>
     /// Bytes the entries' vertices and structures hold.
     /// </summary>
     long _bytes;
 
     /// <summary>
-    /// This frame's triangles over every job.
+    /// This frame's unique vertices over every job.
     /// </summary>
-    int _jobTriangles;
+    int _jobVertices;
 
     /// <summary>
     /// Structures built this frame.
@@ -322,9 +388,10 @@ sealed unsafe class TracedCharacters : IDisposable
     int _held;
 
     /// <summary>
-    /// What a character's structure was built over: per geometry its group, level, triangles and whether it is opaque.
+    /// What a character's structure was built over: per geometry its group, level, unique vertex count, triangle count, hide flags (so a limb or
+    /// hide-mask change triggers a full build instead of a refit across active/inactive NaN triangles) and whether it is opaque.
     /// </summary>
-    readonly record struct Piece(GpuObjectPart Group, int Level, int Triangles, bool Opaque);
+    readonly record struct Piece(GpuObjectPart Group, int Level, int Vertices, int Triangles, uint Flags, bool Opaque);
 
     /// <summary>
     /// A character's structure and the skinned vertices it is built over.
@@ -384,19 +451,14 @@ sealed unsafe class TracedCharacters : IDisposable
     }
 
     /// <summary>
-    /// The skinning kernel and the shared index buffer.
+    /// The skinning kernel.
     /// </summary>
     public TracedCharacters(GpuContext ctx)
     {
         this._ctx = ctx;
-        _program = ctx.Shaders.Compute(Skin, "traced characters",
+        _program = ctx.Shaders.Compute(SkinIndexed, "traced characters",
             [(0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer)]);
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "traced characters"));
-
-        var list = new uint[MaxGroupTriangles * 3];
-        for (uint i = 0; i < list.Length; i++) list[i] = i;
-        _sequence = DeviceBuffer.Create(ctx, (ulong)list.Length * 4, BufferUse.Index | BufferUse.RayInput, "traced character indices");
-        ctx.Uploads.Write(_sequence, 0, MemoryMarshal.AsBytes(list.AsSpan()));
     }
 
     /// <summary>
@@ -412,7 +474,7 @@ sealed unsafe class TracedCharacters : IDisposable
     {
         _shown.Clear();
         _jobs.Clear();
-        (_jobTriangles, _built, _refitted, _triangles, _held) = (0, 0, 0, 0, 0);
+        (_jobVertices, _built, _refitted, _triangles, _held) = (0, 0, 0, 0, 0);
         people.RayCharacters(eye, MathF.Max(Range, reach), MaxCharacters, _characters, minAngle);
 
         foreach (var c in _characters)
@@ -488,13 +550,21 @@ sealed unsafe class TracedCharacters : IDisposable
     }
 
     /// <summary>
-    /// The structures, the shared index buffer and the kernel go.
+    /// The structures and the kernel go.
     /// </summary>
     public void Dispose()
     {
         Release();
-        _sequence.Dispose();
         _ctx.Shaders.Dispose(_program);
+    }
+
+    /// <summary>
+    /// Unique vertices in <paramref name="group"/>'s vertex buffer (excluding the trailing slack vertex added at upload).
+    /// </summary>
+    static int VertexCount(GpuObjectPart group)
+    {
+        ulong bytes = group.Vertices.Size > (ulong)Vertex.Size ? group.Vertices.Size - (ulong)Vertex.Size : group.Vertices.Size;
+        return Math.Max(1, (int)(bytes / (ulong)group.Stride));
     }
 
     /// <summary>
@@ -506,8 +576,8 @@ sealed unsafe class TracedCharacters : IDisposable
         int count = 0;
         foreach (var part in c.Parts)
         {
-            int n = Math.Min(part.Group.Count[part.Level] / 3, MaxGroupTriangles);
-            _pieces.Add(new Piece(part.Group, part.Level, n, part.AlphaCut <= 0));
+            int n = part.Group.Count[part.Level] / 3;
+            _pieces.Add(new Piece(part.Group, part.Level, VertexCount(part.Group), n, part.Flags, part.AlphaCut <= 0));
             count += n;
         }
 
@@ -533,14 +603,13 @@ sealed unsafe class TracedCharacters : IDisposable
     }
 
     /// <summary>
-    /// A new entry over <see cref="_pieces"/>: its vertices, and per piece a geometry and a record over its run of them.
+    /// A new entry over <see cref="_pieces"/>: its compact skinned vertices, and per piece a geometry and a record indexing the mesh's own index buffer.
     /// </summary>
     Entry NewEntry(long frame)
     {
-        int count = _pieces.Sum(p => p.Triangles);
-        var vertices = DeviceBuffer.Create(_ctx, (ulong)count * 3 * Stride, BufferUse.Storage | BufferUse.RayInput, "traced character vertices");
+        int count = _pieces.Sum(p => p.Vertices);
+        var vertices = DeviceBuffer.Create(_ctx, (ulong)Math.Max(count, 1) * Stride, BufferUse.Storage | BufferUse.RayInput, "traced character vertices");
         ulong address = _ctx.Device.Address(vertices.Handle);
-        ulong indices = _ctx.Device.Address(_sequence.Handle);
         var geometries = new TriangleGeometry[_pieces.Count];
         var records = new GeometryRecord[_pieces.Count];
 
@@ -548,10 +617,11 @@ sealed unsafe class TracedCharacters : IDisposable
         for (int i = 0; i < _pieces.Count; i++)
         {
             var p = _pieces[i];
-            ulong at = address + first * 3 * Stride;
-            geometries[i] = new TriangleGeometry(at, Stride, (uint)p.Triangles * 3, indices, (uint)p.Triangles, p.Opaque);
+            ulong at = address + first * Stride;
+            ulong indices = _ctx.Device.Address(p.Group.Indices.Handle) + (ulong)p.Group.Offset[p.Level] * 4;
+            geometries[i] = new TriangleGeometry(at, Stride, (uint)p.Vertices, indices, (uint)p.Triangles, p.Opaque);
             records[i] = new GeometryRecord { Vertices = at, Indices = indices, Stride = Stride, Kind = GeometryRecord.Character };
-            first += (ulong)p.Triangles;
+            first += (ulong)p.Vertices;
         }
 
         return new Entry
@@ -608,7 +678,7 @@ sealed unsafe class TracedCharacters : IDisposable
     }
 
     /// <summary>
-    /// A job per piece, its corners into the entry's vertices in order.
+    /// A job per piece, its unique vertices into the entry's compact skinned buffer.
     /// </summary>
     void AddJobs(CharacterRenderer.RayCharacter c, Entry entry)
     {
@@ -622,15 +692,14 @@ sealed unsafe class TracedCharacters : IDisposable
             {
                 Model = part.Model,
                 Vertices = _ctx.Device.Address(group.Vertices.Handle),
-                Indices = _ctx.Device.Address(group.Indices.Handle) + (ulong)group.Offset[part.Level] * 4,
                 Target = g.VertexAddress,
-                Triangles = g.TriangleCount,
+                VertexCount = g.VertexCount,
                 BoneBase = c.BoneBase,
                 MorphBase = part.MorphBase,
                 Flags = part.Flags,
-                First = (uint)_jobTriangles,
+                First = (uint)_jobVertices,
             });
-            _jobTriangles += (int)g.TriangleCount;
+            _jobVertices += (int)g.VertexCount;
         }
     }
 
@@ -675,9 +744,9 @@ sealed unsafe class TracedCharacters : IDisposable
 
         cmd.BindPipeline(_pipeline);
         cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 3), GpuBindPoint.Compute);
-        var count = new Counts { Jobs = (uint)_jobs.Count, Triangles = (uint)_jobTriangles };
+        var count = new Counts { Jobs = (uint)_jobs.Count, Vertices = (uint)_jobVertices };
         cmd.PushConstants(_program, GpuStage.Compute, in count);
-        cmd.Dispatch((uint)((_jobTriangles + 63) / 64));
+        cmd.Dispatch((uint)((_jobVertices + 63) / 64));
     }
 
     /// <summary>

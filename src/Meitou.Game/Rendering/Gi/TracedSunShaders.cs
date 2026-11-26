@@ -210,7 +210,7 @@ static class TracedSunShaders
         layout(set = 0, binding = 0) uniform sampler2D uDepth;
         layout(set = 0, binding = 1) uniform usampler2D uSurface;
         layout(set = 0, binding = 2) uniform sampler2D uTerm;
-        layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D uOut;
+        layout(set = 0, binding = 3, rg16f) uniform writeonly image2D uOut;
         layout(set = 0, binding = 4) uniform accelerationStructureEXT uScene;
         {{GiShaders.GeometryStruct}}
         layout(set = 0, binding = 5, std430) readonly buffer Geometries { Geometry geometries[]; };
@@ -397,12 +397,12 @@ static class TracedSunShaders
             // "lit", would light its sunward neighbours inside a shadow, and a caster's dark side the ground at its foot.
             uvec4 surface = texelFetch(uSurface, px, 0);
             vec3 term = texelFetch(uTerm, px, 0).rgb;
-            if ((surface.w & 65536u) == 0u || max(term.r, max(term.g, term.b)) < 1e-5) { imageStore(uOut, px, vec4(1.0, 1.0, 1.0, -1.0)); return; }
+            if ((surface.w & 65536u) == 0u || max(term.r, max(term.g, term.b)) < 1e-5) { imageStore(uOut, px, vec4(1.0, -1.0, 0.0, 0.0)); return; }
             vec2 v = visibility(px);
             // On a character a shadow's edge is at least BodyPenumbra wide: light spreads that far under skin, and the low-poly body's own shadows are polygons.
             float spread = v.y * p.eye.w;
             if (v.y > 0.0 && ((surface.w >> 17u) & 3u) == 3u) spread = max(spread, {{F(BodyPenumbra)}});
-            imageStore(uOut, px, vec4(v.xxx, spread));
+            imageStore(uOut, px, vec4(v.x, spread, 0.0, 0.0));
         }
         """;
 

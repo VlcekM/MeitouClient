@@ -721,6 +721,10 @@ msgstr ""
 msgid "BUILDING"
 msgstr ""
 
+#: src/Meitou.Game/Mods/LuaHudOverlay.cs
+msgid "Back"
+msgstr ""
+
 #: src/Meitou.Game/Settings/LookPresets.cs
 msgid "Back to the game's value."
 msgstr ""
@@ -1051,6 +1055,10 @@ msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Character levels"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
+msgid "Character texture quality"
 msgstr ""
 
 #: src/Meitou.Simulation/Population/PopulationRoaming.cs
@@ -3809,6 +3817,10 @@ msgstr ""
 msgid "OVERWRITE SAVE"
 msgstr ""
 
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
+msgid "Object & foliage texture quality"
+msgstr ""
+
 #: src/Meitou.Game/Settings/LookPresets.cs
 msgid "Object LOD"
 msgstr ""
@@ -5473,11 +5485,15 @@ msgstr ""
 msgid "Terrain relief"
 msgstr ""
 
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
+msgid "Terrain texture quality"
+msgstr ""
+
 #: src/Meitou.Game/Settings/LauncherSchema.cs
 msgid "Texture filtering"
 msgstr ""
 
-#: src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/SettingHints.cs
+#: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Texture quality"
 msgstr ""
 

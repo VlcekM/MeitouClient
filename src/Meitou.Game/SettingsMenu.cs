@@ -648,7 +648,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// the game started with.
     /// </summary>
     static readonly HashSet<string> RestartKeys =
-        ["hdr", WorldFrame.TextureQualitySlider, WorldFrame.WaterGridSlider, WorldFrame.WaterOceanSlider];
+        ["hdr", WorldFrame.TerrainTextureQualitySlider, WorldFrame.WaterGridSlider, WorldFrame.WaterOceanSlider];
     /// <summary>
     /// The value each restart setting had when its row was first built (the menu is made with the game).
     /// </summary>
@@ -690,7 +690,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         if (label is "VSync" or "Full screen" or MetalUseUpscalingSlider or MetalPresetSlider or MetalRenderScaleSlider or MetalRenderResolutionSlider
                 or MetalRetinaResolutionSlider or MetalUiResolutionSlider
             || WorldFrame.UpscalerSliders.Contains(label) || label is WorldFrame.DlssPresetSlider or WorldFrame.SmaaQualitySlider
-            || label == WorldFrame.FilteringSlider || label == WorldFrame.TextureQualitySlider) return "Display";
+            || label == WorldFrame.FilteringSlider
+            || label is WorldFrame.TextureQualitySlider or WorldFrame.CharacterTextureQualitySlider
+                or WorldFrame.TerrainTextureQualitySlider or WorldFrame.ObjectTextureQualitySlider) return "Display";
 
         return GraphicsSection(label, false);
     }

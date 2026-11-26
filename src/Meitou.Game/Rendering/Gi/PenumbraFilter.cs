@@ -56,9 +56,14 @@ sealed unsafe class PenumbraFilter : IDisposable
     public const int ColumnMargin = (int)MaxRadius;
 
     /// <summary>
-    /// The filter's kernel, one pass along rows or columns (<c>size.w</c>) over an area or a list's cells.
+    /// The filter's kernel, one pass along rows or columns (<c>size.w</c>) over an area or a list's cells (RGBA16F 2D).
     /// </summary>
     internal static readonly string Source = SourceFor(1, false);
+
+    /// <summary>
+    /// The 2D RG16F kernel for single-channel masks (<see cref="TracedSunPass"/>): visibility in red, penumbra radius in green.
+    /// </summary>
+    static readonly string MaskSource = SourceFor(1, false, rg: true);
 
     /// <summary>
     /// The kernel over the cells of a list of <see cref="LampShadowPass"/> (<see cref="LampShadowShaders.Classify"/>), each in its entry's slice of
@@ -80,9 +85,9 @@ sealed unsafe class PenumbraFilter : IDisposable
 
     /// <summary>
     /// The kernel for targets <paramref name="step"/> times smaller than the depth (1 or 2); <paramref name="layered"/>: over a list's cells,
-    /// the targets arrays of slices.
+    /// the targets arrays of slices; <paramref name="rg"/>: 2D RG16F targets (visibility in red, radius in green).
     /// </summary>
-    static string SourceFor(int step, bool layered) => $$"""
+    static string SourceFor(int step, bool layered, bool rg = false) => $$"""
         #version 460
         layout(local_size_x = 8, local_size_y = 8) in;
         #define MAX_CELLS {{LampShadowShaders.MaxCells}}
@@ -90,7 +95,7 @@ sealed unsafe class PenumbraFilter : IDisposable
         layout(set = 0, binding = 1) uniform usampler2D uSurface;
         layout(set = 0, binding = 2) uniform {{(layered ? "sampler2DArray" : "sampler2D")}} uIn;
         layout(set = 0, binding = 3) uniform sampler2D uPlanes;   // every pixel's plane (PlanesSource), made once a frame
-        layout(set = 0, binding = 4, {{(layered ? "rg16f) uniform writeonly image2DArray" : "rgba16f) uniform writeonly image2D")}} uOut;
+        layout(set = 0, binding = 4, {{(layered || rg ? "rg16f" : "rgba16f")}}) uniform writeonly {{(layered ? "image2DArray" : "image2D")}} uOut;
         layout(set = 0, binding = 6, std430) readonly buffer CellLists { uint lists[]; };   // LampShadowPass's lists (options.z)
         layout(set = 0, binding = 5, std140) uniform Params
         {
@@ -109,6 +114,9 @@ sealed unsafe class PenumbraFilter : IDisposable
         {{(layered ? """
         vec4 inAt(ivec2 q) { vec2 v = texelFetch(uIn, ivec3(q, slice), 0).rg; return vec4(v.r, 0.0, 0.0, v.g); }
         void outAt(ivec2 q, vec4 c) { imageStore(uOut, ivec3(q, slice), vec4(c.r, c.a, 0.0, 0.0)); }
+        """ : rg ? """
+        vec4 inAt(ivec2 q) { vec2 v = texelFetch(uIn, q, 0).rg; return vec4(v.r, 0.0, 0.0, v.g); }
+        void outAt(ivec2 q, vec4 c) { imageStore(uOut, q, vec4(c.r, c.a, 0.0, 0.0)); }
         """ : """
         vec4 inAt(ivec2 q) { return texelFetch(uIn, q, 0); }
         void outAt(ivec2 q, vec4 c) { imageStore(uOut, q, c); }
@@ -333,6 +341,16 @@ sealed unsafe class PenumbraFilter : IDisposable
     readonly GpuComputePipeline _pipeline;
 
     /// <summary>
+    /// The 2D RG16F kernel's program (<see cref="MaskSource"/>).
+    /// </summary>
+    readonly GpuProgram _maskProgram;
+
+    /// <summary>
+    /// The pipeline of <see cref="_maskProgram"/>.
+    /// </summary>
+    readonly GpuComputePipeline _maskPipeline;
+
+    /// <summary>
     /// The kernels over a list's cells, at the depth's size (<see cref="ListSource"/>) and at half of it (<see cref="HalfSource"/>).
     /// </summary>
     readonly GpuProgram _listProgram, _halfProgram;
@@ -400,6 +418,17 @@ sealed unsafe class PenumbraFilter : IDisposable
             (5, DescriptorType.UniformBuffer),
             (6, DescriptorType.StorageBuffer),
         ]);
+        _maskProgram = ctx.Shaders.Compute(MaskSource, "penumbra filter rg16f",
+        [
+            (0, DescriptorType.CombinedImageSampler),
+            (1, DescriptorType.CombinedImageSampler),
+            (2, DescriptorType.CombinedImageSampler),
+            (3, DescriptorType.CombinedImageSampler),
+            (4, DescriptorType.StorageImage),
+            (5, DescriptorType.UniformBuffer),
+            (6, DescriptorType.StorageBuffer),
+        ]);
+        _maskPipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_maskProgram, "penumbra filter rg16f"));
         _listProgram = ctx.Shaders.Compute(ListSource, "penumbra filter list",
         [
             (0, DescriptorType.CombinedImageSampler),
@@ -440,13 +469,14 @@ sealed unsafe class PenumbraFilter : IDisposable
     /// jittered as the frame was, to the position relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth.
     /// </summary>
     /// <param name="named">The blue channel names what the others hold (the lamps' pair): only taps with the pixel's name are read.</param>
-    public void Run(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, bool named = false)
+    /// <param name="rg16f">Targets are 2D RG16F (visibility in red, radius in green), as for <see cref="TracedSunPass"/>.</param>
+    public void Run(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, bool named = false, bool rg16f = false)
     {
         var all = new Vector4(0, 0, t.Width, t.Height);
         EnsurePlanes(cmd, t, inverse, pixelSlope);
-        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, named, all);
+        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, named, all, rg16f: rg16f);
         cmd.Barrier(BarrierBatch.Full);
-        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, named, all);
+        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, named, all, rg16f: rg16f);
         cmd.Barrier(BarrierBatch.Full);
     }
 
@@ -484,6 +514,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     public void Dispose()
     {
         _ctx.Shaders.Dispose(_program);
+        _ctx.Shaders.Dispose(_maskProgram);
         _ctx.Shaders.Dispose(_listProgram);
         _ctx.Shaders.Dispose(_halfProgram);
         _ctx.Shaders.Dispose(_planesProgram);
@@ -532,7 +563,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     /// </summary>
     void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named,
         Vector4 area, GpuBuffer lists = default, ulong listsSize = 0, ulong argsOffset = 0, bool listed = false, int listBase = 0, bool half = false,
-        Vector2 sub = default)
+        Vector2 sub = default, bool rg16f = false)
     {
         var parameters = new Params
         {
@@ -543,7 +574,7 @@ sealed unsafe class PenumbraFilter : IDisposable
         };
         var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
 
-        BindPass(cmd, t, input, output, constants, listed, lists, listsSize, half);
+        BindPass(cmd, t, input, output, constants, listed, lists, listsSize, half, rg16f);
 
         if (listed) cmd.DispatchIndirect(lists, argsOffset);
         else cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
@@ -553,7 +584,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     /// The pipeline bound and a pass's descriptors pushed: the depth, the surface, the input, the output, the constants and the cell lists.
     /// </summary>
     void BindPass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, Transient constants, bool listed, GpuBuffer lists,
-        ulong listsSize, bool half = false)
+        ulong listsSize, bool half = false, bool rg16f = false)
     {
         var images = stackalloc DescriptorImageInfo[5];
         images[0] = Sampled(t.Depth);
@@ -581,8 +612,8 @@ sealed unsafe class PenumbraFilter : IDisposable
             PBufferInfo = &cells,
         };
 
-        cmd.BindPipeline(half ? _halfPipeline : listed ? _listPipeline : _pipeline);
-        var program = half ? _halfProgram : listed ? _listProgram : _program;
+        cmd.BindPipeline(half ? _halfPipeline : listed ? _listPipeline : rg16f ? _maskPipeline : _pipeline);
+        var program = half ? _halfProgram : listed ? _listProgram : rg16f ? _maskProgram : _program;
         cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 7), GpuBindPoint.Compute);
     }
 

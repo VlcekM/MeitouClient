@@ -599,16 +599,29 @@ sealed class GameLoop(GameHost host)
     }
 
     /// <summary>
+    /// Whether the command line overrode the texture quality slider <paramref name="label"/> for this run.
+    /// </summary>
+    static bool TextureQualityOverridden(string label, string[] args) => label switch
+    {
+        WorldFrame.CharacterTextureQualitySlider => args.Contains("--character-texture-quality") || args.Contains("--texture-quality"),
+        WorldFrame.TerrainTextureQualitySlider => args.Contains("--terrain-texture-quality") || args.Contains("--texture-quality"),
+        WorldFrame.ObjectTextureQualitySlider => args.Contains("--object-texture-quality") || args.Contains("--texture-quality"),
+        WorldFrame.TextureQualitySlider => args.Contains("--texture-quality"),
+        _ => false,
+    };
+
+    /// <summary>
     /// The saved sliders, the look the command line chose, then the saved switches and preset (unless the command line chose them).
     /// </summary>
     void ApplySavedGraphics()
     {
+        var args = Environment.GetCommandLineArgs();
         if (_panel is not null && !_lowEnd)
             foreach (var slider in _panel.Sliders)
                 // the saved one was applied before the boot (Program)
                 if (!_runOnly.Contains(slider.Label) && host.Config.Graphics.TryGetValue(slider.Label, out float v)
                         && !(host.WorldOptions.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label))
-                        && !(slider.Label == WorldFrame.TextureQualitySlider && Environment.GetCommandLineArgs().Contains("--texture-quality")))
+                        && !TextureQualityOverridden(slider.Label, args))
                     slider.Set(Math.Clamp(v, slider.Min, slider.Max));
         // The look as the command line chose it: Faithful or Meitou for "all", else read from the switches (not saved).
         if (CommandLineLook() is var (given, faithfulLook) && given) host.Config.FaithfulLook = faithfulLook;

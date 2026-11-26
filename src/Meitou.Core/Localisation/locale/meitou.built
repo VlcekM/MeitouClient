@@ -156,7 +156,6 @@ world grid {coarseSize}² every {CoarseStep * WorldLayout.SampleSpacing} units;
 {counted} squad(s) a mod that is not loaded kept out of your faction size count are counted again.
 {dropped} squad(s) run by a mod that is not loaded are yours again.
 {gpu.Terrain.DepthTriangles:N0} terrain triangles, {_objects} objects, {_foliage} foliage meshes (over the cascades); 
-{labels[level]} (terrain at start)
 {look.Name} deleted; the look is Meitou.
 {look.Name} loaded.
 {look.Name} pasted and loaded (made on Meitou {look.Made}).

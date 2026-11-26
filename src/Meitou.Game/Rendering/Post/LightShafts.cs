@@ -366,10 +366,10 @@ sealed unsafe class LightShafts(PostProcess post)
         _historyValid = false;
         using var batch = post.Gpu.Uploads.Begin();
 
-        // Linear: the fog volumes pass reads the sun's share (blue) between cells.
+        // Linear: the fog volumes pass reads the sun's share (blue) between cells. Light and Scatter need storage for the compute scan kernel.
         Injected = post.Make(batch, aw, ah, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post shafts injected");
-        Light = post.Make(batch, aw, ah, InternalFormat.R32F, TextureMinFilter.Linear, "post shafts light");
-        Scatter = post.Make(batch, aw, ah, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post shafts scatter");
+        Light = post.Make(batch, aw, ah, InternalFormat.R32F, TextureMinFilter.Linear, "post shafts light", storage: true);
+        Scatter = post.Make(batch, aw, ah, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post shafts scatter", storage: true);
     }
 
     #endregion

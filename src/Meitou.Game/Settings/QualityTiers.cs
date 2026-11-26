@@ -82,7 +82,11 @@ sealed class QualityTiers(SettingsMenu menu)
         new(WorldFrame.FilteringSlider, 0, 2, 4, High: 4),
 
         // The start default is the saved level (applied before the menu exists), so High names the full size.
+        // TextureQualitySlider stays for BenchmarkSpec.TextureQuality; the menu's sliders are the three per-category ones below.
         new(WorldFrame.TextureQualitySlider, WorldOptions.LowEndTextureQuality, 1, 0, High: 0),
+        new(WorldFrame.CharacterTextureQualitySlider, WorldOptions.LowEndTextureQuality, 1, 0, High: 0),
+        new(WorldFrame.TerrainTextureQualitySlider, WorldOptions.LowEndTextureQuality, 1, 0, High: 0),
+        new(WorldFrame.ObjectTextureQualitySlider, WorldOptions.LowEndTextureQuality, 1, 0, High: 0),
         new(WorldFrame.GroundDisplaceDistanceSlider, 0.5f, 0.75f, 1.5f, Scale: true),
         new(WorldFrame.GroundParallaxDistanceSlider, 0.5f, 0.75f, 1.5f, Scale: true),
 

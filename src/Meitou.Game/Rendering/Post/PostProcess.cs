@@ -775,7 +775,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 _lowTargets[1].Depth, _lowTargets[1].Soft, _lowTargets[1].AccumFar, _lowTargets[1].DepthFar, _lowTargets[1].SoftFar, _softDepth,
                 _fogRate.Distance, _fogRate.Image, _fogRate.Neutral, _giAlbedo, _giLow, _giLowSky, _ssrLowSky, _shafts.Injected, _shafts.Light,
                 _shafts.Scatter, _shafts.Raw, _shafts.History, _gtaoPacked, _terrainResolve, _lampLost, _ssrHit, _ssrLow, _tracedTerm, _tracedMask,
-                _tracedScratch, _tracedFiltered, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1, _characterVisibility, _characterGatherLast,
+                _tracedScratch, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1, _characterVisibility, _characterGatherLast,
                 _characterGatherPooled, _roomMask }
             .OfType<Target2D>();
 
@@ -793,7 +793,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = l.AccumFar = l.DepthFar = l.SoftFar = null;
         _giAlbedo = _giLow = _giLowSky = _ssrLowSky = _softDepth = null;
-        _tracedTerm = _tracedMask = _tracedScratch = _tracedFiltered = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = null;
+        _tracedTerm = _tracedMask = _tracedScratch = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = null;
         _lampLost = _ssrHit = _ssrLow = null;
         _characterVisibility = _characterGatherLast = _characterGatherPooled = _roomMask = null;
         _characterVisibilityFrame = _roomMaskFrame = -1;
@@ -855,13 +855,16 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
 
     /// <summary>
-    /// A target of a GL internal format (the format VkGl made of it), with the uses VkGl's image had, one level unless asked.
+    /// A target of a GL internal format (the format VkGl made of it), with the uses VkGl's image had, one level unless asked. Pass
+    /// <paramref name="storage"/> only for targets written as storage images or by a vendor upscaler, so pure render targets keep framebuffer
+    /// compression.
     /// </summary>
-    internal Target2D Make(IGpuUploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1)
+    internal Target2D Make(IGpuUploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1,
+        bool storage = false)
     {
         var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst
             | (GlConventions.IsDepthFormat(glFormat) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
-        if (glFormat is InternalFormat.Rgba16F or InternalFormat.R32F or InternalFormat.Rg16F or InternalFormat.Rg32F && SupportsStorage(glFormat))
+        if (storage && SupportsStorage(glFormat))
             use |= TextureUse.Storage;
         var texture = batch.Create(new TextureDesc(glFormat, w, h, levels, Use: use, Name: name));
         return new Target2D(texture, min, min == TextureMinFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear);
@@ -902,20 +905,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
         using (var batch = Gpu.Uploads.Begin())
         {
-            // Colour (RGBA16F) and depth (GL's 24 bit, a 32-bit float buffer, reversed-Z: DepthConvention) the scene is drawn into.
-            _sceneColour = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post scene colour");
+            // Colour (RGBA16F) and depth (GL's 24 bit, a 32-bit float buffer, reversed-Z: DepthConvention) the scene is drawn into. Colour needs
+            // storage for MergedKernels.Velocity (cleanColour) and MergedKernels.InteriorGain.
+            _sceneColour = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post scene colour", storage: true);
             _sceneDepth = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post scene depth");
             if (up.Temporal)
             {
-                _motion = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post motion");
-                _upscaleDepth = Make(batch, w, h, InternalFormat.R32F, TextureMinFilter.Nearest, "post upscale depth");
+                _motion = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post motion", storage: true);
+                _upscaleDepth = Make(batch, w, h, InternalFormat.R32F, TextureMinFilter.Nearest, "post upscale depth", storage: true);
 
                 // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either. TAA reads motion.a instead.
                 if (up.Kind != UpscalerKind.Taa)
-                    _reactive = Make(batch, w, h, InternalFormat.R32F, TextureMinFilter.Nearest, "post reactive");
+                    _reactive = Make(batch, w, h, InternalFormat.R32F, TextureMinFilter.Nearest, "post reactive", storage: true);
 
                 // The output; the TAA's second history is made when it first runs (a vendor upscaler keeps its own history: one image does).
-                _historyB = Make(batch, displayW, displayH, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post taa history");
+                _historyB = Make(batch, displayW, displayH, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post taa history",
+                    storage: up.Kind != UpscalerKind.Taa);
             }
 
             // The LDR, FXAA and SMAA targets are made when a frame first needs them (MakeLdrTargets).
@@ -923,11 +928,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             _occlusion.Allocate(batch, hw, hh);
 
             // Exposure runs after the upscaler, at the display size: the luminance's whole mip chain (GL's, defined by GenerateMipmap), read
-            // mipmapped.
+            // mipmapped. The adaptation targets need storage for MergedKernels.Exposure.
             _luminance = Make(batch, LuminanceSize, LuminanceSize, InternalFormat.R32F, TextureMinFilter.LinearMipmapNearest, "post luminance",
                 LuminanceLevels);
-            _adaptA = Make(batch, 1, 1, InternalFormat.Rg32F, TextureMinFilter.Linear, "post exposure adapted");
-            _adaptB = Make(batch, 1, 1, InternalFormat.Rg32F, TextureMinFilter.Linear, "post exposure adapted");
+            _adaptA = Make(batch, 1, 1, InternalFormat.Rg32F, TextureMinFilter.Linear, "post exposure adapted", storage: true);
+            _adaptB = Make(batch, 1, 1, InternalFormat.Rg32F, TextureMinFilter.Linear, "post exposure adapted", storage: true);
         }
     }
 

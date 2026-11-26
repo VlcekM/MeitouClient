@@ -8,11 +8,11 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
-/// What the traced sun's rays read and write, all at the render size: the rays' mask (visibility, the penumbra's spread), the filter's scratch and
-/// its result (<see cref="PenumbraFilter"/>).
+/// What the traced sun's rays read and write, all at the render size: the rays' mask (RG16F: visibility, the penumbra's spread; also the penumbra
+/// filter's output) and the filter's scratch (<see cref="PenumbraFilter"/>).
 /// </summary>
 readonly record struct TracedSunTargets(
-    GpuTexture Depth, GpuTexture Surface, GpuTexture Term, GpuTexture Mask, GpuTexture Scratch, GpuTexture Filtered, int Width, int Height);
+    GpuTexture Depth, GpuTexture Surface, GpuTexture Term, GpuTexture Mask, GpuTexture Scratch, int Width, int Height);
 
 /// <summary>
 /// The traced sun's rays (docs/render-shadows.md "Traced sun"): <see cref="TracedSunShaders.Mask"/> over the scene's depth and surface target, one
@@ -105,9 +105,10 @@ sealed unsafe class TracedSunPass : IDisposable
     }
 
     /// <summary>
-    /// Traces into <see cref="TracedSunTargets.Mask"/>, then filters it with <paramref name="penumbra"/> into
-    /// <see cref="TracedSunTargets.Filtered"/>. <paramref name="inverse"/>: NDC to the position relative to the eye; <paramref name="pixelSlope"/>:
-    /// a pixel's width per unit of depth. Nothing depends on the frame: a still view gives the same picture.
+    /// Traces into <see cref="TracedSunTargets.Mask"/>, then filters it with <paramref name="penumbra"/> through
+    /// <see cref="TracedSunTargets.Scratch"/> and back into <see cref="TracedSunTargets.Mask"/>. <paramref name="inverse"/>: NDC to the position
+    /// relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth. Nothing depends on the frame: a still view gives the
+    /// same picture.
     /// </summary>
     public void Run(GiScene scene, in TracedSunTargets t, PenumbraFilter penumbra, in Matrix4x4 inverse, Vector3 eye, Vector3 toSun, float pixelSlope)
     {
@@ -130,8 +131,8 @@ sealed unsafe class TracedSunPass : IDisposable
         cmd.BindPipeline(_pipeline);
         cmd.Dispatch((uint)((t.Width + 7) / 8), (uint)((t.Height + 7) / 8));
         cmd.Barrier(BarrierBatch.Full);
-        var filter = new PenumbraTargets(t.Depth, t.Surface, t.Mask, t.Scratch, t.Filtered, t.Width, t.Height);
-        penumbra.Run(cmd, filter, inverse, pixelSlope);
+        var filter = new PenumbraTargets(t.Depth, t.Surface, t.Mask, t.Scratch, t.Mask, t.Width, t.Height);
+        penumbra.Run(cmd, filter, inverse, pixelSlope, rg16f: true);
         cmd.EndLabel();
         _ctx.EndNative(cmd);
     }

@@ -46,6 +46,7 @@ static class WorldCommandLine
           --water-reflection <0..4> the game's `water reflection`: what the water mirrors: 0 nothing (sky colour; R toggles), 1 sky and terrain, 2 + characters, 3 + buildings and features, 4 + trees, bushes and rocks (default 4; the game's own default is 2; Tab slider)
           --reflection-samples <n> samples per texel of the half-resolution reflection target (default 4; 1 disables MSAA; the device may cap it)
           --texture-quality <0..4> the game's `texture resolution gimping`: 0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly; each step drops the top mip of compressed textures as they load (default 0, full size; the game's own default is 1)
+          --character-texture-quality <0..4> --terrain-texture-quality <0..4> --object-texture-quality <0..4>   per-category texture quality overrides (0..4; default follows --texture-quality)
           --shadow-quality <0|1|2> map side 1024/2048/4096 (default 2)   --shadow-range <u> (1000..9000, default 5000; with the Meitou shadows 1000..15000, default 10000)
           --shadow-range 0         shadows start off (the Tab slider turns them on)
           --shadow-filter <0|1|2>  Meitou shadow filter: 2 full (default), 1 the far cascades cheaper, 0 cheapest everywhere (low-end GPUs)
@@ -283,6 +284,9 @@ static class WorldCommandLine
         switch (r.Current)
         {
             case "--texture-quality": o.TextureQuality = Math.Clamp(r.Int(), 0, Data.Textures.TextureQuality.Maximum); break;
+            case "--character-texture-quality": o.CharacterTextureQuality = Math.Clamp(r.Int(), 0, Data.Textures.TextureQuality.Maximum); break;
+            case "--terrain-texture-quality": o.TerrainTextureQuality = Math.Clamp(r.Int(), 0, Data.Textures.TextureQuality.Maximum); break;
+            case "--object-texture-quality": o.ObjectTextureQuality = Math.Clamp(r.Int(), 0, Data.Textures.TextureQuality.Maximum); break;
             case "--shadow-quality": o.ShadowQuality = r.Int(); break;
             case "--shadow-filter": o.ShadowFilter = Math.Clamp(r.Int(), 0, 2); break;
             case "--shadow-range":

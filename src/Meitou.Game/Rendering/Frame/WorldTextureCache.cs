@@ -425,10 +425,24 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public double IdleSeconds { get; set; } = 20;
 
     /// <summary>
+    /// Which texture quality category this cache follows (<see cref="TextureQuality.LevelOf"/>).
+    /// </summary>
+    public TextureCategory Category { get; init; } = TextureCategory.Object;
+
+    /// <summary>
+    /// Backing field of <see cref="HighWaterMb"/> when explicitly set; null uses <see cref="TextureQuality.MemoryBudgetMb"/> for <see cref="Category"/>.
+    /// </summary>
+    double? _highWaterMb;
+
+    /// <summary>
     /// Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too. With a <see cref="Share"/> the mark
     /// is for all the sharing caches together (<see cref="TextureShare.ResidentBytes"/>), not for each.
     /// </summary>
-    public double HighWaterMb { get; set; } = TextureQuality.MemoryBudgetMb(TextureQuality.Level);
+    public double HighWaterMb
+    {
+        get => _highWaterMb ?? TextureQuality.MemoryBudgetMb(TextureQuality.LevelOf(Category));
+        set => _highWaterMb = value;
+    }
 
     /// <summary>
     /// Unused for this long, a texture goes when the cache is over its mark.
@@ -714,9 +728,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
         // The levels dropped on top of the quality setting's are decided on the worker once the file's size is known, from what the owner says
         // about how near the texture is used now.
-        int quality = TextureQuality.LevelsToDrop(Path.GetFileName(path), _assets.Configured.GroupOfFile(path));
+        int level = TextureQuality.LevelOf(Category);
+        int quality = TextureQuality.LevelsToDrop(Path.GetFileName(path), _assets.Configured.GroupOfFile(path), Category);
         t.QualityDrop = quality;
-        t.QualityLevel = TextureQuality.Level;
+        t.QualityLevel = level;
         float need = t.KeepAllMips ? float.PositiveInfinity : t.Need;
         t.Lean = false;   // an image taken from another cache is not lean
         if (!replacing && Shared(t, need, exact: false) is { } shared)
@@ -775,10 +790,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
     internal TextureShare.Image? Shared(WorldTexture t, float need, bool exact)
     {
         if (Share is null) return null;
+        int level = TextureQuality.LevelOf(Category);
         TextureShare.Image? best = null;
         foreach (var e in Share.Of(ShareKey(t)))
         {
-            if (e.QualityLevel != TextureQuality.Level || e == t.Shared) continue;
+            if (e.QualityLevel != level || e == t.Shared) continue;
             int target = Math.Max(Mips.Drop(e.FileWidth, e.FileHeight, need), t.QualityDrop);
             if (exact ? e.Dropped == target : e.Dropped <= target && (best is null || e.Dropped > best.Dropped))
                 best = e;

@@ -138,12 +138,18 @@ static class WorldGpuBuilder
     /// </summary>
     static int TerrainLayerSize(WorldOptions o)
     {
-        Data.Textures.TextureQuality.Level = o.TextureQuality;
-        int layerSize = Math.Max(2048 >> Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape"), 16);
+        int characterLevel = o.CharacterTextureQuality ?? o.TextureQuality;
+        int terrainLevel = o.TerrainTextureQuality ?? o.TextureQuality;
+        int objectLevel = o.ObjectTextureQuality ?? o.TextureQuality;
+        Data.Textures.TextureQuality.CharacterLevel = characterLevel;
+        Data.Textures.TextureQuality.TerrainLevel = terrainLevel;
+        Data.Textures.TextureQuality.ObjectLevel = objectLevel;
+
+        int layerSize = Math.Max(2048 >> Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape", terrainLevel), 16);
         if (layerSize != 2048)
         {
-            string label = Data.Textures.TextureQuality.Labels[o.TextureQuality];
-            Console.WriteLine($"textures  quality {o.TextureQuality} ({label}): terrain layers {layerSize}² instead of 2048²");
+            string label = Data.Textures.TextureQuality.Labels[terrainLevel];
+            Console.WriteLine($"textures  terrain quality {terrainLevel} ({label}): terrain layers {layerSize}² instead of 2048²");
         }
         return layerSize;
     }

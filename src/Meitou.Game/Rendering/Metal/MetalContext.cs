@@ -649,28 +649,32 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         // A render target nothing writes as a storage image: the GPU alone touches it (the CPU reads pictures back through buffers), so it can be
         // private and stay eligible for lossless compression, which a shaderWrite or pixelFormatView usage (or, in effect, shared storage) rules out.
         bool target = desc.Use.HasFlag(TextureUse.ColourTarget) || desc.Use.HasFlag(TextureUse.DepthTarget);
-        bool compressible = LosslessCompression && target && !desc.Use.HasFlag(TextureUse.Storage);
+        bool memoryless = samples > 1 && desc.Use.HasFlag(TextureUse.DepthTarget) && !desc.Use.HasFlag(TextureUse.Sampled);
+        bool compressible = !memoryless && LosslessCompression && target && !desc.Use.HasFlag(TextureUse.Storage);
 
         // Unified memory: shared where the CPU writes or reads, private where the GPU alone does (a compressible target) or an external producer
-        // (MetalFX) requires it.
+        // (MetalFX) requires it; unresolved multisampled depth lives in tile memory alone (StoreActionFor sets DontCare).
         bool gpuOnly = desc.Private || compressible;
-        d.StorageMode = gpuOnly ? MTLStorageMode.Private : MTLStorageMode.Shared;
+        d.StorageMode = memoryless ? MTLStorageMode.Memoryless : gpuOnly ? MTLStorageMode.Private : MTLStorageMode.Shared;
         MTLTextureUsage usage = 0;
         if (desc.Use.HasFlag(TextureUse.Sampled)) usage |= MTLTextureUsage.ShaderRead;
-        if (desc.Use.HasFlag(TextureUse.Storage)) usage |= MTLTextureUsage.ShaderWrite;
+        if (!memoryless && desc.Use.HasFlag(TextureUse.Storage)) usage |= MTLTextureUsage.ShaderWrite;
         if (target) usage |= MTLTextureUsage.RenderTarget;
 
         // A blit destination needs no shaderWrite; it is kept where the texture is not a target (the uploads' own textures).
-        if (desc.Use.HasFlag(TextureUse.TransferDst) && !compressible) usage |= MTLTextureUsage.ShaderWrite;
+        if (!memoryless && desc.Use.HasFlag(TextureUse.TransferDst) && !compressible) usage |= MTLTextureUsage.ShaderWrite;
 
         // A plain 2D target can be attached and sampled through its base image (see <c>View</c>); only sub-ranges, layers and swizzles
         // need MTLTexture views. Omitting the flag on the plain targets lets Metal use lossless compression.
         bool plain = desc.Levels <= 1 && desc.Layers <= 1 && desc.Kind == TextureKind.Texture2D;
-        bool needsViews = !LosslessCompression || !compressible && desc.Use.HasFlag(TextureUse.Sampled) || desc.Use.HasFlag(TextureUse.Storage) || !plain;
+        bool needsViews = !memoryless
+            && (!LosslessCompression || !compressible && desc.Use.HasFlag(TextureUse.Sampled) || desc.Use.HasFlag(TextureUse.Storage) || !plain);
         if (needsViews) usage |= MTLTextureUsage.PixelFormatView;
 
         d.Usage = usage;
-        d.ResourceOptions = gpuOnly ? MTLResourceOptions.ResourceStorageModePrivate : MTLResourceOptions.ResourceStorageModeShared;
+        d.ResourceOptions = memoryless
+            ? MTLResourceOptions.ResourceStorageModeMemoryless
+            : gpuOnly ? MTLResourceOptions.ResourceStorageModePrivate : MTLResourceOptions.ResourceStorageModeShared;
         var image = Device.NewTexture(d);
         d.Dispose();
         if (desc.Name.Length > 0) image.Label = (NSString)desc.Name;
@@ -687,9 +691,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     internal MTLStoreAction StoreActionFor(GpuView view, bool depth)
     {
+        var of = _views[view.Index]!.Of;
+        if (depth && of.Desc.Samples > 1 && !of.Desc.Use.HasFlag(TextureUse.Sampled)) return MTLStoreAction.DontCare;
         if (StoreAll) return MTLStoreAction.Store;
 
-        var of = _views[view.Index]!.Of;
         bool albedo = !StoreSurface && _albedo is { } a && ReferenceEquals(of, _textures[a.Index]);
         bool unresolvedDepth = depth && of.Desc.Samples > 1;
         return albedo || unresolvedDepth ? MTLStoreAction.DontCare : MTLStoreAction.Store;

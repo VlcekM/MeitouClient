@@ -58,7 +58,7 @@ sealed unsafe class UpscaleExposure(PostProcess post)
         if (_upscaleExposure is null)
         {
             using var batch = post.Gpu.Uploads.Begin();
-            _upscaleExposure = post.Make(batch, 1, 1, InternalFormat.R32F, TextureMinFilter.Nearest, "post upscale exposure");
+            _upscaleExposure = post.Make(batch, 1, 1, InternalFormat.R32F, TextureMinFilter.Nearest, "post upscale exposure", storage: true);
         }
         if (_upscaleExposureProgram is null)
         {

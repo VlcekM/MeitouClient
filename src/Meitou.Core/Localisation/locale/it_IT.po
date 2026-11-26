@@ -5908,3 +5908,15 @@ msgstr "• Livello di qualità scelto (aspetto Meitou), nessun upscaler né ant
 #. machine-translated
 msgid "• No ray tracing: Low, Medium and High only"
 msgstr "• Nessun ray tracing: solo Basso, Medio e Alto"
+
+#. machine-translated
+msgid "Character texture quality"
+msgstr "Qualità delle texture dei personaggi"
+
+#. machine-translated
+msgid "Terrain texture quality"
+msgstr "Qualità delle texture del terreno"
+
+#. machine-translated
+msgid "Object & foliage texture quality"
+msgstr "Qualità delle texture di oggetti e vegetazione"

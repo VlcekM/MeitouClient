@@ -10,8 +10,8 @@ namespace Meitou.Game.Rendering.Terrain;
 /// The terrain's shadow over the whole world for the Meitou shadows (beyond the cascades' range): for the sun's direction, per sample of the world
 /// height grid (2049², 144 units apart) the height of the top of the shadow the land towards the sun casts there, and the distance to the land that
 /// casts it. A point below that top is in shadow; the distance widens the penumbra. Built on the GPU by a doubling sweep (each pass looks twice as
-/// far towards the sun: 12 passes cover the world) into two RG32F targets, again only when the sun has moved. The receiver reads it with one fetch
-/// (<see cref="MeitouShadowShaders.Functions"/>, <c>msTerrain</c>).
+/// far towards the sun: 12 passes cover the world) into an RG32F target with a temporary scratch target during rebuilds, again only when the sun has
+/// moved. The receiver reads it with one fetch (<see cref="MeitouShadowShaders.Functions"/>, <c>msTerrain</c>).
 /// <para>
 /// Phase 8 (docs/renderer-native.md 8): the heights and the targets are native textures and the sweep renders into them in one native segment of its
 /// own; the consumer (<c>ShadowPass.Meitou</c>) takes the finished map as <see cref="Sampled"/> (linear, clamped, as the GL texture was).
@@ -56,14 +56,19 @@ sealed unsafe class TerrainShadowMap : IDisposable
     readonly UniformHandle _uSize, _uFirst, _uStep, _uDrop, _uDistance;
 
     /// <summary>
-    /// The two RG32F targets the passes ping-pong between.
+    /// The linear, clamped sampler shared by the heights and the sweep targets.
     /// </summary>
-    readonly GpuTexture[] _targets = new GpuTexture[2];
+    readonly GpuSampler _linear;
 
     /// <summary>
-    /// The targets with the linear, clamped sampler.
+    /// The persistent RG32F target holding the finished shadow map.
     /// </summary>
-    readonly SampledTexture[] _targetsSampled = new SampledTexture[2];
+    readonly GpuTexture _target;
+
+    /// <summary>
+    /// The persistent target with the linear, clamped sampler.
+    /// </summary>
+    readonly SampledTexture _targetSampled;
 
     /// <summary>
     /// The targets' attachment formats (colour only).
@@ -86,9 +91,9 @@ sealed unsafe class TerrainShadowMap : IDisposable
     Vector3 _builtFor;
 
     /// <summary>
-    /// The target holding the finished map (-1: none).
+    /// Whether <see cref="_target"/> holds a finished map for <see cref="_builtFor"/>.
     /// </summary>
-    int _result = -1;
+    bool _built;
 
     /// <summary>
     /// Rebuilt when the sun's direction has turned by more than this (radians; about 0.1°).
@@ -103,28 +108,25 @@ sealed unsafe class TerrainShadowMap : IDisposable
         _spacing = WorldLayout.WorldSize / (float)(size - 1);
 
         // GL's R16 and RG32F, one level each (VkGl sampled only level 0 of them: linear without mips), linear and clamped.
-        var linear = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
+        _linear = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
         using (var batch = gpu.Uploads.Begin())
         {
             _heights = batch.Create(new TextureDesc(InternalFormat.R16, size, size, Name: "terrain shadow map heights"));
             batch.Write(_heights, 0, 0, new PixelRect(0, 0, (uint)size, (uint)size),
                 System.Runtime.InteropServices.MemoryMarshal.AsBytes(coarse.AsSpan(0, size * size)));
-            for (int i = 0; i < 2; i++)
-            {
-                _targets[i] = batch.Create(new TextureDesc(InternalFormat.Rg32F, size, size,
-                    Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "terrain shadow map"));
-            }
+            _target = batch.Create(new TextureDesc(InternalFormat.Rg32F, size, size,
+                Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "terrain shadow map"));
         }
 
-        _heightsSampled = new SampledTexture(linear, _heights.View());
-        for (int i = 0; i < 2; i++) _targetsSampled[i] = new SampledTexture(linear, _targets[i].View());
+        _heightsSampled = new SampledTexture(_linear, _heights.View());
+        _targetSampled = new SampledTexture(_linear, _target.View());
 
         // Native (docs/renderer-native.md 7.1, wave 3 agent B, step P): VkGl's SPIR-V and layout, made once, never inside a draw.
         _sweep = LegacyProgram.Create(gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment, "terrain shadow sweep");
         (_sourceSlot, _uSize, _uFirst, _uStep, _uDrop, _uDistance) = (_sweep.Sampler("uSource"), _sweep.Uniform("uSize"), _sweep.Uniform("uFirst"),
             _sweep.Uniform("uStep"), _sweep.Uniform("uDrop"), _sweep.Uniform("uDistance"));
-        _format = new AttachmentFormats(_targets[0].Desc.Format, InternalFormat.None);
+        _format = new AttachmentFormats(_target.Desc.Format, InternalFormat.None);
 
         // What VkGl made of the GL state the sweep set (no culling, depth or blending; all channels; filled).
         _state = new DrawState(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal, false, 0, 0, BlendState.Off,
@@ -139,7 +141,7 @@ sealed unsafe class TerrainShadowMap : IDisposable
     /// <summary>
     /// The finished map with its sampler (linear, clamped); null before the first build or when the sun is too high for any terrain shadow.
     /// </summary>
-    public SampledTexture? Sampled => _result < 0 ? null : _targetsSampled[_result];
+    public SampledTexture? Sampled => _built ? _targetSampled : null;
 
     /// <summary>
     /// Samples along the map's side.
@@ -175,11 +177,11 @@ sealed unsafe class TerrainShadowMap : IDisposable
         toSun = Vector3.Normalize(toSun);
         if (!Applies(toSun))
         {
-            _result = -1;
+            _built = false;
             return false;
         }
 
-        if (_result >= 0 && Vector3.Dot(toSun, _builtFor) > MathF.Cos(RebuildAngle)) return false;
+        if (_built && Vector3.Dot(toSun, _builtFor) > MathF.Cos(RebuildAngle)) return false;
 
         var watch = Stopwatch.StartNew();
         float horizontal = MathF.Sqrt(toSun.X * toSun.X + toSun.Z * toSun.Z);
@@ -189,7 +191,12 @@ sealed unsafe class TerrainShadowMap : IDisposable
         int passes = 1;
         while ((1 << (passes - 1)) < _size) passes++;
 
-        int write = 0;
+        var scratch = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rg32F, _size, _size,
+            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "terrain shadow map scratch"));
+        var scratchSampled = new SampledTexture(_linear, scratch.View());
+
+        // Start on _target (0) for an odd pass count or scratch (1) for an even one so the final pass always lands in _target.
+        int write = (passes - 1) & 1;
         _pipeline ??= Gpu.Pipelines.Get(_state.Pipeline(_sweep.Program, _sweep.VertexLayout([]), PrimitiveType.Triangles, _format,
             "terrain shadow sweep"));
         var viewport = new PixelViewport(0, 0, _size, _size, 0, 1);
@@ -203,8 +210,8 @@ sealed unsafe class TerrainShadowMap : IDisposable
             _sweep.Set(_uStep, direction.X * step, direction.Y * step);
             _sweep.Set(_uDrop, step * _spacing * tangent);
             _sweep.Set(_uDistance, step * _spacing);
-            _sweep.Bind(_sourceSlot, pass == 0 ? _heightsSampled : _targetsSampled[1 - write]);
-            var target = _targets[write];
+            _sweep.Bind(_sourceSlot, pass == 0 ? _heightsSampled : write == 0 ? scratchSampled : _targetSampled);
+            var target = write == 0 ? _target : scratch;
             cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), LoadOp.Load, default), default, _size, _size));
             cmd.SetViewport(viewport);
             cmd.SetScissor(scissor);
@@ -220,7 +227,8 @@ sealed unsafe class TerrainShadowMap : IDisposable
         }
 
         Gpu.EndNative(cmd);
-        _result = 1 - write;
+        scratch.Dispose();
+        _built = true;
         _builtFor = toSun;
         Builds++;
         LastBuildCpuMs = watch.Elapsed.TotalMilliseconds;
@@ -228,11 +236,11 @@ sealed unsafe class TerrainShadowMap : IDisposable
     }
 
     /// <summary>
-    /// Frees the targets, the heights and the program.
+    /// Frees the target, the heights and the program.
     /// </summary>
     public void Dispose()
     {
-        for (int i = 0; i < 2; i++) _targets[i].Dispose();
+        _target.Dispose();
         _heights.Dispose();
         _sweep.Dispose();
     }

@@ -203,10 +203,11 @@ static class FoliageShaders
     /// <remarks>The aerial perspective is linear in the colour (<c>atmoApply</c> mixes), so it is evaluated per vertex as a multiply and an add:
     /// grass covers much of the screen.</remarks>
     public static readonly string GrassVertex = "#version 330 core\n" + AtmosphereShaders.Functions + """
-        layout(location = 0) in vec4 aBlade;     // x, y, z, scale 0..1
-        layout(location = 1) in float aYaw;
+        layout(location = 0) in vec4 aBlade;     // page-local UNORM16 (x, y, z) and packed UNORM8 (scale | yaw << 8) in w
         uniform mat4 uViewProjection;
         uniform vec4 uSize;                      // min width, max width, min height, max height
+        uniform vec4 uPageBounds;                // x0, yMin, z0, yMax - yMin
+        uniform float uPageSize;                 // page side in world units
         uniform bool uCross;                     // CROSSQUADS: two quads at right angles
         uniform float uTime;                     // sway phase (radians)
         uniform float uFrequency;
@@ -226,23 +227,26 @@ static class FoliageShaders
             // two triangles: (0,0) (1,0) (1,1)  (0,0) (1,1) (0,1); u along the quad, v = 1 at the ground, 0 at the top
             int cu[6] = int[6](0, 1, 1, 0, 1, 0);
             int cv[6] = int[6](1, 1, 0, 1, 0, 0);
-            float s = aBlade.w;
+            vec3 root = uPageBounds.xyz + aBlade.xyz * vec3(uPageSize, uPageBounds.w, uPageSize);
+            uint sy = uint(aBlade.w * 65535.0 + 0.5);
+            float s = float(sy & 255u) * (1.0 / 255.0);
+            float baseYaw = float(sy >> 8u) * (6.2831853 / 255.0);
             float width = mix(uSize.x, uSize.y, s), height = mix(uSize.z, uSize.w, s);
-            width *= clamp(distance(uEye.xz, aBlade.xz) / 1500.0, 1.0, 8.0);   // far pages draw fewer blades (FoliageGrassShaders, the cull): each as much wider
-            float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
+            width *= clamp(distance(uEye.xz, root.xz) / 1500.0, 1.0, 8.0);   // far pages draw fewer blades (FoliageGrassShaders, the cull): each as much wider
+            float yaw = baseYaw + (quad == 1 ? 1.5707963 : 0.0);
             vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
             float u = float(cu[corner]), v = float(cv[corner]);
             // The blade's own offsets, then its root less the eye (exact): projected relative to the eye (docs/renderer-native.md "Render origin").
             vec3 o = side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
-            vWetPos = o + fract(aBlade.xyz * 0.371) * 7.0;   // the blade's own place before it sways: where its drops sit (wetFoliage)
-            if (v == 0.0) o.x += uSway * sin(uTime + aBlade.x * uFrequency);
-            float dist = distance(uEye.xz, aBlade.xz);
+            vWetPos = o + fract(root * 0.371) * 7.0;   // the blade's own place before it sways: where its drops sit (wetFoliage)
+            if (v == 0.0) o.x += uSway * sin(uTime + root.x * uFrequency);
+            float dist = distance(uEye.xz, root.xz);
             o.y -= height * clamp(5.0 * dist / uRange - 4.0, 0.0, 1.0);   // grows out of the ground over the last fifth of the range
-            vec3 p = aBlade.xyz + o;
+            vec3 p = root + o;
             vWorld = p;
             vUv = vec2(u, v);
             vFade = 1.0;
-            gl_Position = uViewProjection * vec4((aBlade.xyz - uEye) + o, 1.0);
+            gl_Position = uViewProjection * vec4((root - uEye) + o, 1.0);
             vHazeMul = vec3(1.0);
             vHazeAdd = vec3(0.0);
             if (uFogDistance > 0.0) atmoApplyCoefficients(uEye, p, vHazeMul, vHazeAdd);
@@ -341,10 +345,11 @@ static class FoliageShaders
     public const string GrassMotionVertex = """
         #version 330 core
         layout(location = 0) in vec4 aBlade;
-        layout(location = 1) in float aYaw;
         uniform mat4 uViewProjection;            // this frame's, jittered (as the grass was drawn)
         uniform mat4 uPreviousViewProjection;    // last frame's, unjittered
         uniform vec4 uSize;
+        uniform vec4 uPageBounds;                // x0, yMin, z0, yMax - yMin
+        uniform float uPageSize;
         uniform float uTime, uPreviousTime, uFrequency, uSway, uRange;
         uniform vec3 uEye;
         out vec2 vUv;
@@ -355,21 +360,24 @@ static class FoliageShaders
             int quad = gl_VertexID / 6, corner = gl_VertexID % 6;
             int cu[6] = int[6](0, 1, 1, 0, 1, 0);
             int cv[6] = int[6](1, 1, 0, 1, 0, 0);
-            float s = aBlade.w;
+            vec3 root = uPageBounds.xyz + aBlade.xyz * vec3(uPageSize, uPageBounds.w, uPageSize);
+            uint sy = uint(aBlade.w * 65535.0 + 0.5);
+            float s = float(sy & 255u) * (1.0 / 255.0);
+            float baseYaw = float(sy >> 8u) * (6.2831853 / 255.0);
             float width = mix(uSize.x, uSize.y, s), height = mix(uSize.z, uSize.w, s);
-            width *= clamp(distance(uEye.xz, aBlade.xz) / 1500.0, 1.0, 8.0);   // far pages draw fewer blades (FoliageGrassShaders, the cull): each as much wider
-            float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
+            width *= clamp(distance(uEye.xz, root.xz) / 1500.0, 1.0, 8.0);   // far pages draw fewer blades (FoliageGrassShaders, the cull): each as much wider
+            float yaw = baseYaw + (quad == 1 ? 1.5707963 : 0.0);
             vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
             float u = float(cu[corner]), v = float(cv[corner]);
             // Relative to the eye, both frames (the previous view-projection is last frame's camera seen from this frame's eye).
-            vec3 p = (aBlade.xyz - uEye) + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
+            vec3 p = (root - uEye) + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
             vec3 q = p;
             if (v == 0.0)
             {
-                p.x += uSway * sin(uTime + aBlade.x * uFrequency);
-                q.x += uSway * sin(uPreviousTime + aBlade.x * uFrequency);
+                p.x += uSway * sin(uTime + root.x * uFrequency);
+                q.x += uSway * sin(uPreviousTime + root.x * uFrequency);
             }
-            float sink = height * clamp(5.0 * distance(uEye.xz, aBlade.xz) / uRange - 4.0, 0.0, 1.0);
+            float sink = height * clamp(5.0 * distance(uEye.xz, root.xz) / uRange - 4.0, 0.0, 1.0);
             p.y -= sink;
             q.y -= sink;
             vUv = vec2(u, v);
@@ -437,6 +445,7 @@ static class FoliageShaders
     public const string GrassPushMembers = """
             vec4 size;
             vec4 colourBounds;
+            vec4 pageBounds;
             float sway;
             float range;
             float frequency;
@@ -447,6 +456,7 @@ static class FoliageShaders
             uint sprite;
             uint colourMap;
             uint nearDepth;
+            float pageSize;
         """;
 
     /// <summary>
@@ -456,6 +466,8 @@ static class FoliageShaders
     {
         ["uSize"] = "pc.size",
         ["uColourBounds"] = "pc.colourBounds",
+        ["uPageBounds"] = "pc.pageBounds",
+        ["uPageSize"] = "pc.pageSize",
         ["uSway"] = "pc.sway",
         ["uRange"] = "pc.range",
         ["uFrequency"] = "pc.frequency",
@@ -899,7 +911,7 @@ static class FoliageShaders
 /// <summary>
 /// The C# side of <see cref="FoliageShaders.GrassPushMembers"/> (std430 push constants). GLSL bools are 32-bit (0 / 1).
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 72)]
+[StructLayout(LayoutKind.Explicit, Size = 92)]
 struct GrassPush
 {
     /// <summary>
@@ -911,43 +923,51 @@ struct GrassPush
     /// </summary>
     [FieldOffset(16)] public Vector4 ColourBounds;
     /// <summary>
+    /// <c>pageBounds</c>: the page's x0, yMin, z0 and height span (yMax - yMin) for unpacking page-local blades.
+    /// </summary>
+    [FieldOffset(32)] public Vector4 PageBounds;
+    /// <summary>
     /// <c>sway</c>: the sway amplitude along X, in units.
     /// </summary>
-    [FieldOffset(32)] public float Sway;
+    [FieldOffset(48)] public float Sway;
     /// <summary>
     /// <c>range</c>: the grass layer's range.
     /// </summary>
-    [FieldOffset(36)] public float Range;
+    [FieldOffset(52)] public float Range;
     /// <summary>
     /// <c>frequency</c>: the sway's spatial frequency.
     /// </summary>
-    [FieldOffset(40)] public float Frequency;
+    [FieldOffset(56)] public float Frequency;
     /// <summary>
     /// <c>cross</c>: CROSSQUADS, two quads at right angles.
     /// </summary>
-    [FieldOffset(44)] public uint Cross;
+    [FieldOffset(60)] public uint Cross;
     /// <summary>
     /// <c>hasColourMap</c>: the patch has a colour map.
     /// </summary>
-    [FieldOffset(48)] public uint HasColourMap;
+    [FieldOffset(64)] public uint HasColourMap;
     /// <summary>
     /// <c>coverage</c>: alpha to coverage on a multisampled target.
     /// </summary>
-    [FieldOffset(52)] public uint Coverage;
+    [FieldOffset(68)] public uint Coverage;
     /// <summary>
     /// <c>wireframe</c>: draws flat green for the wireframe view.
     /// </summary>
-    [FieldOffset(56)] public uint Wireframe;
+    [FieldOffset(72)] public uint Wireframe;
     /// <summary>
     /// <c>sprite</c>: the sprite's bindless index.
     /// </summary>
-    [FieldOffset(60)] public uint Sprite;
+    [FieldOffset(76)] public uint Sprite;
     /// <summary>
     /// <c>colourMap</c>: the colour map's bindless index.
     /// </summary>
-    [FieldOffset(64)] public uint ColourMap;
+    [FieldOffset(80)] public uint ColourMap;
     /// <summary>
     /// <c>nearDepth</c>: the bindless index of the scene depth the motion pass's near test reads.
     /// </summary>
-    [FieldOffset(68)] public uint NearDepth;
+    [FieldOffset(84)] public uint NearDepth;
+    /// <summary>
+    /// <c>pageSize</c>: the page's side in world units.
+    /// </summary>
+    [FieldOffset(88)] public float PageSize;
 }

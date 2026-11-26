@@ -5905,3 +5905,15 @@ msgstr "• 선택한 품질 등급(Meitou 스타일), 업스케일러 및 안�
 #. machine-translated
 msgid "• No ray tracing: Low, Medium and High only"
 msgstr "• 레이 트레이싱 없음: 낮음, 중간, 높음만 가능"
+
+#. machine-translated
+msgid "Character texture quality"
+msgstr "캐릭터 텍스처 품질"
+
+#. machine-translated
+msgid "Terrain texture quality"
+msgstr "지형 텍스처 품질"
+
+#. machine-translated
+msgid "Object & foliage texture quality"
+msgstr "오브젝트 및 식생 텍스처 품질"

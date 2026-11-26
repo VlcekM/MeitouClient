@@ -4056,6 +4056,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     {
                         Size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight),
                         ColourBounds = new Vector4(patch.X0, patch.Z0, patch.X1, patch.Z1),
+                        PageBounds = new Vector4(x0, page.MinY, z0, page.MaxY - page.MinY),
+                        PageSize = PageSize,
                         Sway = patch.Layer.Wind ? g.SwayLength : 0f,
                         Range = range,
                         Frequency = 2f,
@@ -4365,6 +4367,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         Push = new GrassPush
                         {
                             Size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight),
+                            PageBounds = new Vector4(x0, page.MinY, z0, page.MaxY - page.MinY),
+                            PageSize = PageSize,
                             Sway = g.SwayLength,
                             Range = range,
                             Frequency = 2f,
@@ -4539,11 +4543,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// A grass page's patch for the traced sun (<see cref="Gi.TracedGrass"/>): its identity (a dropped page's buffer is never seen again), where its
-    /// blades are in the arena, those the density shows, the page's corner and the patch's card sizes (min width, max width, min height, max
-    /// height), and this frame's sprite.
+    /// blades are in the arena, those the density shows, the page's corner (<c>x0, yMin, z0</c>) and height span (<c>yMax - yMin</c>), the patch's
+    /// card sizes (min width, max width, min height, max height), and this frame's sprite.
     /// </summary>
-    internal readonly record struct RayGrassPatch(object Key, uint FirstBlade, int Blades, Vector3 Corner, Vector4 Size, bool Cross, uint Sprite,
-        float Distance, float Sway);
+    internal readonly record struct RayGrassPatch(object Key, uint FirstBlade, int Blades, Vector3 Corner, float YSpan, Vector4 Size, bool Cross,
+        uint Sprite, float Distance, float Sway);
 
     /// <summary>
     /// The arena holding the blades (read by <see cref="Gi.TracedGrass"/>'s kernel).
@@ -4580,7 +4584,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             {
                 float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
                 float d = BoxDistance(x0, z0, PageSize, eye);
-                if (page.Buffers is not null && d < range) AddRayGrassPage(state, page, new Vector3(x0, 0, z0), d, into);
+                if (page.Buffers is not null && d < range) AddRayGrassPage(state, page, new Vector3(x0, page.MinY, z0), d, into);
             }
         }
 
@@ -4601,7 +4605,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             var g = patch.Grass;
             var size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight);
             float sway = patch.Layer.Wind ? g.SwayLength : 0f;
-            into.Add(new RayGrassPatch(b, b.FirstBlade, b.Shown, corner, size, g.CrossQuads, _rays.Texture(sprite), distance, sway));
+            into.Add(new RayGrassPatch(b, b.FirstBlade, b.Shown, corner, page.MaxY - page.MinY, size, g.CrossQuads, _rays.Texture(sprite), distance,
+                sway));
         }
     }
 

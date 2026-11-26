@@ -55,14 +55,14 @@ public sealed unsafe partial class PostProcess
     {
         var (depth, surface) = (_sceneDepth, _giAlbedo);
         if (IndoorExposure <= 0 || _exposureHold is not null || !MergeExposure || !MergeSupported || !_haveScene || depth is null || surface is null
-            || scene?.Top is null || !SupportsStorage(InternalFormat.R32F)) return;
+            || scene?.Top is null || !SupportsStorage(InternalFormat.R8)) return;
 
         _roomMaskLastUsed = Environment.TickCount64;
         MarkScene();
         if (_roomMask is null)
         {
             using var batch = Gpu.Uploads.Begin();
-            _roomMask = Make(batch, _width, _height, InternalFormat.R32F, TextureMinFilter.Nearest, "post room mask");
+            _roomMask = Make(batch, _width, _height, InternalFormat.R8, TextureMinFilter.Nearest, "post room mask", storage: true);
         }
         CloseSegment();
 

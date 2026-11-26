@@ -1,10 +1,31 @@
 namespace Meitou.Data.Textures;
 
 /// <summary>
+/// Which texture category a quality level applies to: objects (buildings and foliage), characters, or terrain.
+/// </summary>
+public enum TextureCategory
+{
+    /// <summary>
+    /// Building, prop, and foliage textures.
+    /// </summary>
+    Object,
+
+    /// <summary>
+    /// Character body, hair, armour, and weapon textures.
+    /// </summary>
+    Character,
+
+    /// <summary>
+    /// Terrain biome layer textures.
+    /// </summary>
+    Terrain,
+}
+
+/// <summary>
 /// The game's <c>texture resolution gimping</c> setting (docs/formats/settings.md, "Graphics: textures"): how many top mip
 /// levels of block-compressed DDS textures are dropped as they are loaded, and the texture memory budget that goes with it.
-/// The level is process-wide and read when a texture is loaded, so it is set once before the world loads (the game needs a
-/// restart for it too).
+/// Each <see cref="TextureCategory"/> has its own level (object/foliage and character caches reload live; terrain layer arrays
+/// are sized once at start).
 /// </summary>
 public static class TextureQuality
 {
@@ -18,9 +39,39 @@ public static class TextureQuality
     public const int Maximum = 4;
 
     /// <summary>
-    /// The level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly). The tools and tests that do not set it keep 0: nothing dropped.
+    /// The character texture quality level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly).
     /// </summary>
-    public static int Level { get; set; }
+    public static int CharacterLevel { get; set; }
+
+    /// <summary>
+    /// The terrain texture quality level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly).
+    /// </summary>
+    public static int TerrainLevel { get; set; }
+
+    /// <summary>
+    /// The object and foliage texture quality level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly).
+    /// </summary>
+    public static int ObjectLevel { get; set; }
+
+    /// <summary>
+    /// The level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly). Getting returns <see cref="ObjectLevel"/>; setting sets all three
+    /// categories. The tools and tests that do not set it keep 0: nothing dropped.
+    /// </summary>
+    public static int Level
+    {
+        get => ObjectLevel;
+        set => CharacterLevel = TerrainLevel = ObjectLevel = value;
+    }
+
+    /// <summary>
+    /// The current quality level for <paramref name="category"/>.
+    /// </summary>
+    public static int LevelOf(TextureCategory category) => category switch
+    {
+        TextureCategory.Character => CharacterLevel,
+        TextureCategory.Terrain => TerrainLevel,
+        _ => ObjectLevel,
+    };
 
     /// <summary>
     /// The options' labels, indexed by level.
@@ -44,6 +95,11 @@ public static class TextureQuality
         if (n > 0 && !name.Contains("_HI.", StringComparison.Ordinal) && group != "Landscape") n--;
         return Math.Max(n, 0);
     }
+
+    /// <summary>
+    /// <see cref="LevelsToDrop(string, string, int)"/> at the current level of <paramref name="category"/>.
+    /// </summary>
+    public static int LevelsToDrop(string name, string group, TextureCategory category) => LevelsToDrop(name, group, LevelOf(category));
 
     /// <summary>
     /// <see cref="LevelsToDrop(string, string, int)"/> at the current <see cref="Level"/>.

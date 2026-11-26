@@ -208,11 +208,28 @@ static class Program
     /// </summary>
     static void RestoreTextureQuality(string[] args, GameOptions game, WorldOptions world, UserConfig config)
     {
-        // The saved texture quality before the world loads: the terrain's layer arrays are sized from it once (the Tab panel's restore after
-        // the boot reaches only the other textures). --texture-quality, --low-end and --benchmark-baseline choose it for this run instead.
-        if (!args.Contains("--texture-quality") && !args.Contains("--low-end") && !game.BenchmarkBaseline && game.Benchmark is null
-            && config.Graphics.TryGetValue(WorldFrame.TextureQualitySlider, out float savedQuality))
-            world.TextureQuality = Math.Clamp((int)MathF.Round(savedQuality), 0, Data.Textures.TextureQuality.Maximum);
+        // The saved texture quality before the world loads: the terrain's layer arrays are sized from it once.
+        // --texture-quality, --low-end and --benchmark-baseline choose it for this run instead.
+        if (!args.Contains("--low-end") && !game.BenchmarkBaseline && game.Benchmark is null)
+        {
+            static int Clamp(float v) => Math.Clamp((int)MathF.Round(v), 0, Data.Textures.TextureQuality.Maximum);
+            bool globalFlag = args.Contains("--texture-quality");
+
+            if (!globalFlag && config.Graphics.TryGetValue(WorldFrame.TextureQualitySlider, out float legacyQuality))
+                world.TextureQuality = Clamp(legacyQuality);
+
+            if (!globalFlag && !args.Contains("--character-texture-quality")
+                && config.Graphics.TryGetValue(WorldFrame.CharacterTextureQualitySlider, out float savedChar))
+                world.CharacterTextureQuality = Clamp(savedChar);
+
+            if (!globalFlag && !args.Contains("--terrain-texture-quality")
+                && config.Graphics.TryGetValue(WorldFrame.TerrainTextureQualitySlider, out float savedTerrain))
+                world.TerrainTextureQuality = Clamp(savedTerrain);
+
+            if (!globalFlag && !args.Contains("--object-texture-quality")
+                && config.Graphics.TryGetValue(WorldFrame.ObjectTextureQualitySlider, out float savedObject))
+                world.ObjectTextureQuality = Clamp(savedObject);
+        }
 
         ReadSavedWaterSizes(world, config, args);
     }

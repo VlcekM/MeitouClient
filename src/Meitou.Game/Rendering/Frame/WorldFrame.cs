@@ -326,9 +326,16 @@ static partial class WorldFrame
     public const string FilteringSlider = "Anisotropic filtering (texture filtering)";
 
     /// <summary>
-    /// The texture quality slider's label (the game's <c>texture resolution gimping</c>, 0-4).
+    /// The legacy texture quality slider's label (the game's <c>texture resolution gimping</c>, 0-4), kept for saved configs and benchmarks.
     /// </summary>
     public const string TextureQualitySlider = "Texture quality 0-4 (game)";
+
+    /// <summary>
+    /// Per-category texture quality sliders' labels (0-4: Maximum to Fugly): characters, terrain, and objects &amp; foliage.
+    /// </summary>
+    public const string CharacterTextureQualitySlider = "Character texture quality",
+        TerrainTextureQualitySlider = "Terrain texture quality",
+        ObjectTextureQualitySlider = "Object & foliage texture quality";
 
     /// <summary>
     /// The rows that were command-line options only (docs/launch-options.md); the water's grid and FFT size are made once with the water
@@ -1256,19 +1263,22 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// The third column: textures. The game's <c>texture resolution gimping</c> (docs/formats/settings.md): the object, foliage and character
-    /// textures are loaded again at the new level as the slider moves; the terrain's layer arrays keep the size they were made with
-    /// (--texture-quality at start).
+    /// The third column: textures. Per-category <c>texture resolution gimping</c> (docs/formats/settings.md): character and object &amp; foliage
+    /// textures reload live at the new level; the terrain's layer arrays keep the size they were made with (at start).
     /// </summary>
     static List<Slider> TextureSliders()
     {
-        int terrainLevel = Data.Textures.TextureQuality.Level;
         var labels = Data.Textures.TextureQuality.Labels;
+        int max = Data.Textures.TextureQuality.Maximum;
+        string LabelText(float v) => labels[Math.Clamp((int)MathF.Round(v), 0, max)];
         return
         [
-            new(TextureQualitySlider, 0, Data.Textures.TextureQuality.Maximum, () => Data.Textures.TextureQuality.Level,
-                v => Data.Textures.TextureQuality.Level = (int)MathF.Round(v), "0",
-                Text: v => (int)MathF.Round(v) is var level && level != terrainLevel ? $"{labels[level]} (terrain at start)" : labels[level]),
+            new(CharacterTextureQualitySlider, 0, max, () => Data.Textures.TextureQuality.CharacterLevel,
+                v => Data.Textures.TextureQuality.CharacterLevel = (int)MathF.Round(v), "0", Text: LabelText),
+            new(TerrainTextureQualitySlider, 0, max, () => Data.Textures.TextureQuality.TerrainLevel,
+                v => Data.Textures.TextureQuality.TerrainLevel = (int)MathF.Round(v), "0", Text: LabelText),
+            new(ObjectTextureQualitySlider, 0, max, () => Data.Textures.TextureQuality.ObjectLevel,
+                v => Data.Textures.TextureQuality.ObjectLevel = (int)MathF.Round(v), "0", Text: LabelText),
         ];
     }
 

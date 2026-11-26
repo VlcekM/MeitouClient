@@ -58,7 +58,7 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
     /// </summary>
     internal void Requalify()
     {
-        int level = TextureQuality.Level;
+        int level = TextureQuality.LevelOf(cache.Category);
         if (level == _requalifiedLevel) return;
         int replacing = 0;
         foreach (var t in cache.Textures) if (t.Replacing) replacing++;

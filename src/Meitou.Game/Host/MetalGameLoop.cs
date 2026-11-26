@@ -1437,9 +1437,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             WorldFrame.UpscalerSliders[1], SettingsMenu.MetalRetinaResolutionSlider, SettingsMenu.MetalRenderResolutionSlider,
             SettingsMenu.MetalUiResolutionSlider,
         };
+        var args = Environment.GetCommandLineArgs();
         foreach (var slider in settingsValues.Sliders)
             if (!GameHost.RunOnlyKeys().Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label)
-                    && !WorldFrame.ChoiceSliders.Contains(slider.Label) && host.Config.Graphics.TryGetValue(slider.Label, out float value))
+                    && !WorldFrame.ChoiceSliders.Contains(slider.Label) && !TextureQualityOverridden(slider.Label, args)
+                    && host.Config.Graphics.TryGetValue(slider.Label, out float value))
                 slider.Set(Math.Clamp(value, slider.Min, slider.Max));
 
         // The switches as saved, the technique choices after them, then the saved preset, as the Vulkan loop (GameLoop.ApplySavedGraphics): unless
@@ -1544,10 +1546,26 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         sliders.Add(new Slider(WorldFrame.FilteringSlider, 0, 4, () => MathF.Log2(_ctx.Samplers.MaxAnisotropy),
             v => _ctx.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
             Text: v => (1 << (int)MathF.Round(v)) + "x"));
-        sliders.Add(new Slider(WorldFrame.TextureQualitySlider, 0, TextureQuality.Maximum, () => TextureQuality.Level,
-            v => TextureQuality.Level = (int)MathF.Round(v), "0",
-                Text: v => TextureQuality.Labels[Math.Clamp((int)MathF.Round(v), 0, TextureQuality.Maximum)]));
+        string LabelText(float v) => TextureQuality.Labels[Math.Clamp((int)MathF.Round(v), 0, TextureQuality.Maximum)];
+        sliders.Add(new Slider(WorldFrame.CharacterTextureQualitySlider, 0, TextureQuality.Maximum, () => TextureQuality.CharacterLevel,
+            v => TextureQuality.CharacterLevel = (int)MathF.Round(v), "0", Text: LabelText));
+        sliders.Add(new Slider(WorldFrame.TerrainTextureQualitySlider, 0, TextureQuality.Maximum, () => TextureQuality.TerrainLevel,
+            v => TextureQuality.TerrainLevel = (int)MathF.Round(v), "0", Text: LabelText));
+        sliders.Add(new Slider(WorldFrame.ObjectTextureQualitySlider, 0, TextureQuality.Maximum, () => TextureQuality.ObjectLevel,
+            v => TextureQuality.ObjectLevel = (int)MathF.Round(v), "0", Text: LabelText));
     }
+
+    /// <summary>
+    /// Whether the command line overrode the texture quality slider <paramref name="label"/> for this run.
+    /// </summary>
+    static bool TextureQualityOverridden(string label, string[] args) => label switch
+    {
+        WorldFrame.CharacterTextureQualitySlider => args.Contains("--character-texture-quality") || args.Contains("--texture-quality"),
+        WorldFrame.TerrainTextureQualitySlider => args.Contains("--terrain-texture-quality") || args.Contains("--texture-quality"),
+        WorldFrame.ObjectTextureQualitySlider => args.Contains("--object-texture-quality") || args.Contains("--texture-quality"),
+        WorldFrame.TextureQualitySlider => args.Contains("--texture-quality"),
+        _ => false,
+    };
 
     /// <summary>
     /// Whether a Display row of the Metal upscaling is shown: with the switch on the preset and the render scale, off the interface's size and, in a

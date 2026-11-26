@@ -179,6 +179,12 @@ sealed class WorldOptions
     public int TextureQuality = 0, WaterReflection = 4;
 
     /// <summary>
+    /// Optional per-category texture quality overrides (0..4; null: follow <see cref="TextureQuality"/>):
+    /// <c>--character-texture-quality</c>, <c>--terrain-texture-quality</c>, <c>--object-texture-quality</c>.
+    /// </summary>
+    public int? CharacterTextureQuality, TerrainTextureQuality, ObjectTextureQuality;
+
+    /// <summary>
     /// Samples per texel of the reflection target (<c>--reflection-samples</c>; 1 disables the MSAA/resolve path).
     /// </summary>
     public int ReflectionSamples = ReflectionPass.DefaultSamples;
@@ -634,6 +640,7 @@ sealed class WorldOptions
         Post.ParticleDivisor = 4;
         ParticleDensity = LowEndParticleDensity;
         (Anisotropy, TextureQuality, MaterialDistance) = (1, LowEndTextureQuality, LowEndMaterialDistance);
+        CharacterTextureQuality = TerrainTextureQuality = ObjectTextureQuality = null;
     }
 
     /// <summary>
@@ -653,6 +660,7 @@ sealed class WorldOptions
         (Post.Upscale.Kind, Post.Upscale.Scale, Post.Upscale.Explicit) = (UpscalerKind.Off, 1, true);
         Post.Smaa = true;
         TextureQuality = 1;
+        CharacterTextureQuality = TerrainTextureQuality = ObjectTextureQuality = null;
     }
 
     /// <summary>
@@ -668,6 +676,7 @@ sealed class WorldOptions
         (SizeGiven, Windowed) = (true, windowed);
         VSync = false;
         TextureQuality = textureQuality;
+        CharacterTextureQuality = TerrainTextureQuality = ObjectTextureQuality = null;
         if (!rays)
         {
             Gi = false;

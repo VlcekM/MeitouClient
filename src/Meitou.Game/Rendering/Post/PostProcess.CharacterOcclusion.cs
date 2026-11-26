@@ -103,12 +103,14 @@ public sealed unsafe partial class PostProcess
         if (_characterVisibility is null)
         {
             using var batch = Gpu.Uploads.Begin();
-            _characterVisibility = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post character gather");
+            _characterVisibility = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post character gather",
+                storage: true);
         }
         if (_characterGatherPooled is null)
         {
             using var batch = Gpu.Uploads.Begin();
-            _characterGatherPooled = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post character gather pooled");
+            _characterGatherPooled = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post character gather pooled",
+                storage: true);
         }
         CloseSegment();
 

@@ -330,7 +330,7 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     /// </summary>
     public static ScalarKind ScalarOf(InternalFormat format) => format switch
     {
-        InternalFormat.R8Ui or InternalFormat.R16Ui or InternalFormat.R32Ui
+        InternalFormat.R8Ui or InternalFormat.R16Ui or InternalFormat.R32Ui or InternalFormat.Rg32Ui
             or InternalFormat.Rgba8Ui or InternalFormat.Rgba16Ui or InternalFormat.Rgba32Ui => ScalarKind.UInt,
         InternalFormat.R16I or InternalFormat.R32I or InternalFormat.Rgba32I => ScalarKind.Int,
         _ => ScalarKind.Float,

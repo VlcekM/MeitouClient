@@ -27,12 +27,10 @@ static partial class CharacterVisibilityShaders
     public const int RateShift = 27;
 
     /// <summary>
-    /// The resolve's push block: the colour pass's, then the id and slope targets' bindless indices.
+    /// The resolve's push block: the colour pass's, then the id target's bindless index.
     /// </summary>
     internal const string PushMembers = CharacterShaders.PushMembers + "\n" + """
-            uint visIds;        // the id target (UintTexture2D): x the instance row + 1 (0: no character), y primitive | rate | facing, zw barycentrics 1 and 2
-            uint visSlopes;     // the slopes target: the barycentrics' fine screen derivatives (dFdx, dFdy), xy along x, zw along y
-            uint visCoarse;     // the coarse ones (the quad's, which the implicit lookups take)
+            uint visIds;        // the id target (UintTexture2D): x the instance row + 1 (0: no character), y primitive | rate | facing
         """;
 
     #endregion
@@ -42,19 +40,16 @@ static partial class CharacterVisibilityShaders
     /// <summary>
     /// The id pass's fragment program, after the colour pass's vertex program with the row (<see cref="CharacterShaders.IdVertex"/>): the colour
     /// pass's discards (hidden vertices, a cut-out still streaming in, the hair cards' and cut-out items' alpha, at the same lookups), then the row,
-    /// the primitive, the rate and facing, and the hardware's perspective-correct barycentrics with their derivatives (taken before the cut's
-    /// discard, while the whole quad runs). <paramref name="rate"/>: the rendering has a shading rate attachment.
+    /// the primitive, the rate and facing into a single RG32UI target. <paramref name="rate"/>: the rendering has a shading rate attachment.
     /// </summary>
-    public static string IdFragment(bool rate) => "#version 450\n#extension GL_EXT_fragment_shader_barycentric : require\n"
+    public static string IdFragment(bool rate) => "#version 450\n"
         + (rate ? "#extension GL_EXT_fragment_shading_rate : require\n" : "") + NativeShaders.Prelude(CharacterShaders.PushMembers)
         + CharacterShaders.Structs + CharacterShaders.Lookup + $$"""
         in vec2 vUv;
         flat in uint vMaterial;
         in float vHidden;
         flat in uint vRow;
-        layout(location = 0) out uvec4 oVisible;
-        layout(location = 1) out vec4 oSlopes;
-        layout(location = 2) out vec4 oCoarse;
+        layout(location = 0) out uvec2 oVisible;
 
         void main()
         {
@@ -62,17 +57,16 @@ static partial class CharacterVisibilityShaders
             CharMaterial m = materials.items[vMaterial];
             uint f = m.flags;
             if ((f & {{CharacterShaders.AlphaPending}}u) != 0u) discard;
-            bool cut = false;
-            if (m.shading == {{CharacterShaders.ShadeHair}}u) cut = (f & {{CharacterShaders.HasDiffuse}}u) != 0u && dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold;
+            if (m.shading == {{CharacterShaders.ShadeHair}}u)
+            {
+                if ((f & {{CharacterShaders.HasDiffuse}}u) != 0u && dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold) discard;
+            }
             else if (m.shading == {{CharacterShaders.ShadeItem}}u && (f & {{CharacterShaders.ClipNormalAlpha}}u) != 0u)
-                cut = tex(m.tex[{{CharacterShaders.SlotNormal}}], vUv).a < (view.fogDistance < 0.0 ? 0.5 : 0.6);
-            vec2 b = gl_BaryCoordEXT.yz;
-            vec4 slopes = vec4(dFdxFine(b), dFdyFine(b)), coarse = vec4(dFdxCoarse(b), dFdyCoarse(b));
-            if (cut) discard;
+            {
+                if (tex(m.tex[{{CharacterShaders.SlotNormal}}], vUv).a < (view.fogDistance < 0.0 ? 0.5 : 0.6)) discard;
+            }
             uint rate = {{(rate ? "uint(gl_ShadingRateEXT) & 15u" : "0u")}};
-            oVisible = uvec4(vRow + 1u, uint(gl_PrimitiveID) | (rate << {{RateShift}}) | (gl_FrontFacing ? 0x80000000u : 0u), floatBitsToUint(b));
-            oSlopes = slopes;
-            oCoarse = coarse;
+            oVisible = uvec2(vRow + 1u, uint(gl_PrimitiveID) | (rate << {{RateShift}}) | (gl_FrontFacing ? 0x80000000u : 0u));
         }
         """;
 
@@ -166,20 +160,27 @@ static partial class CharacterVisibilityShaders
 
             """);
         foreach (var v in varyings)
-            if (!v.Flat) s.Append(CultureInvariant($"{v.Type} {v.Name}Dx, {v.Name}Dy, {v.Name}Gx, {v.Name}Gy;\n"));
+        {
+            if (v.Flat) continue;
+            s.Append(CultureInvariant($"{v.Type} {v.Name}Dx, {v.Name}Dy;\n"));
+            s.Append(CultureInvariant($"#define {v.Name}Gx {v.Name}Dx\n#define {v.Name}Gy {v.Name}Dy\n"));
+        }
         return s.ToString();
     }
 
     /// <summary>
-    /// The functions that gather a pixel's outputs from its triangle's corners: <c>vbBegin</c> clears the sums, <c>vbCorner</c> adds the corner the
-    /// vertex program just ran for (its barycentric and its derivatives; a flat output is the first corner's, the provoking vertex),
-    /// <c>vbFinish</c> sets the pixel's, <c>vbShift</c> its neighbour's along the quad's directions.
+    /// The functions that gather a pixel's outputs from its triangle's corners: <c>vbKeep0</c>, <c>vbKeep1</c>, <c>vbKeep2</c> keep the vertex
+    /// program's outputs for each corner (a flat output is the first corner's, the provoking vertex; corners 1 and 2 store their differences from
+    /// corner 0), <c>vbInterpolate</c> evaluates the interpolated value and analytical derivatives from <c>(b, dx, dy)</c>, <c>vbFinish</c> sets the
+    /// pixel's outputs, and <c>vbShift</c> shifts them to a quad neighbour.
     /// </summary>
     static string Corners(List<Varying> varyings)
     {
         var decls = new StringBuilder();
-        var begin = new StringBuilder("void vbBegin()\n{\n");
-        var corner = new StringBuilder("void vbCorner(bool first, float b, float dx, float dy, float gx, float gy)\n{\n");
+        var keep0 = new StringBuilder("void vbKeep0()\n{\n");
+        var keep1 = new StringBuilder("void vbKeep1()\n{\n");
+        var keep2 = new StringBuilder("void vbKeep2()\n{\n");
+        var interp = new StringBuilder("void vbInterpolate(vec3 b, vec3 dx, vec3 dy)\n{\n");
         var finish = new StringBuilder("void vbFinish()\n{\n");
         var shift = new StringBuilder("void vbShift(float sx, float sy)\n{\n");
         foreach (var (flat, type, name) in varyings)
@@ -188,19 +189,23 @@ static partial class CharacterVisibilityShaders
             finish.Append(CultureInvariant($"    {name} = vbAt_{name};\n"));
             if (flat)
             {
-                corner.Append(CultureInvariant($"    if (first) vbAt_{name} = {name};\n"));
+                keep0.Append(CultureInvariant($"    vbAt_{name} = {name};\n"));
                 continue;
             }
 
-            // The first corner's value, then the others' differences to it times their barycentrics and slopes.
-            decls.Append(CultureInvariant($"{type} vbFirst_{name};\n"));
-            begin.Append(CultureInvariant($"    {name}Dx = {type}(0.0); {name}Dy = {type}(0.0); {name}Gx = {type}(0.0); {name}Gy = {type}(0.0);\n"));
-            corner.Append(CultureInvariant($"    if (first) {{ vbFirst_{name} = {name}; vbAt_{name} = {name} * b; }}\n"));
-            corner.Append(CultureInvariant($"    else {{ {type} e = {name} - vbFirst_{name}; vbAt_{name} += {name} * b; {name}Dx += e * dx; {name}Dy += e * dy; {name}Gx += e * gx; {name}Gy += e * gy; }}\n"));
+            // Corner 0's value and the other two corners' differences to it, interpolated with the analytical barycentrics and slopes.
+            decls.Append(CultureInvariant($"{type} vb0_{name}, vb1_{name}, vb2_{name};\n"));
+            keep0.Append(CultureInvariant($"    vb0_{name} = {name};\n"));
+            keep1.Append(CultureInvariant($"    vb1_{name} = {name} - vb0_{name};\n"));
+            keep2.Append(CultureInvariant($"    vb2_{name} = {name} - vb0_{name};\n"));
+            interp.Append(CultureInvariant($"    vbAt_{name} = vb0_{name} + vb1_{name} * b.y + vb2_{name} * b.z;\n"));
+            interp.Append(CultureInvariant($"    {name}Dx = vb1_{name} * dx.y + vb2_{name} * dx.z;\n"));
+            interp.Append(CultureInvariant($"    {name}Dy = vb1_{name} * dy.y + vb2_{name} * dy.z;\n"));
             shift.Append(CultureInvariant($"    {name} = vbAt_{name} + sx * {name}Dx + sy * {name}Dy;\n"));
         }
 
-        return decls + begin.Append("}\n").ToString() + corner.Append("}\n") + finish.Append("}\n") + shift.Append("}\n");
+        return decls + keep0.Append("}\n").ToString() + keep1.Append("}\n") + keep2.Append("}\n") + interp.Append("}\n")
+            + finish.Append("}\n") + shift.Append("}\n");
     }
 
     /// <summary>
@@ -374,10 +379,9 @@ static partial class CharacterVisibilityShaders
         void main()
         {
             ivec2 px = ivec2(gl_FragCoord.xy);
-            uvec4 id = texelFetch(utextures2D[pc.visIds], px, 0);
+            uvec2 id = texelFetch(utextures2D[pc.visIds], px, 0).xy;
             // The return matters: a discard compiled as a demote (ShaderCompileOptions.DemoteDiscard) runs on, and row -1 has no mesh.
             if (id.x == 0u) { discard; return; }
-            vec4 slopes = texelFetch(textures2D[pc.visSlopes], px, 0), coarse = texelFetch(textures2D[pc.visCoarse], px, 0);
             uint row = id.x - 1u, prim = id.y & {{(1u << RateShift) - 1}}u, rate = (id.y >> {{RateShift}}) & 15u;
             vbFrontFacing = (id.y & 0x80000000u) != 0u;
 
@@ -389,20 +393,34 @@ static partial class CharacterVisibilityShaders
             vbSx = (cell.x & 1) == 0 ? 1.0 : -1.0;
             vbSy = (cell.y & 1) == 0 ? 1.0 : -1.0;
 
-            vec2 b12 = uintBitsToFloat(id.zw);
-            vec3 b = vec3(1.0 - b12.x - b12.y, b12);
-            vec3 dx = vec3(-slopes.x - slopes.y, slopes.xy), dy = vec3(-slopes.z - slopes.w, slopes.zw);
-            vec3 gx = vec3(-coarse.x - coarse.y, coarse.xy), gy = vec3(-coarse.z - coarse.w, coarse.zw);
-            vbBegin();
             vbFetch(row, prim, 0u);
             vbVertex();
-            vbCorner(true, b.x, dx.x, dy.x, gx.x, gy.x);
+            vec4 p0 = vbPosition;
+            vbKeep0();
             vbFetch(row, prim, 1u);
             vbVertex();
-            vbCorner(false, b.y, dx.y, dy.y, gx.y, gy.y);
+            vec4 p1 = vbPosition;
+            vbKeep1();
             vbFetch(row, prim, 2u);
             vbVertex();
-            vbCorner(false, b.z, dx.z, dy.z, gx.z, gy.z);
+            vec4 p2 = vbPosition;
+            vbKeep2();
+
+            // Analytical homogeneous perspective-correct barycentrics and exact screen-space derivatives (Olano & Greer: no division by p.w, so
+            // near-plane clipped triangles with p.w <= 0 stay exact; viewport is not flipped, GlConventions.VkViewport).
+            vec2 invSize = 1.0 / vec2(textureSize(utextures2D[pc.visIds], 0));
+            vec2 q = vbFragCoord.xy * invSize * 2.0 - 1.0;
+            vec2 d0 = p0.xy - q * p0.w, d1 = p1.xy - q * p1.w, d2 = p2.xy - q * p2.w;
+            vec3 e = vec3(d1.x * d2.y - d1.y * d2.x, d2.x * d0.y - d2.y * d0.x, d0.x * d1.y - d0.y * d1.x);
+            vec3 ex = vec3(p2.w * d1.y - p1.w * d2.y, p0.w * d2.y - p2.w * d0.y, p1.w * d0.y - p0.w * d1.y);
+            vec3 ey = vec3(p1.w * d2.x - p2.w * d1.x, p2.w * d0.x - p0.w * d2.x, p0.w * d1.x - p1.w * d0.x);
+            float sum = e.x + e.y + e.z;
+            float invSum = abs(sum) > 1e-12 ? 1.0 / sum : 0.0;
+            vec3 b = abs(sum) > 1e-12 ? e * invSum : vec3(1.0, 0.0, 0.0);
+            vec2 scale = 2.0 * vec2(size) * invSize;
+            vec3 dx = (ex - b * (ex.x + ex.y + ex.z)) * (invSum * scale.x);
+            vec3 dy = (ey - b * (ey.x + ey.y + ey.z)) * (invSum * scale.y);
+            vbInterpolate(b, dx, dy);
             vbFinish();
 
             vec3 g = normalize(vNormal);

@@ -39,6 +39,7 @@ public static class GlConventions
         GlEnum.R32Ui => Format.R32Uint,
         GlEnum.R32I => Format.R32Sint,
         GlEnum.Rg32F => Format.R32G32Sfloat,
+        GlEnum.Rg32Ui => Format.R32G32Uint,
         GlEnum.Rgb32F => Format.R32G32B32Sfloat,
         GlEnum.Rgba32F => Format.R32G32B32A32Sfloat,
         GlEnum.Rgba32Ui => Format.R32G32B32A32Uint,
@@ -126,7 +127,7 @@ public static class GlConventions
     /// Formats sampled with nearest filtering and integer border colours.
     /// </summary>
     public static bool IsIntegerFormat(InternalFormat f) =>
-        f is InternalFormat.Rgba8Ui or InternalFormat.R32Ui or InternalFormat.R16Ui or InternalFormat.R8Ui;
+        f is InternalFormat.Rgba8Ui or InternalFormat.R32Ui or InternalFormat.Rg32Ui or InternalFormat.R16Ui or InternalFormat.R8Ui;
 
     #endregion
 
@@ -817,6 +818,10 @@ public enum GlEnum : int
     /// </summary>
     R32Ui = 0x8236,
     /// <summary>
+    /// <c>GL_RG32UI</c>: 32-bit unsigned integer red-green.
+    /// </summary>
+    Rg32Ui = 0x823C,
+    /// <summary>
     /// <c>GL_RGBA16UI</c>: 16-bit unsigned integer RGBA.
     /// </summary>
     Rgba16Ui = 0x8D76,
@@ -913,6 +918,10 @@ public enum InternalFormat : int
     /// <c>GL_R32UI</c>: 32-bit unsigned integer red.
     /// </summary>
     R32Ui = 0x8236,
+    /// <summary>
+    /// <c>GL_RG32UI</c>: 32-bit unsigned integer red-green.
+    /// </summary>
+    Rg32Ui = 0x823C,
     /// <summary>
     /// <c>GL_COMPRESSED_RGB_S3TC_DXT1_EXT</c>: BC1 without alpha.
     /// </summary>

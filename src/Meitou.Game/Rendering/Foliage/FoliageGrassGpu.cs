@@ -14,12 +14,17 @@ namespace Meitou.Game.Rendering.Foliage;
 public readonly record struct GrassTables(Transient Zones, int ZoneCount, Transient Patches, int PatchCount);
 
 /// <summary>
-/// What one view's grass cull wrote: the indirect draws (16 bytes each, the first <c>Counters[0]</c> of at most <see cref="MaxDraws"/> valid), and
-/// the counters (draws, blades).
+/// What one view's grass cull wrote: the indirect draws (16 bytes each, the first <c>Counters[0]</c> of at most <see cref="MaxDraws"/> valid), the
+/// counters (draws, blades), the patch table, and each draw's page bounds (<see cref="Bounds"/>, indexed by <c>gl_DrawID</c>).
 /// </summary>
 public readonly record struct GrassResult(GpuBuffer Draws, ulong DrawsOffset, GpuBuffer Counters, ulong CountersOffset, int MaxDraws,
     Transient Patches)
 {
+    /// <summary>
+    /// Each ordered draw's page bounds (<c>x0, yMin, z0, yMax - yMin</c>, 16 bytes per draw, indexed by <c>gl_DrawID</c>).
+    /// </summary>
+    public GpuBufferBinding Bounds { get; init; }
+
     /// <summary>
     /// Nothing to draw: the cull did not run (no slots, no patches, or no scratch memory).
     /// </summary>
@@ -102,11 +107,11 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     }
 
     /// <summary>
-    /// Whether the device can run the GPU grass (push descriptors, indirect draws with a count and a first instance).
+    /// Whether the device can run the GPU grass (push descriptors, indirect draws with a count, first instance and <c>gl_DrawID</c>).
     /// </summary>
     public static bool Supported(IGpuContext ctx) =>
         ctx is GpuContext vk && vk.Device.HasPushDescriptor && vk.Device.DrawIndirectCount && vk.Device.DrawIndirectFirstInstance
-            && vk.Device.MultiDrawIndirect;
+            && vk.Device.MultiDrawIndirect && vk.Device.ShaderDrawParameters;
 
     /// <summary>
     /// Frees the kernels, the arena, the slot table, the per-view memory and the read-backs.
@@ -158,9 +163,9 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     #region Blade arena
 
     /// <summary>
-    /// Bytes of a blade (<see cref="FoliageGrassField.Stride"/> floats).
+    /// Bytes of a packed blade: page-local UNORM16 (x, y, z) and packed UNORM8 (scale, yaw) in 4 ushorts (8 bytes).
     /// </summary>
-    public const int BladeBytes = FoliageGrassField.Stride * 4;
+    public const int BladeBytes = 8;
     /// <summary>
     /// The blade arena (a vertex buffer, see <see cref="BladeBuffer"/>).
     /// </summary>
@@ -391,14 +396,16 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         if (!(scratch.TryAllocate((ulong)n * 16, out var keysBuffer, out var keysOffset) && scratch.TryAllocate((ulong)n * 16, out var drawsBuffer,
                 out var drawsOffset) &&
               scratch.TryAllocate(16, out var countersBuffer, out var countersOffset) &&
-              scratch.TryAllocate((ulong)n * 4, out var firstsBuffer, out var firstsOffset)))
+              scratch.TryAllocate((ulong)n * 4, out var firstsBuffer, out var firstsOffset) &&
+              scratch.TryAllocate((ulong)n * 16, out var boundsBuffer, out var boundsOffset)))
             return default;
         var keys = (Buffer: keysBuffer, Offset: keysOffset);
         var draws = (Buffer: drawsBuffer, Offset: drawsOffset);
         var counters = (Buffer: countersBuffer, Offset: countersOffset);
+        var boundsBinding = new GpuBufferBinding(boundsBuffer, boundsOffset, (ulong)n * 16);
         var viewData = WriteCullView(planes, eye, n, pageSize, prefixIndex, fraction, motionScale, in occlusion);
 
-        Span<GpuBufferBinding> b = stackalloc GpuBufferBinding[10];
+        Span<GpuBufferBinding> b = stackalloc GpuBufferBinding[11];
         b[0] = new GpuBufferBinding(viewData.Handle, viewData.Offset, ViewBytes);
         b[1] = new GpuBufferBinding(_slots.Handle, 0, _slots.Size);
         b[2] = new GpuBufferBinding(_prefixes.Handle, 0, _prefixes.Size);
@@ -407,11 +414,12 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
         b[5] = new GpuBufferBinding(keys.Buffer, keys.Offset, (ulong)n * 16);
         b[6] = new GpuBufferBinding(draws.Buffer, draws.Offset, (ulong)n * 16);
         b[7] = new GpuBufferBinding(counters.Buffer, counters.Offset, 16);
-        b[8] = new GpuBufferBinding(firstsBuffer, firstsOffset, (ulong)n * 4);   // the draws' first blades, in kernel 1's list order
+        b[8] = new GpuBufferBinding(firstsBuffer, firstsOffset, (ulong)n * 4);   // the draws' slot indices, in kernel 1's list order
         b[9] = occlusion.IsEmpty ? new GpuBufferBinding(_slots.Handle, 0, _slots.Size) : occlusion.Buffer;   // the pyramid (a stand-in without one)
+        b[10] = boundsBinding;   // each ordered draw's page bounds (x0, yMin, z0, yMax - yMin)
 
         RecordCullKernels(b, n, counters);
-        return new GrassResult(draws.Buffer, draws.Offset, counters.Buffer, counters.Offset, n, tables.Patches);
+        return new GrassResult(draws.Buffer, draws.Offset, counters.Buffer, counters.Offset, n, tables.Patches) { Bounds = boundsBinding };
     }
 
     /// <summary>

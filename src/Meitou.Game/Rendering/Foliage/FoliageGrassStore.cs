@@ -18,10 +18,10 @@ sealed class FoliageGrassStore
     #region Store
 
     /// <summary>
-    /// Bytes of the blade arena (160 MB) and slots of the cull table at the default grass distance; <see cref="StoreScale"/> times them for a
-    /// longer one.
+    /// Bytes of the packed blade arena (64 MB at 8 bytes per blade, holding 8M blades) and slots of the cull table at the default grass distance;
+    /// <see cref="StoreScale"/> times them for a longer one.
     /// </summary>
-    const ulong GrassArenaBytes = 160ul << 20;
+    const ulong GrassArenaBytes = 64ul << 20;
 
     /// <summary>
     /// Slots of the cull table at the default grass distance.
@@ -29,7 +29,7 @@ sealed class FoliageGrassStore
     const int GrassSlotCapacity = 32768;
 
     /// <summary>
-    /// The largest <see cref="StoreScale"/>: 1.28 GB of blades, a grass distance of about 2.8 times the default.
+    /// The largest <see cref="StoreScale"/>: 512 MB of packed blades, a grass distance of about 2.8 times the default.
     /// </summary>
     const int MaxGrassStoreScale = 8;
 
@@ -74,8 +74,8 @@ sealed class FoliageGrassStore
     public NativeProg? MotionGpuProgram { get; }
 
     /// <summary>
-    /// The blade programs' vertex layout over the arena (instance rate: vec4 at 0, float at 16, stride 20), and their pipelines per segment: the
-    /// CPU path's colour program.
+    /// The blade programs' vertex layout over the arena (instance rate: Rgba16 at 0, stride 8), and their pipelines per segment: the CPU path's
+    /// colour program.
     /// </summary>
     public FoliageNativeMesh MeshCpu;
 
@@ -113,7 +113,7 @@ sealed class FoliageGrassStore
         MeshCpu = ArenaMesh(_grassProgram);
         MeshMotionCpu = ArenaMesh(_grassMotionProgram);
         if (!Store.Kernels) return;
-        Frame = new NativeFrame(gpu, extraStorage: 1);
+        Frame = new NativeFrame(gpu, extraStorage: 2);
         GpuProgram = new NativeProg(gpu, Frame, FoliageGrassShaders.GrassVertexGpu(), FoliageGrassShaders.GrassFragmentGpu(),
             "foliage grass gpu");
         MotionGpuProgram = new NativeProg(gpu, Frame, FoliageGrassShaders.GrassMotionVertexGpu(),
@@ -156,7 +156,7 @@ sealed class FoliageGrassStore
     }
 
     /// <summary>
-    /// How many times the default store a grass distance needs: the pages in reach grow with the square of the distance, so x 2 needs 4 (640 MB);
+    /// How many times the default store a grass distance needs: the pages in reach grow with the square of the distance, so x 2 needs 4 (256 MB);
     /// at most <see cref="MaxGrassStoreScale"/> and 1 / <see cref="GrassStoreBudgetShare"/> of the memory budget, at least 1 (a shorter distance
     /// keeps the default store). Pages past a smaller store wait for room (<see cref="TryQueuePage"/>).
     /// </summary>
@@ -209,14 +209,14 @@ sealed class FoliageGrassStore
     }
 
     /// <summary>
-    /// A blade program's inputs over the arena: location 0 the position and scale (a vec4), location 1 the yaw, both per instance.
+    /// A blade program's inputs over the arena: location 0 holds page-local UNORM16 (x, y, z) and packed UNORM8 (scale, yaw) in 4 ushorts, per
+    /// instance.
     /// </summary>
     FoliageNativeMesh ArenaMesh(NativeProg p)
     {
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
         var arena = Store.BladeBuffer;
-        attributes[0] = new LegacyProgram.Attribute(new GpuBufferBinding(arena, 0), InternalFormat.Rgba32F, FoliageGrassGpu.BladeBytes, true);
-        attributes[1] = new LegacyProgram.Attribute(new GpuBufferBinding(arena, 16), InternalFormat.R32F, FoliageGrassGpu.BladeBytes, true);
+        attributes[0] = new LegacyProgram.Attribute(new GpuBufferBinding(arena, 0), InternalFormat.Rgba16, FoliageGrassGpu.BladeBytes, true);
         return new FoliageNativeMesh { Layout = p.Layout(attributes), Vertices = p.Buffers(attributes, p.Own) };
     }
 
@@ -361,19 +361,32 @@ sealed class FoliageGrassStore
         float z0 = state.Z0 + key / FoliageRenderer.PagesPerZone * FoliageRenderer.PageSize;
         SpanHeights(state, page, blades, floats);
         float pageMinY = page.MinY, pageMaxY = page.MaxY;
+        int slabBlades = FoliageRenderer.SlabBytes / FoliageGrassGpu.BladeBytes;
         for (int i = 0; i < buffers.Length; i++)
         {
             var b = buffers[i];
             if (b.Count == 0) continue;
             var data = blades[i];
-            int bytes = floats[i] * sizeof(float);
-            for (int at = 0; at < bytes; at += FoliageRenderer.SlabBytes)
+            int totalBlades = b.Count;
+            for (int bladeStart = 0; bladeStart < totalBlades; bladeStart += slabBlades)
             {
-                int start = at, length = Math.Min(FoliageRenderer.SlabBytes, bytes - at);
+                int start = bladeStart, count = Math.Min(slabBlades, totalBlades - bladeStart);
                 _uploads.Enqueue(() =>
                 {
-                    if (!page.Dropped)
-                        store.WriteBlades(b.Range, start, MemoryMarshal.AsBytes(data.AsSpan()).Slice(start, length));
+                    if (page.Dropped) return;
+
+                    ushort[] packed = ArrayPool<ushort>.Shared.Rent(count * 4);
+                    try
+                    {
+                        PackBlades(data.AsSpan(start * FoliageGrassField.Stride, count * FoliageGrassField.Stride),
+                            packed.AsSpan(0, count * 4), x0, z0, FoliageRenderer.PageSize, pageMinY, pageMaxY);
+                        store.WriteBlades(b.Range, start * FoliageGrassGpu.BladeBytes,
+                            MemoryMarshal.AsBytes(packed.AsSpan(0, count * 4)));
+                    }
+                    finally
+                    {
+                        ArrayPool<ushort>.Shared.Return(packed);
+                    }
                 });
             }
         }
@@ -397,6 +410,29 @@ sealed class FoliageGrassStore
             Version++;
         });
         return true;
+    }
+
+    /// <summary>
+    /// Packs <see cref="FoliageGrassField.Stride"/>-float blades (<c>x, y, z, scale, yaw</c>) into 4 ushorts each: page-local UNORM16
+    /// <c>(x, y, z)</c> and UNORM8 <c>(scale | yaw &lt;&lt; 8)</c>.
+    /// </summary>
+    static void PackBlades(ReadOnlySpan<float> src, Span<ushort> dst, float x0, float z0, float pageSize, float minY, float maxY)
+    {
+        float invSize = 65535f / pageSize;
+        float ySpan = maxY - minY;
+        float invY = ySpan > 0f ? 65535f / ySpan : 0f;
+        const float invTau = 255f / MathF.Tau;
+        int blades = src.Length / FoliageGrassField.Stride;
+        for (int i = 0; i < blades; i++)
+        {
+            int s = i * FoliageGrassField.Stride, d = i * 4;
+            dst[d] = (ushort)Math.Clamp((int)((src[s] - x0) * invSize + 0.5f), 0, 65535);
+            dst[d + 1] = (ushort)Math.Clamp((int)((src[s + 1] - minY) * invY + 0.5f), 0, 65535);
+            dst[d + 2] = (ushort)Math.Clamp((int)((src[s + 2] - z0) * invSize + 0.5f), 0, 65535);
+            int qScale = Math.Clamp((int)(src[s + 3] * 255f + 0.5f), 0, 255);
+            int qYaw = Math.Clamp((int)(src[s + 4] * invTau + 0.5f), 0, 255);
+            dst[d + 3] = (ushort)(qScale | (qYaw << 8));
+        }
     }
 
     /// <summary>

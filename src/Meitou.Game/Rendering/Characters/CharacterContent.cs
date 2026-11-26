@@ -577,7 +577,7 @@ internal sealed class CharacterContent : IDisposable
         this._assets = assets;
         this._db = db;
         _resolver = new MaterialResolver(db, assets.Materials, assets);
-        Textures = new WorldTextureCache(gpu, assets, "character textures") { Share = TextureShare.For(gpu) };
+        Textures = new WorldTextureCache(gpu, assets, "character textures") { Share = TextureShare.For(gpu), Category = TextureCategory.Character };
         Morphs = new MorphArena(gpu);
         Materials = new CharacterMaterialTable(gpu);
         Rigs = rigs ?? CreateRigs(db, assets);

@@ -9,8 +9,9 @@ namespace Meitou.Game.Rendering.Characters;
 /// <summary>
 /// The characters' visibility buffer in the main view (docs/character-renderer.md "Visibility buffer"): the colour pass split in two so each pixel a
 /// character shows is shaded once. The id pass draws the characters as the colour pass does (its vertex program, its cut-outs, the scene's depth),
-/// writing per pixel the instance row, the triangle, the shading rate and facing, and the hardware's barycentrics with their derivatives; the resolve
-/// (<see cref="CharacterVisibilityShaders"/>) then runs the colour pass's shading once per pixel over the picture, into the scene's colour targets.
+/// writing per pixel the instance row, the triangle, the shading rate and facing into a single RG32UI target; the resolve
+/// (<see cref="CharacterVisibilityShaders"/>) then runs the colour pass's vertex program for the triangle's corners, computes analytical
+/// perspective-correct barycentrics and screen-space derivatives, and runs the colour pass's shading once per pixel into the scene's colour targets.
 /// Render thread only.
 /// </summary>
 sealed unsafe class CharacterVisibility : IDisposable
@@ -54,11 +55,9 @@ sealed unsafe class CharacterVisibility : IDisposable
     readonly SceneHost _host;
 
     /// <summary>
-    /// The id target (RGBA32UI: the row + 1, the primitive, rate and facing, two barycentrics' bits), the slopes target (RGBA32F: the two
-    /// barycentrics' fine derivatives along x, then along y: what <c>dFdx</c> gives) and the coarse one (the quad's, as the implicit lookups take
-    /// them), at the render size.
+    /// The id target (RG32UI: the row + 1, and the primitive, rate and facing) at the render size.
     /// </summary>
-    GpuTexture? _idTarget, _slopeTarget, _coarseTarget;
+    GpuTexture? _idTarget;
 
     /// <summary>
     /// Milliseconds without an id pass before the visibility targets are released.
@@ -66,9 +65,9 @@ sealed unsafe class CharacterVisibility : IDisposable
     const long IdleMs = 5_000;
 
     /// <summary>
-    /// Their bindless indices.
+    /// The id target's bindless index.
     /// </summary>
-    uint _idIndex, _slopeIndex, _coarseIndex;
+    uint _idIndex;
 
     /// <summary>
     /// When <see cref="Open"/> last ran (<see cref="Environment.TickCount64"/>).
@@ -76,11 +75,11 @@ sealed unsafe class CharacterVisibility : IDisposable
     long _lastUsedAt;
 
     /// <summary>
-    /// Whether the device has what the visibility buffer needs: Vulkan with the meshes read by address, fragment barycentrics, <c>gl_PrimitiveID</c>
-    /// in a fragment program, and no late-depth workaround for discards.
+    /// Whether the device has what the visibility buffer needs: Vulkan with the meshes read by address, <c>gl_PrimitiveID</c> in a fragment program,
+    /// and no late-depth workaround for discards.
     /// </summary>
     public static bool Supported(IGpuContext gpu) =>
-        gpu is GpuContext { HasRayQuery: true, Device: { HasFragmentBarycentric: true, HasGeometryShader: true } }
+        gpu is GpuContext { HasRayQuery: true, Device.HasGeometryShader: true }
         && !gpu.Shaders.DiscardNeedsLateDepth;
 
     /// <summary>
@@ -116,7 +115,7 @@ sealed unsafe class CharacterVisibility : IDisposable
         var scene = post.SceneTargets;
         if (_idTarget is null || _idTarget.Desc.Width != scene.Width || _idTarget.Desc.Height != scene.Height) MakeTargets(scene.Width, scene.Height);
 
-        var targets = post.WithShadingRate(PassTargets.Of(_idTarget, post.SceneDepth, _slopeTarget, _coarseTarget));
+        var targets = post.WithShadingRate(PassTargets.Of(_idTarget, post.SceneDepth));
         _host.Open(stage, targets, new ClearColour(0, 0, 0, 0));
     }
 
@@ -137,19 +136,15 @@ sealed unsafe class CharacterVisibility : IDisposable
     public void Close() => _host.Close();
 
     /// <summary>
-    /// The id and slope targets at <paramref name="width"/> x <paramref name="height"/>, the old ones released after the frames in flight.
+    /// The id target at <paramref name="width"/> x <paramref name="height"/>, the old one released after the frames in flight.
     /// </summary>
     void MakeTargets(int width, int height)
     {
         FreeTargets();
         using var batch = _gpu.Uploads.Begin();
         var use = TextureUse.Sampled | TextureUse.ColourTarget;
-        _idTarget = batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, width, height, Use: use, Name: "characters visibility ids"));
-        _slopeTarget = batch.Create(new TextureDesc(InternalFormat.Rgba32F, width, height, Use: use, Name: "characters visibility slopes"));
-        _coarseTarget = batch.Create(new TextureDesc(InternalFormat.Rgba32F, width, height, Use: use, Name: "characters visibility coarse slopes"));
+        _idTarget = batch.Create(new TextureDesc(InternalFormat.Rg32Ui, width, height, Use: use, Name: "characters visibility ids"));
         _idIndex = _gpu.Bindless.Register(BindlessKind.UintTexture2D, Sampled(_idTarget));
-        _slopeIndex = _gpu.Bindless.Register(BindlessKind.Texture2D, Sampled(_slopeTarget));
-        _coarseIndex = _gpu.Bindless.Register(BindlessKind.Texture2D, Sampled(_coarseTarget));
     }
 
     /// <summary>
@@ -160,19 +155,15 @@ sealed unsafe class CharacterVisibility : IDisposable
             TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), t.View());
 
     /// <summary>
-    /// Releases the targets and their bindless entries.
+    /// Releases the id target and its bindless entry.
     /// </summary>
     void FreeTargets()
     {
         if (_idTarget is null) return;
 
         _gpu.Bindless.Free(BindlessKind.UintTexture2D, _idIndex);
-        _gpu.Bindless.Free(BindlessKind.Texture2D, _slopeIndex);
-        _gpu.Bindless.Free(BindlessKind.Texture2D, _coarseIndex);
         _idTarget.Dispose();
-        _slopeTarget!.Dispose();
-        _coarseTarget!.Dispose();
-        (_idTarget, _slopeTarget, _coarseTarget) = (null, null, null);
+        _idTarget = null;
     }
 
     /// <summary>
@@ -203,9 +194,9 @@ sealed unsafe class CharacterVisibility : IDisposable
         public CharacterPush Colour;
 
         /// <summary>
-        /// The id, slope and coarse slope targets' bindless indices.
+        /// The id target's bindless index.
         /// </summary>
-        public uint Ids, Slopes, Coarse;
+        public uint Ids;
     }
 
     /// <summary>
@@ -242,7 +233,7 @@ sealed unsafe class CharacterVisibility : IDisposable
         _storage[4] = new GpuBufferBinding(rows.Handle, rows.Offset, (ulong)Math.Max(count, 1) * CharInstance.Size);
         _storage[5] = Meshes(batches, count);
         _view = view;
-        _push = new ResolvePush { Colour = push, Ids = _idIndex, Slopes = _slopeIndex, Coarse = _coarseIndex };
+        _push = new ResolvePush { Colour = push, Ids = _idIndex };
         _pending = count > 0;
     }
 

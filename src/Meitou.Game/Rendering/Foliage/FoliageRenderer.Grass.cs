@@ -156,7 +156,8 @@ public sealed unsafe partial class FoliageRenderer
 
         var job = _grassGpuJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program) = (this, targets, state, p);
-        job.Frame = _grass.Frame!.Prepare(in view, [tables.Patches.Binding]);
+        var boundsBinding = result.IsEmpty ? tables.Patches.Binding : result.Bounds;
+        job.Frame = _grass.Frame!.Prepare(in view, [tables.Patches.Binding, boundsBinding]);
         if (depthFirst)
         {
             job.Pipeline = PipelineFor(ref _grass.MeshGpuEqual, gp, segment, state, targets.Formats, "foliage grass gpu after depth");
@@ -185,7 +186,7 @@ public sealed unsafe partial class FoliageRenderer
         view.PreviousTime = -1;
         var job = _grassGpuJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program) = (this, targets, depthState, p);
-        job.Frame = _grass.Frame!.Prepare(in view, [tables.Patches.Binding]);
+        job.Frame = _grass.Frame!.Prepare(in view, [tables.Patches.Binding, result.Bounds]);
         int segment = SegmentId(GrassDepthKind, p, targets, depthState);
         job.Pipeline = PipelineFor(ref _grass.MeshGpuDepth, gp, segment, depthState, targets.Formats, "foliage grass gpu depth");
         (job.Vertices, job.Result) = (_grass.MeshGpuDepth.Vertices, result);
@@ -292,7 +293,7 @@ public sealed unsafe partial class FoliageRenderer
         var tables = BindRows(NearDepthIndex(targets.Depth));
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = _grass.Store.Dispatch(_motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables, _motionScale);
-        _grass.Frame!.Bind(cmd, p, in view, [tables.Patches.Binding]);
+        _grass.Frame!.Bind(cmd, p, in view, [tables.Patches.Binding, result.IsEmpty ? tables.Patches.Binding : result.Bounds]);
         if (!result.IsEmpty)
         {
             cmd.BindPipeline(PipelineFor(ref _grass.MeshMotionGpu, gp, segment, drawState, pass.Formats, "foliage grass motion gpu"));

@@ -82,7 +82,7 @@ sealed class ShadowBlockerMap : IDisposable
         if (_blocker is null || _blocker.Desc.Width != size || _blocker.Desc.Layers != count)
         {
             _blocker?.Dispose();
-            _blocker = _gpu.CreateTexture(new TextureDesc(InternalFormat.R32F, size, size, Layers: count, Kind: TextureKind.Texture2DArray,
+            _blocker = _gpu.CreateTexture(new TextureDesc(InternalFormat.R16F, size, size, Layers: count, Kind: TextureKind.Texture2DArray,
                 Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "shadow blocker map"));
             _blockerSampled = ShadowPass.Sampled(_gpu, _blocker, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
             _blockerPublished = false;

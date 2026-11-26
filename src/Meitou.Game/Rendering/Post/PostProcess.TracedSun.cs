@@ -52,9 +52,9 @@ public sealed unsafe partial class PostProcess
     #region Traced sun
 
     /// <summary>
-    /// The sun term, the rays' mask, the penumbra filter's scratch and the filtered mask, at the render size.
+    /// The sun term, the rays' mask (also the penumbra filter's output) and the penumbra filter's scratch, at the render size.
     /// </summary>
-    Target2D? _tracedTerm, _tracedMask, _tracedScratch, _tracedFiltered;
+    Target2D? _tracedTerm, _tracedMask, _tracedScratch;
 
     /// <summary>
     /// The additive pass, made when first used.
@@ -86,8 +86,7 @@ public sealed unsafe partial class PostProcess
         {
             _tracedMask?.Texture.Dispose();
             _tracedScratch?.Texture.Dispose();
-            _tracedFiltered?.Texture.Dispose();
-            _tracedMask = _tracedScratch = _tracedFiltered = null;
+            _tracedMask = _tracedScratch = null;
         }
         if ((!Options.TracedSun && !ContactSun) || GiResolve <= 0)
         {
@@ -121,7 +120,7 @@ public sealed unsafe partial class PostProcess
     {
         if ((!TracedSun && !ContactSun) || GiResolve <= 0) return;
         if (_tracedTerm is not null && (!TracedSun || _tracedMask is not null)) return;
-        if (!SupportsStorage(InternalFormat.Rgba16F)) return;
+        if (!SupportsStorage(InternalFormat.Rg16F) || !SupportsStorage(InternalFormat.Rgba16F)) return;
 
         using var batch = Gpu.Uploads.Begin();
         if (_tracedTerm is null)
@@ -133,9 +132,8 @@ public sealed unsafe partial class PostProcess
         }
         if (!TracedSun) return;
 
-        _tracedMask = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post traced sun mask");
-        _tracedScratch = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post traced sun penumbra");
-        _tracedFiltered = Make(batch, _width, _height, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post traced sun filtered");
+        _tracedMask = Make(batch, _width, _height, InternalFormat.Rg16F, TextureMinFilter.Nearest, "post traced sun mask", storage: true);
+        _tracedScratch = Make(batch, _width, _height, InternalFormat.Rg16F, TextureMinFilter.Nearest, "post traced sun penumbra", storage: true);
     }
 
     /// <summary>
@@ -145,18 +143,18 @@ public sealed unsafe partial class PostProcess
     /// </summary>
     internal void RunTracedSun(Gi.TracedSunPass rays, Gi.GiScene scene, in Matrix4x4 inverse, Vector3 toSun)
     {
-        if (_tracedTerm is null || _tracedMask is null || _tracedScratch is null || _tracedFiltered is null) return;
+        if (_tracedTerm is null || _tracedMask is null || _tracedScratch is null) return;
         if (_giAlbedo is null || _sceneColour is null || _sceneDepth is null) return;
 
         float pixelSlope = 2 * MathF.Tan(_fovNow * 0.5f) / _height;
         var targets = new Gi.TracedSunTargets(_sceneDepth.Texture, _giAlbedo.Texture, _tracedTerm.Texture, _tracedMask.Texture,
-            _tracedScratch.Texture, _tracedFiltered.Texture, _width, _height);
+            _tracedScratch.Texture, _width, _height);
         rays.Run(scene, targets, SharedPenumbra(), inverse, _eyeNow, toSun, pixelSlope);
 
         var add = _tracedAddPass ??= new TracedAddPass(Gpu);
         SetGiView(add);
         Bind(add.P, add.Term, _tracedTerm);
-        Bind(add.P, add.Mask, _tracedFiltered);
+        Bind(add.P, add.Mask, _tracedMask);
         add.P.ApplyGlobals();   // the haze's uniforms, through the frame globals
         Draw(add.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, GiAddState);
 
@@ -174,7 +172,7 @@ public sealed unsafe partial class PostProcess
         var debug = _tracedDebugPass ??= new TracedDebugPass(Gpu);
         SetGiView(debug);
         Bind(debug.P, debug.Term, _tracedTerm);
-        Bind(debug.P, debug.Mask, _tracedFiltered);
+        Bind(debug.P, debug.Mask, _tracedMask);
         Draw(debug.P, colour.Attachment, colour.Format, _width, _height, _width, _height, PassState with { ColourMask = DrawState.Rgb });
     }
 
