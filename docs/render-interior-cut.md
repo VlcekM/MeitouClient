@@ -46,7 +46,10 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   in through an open side of one) R keeps its clear (65000), which the readers take as the game's 0: cut from the eye.
   **Observed** (Y-House, in and outside its room): the terrain cut holds from outside, and the eye inside clears rain over
   furniture; the collision hull Meitou tested before disagreed with the mask mesh near its sides. `Boxes` are the drawn mask
-  meshes' X/Z bounds.
+  meshes' X/Z bounds. While the eye lies inside a mask mesh's bounds (building space), only the masks holding it are drawn: another
+  building's mask behind the room's wall would put its near face into R and start the cut there, not at the eye, so the room's
+  storm dust showed in that building's outline. **Observed** (#1449, Heft's Armory, dust storm, boom 79): blobs over the walls,
+  gone with weather particles at 0 and with this rule. The original has only the open building's mask there, so its R is empty.
 - Readers: `InteriorMaskRenderer.WithCut` puts the test first in a fragment program. A `discard` costs the early depth
 - **Under the floor** (Meitou, `InteriorMaskRenderer.CutUnderFloor`, on; no setting yet): the mask pass also writes G = -(depth + 1) of the farthest face that lies flat below the eye (min blend), and where that face is the farthest of all (the mask's floor) the cut reaches 24 units further along the view; a pixel without such a face (G = 0, also where no mask face is) gets no reach. **Observed** (#1411 save, boom 14 by a Storm House): taking G = 0 as a floor cut all terrain within 24 of the eye on the patches over a mask's box. **Observed** (save grass-through interior, the Bughouse): a hump of terrain between the floor's boards and the mask's bottom (more than 1 unit behind the mask's back face, so the game's rule keeps it) came through the floor with its grass; cut with the reach, 19,300 -> 150 dark pixels. **Unknown**: whether the original shows the same hump there (its shader rule says it would; not run).
   test, so programs without one stay without it and only work over a box takes the cut:

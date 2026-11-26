@@ -322,6 +322,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         _cuts.Clear();
         if (width <= 0 || height <= 0) return;
         _objects.InteriorMasks(eye, Range, _near);
+        KeepMasksHoldingEye(eye);
         if (_near.Count == 0) return;
         var target = EnsureTarget(width, height);
         var cmd = _gpu.BeginNative("interior mask");
@@ -345,6 +346,31 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         if (Drawn == 0) return;
         RegisterBindless(target);
         Active = true;
+    }
+
+    /// <summary>
+    /// While the eye is inside a mask mesh's bounds, leaves only the buildings whose masks hold it in <see cref="_near"/>
+    /// (docs/render-interior-cut.md "Meitou"): another building's mask behind the room's wall would put its near face into R and start the cut
+    /// there instead of at the eye, so the room's dust showed in that building's outline (#1449).
+    /// </summary>
+    void KeepMasksHoldingEye(Vector3 eye)
+    {
+        if (!_near.Exists(v => HoldsEye(v, eye))) return;
+
+        _near.RemoveAll(v => !HoldsEye(v, eye));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="eye"/> lies within the bounds of one of <paramref name="volume"/>'s mask meshes, in the building's space.
+    /// </summary>
+    bool HoldsEye(InteriorVolume volume, Vector3 eye)
+    {
+        if (!Matrix4x4.Invert(volume.Node, out var toBox)) return false;
+
+        var p = Vector3.Transform(eye, toBox);
+        foreach (var path in volume.MaskMeshes)
+            if (Mesh(path) is { Vertices: not null } mesh && Vector3.Clamp(p, mesh.Min, mesh.Max) == p) return true;
+        return false;
     }
 
     /// <summary>
