@@ -158,6 +158,7 @@ sealed unsafe class MetalTracedSun(MetalContext ctx) : IDisposable
             Eye = new Vector4(eye - scene.Origin, TracedSunPass.DiscTangent),
             Sun = new Vector4(Vector3.Normalize(toSun), RayLength),
             Size = new Vector4(width, height, 0, pixelSlope),
+            Grass = scene.GrassRayParams,
         };
         cmd.BindPipeline(_maskPass.Pipeline);
         var e = cmd.ComputeEncoder();

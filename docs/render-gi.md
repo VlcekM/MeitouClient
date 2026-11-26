@@ -237,14 +237,18 @@ a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`Prob
 - **Lamp shadows** (`MetalLampShadows`, `MetalPostChain.RunLampShadows`, after the resolve): Vulkan's full-screen trace (every lamp of a pixel's
   cell; no tile cache on Metal, so the per-lamp passes do not run), the shared penumbra filter (`named`), the apply (reverse subtract) and floor (max)
   passes. While on, the scene holds the casters and the characters draw as the lamps' receivers (`uGiParams.z` bit 16).
+- **Traced grass** (`MetalTracedGrass`, with the traced sun and `PostOptions.TracedGrass`): `TracedGrass`' patches, budgets, interior cuts and sway
+  (its `Expand` kernel, then a bottom level a patch built or refitted after it), cut-out instances under the grass mask; the mask kernel takes
+  their ray constants. No blades map: Metal's lamp shadows trace every pixel, not by tiles. **Observed** (new game, 16:00, a scrub plain near
+  (-53050, 2245), Extreme): 108 patches, 14 MB; the clumps' shadows on the ground, 3 % of the pixels changed.
 - **Characters' gathered light** (`MetalCharacterGather`, `MetalPostChain.RunCharacterOcclusion`, after the lamp shadows): `GatherPool` and
   `CharacterGather` with the probe update's constants and hit inputs, the camera's up axis turned round (the kernels rebuild rays from a pixel's
   row); then `CharacterOcclusionPass.Apply` and the lamp shadows' floor. The scene holds the characters for it alone too (`MetalGiScene.Characters`).
-- **Settings.** The Metal panel has the switches under the Vulkan panel's names (Hybrid GI and its four parts, Traced sun shadows, Lamp shadows,
-  GI traced on characters),
+- **Settings.** The Metal panel has the switches under the Vulkan panel's names (Hybrid GI and its four parts, Traced sun shadows and their grass, Lamp
+  shadows, GI traced on characters),
   so the saved values and the quality tiers reach them, and the technique choices over them (`WorldFrame.AddChoiceSliders`: Sun shadows,
   Ambient occlusion type, Global illumination), loaded after the switches and saved as Vulkan does, so the launcher's choice reaches Metal.
-- **Not on Metal** (Vulkan has them): grass in the scene, reflections' rays.
+- **Not on Metal** (Vulkan has them): reflections' rays.
   The Metal panel has no rows for the Hybrid GI, traced sun or lamp shadows switches: `--meitou gihybrid,traced,lampshadows` and `--gi-hybrid`
   turn them on.
 - **Observed** (Apple M6, macOS 27.2, play bench settle and orbit on `bench-bases-2026-10-27`, 1920x1080 scene, probes + resolve + relocation, one run

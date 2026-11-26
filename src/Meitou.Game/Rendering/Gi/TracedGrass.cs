@@ -31,22 +31,22 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>
     /// The budget: structures built a frame.
     /// </summary>
-    const int MaxBuilds = 4;
+    internal const int MaxBuilds = 4;
 
     /// <summary>
     /// The budget: triangles built a frame.
     /// </summary>
-    const int MaxBuildTriangles = 600_000;
+    internal const int MaxBuildTriangles = 600_000;
 
     /// <summary>
     /// The budget: the frames an unused structure is kept.
     /// </summary>
-    const int KeepFrames = 600;
+    internal const int KeepFrames = 600;
 
     /// <summary>
     /// The budget: the bytes held.
     /// </summary>
-    const long MaxBytes = 512L << 20;
+    internal const long MaxBytes = 512L << 20;
 
     /// <summary>
     /// Most patches traced.
@@ -56,27 +56,27 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>
     /// Most blades of one patch (the first ones: the density's order keeps a prefix even).
     /// </summary>
-    const int MaxBlades = 1 << 16;
+    internal const int MaxBlades = 1 << 16;
 
     /// <summary>
     /// Most cards of one patch: the shared index buffer's size.
     /// </summary>
-    const int MaxQuads = MaxBlades * 2;
+    internal const int MaxQuads = MaxBlades * 2;
 
     /// <summary>
     /// A card's corners.
     /// </summary>
-    const int VerticesPerQuad = 4;
+    internal const int VerticesPerQuad = 4;
 
     /// <summary>
     /// A card's indices: two triangles.
     /// </summary>
-    const int IndicesPerQuad = 6;
+    internal const int IndicesPerQuad = 6;
 
     /// <summary>
     /// Most masks a page's kernel takes.
     /// </summary>
-    const int MaxCuts = 32;
+    internal const int MaxCuts = 32;
 
     /// <summary>
     /// How far from the eye, across the ground, a patch's cards sway with the drawn blades. Past it the cards hold still: a few units of sway are not
@@ -87,22 +87,22 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>
     /// The triangles refitted a frame at most (nearest first); past them the cards hold still.
     /// </summary>
-    const int MaxSwayTriangles = 1_000_000;
+    internal const int MaxSwayTriangles = 1_000_000;
 
     /// <summary>
     /// World units: what a blade's own ray does not see of other cards (a card's sway from its traced copy, a twin on top of it).
     /// </summary>
-    const float BlindRange = 4;
+    internal const float BlindRange = 4;
 
     /// <summary>
     /// World units: the fade to all other cards past <see cref="BlindRange"/>.
     /// </summary>
-    const float BlindFade = 8;
+    internal const float BlindFade = 8;
 
     /// <summary>
     /// The sprite's alpha a hit keeps from.
     /// </summary>
-    const float SpriteThreshold = 0.6f;
+    internal const float SpriteThreshold = 0.6f;
 
     /// <summary>
     /// How far from the eye, across the ground, pages are traced this frame.
@@ -564,7 +564,7 @@ sealed unsafe class TracedGrass : IDisposable
     /// The kernel's constants, as <see cref="Expand"/>'s <c>Params</c> reads them.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    struct Params
+    internal struct Params
     {
         /// <summary>
         /// Min width, max width, min height, max height.
@@ -664,9 +664,12 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>
     /// The mask pass's constants (<see cref="GiScene.GrassRayParams"/>).
     /// </summary>
-    public Vector4 RayParams => _shown.Count == 0
-        ? default
-        : new Vector4(_range, _tallest, BlindRange, BlindFade);
+    public Vector4 RayParams => _shown.Count == 0 ? default : RayParamsFor(_range, _tallest);
+
+    /// <summary>
+    /// The mask pass's grass constants for a reach and the tallest blade traced.
+    /// </summary>
+    internal static Vector4 RayParamsFor(float range, float tallest) => new(range, tallest, BlindRange, BlindFade);
 
     /// <summary>
     /// The triangles refitted this frame (0: every structure is as it was, the scene's top level need not follow).
@@ -764,7 +767,7 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>
     /// Two triangles a card, over its corners in order (u the first bit, v the second).
     /// </summary>
-    static ReadOnlySpan<uint> CardIndices()
+    internal static uint[] CardIndices()
     {
         var list = new uint[MaxQuads * IndicesPerQuad];
         for (int q = 0; q < MaxQuads; q++)
@@ -824,7 +827,7 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>
     /// Whether the patch's cards follow the drawn blades' sway.
     /// </summary>
-    static bool Sways(in FoliageRenderer.RayGrassPatch patch) => patch.Sway != 0 && patch.Distance < SwayReach;
+    internal static bool Sways(in FoliageRenderer.RayGrassPatch patch) => patch.Sway != 0 && patch.Distance < SwayReach;
 
     /// <summary>
     /// The patch's entry: its own when its blades and masks are those it was built over, else built again when the frame's budget allows (the old
@@ -885,15 +888,20 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>
     /// The masks that may hold a card of this page, into <see cref="_pageCuts"/>, and their hash.
     /// </summary>
-    int CollectCuts(in FoliageRenderer.RayGrassPatch patch, IReadOnlyList<InteriorMaskCut> cuts)
+    int CollectCuts(in FoliageRenderer.RayGrassPatch patch, IReadOnlyList<InteriorMaskCut> cuts) => CollectCuts(patch, cuts, _pageCuts);
+
+    /// <summary>
+    /// The masks that may hold a card of this page, into <paramref name="into"/> (at most <see cref="MaxCuts"/>), and their hash.
+    /// </summary>
+    internal static int CollectCuts(in FoliageRenderer.RayGrassPatch patch, IReadOnlyList<InteriorMaskCut> cuts, List<InteriorMaskCut> into)
     {
-        _pageCuts.Clear();
+        into.Clear();
         var hash = new HashCode();
         foreach (var cut in cuts)
         {
-            if (_pageCuts.Count >= MaxCuts || !Reaches(cut, patch.Corner, FoliageRenderer.RayGrassPageSize)) continue;
+            if (into.Count >= MaxCuts || !Reaches(cut, patch.Corner, FoliageRenderer.RayGrassPageSize)) continue;
 
-            _pageCuts.Add(cut);
+            into.Add(cut);
             hash.Add(cut);
         }
 
@@ -960,24 +968,7 @@ sealed unsafe class TracedGrass : IDisposable
     void RecordExpand(CommandList cmd, (GpuBuffer Buffer, ulong Bytes) blades, DeviceBuffer vertices, in FoliageRenderer.RayGrassPatch patch,
         int count, int cards, Vector4 sway)
     {
-        var parameters = new Params
-        {
-            Size = patch.Size,
-            Corner = new Vector4(patch.Corner, 0),
-            Sway = sway,
-            Blades = (uint)count,
-            Cards = (uint)cards,
-            Cuts = (uint)_pageCuts.Count,
-            First = patch.FirstBlade,
-        };
-        for (int i = 0; i < _pageCuts.Count; i++)
-        {
-            var cut = _pageCuts[i];
-            new Span<Matrix4x4>(parameters.ToBox, MaxCuts)[i] = cut.ToBox;
-            new Span<Vector4>(parameters.BoxMin, MaxCuts)[i] = new Vector4(cut.Min, 0);
-            new Span<Vector4>(parameters.BoxMax, MaxCuts)[i] = new Vector4(cut.Max, 0);
-        }
-
+        var parameters = ExpandParams(patch, count, cards, sway, _pageCuts);
         var constants = _ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
         var arena = new DescriptorBufferInfo(_ctx.Device.BufferAt(blades.Buffer.Index), 0, blades.Bytes);
         var target = new DescriptorBufferInfo(_ctx.Device.BufferAt(vertices.Handle.Index), 0, vertices.Size);
@@ -990,6 +981,33 @@ sealed unsafe class TracedGrass : IDisposable
         cmd.BindPipeline(_pipeline);
         cmd.PushDescriptors(_program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 3), GpuBindPoint.Compute);
         cmd.Dispatch((uint)((count + 63) / 64));
+    }
+
+    /// <summary>
+    /// <see cref="Expand"/>'s constants for <paramref name="count"/> of the patch's blades, <paramref name="cards"/> a blade, the page's masks
+    /// <paramref name="cuts"/> and <paramref name="sway"/>.
+    /// </summary>
+    internal static Params ExpandParams(in FoliageRenderer.RayGrassPatch patch, int count, int cards, Vector4 sway, List<InteriorMaskCut> cuts)
+    {
+        var parameters = new Params
+        {
+            Size = patch.Size,
+            Corner = new Vector4(patch.Corner, 0),
+            Sway = sway,
+            Blades = (uint)count,
+            Cards = (uint)cards,
+            Cuts = (uint)cuts.Count,
+            First = patch.FirstBlade,
+        };
+        for (int i = 0; i < cuts.Count; i++)
+        {
+            var cut = cuts[i];
+            new Span<Matrix4x4>(parameters.ToBox, MaxCuts)[i] = cut.ToBox;
+            new Span<Vector4>(parameters.BoxMin, MaxCuts)[i] = new Vector4(cut.Min, 0);
+            new Span<Vector4>(parameters.BoxMax, MaxCuts)[i] = new Vector4(cut.Max, 0);
+        }
+
+        return parameters;
     }
 
     /// <summary>

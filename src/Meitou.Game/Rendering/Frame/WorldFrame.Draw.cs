@@ -642,6 +642,7 @@ static partial class WorldFrame
             bool lampShadows = f.Post.Options.LampShadows && f.Post.GiResolve > 0 && gpu.Lamps is { Grid.W: > 0 };
             bool casters = gpu.Traced || lampShadows;
             probeGi.SetCasters(casters, casters || f.Post.CharacterOcclusionWanted, GiCasterRange(ref f), f.Render.TerrainPixelScale);
+            probeGi.SetGrass(gpu.Traced && f.Post.Options.TracedGrass, TracedReach(ref f), gpu.InteriorMask?.Cuts ?? []);
             if (gpu.GiActive)
             {
                 var foliage = gpu.Foliage is { Enabled: true } shown ? shown : null;

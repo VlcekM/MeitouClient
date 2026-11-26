@@ -1686,7 +1686,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
 
     /// <summary>
     /// The switches that need the indirect light's traced scene, under the same names as the Vulkan panel's (so the saved values and the quality
-    /// tiers reach them): the hybrid GI and its parts, the traced sun shadows, the lamp shadows and the GI traced on characters.
+    /// tiers reach them): the hybrid GI and its parts, the traced sun shadows and their grass, the lamp shadows and the GI traced on characters.
     /// </summary>
     void AddTracedSettings(List<Toggle> toggles)
     {
@@ -1694,6 +1694,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         toggles.Add(SwitchToggle("gihybrid"));
         toggles.AddRange(WorldFrame.GiHybridToggles(post));
         toggles.Add(SwitchToggle("traced"));
+        toggles.Add(new Toggle(WorldFrame.TracedGrassSwitch, () => post.TracedGrass, v => post.TracedGrass = v));
         toggles.Add(SwitchToggle("lampshadows"));
         toggles.Add(new Toggle(WorldFrame.GiCharactersSwitch, () => post.CharacterOcclusion, v => post.CharacterOcclusion = v));
     }

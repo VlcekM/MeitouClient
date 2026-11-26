@@ -62,6 +62,11 @@ internal interface IProbeGi : IDisposable
     void SetCasters(bool casters, bool characters, float range, float pixelsPerRadian);
 
     /// <summary>
+    /// The traced sun's grass (with the casters): whether it is traced, how far from the eye, and the drawn interior masks' boxes it is cut by.
+    /// </summary>
+    void SetGrass(bool shadows, float reach, IReadOnlyList<Objects.InteriorMaskCut> cuts);
+
+    /// <summary>
     /// True while the characters draw as the traced lamps' receivers (<c>uGiParams.z</c> bit 16, with the resolve).
     /// </summary>
     bool LampReceivers { get; set; }

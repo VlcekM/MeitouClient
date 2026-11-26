@@ -71,7 +71,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
     /// <summary>
     /// The objects' share of the instances: the rest is the foliage's, small foliage included.
     /// </summary>
-    const int ObjectInstances = MaxInstances - FoliageReserve - SmallFoliageInstances - TracedCharacters.MaxCharacters;
+    const int ObjectInstances = MaxInstances - FoliageReserve - SmallFoliageInstances - TracedCharacters.MaxCharacters - TracedGrass.MaxInstances;
 
     /// <summary>
     /// True while the sun is traced: the scene holds the casters too (the objects to <see cref="Range"/>, the small foliage, the cut parts' maps).
@@ -219,6 +219,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
         AddTerrain(eye, heights);
         if (objects is not null) AddObjects(eye, objects, lamps);
         if (foliage is not null) AddFoliageBlock(eye, foliage);
+        UpdateGrass(eye, foliage);
         UpdateCharacters(eye, characters);
         Evict();
 
@@ -589,6 +590,53 @@ internal sealed unsafe class MetalGiScene : IDisposable
 
     #endregion
 
+    #region Grass
+
+    /// <summary>
+    /// How far from the eye the grass is traced (<see cref="TracedGrass"/>): where the traced sun's share ends, set before <see cref="Update"/>.
+    /// </summary>
+    public float GrassReach { get; set; } = TracedGrass.MinRange;
+
+    /// <summary>
+    /// Whether the traced sun sees grass at all (<c>PostOptions.TracedGrass</c>; with the casters).
+    /// </summary>
+    public bool GrassShadows { get; set; }
+
+    /// <summary>
+    /// The drawn interior masks' boxes: the grass in them casts nothing.
+    /// </summary>
+    public IReadOnlyList<InteriorMaskCut> InteriorCuts { get; set; } = [];
+
+    /// <summary>
+    /// The traced sun's grass (made the first frame that traces it).
+    /// </summary>
+    MetalTracedGrass? _grass;
+
+    /// <summary>
+    /// The mask kernel's grass constants (<see cref="TracedGrass.RayParams"/>; zero without traced grass).
+    /// </summary>
+    public Vector4 GrassRayParams => Casters && GrassShadows && _grass is not null ? _grass.RayParams : default;
+
+    /// <summary>
+    /// The grass near the eye while the scene holds the casters and the grass's shadows are on: built and swayed, its instances after the foliage
+    /// (cut-outs); dropped otherwise.
+    /// </summary>
+    void UpdateGrass(Vector3 eye, FoliageRenderer? foliage)
+    {
+        if (!Casters || !GrassShadows || foliage is null)
+        {
+            _grass?.Release();
+            return;
+        }
+
+        _grass ??= new MetalTracedGrass(_ctx);
+        _grass.Update(_builds, foliage, eye, InteriorCuts, GrassReach);
+        _grass.Emit((level, world, mask, options) => Add(level, world, mask, options), _records, Origin, MaxInstances, MaxRecords,
+            () => _instances.Count, NoCulling | NotOpaque);
+    }
+
+    #endregion
+
     #region Characters
 
     /// <summary>
@@ -631,7 +679,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
     {
         var bytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(_instances));
         bool same = slot.Built is { } built && built.Length == bytes.Length && bytes.SequenceEqual(built) && _frame - slot.BuiltFrame < TopRebuildEvery
-            && !(_people?.Moved ?? false);
+            && !(_people?.Moved ?? false) && !(_grass?.Moved ?? false);
         if (same) return;
 
         bytes.CopyTo(new Span<byte>((void*)slot.Instances.Contents, MaxInstances * InstanceBytes));
@@ -772,7 +820,8 @@ internal sealed unsafe class MetalGiScene : IDisposable
     /// </summary>
     public string Describe() =>
         $"{InstanceCount} instances ({FoliageInstances} foliage), {_meshes.Count} structures ({_builds.Bytes / (1024 * 1024)} MB built), "
-        + $"terrain {string.Join(" + ", _terrain.Select(t => t.Describe()))}{(_people is { } p ? ", " + p.Describe() : "")}";
+        + $"terrain {string.Join(" + ", _terrain.Select(t => t.Describe()))}{(_people is { } p ? ", " + p.Describe() : "")}"
+        + (_grass is { } g ? ", " + g.Describe() : "");
 
     /// <summary>
     /// Frees the grids, the structures and the slots.
@@ -781,6 +830,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
     {
         foreach (var t in _terrain) t.Dispose();
         _people?.Dispose();
+        _grass?.Dispose();
         foreach (var e in _meshes.Values) e.Dispose();
         _meshes.Clear();
         foreach (var s in _slots) s.Dispose();

@@ -315,7 +315,17 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     }
 
     /// <summary>
-    /// The scene's casters for the traced sun (<see cref="MetalGiScene.Casters"/>).
+    /// The traced sun's grass in the scene (<see cref="MetalGiScene.GrassShadows"/>): on, its reach and the interior masks' boxes.
+    /// </summary>
+    public void SetGrass(bool shadows, float reach, IReadOnlyList<Objects.InteriorMaskCut> cuts)
+    {
+        _scene.GrassShadows = shadows;
+        _scene.GrassReach = reach;
+        _scene.InteriorCuts = cuts;
+    }
+
+    /// <summary>
+    /// The scene's casters for the traced sun (<see cref="MetalGiScene.Casters"/>) and the characters for their gathered light.
     /// </summary>
     public void SetCasters(bool casters, bool characters, float range, float pixelsPerRadian)
     {
