@@ -522,7 +522,9 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   **Verified** in `Kenshi_MainPanel.layout`; its frame is invisible and disabled and the exe never names `BehaviorSlider`: dead layout, **Verified** by byte search) and a jobs list ([ai.md](ai.md#packages-and-goals)) with the hint "To add jobs, hold shift key when
   giving an order". Jobs list (`JobsPanel`, an ItemBox of class `OrdersItemBox`): "assigned player jobs and
   orders for the selected character"; each row has an X that removes the job, top rows take priority and rows can be dragged to reorder (tutorial strings,
-  **Verified** in the exe). Its rows are the job list alone (`+0x88`, count `+0x90`, through `FUN_1405c8f30` / `FUN_1405c8f10`, **Verified** `FUN_1407263b0`): neither the order
+  **Verified** in the exe). While a row is dragged, the ItemBox draws its cell again under the pointer on its drag layer, keeping where it was taken, and the row
+  stays in the list (MyGUI `ItemBox::updateDropItems`; the cell's update `FUN_140723ee0` sets only the text and the alpha, so the copy looks like
+  the row; **Verified**). Meitou: `OrdersPanel.AddJobDrag`. Its rows are the job list alone (`+0x88`, count `+0x90`, through `FUN_1405c8f30` / `FUN_1405c8f10`, **Verified** `FUN_1407263b0`): neither the order
   queue nor the second list is shown. Empty, `JobsPanelInfo` shows "[No jobs assigned]" and the hint. Rows (**Verified**, `FUN_14072b540`, `FUN_1407263b0`,
   `FUN_140724cb0`, `FUN_140729d50`, `FUN_140723ee0`): an `OrderCellView` of `Kenshi_OrdersPanelOrder.layout` (300 × 20: a `Kenshi_ConnectBarSkin` bar,
   `OrderText` `Kenshi_TextboxStandardText` 10 px in and 35 px short of the right, `RemoveButton` `Kenshi_Button1` 30 px wide at the right, red "X"), int(24 ×

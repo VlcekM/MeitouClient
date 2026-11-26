@@ -51,6 +51,21 @@ sealed class OrdersPanel(PlayerInterface player)
     internal int? JobDrag;
 
     /// <summary>
+    /// Where the dragged job row was pressed.
+    /// </summary>
+    Vector2 _jobDragPress;
+
+    /// <summary>
+    /// The press point less the dragged row's corner (the drawn copy keeps it under the pointer).
+    /// </summary>
+    Vector2 _jobDragOffset;
+
+    /// <summary>
+    /// The dragged row and its parts as last found in the list, kept while the list scrolls it out of view.
+    /// </summary>
+    readonly List<UiControl> _jobDragParts = [];
+
+    /// <summary>
     /// The code mods' buttons beside the jobs list (docs/modding.md "Character panel lines and job panel buttons").
     /// </summary>
     internal JobModButtons ModButtons { get; } = new(player);
@@ -343,14 +358,19 @@ sealed class OrdersPanel(PlayerInterface player)
     /// <summary>
     /// The job-list index of the jobs row under a point (not its X), or null.
     /// </summary>
-    static int? JobRowAt(IReadOnlyList<UiControl> controls, Vector2 p)
+    static int? JobRowAt(IReadOnlyList<UiControl> controls, Vector2 p) =>
+        JobRowControlAt(controls, p) is { } row
+        && int.TryParse(row.Argument.AsSpan(4), NumberStyles.None, CultureInfo.InvariantCulture, out int i) ? i : null;
+
+    /// <summary>
+    /// The jobs row under a point (not its X), or null.
+    /// </summary>
+    static UiControl? JobRowControlAt(IReadOnlyList<UiControl> controls, Vector2 p)
     {
         if (controls.Any(c => c.Action == "meitou:job-remove" && c.Bounds.Contains(p.X, p.Y))) return null;
 
         var row = controls.FirstOrDefault(c => c.Properties.GetValueOrDefault("ListOwner") == "JobsPanel" && c.Bounds.Contains(p.X, p.Y));
-        if (row is null || !row.Argument.StartsWith("job:", StringComparison.Ordinal)) return null;
-
-        return int.TryParse(row.Argument.AsSpan(4), NumberStyles.None, CultureInfo.InvariantCulture, out int i) ? i : null;
+        return row is not null && row.Argument.StartsWith("job:", StringComparison.Ordinal) ? row : null;
     }
 
     /// <summary>
@@ -359,7 +379,63 @@ sealed class OrdersPanel(PlayerInterface player)
     internal bool JobDragStart(IReadOnlyList<UiControl> controls, Vector2 p)
     {
         JobDrag = JobRowAt(controls, p);
-        return JobDrag is not null;
+        if (JobDrag is null || JobRowControlAt(controls, p) is not { } row) return false;
+
+        _jobDragParts.Clear();
+        _jobDragPress = p;
+        _jobDragOffset = p - new Vector2(row.Bounds.X, row.Bounds.Y);
+        return true;
+    }
+
+    /// <summary>
+    /// The dragged jobs row drawn again under the pointer, over everything, from the first move after the press; the row stays in the list. The
+    /// original's jobs list is a MyGUI ItemBox, whose drag draws the item's cell again on its drag layer at the pointer, keeping where it was taken
+    /// (MyGUI <c>ItemBox::updateDropItems</c>), and its cell draws the same dragged or not (<c>FUN_140723ee0</c> sets only the text and the
+    /// alpha; docs/game/ui-screens.md "Orders panel").
+    /// </summary>
+    internal void AddJobDrag(List<UiControl> controls)
+    {
+        if (JobDrag is not { } index || player.Mouse == _jobDragPress) return;
+
+        FindJobDragParts(controls, index);
+        if (_jobDragParts.Count == 0) return;
+
+        var row = _jobDragParts[0];
+        var corner = player.Mouse - _jobDragOffset;
+        var shift = corner - new Vector2(row.Bounds.X, row.Bounds.Y);
+        var moved = row.Bounds with { X = corner.X, Y = corner.Y };
+        controls.Add(DraggedJobPart(row, "JobDrag", shift, moved));
+        foreach (var part in _jobDragParts.Skip(1))
+            controls.Add(DraggedJobPart(part, "JobDrag-" + part.Name[(row.Name.Length + 1)..], shift, moved));
+    }
+
+    /// <summary>
+    /// Takes the dragged row (list index <paramref name="index"/>) and the parts that follow it from <paramref name="controls"/> into
+    /// <see cref="_jobDragParts"/>; while the row is not in the list's view the last ones found stay.
+    /// </summary>
+    void FindJobDragParts(List<UiControl> controls, int index)
+    {
+        string argument = "job:" + index.ToString(CultureInfo.InvariantCulture);
+        int at = controls.FindIndex(c => c.Properties.GetValueOrDefault("ListOwner") == "JobsPanel" && c.Argument == argument);
+        if (at < 0) return;
+
+        _jobDragParts.Clear();
+        _jobDragParts.Add(controls[at]);
+        string parts = controls[at].Name + "-";
+        for (int i = at + 1; i < controls.Count && controls[i].Name.StartsWith(parts, StringComparison.Ordinal); i++)
+            _jobDragParts.Add(controls[i]);
+    }
+
+    /// <summary>
+    /// A part of the dragged row's copy: moved by <paramref name="shift"/>, clipped to the copy's box <paramref name="row"/>, neither picked nor
+    /// acting, and no longer one of the list's rows.
+    /// </summary>
+    static UiControl DraggedJobPart(UiControl part, string name, Vector2 shift, UiRect row)
+    {
+        var bounds = part.Bounds with { X = part.Bounds.X + shift.X, Y = part.Bounds.Y + shift.Y };
+        var properties = new Dictionary<string, string>(part.Properties, StringComparer.Ordinal);
+        properties.Remove("ListOwner");
+        return part with { Name = name, Bounds = bounds, Clip = bounds.Intersect(row), Action = "", Pickable = false, Properties = properties };
     }
 
     /// <summary>
