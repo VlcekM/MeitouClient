@@ -245,6 +245,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// Who started each character's last conversation (Dialogue <c>+0x2a0</c>).
     /// </summary>
     readonly ConversationStarters _starters = new();
+    /// <summary>
+    /// BFrizz's Extra Extensions' conditions 1000-1006, tested ahead of the line check.
+    /// </summary>
+    readonly ExtraExtensionChecks _extraChecks;
+    /// <summary>
+    /// BFrizz's Extra Extensions' item actions, run ahead of a line's other effects.
+    /// </summary>
+    readonly ExtraExtensionActions _extraActions;
 
     /// <summary>
     /// Sets up the dialogue system on <paramref name="data"/>'s dialogue (default settings when none are given) and its helpers.
@@ -260,6 +268,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _illegalGoods = new(data);
         _arrival = new(this, data, _dialogue);
         _characterTrading = new(this, data);
+        _extraChecks = new(this);
+        _extraActions = new(data);
         _followers = new(this);
         _stalkers = new(this, data);
         _orders = new(_talks, _npcApproaches, _followers, _stalkers);

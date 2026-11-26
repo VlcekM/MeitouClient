@@ -57,6 +57,16 @@ ends its rows at "Crawling: +100%" and skips the Encumbrance, Injuries, gear and
 The table's stealth case (A; 0.9, 0.9, 0.8) exists, but no caller found reaches it. Meitou: `Orders.Stealth` (its x2 reads
 `MedicalState.Prone`, both crawls).
 
+### The stat getter
+
+`CharStats::getStat(stat, unmodified)` (`FUN_140884ac0`, **Verified** disassembly of its jump table at `0x140884d5c`): stats 0, 20, 33 and above
+38 give 0; 14 and 15 read the medic value ([stat list](#the-stat-list)). Raw (`unmodified` true): the stored value; strength (`FUN_140641480`)
+and dexterity times the stats' scale (CharStats `+0x34`: 1 for people, the age for animals). Modified: stealth the [effective
+stealth](#effective-stealth) x 100; strength and dexterity (`FUN_140338090`) the scaled value x `FUN_1406457e0` with the hunger, limb,
+fitted-limb and gear terms (no light, no dust); perception (the worn gear's `perception bonus`, CharStats `+0x30`, + stored) x the multiplier
+with every term; every other stat stored x the multiplier with every term (no scale). The multiplier's six flags, in argument order: hunger,
+limbs, light, fitted limbs, dust, gear factor. Meitou: `StatGetter.Get` (stealth through `Orders.Stealth`, which also applies the scale).
+
 ### Gear factors
 
 **Verified** (decompile of `FUN_140887030`, the worn-gear refresh, its call to `FUN_140884370`, and the ARMOUR

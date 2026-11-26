@@ -245,9 +245,15 @@ sealed record ModSystemTag(string ModId, string Name);
 sealed class ModRegistry
 {
     /// <summary>
-    /// The owner of each claimed code, by kind and code.
+    /// The owner of the codes the game builds in above <see cref="SimulationExtensions.FirstModCode"/>: BFrizz's Extra Extensions' dialogue
+    /// conditions and its VARIABLE record type (docs/modding.md "Registration surface").
     /// </summary>
-    readonly Dictionary<(ModCodeKind Kind, int Code), string> _owners = [];
+    const string BuiltInPlugin = "BFrizz_Extra_Extensions";
+
+    /// <summary>
+    /// The owner of each claimed code, by kind and code; the built-in plugin's codes are held from the start.
+    /// </summary>
+    readonly Dictionary<(ModCodeKind Kind, int Code), string> _owners = BuiltInCodes();
     /// <summary>
     /// The owner of each item record's use, by record string id.
     /// </summary>
@@ -349,6 +355,20 @@ sealed class ModRegistry
     /// Every mod's settings group, in load order.
     /// </summary>
     public List<ModSettingsGroup> Settings { get; } = [];
+
+    /// <summary>
+    /// The codes a mod may not claim because the game handles them: Extra Extensions' conditions 1000-1006 and record type 1000.
+    /// </summary>
+    static Dictionary<(ModCodeKind Kind, int Code), string> BuiltInCodes()
+    {
+        var owners = new Dictionary<(ModCodeKind Kind, int Code), string>
+        {
+            [(ModCodeKind.RecordType, Data.Gameplay.VariableData.RecordType)] = BuiltInPlugin,
+        };
+        for (int code = Data.Gameplay.Dialogue.ExtraConditions.IsSleeping; code <= Data.Gameplay.Dialogue.ExtraConditions.ArmourLevel; code++)
+            owners[(ModCodeKind.DialogueCondition, code)] = BuiltInPlugin;
+        return owners;
+    }
 
     /// <summary>
     /// Throws when a code is below the mods' range or another mod (or this one) has it already.

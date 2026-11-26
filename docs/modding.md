@@ -37,7 +37,7 @@ public sealed class MyMod : IMod
     public void Initialize(ModContext c)
     {
         c.AddSystem("counter", ctx => new CounterSystem(), SystemAnchor.AfterPart(StandardParts.Combat));
-        c.AddDialogueCondition(1000, check => check.Matches(/* computed answer */ true));
+        c.AddDialogueCondition(1100, check => check.Matches(/* computed answer */ true));
         c.Harmony.PatchAll(typeof(MyMod).Assembly);
     }
 }
@@ -188,7 +188,8 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
 
 Only where a Harmony patch would break an invariant without an error; everything else is Harmony. A new point is added when a patch
 in the wild keeps breaking, not ahead of demand. Mod codes start at `SimulationExtensions.FirstModCode` (1000); a code another mod
-holds refuses the second mod.
+holds refuses the second mod. The game holds the codes of BFrizz's Extra Extensions, which it builds in: dialogue conditions 1000-1006 and record
+type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialogue](game/dialogue.md#extra-extensions-conditions)).
 
 - **Tick systems:** `AddSystem(name, factory, anchor)`. `SystemAnchor.Before(part)` goes before the first system of that
   `StandardParts` member, `AfterPart(part)` after its last, `End` after all; a part the world does not build puts the system at the
@@ -722,9 +723,9 @@ holds refuses the second mod.
   Engine API, not yet checked in a running world.
 - **Dialogue codes:** `AddDialogueCondition(code, handler)` and `AddDialogueEffect(code, handler)`, named from FCS data in a
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
-  condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
-  for interface previews). An effect gets `DialogueAct` (world, speaker, target, effect) in a serial step. An unregistered code
-  computes "no" / does nothing, as an unknown vanilla code. A handler that throws is logged once with the mod id and code; that call computes
+  condition, its DIALOG_ACTION's `tag` included) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
+  for interface previews). An effect gets `DialogueAct` (world, speaker, target, effect) in a serial step. An unregistered condition
+  passes and an unregistered effect does nothing, as an unknown vanilla code ([conditions](game/dialogue.md#conditions)). A handler that throws is logged once with the mod id and code; that call computes
   "no" / does nothing more, and the handler is still asked later (the interface asks conditions too, so a drop would depend on what it asked).
 - **World states:** `AddWorldState(record)` claims a WORLD_EVENT_STATE of the merged data (`ModWorldState`, `src/Meitou.Simulation/Factions`; a
   record of another type, or one another mod claimed, refuses the mod, and so loses all its registrations, not only the claim: two mods that

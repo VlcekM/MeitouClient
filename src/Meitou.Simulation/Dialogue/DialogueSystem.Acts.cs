@@ -46,7 +46,7 @@ public sealed partial class DialogueSystem
     /// 52); else A's faction is allied to B's, with <paramref name="disguise"/> the faction B's working disguise passes for (the third argument,
     /// <c>FUN_1407c0520</c>, <see cref="Crime.ArrestSystem.SeenFaction"/>; <b>Verified</b>). The same-faction test reads the real factions.
     /// </summary>
-    bool RegardsFriendly(World world, CharacterId a, CharacterCold ac, CharacterId b, CharacterCold bc, bool disguise = false)
+    internal bool RegardsFriendly(World world, CharacterId a, CharacterCold ac, CharacterId b, CharacterCold bc, bool disguise = false)
     {
         if (ac.Faction == bc.Faction) return true;
         // One memory lookup each way (A's squad on B, B's on A) for all the tag tests.

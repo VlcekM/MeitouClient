@@ -154,14 +154,16 @@ public sealed partial class DialogueSystem
             || node.IsCharacter.Count == 0 && !((node.IsRoot || node.Interjection) && _data.Db.Find(record)?.GetBool("dumb") == true);
 
     /// <summary>
-    /// The line check (<c>FUN_140678f30</c>, docs/game/dialogue.md "Line check") with <paramref name="me"/> as the speaker and
-    /// <paramref name="other"/> the target: tag masks, the lock, <c>chance temporary</c>, the record lists, <c>repetition limit</c>, <c>target is
-    /// type</c>, <c>chance permanent</c>, then the conditions. <paramref name="retarget"/> false is the flag the token expander passes
-    /// (<c>FUN_14067a530</c>): a <c>target race</c> hit in the target's squad passes the line but does not become the target.
+    /// The line check (<c>FUN_140678f30</c>, docs/game/dialogue.md "Line check") with <paramref name="me"/> as the speaker and <paramref
+    /// name="other"/> the target, after BFrizz's Extra Extensions' conditions and variables (its hooks run first): tag masks, the lock, <c>chance
+    /// temporary</c>, the record lists, <c>repetition limit</c>, <c>target is type</c>, <c>chance permanent</c>, then the conditions. <paramref
+    /// name="retarget"/> false is the flag the token expander passes (<c>FUN_14067a530</c>): a <c>target race</c> hit in the target's squad passes
+    /// the line but does not become the target.
     /// </summary>
     bool Check(World world, Conversation c, DialogueNode node, CharacterId me, CharacterId other, bool retarget = true)
     {
         var table = world.Characters;
+        if (!_extraChecks.ConditionsPass(world, node, me, other) || !_extraChecks.TagConditionsPass(world, node, me, other)) return false;
         if (!VariablesHold(world, node)) return false;
         if (!table.TryResolveNext(me, out int ms) || table.Cold(ms) is not { } mc) return false;
         var tc = Cold(world, other);

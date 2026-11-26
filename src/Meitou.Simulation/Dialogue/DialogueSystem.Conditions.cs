@@ -18,7 +18,7 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// One condition (<c>FUN_140676950</c>, docs/game/dialogue.md "Conditions"): <c>who</c> 0 tests the speaker, any other value the target. Yes/no
     /// conditions pass when the computed answer equals value &gt; 0; counts compare by <c>compare by</c> (Num3: 1 &lt;, 2 &gt;, else ==; Num2: 1
-    /// &lt;, else &gt;=). DC 23 and 26 are folded into the line's tag masks at load; codes outside the enum compute "no".
+    /// &lt;, else &gt;=). DC 23 and 26 are folded into the line's tag masks at load; a code the game does not know passes, whatever its value.
     /// </summary>
     bool Condition(World world, Conversation c, DialogueCondition dc, CharacterId me, CharacterCold mc, CharacterId other)
     {
@@ -56,7 +56,7 @@ public sealed partial class DialogueSystem
             11 or 16 or 17 or 31 or 49 or 57 or 58 or 60 or 68 or 70 or 73 or 74 or 75 => PlaceCondition(world, dc, me, mc, other, subjectId, sF),
             59 or 61 or 62 or 64 or 65 => KindCondition(dc, mc, s, meF),
             77 => Bool(dc, IsRecruitable(world, s)),
-            _ => Bool(dc, false),
+            _ => true,
         };
     }
 

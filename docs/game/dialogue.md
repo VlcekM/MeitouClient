@@ -245,23 +245,65 @@ child's (`FUN_1406ad9d0`).
 
 BFrizz's Extra Extensions (RE_Kenshi plugin, workshop 3625832102; source: github.com/BFrizzleFoShizzle/BFrizz_Extra_Extensions; the workshop DLL
 matches its first commit but for the world-state comparisons) adds VARIABLE records (type 1000, one int `value`) and, on DIALOGUE /
-DIALOGUE_LINE / WORD_SWAPS, three condition lists and two [effects](#effects). Its type 1000 and DCs 1000-1006 sit at Meitou's
-`SimulationExtensions.FirstModCode`, so a code mod claiming either number would clash with it. **Observed** (its `fcs.def`, source and disassembly).
+DIALOGUE_LINE / WORD_SWAPS, three condition lists and two [effects](#effects), besides its own [conditions](#extra-extensions-conditions) and
+[item actions](#extra-extensions-item-actions). **Observed** (its `fcs.def`, source and disassembly). Meitou builds the plugin in: code mods may not
+claim its type 1000 or DCs 1000-1006 ([registration surface](../modding.md#registration-surface)).
 - `variable equals`, `variable less than`, `variable greater than`: each passes when the referenced variable's `value` is `==`, `<` or `>` the
   reference's val0; all references must pass, and one whose record has no `value` is skipped. They are ANDed onto `DialogLineData::checkTags`
   (`FUN_140674c50`), which the line check calls first, so a failing variable fails the line before any other test; they add no score.
 - `set variable` (`value` = val0) and `add to variable` (`value` += val0, an int sum): every reference whose record has a `value`, all sets
-  then all adds, run by its `Dialogue::_doActions` hook (`FUN_140680560`) before the line's own effects, after its `take item` / `destroy item`
-  actions.
+  then all adds, run by its `Dialogue::_doActions` hook (`FUN_140680560`) before the line's own effects, after its
+  [item actions](#extra-extensions-item-actions).
 - The values live in the shared game data, so a change is seen at once by every check, and WORLD_EVENT_STATEs test them too
   ([world states](factions-squads-towns.md#relations-and-world-states)). They are [saved](../formats/save.md#variables) in `quick.save`.
 
 Quests & Contracts (workshop 3797459646) gates its barman and trader replies with them, on variables its own `Ledger.dll` writes; without them
 every such reply passes, 254 replies under a Tech Hunter trader's `trader1` (#1442). Better Banking (workshop 3651996394) keeps an account balance
 in one VARIABLE (`BankBalance`) with 18 `add to variable` lines and 125 conditions. Meitou (`DialogueSystem.VariablesHold`,
-`WorldVariables`, per world) runs the lists and effects whether or not the plugin's mod is enabled. Not built: the plugin's DCs 1000-1006
-(`DC_IS_SLEEPING` .. `DC_ARMOUR_LEVEL`) reach `ModCondition` as unclaimed mod codes, which pass when val0 <= 0 whatever the comparison; its
-`take item`, `take item from squad`, `destroy item` and `destroy item from squad` do nothing.
+`WorldVariables`, per world) runs the lists and effects whether or not the plugin's mod is enabled, as it does the conditions and item actions.
+
+#### Extra Extensions conditions
+
+The plugin's `DialogConditionEnum` adds DCs 1000-1006, tested by its hooks ahead of the game's line check; the check's own pass over the
+conditions then passes them, as it passes every [unknown code](#conditions), so the plugin decides alone. Without the plugin they always pass. Its
+comparison, for yes/no answers (0 or 1) too: compare by 0 `==`, 1 `<`, 2 `>` val0, any other value fails. `who` 0 (T_ME) and 6 (T_WHOLE_SQUAD)
+check the speaker, any other the target, the other side being the other character. T_WHOLE_SQUAD tests each member of the speaker's squad nearer
+than 900 to it (`ActivePlatoon::getCharactersInArea`: 3D, strict, down members included); any member passing passes, none near fails.
+- On `DialogLineData::checkConditions` (`FUN_140678f30`, the whole line check), before any of its tests, in list order: `DC_IS_SLEEPING` (1000,
+  in a bed: `+0x2f8` 1), `DC_IS_ALLY_BECAUSE_OF_DISGUISE` (1002: `isAlly(other, true)` and not `isAlly(other, false)`, the second argument
+  reading the other's working disguise, [regards as friendly](#squad-memory)), `DC_WEAPON_LEVEL` (1005: the drawn weapon, else the preferred one
+  (`getThePreferredWeapon`), its level; with neither the highest of every weapon or crossbow in the weapon sections `back` and `hip`; -1 with
+  none), `DC_ARMOUR_LEVEL` (1006: passes when any worn piece of `armour`, `legs`, `head`, `boots`, `shirt` passes, `getEquippedArmour`; with none
+  -1 is compared). Levels are the gear level (`Gear+0x224`, [economy](economy.md)). The first condition of the list whose checked side is
+  missing (any code, the game's too, on a line with no target) ends the pass and leaves the rest untested.
+- On `checkTags` (`FUN_140674c50`), before the variables, when the line has one of them: `DC_HAS_SHORT_TERM_TAG` (1001: the checked character's
+  squad holds short-term tag `tag` on the other, `FUN_140678960`), `DC_STAT_LEVEL_UNMODIFIED` / `DC_STAT_LEVEL_MODIFIED` (1003 / 1004: stat number
+  `tag`, raw / modified, [stat getter](character-stats.md#the-stat-getter), truncated to an int). `tag` is the DIALOG_ACTION's field.
+
+**Observed** (disassembly of the workshop DLL, which matches source commit e7ece81 here, and of the callees in the 1.0.68 exe). Meitou
+(`ExtraExtensionChecks`, `StatGetter`), engine choices: the weapon in hand is the crossbow in ranged mode, else the one `Fighter.Weapon`
+holds (no drawn weapon); a `checkTags` condition on a missing target is skipped (the original's hook reads through it); a speaker without a
+squad is tested alone for T_WHOLE_SQUAD.
+
+#### Extra Extensions item actions
+
+Four lists of ITEM-like references, val0 the count, run by the plugin's `_doActions` hook in this order, each in data order, before its
+[variable effects](#variables). The giver or victim is the conversation's target, the taker the dialogue's owner; a take needs both, a
+destroy the target. Each pass looks up the first item of the record in the target's own item list (`Inventory::getItem`: every section, worn gear included,
+not the backpack's contents).
+- `take item`: from the first stack on, a stack bigger than what is left gives a split-off part, a smaller one moves whole, until the count or
+  the target's stock runs out. Each part goes to the taker (`giveItem(item, true, false)`: its inventory, else its backpack, else the ground at
+  its feet).
+- `destroy item`: the same order, a bigger stack losing what is left, a smaller one destroyed whole. The count is not checked: a negative one
+  adds to the first stack.
+- `take item from squad` / `destroy item from squad`: the plain action once per member of the target's squad nearer than 900 (to the taker /
+  to the target), on the **target's own** inventory each time (the member is never read), its return taken off what is left until nothing is.
+  `takeItems` returns the units taken; `destroyItems` returns what was left to destroy when the target ran out, else the part taken off the
+  last stack. So a take from squad takes what a plain take does, while a destroy from squad, when the stock spans several stacks, can run
+  again and destroy more than the count.
+
+**Observed** (DLL and exe disassembly). Meitou (`ExtraExtensionActions`): as the plugin; the giver's fighter is made again when a worn piece
+leaves; no squad: nothing (the original reads through it).
 
 #### Retargeting
 
@@ -578,6 +620,9 @@ relation to the player's faction, DC 2 = the player's money, DC 3 = the player f
 true (DC 10 included; DC 11 and 12 never get here). DC 1, 2, 3 reach the same function even with a subject (DC 1/3 then read the subject's
 faction), and DC 2 and 12 never read it. **Verified** (decompile). Meitou: `Condition` / `SubjectFallback`; the target is stored unless the
 Talk menu's dry run is picking.
+- A code the switch does not handle (0, 80 and up: mod and plugin codes too) passes whatever its value: it ends in `FUN_140671530`, which
+  answers true for any code but 1-3 (**Verified**, the disassembly's paths traced for codes 0-1009, with and without a subject). The loader
+  (`FUN_14067b070`) keeps every code but 23 and 26 in the list, and the check (`FUN_140678f30`) tests all of them.
 - **Bool** conditions return computed == B (compare-by ignored; value 1 must hold, 0 must not).
 - **Num3**: compare-by 1 `<`, 2 `>`, else `==`. **Num2**: compare-by 1 `<`, else `>=`.
 
@@ -638,7 +683,8 @@ Talk menu's dry run is picking.
 ## Effects
 
 `FUN_140680560(dialogue, line)`, run when a line is said or a reply clicked, in this order:
-0. With BFrizz's Extra Extensions, its [variable effects](#variables) (its hook runs ahead of the function).
+0. With BFrizz's Extra Extensions, its [item actions](#extra-extensions-item-actions) and [variable effects](#variables) (its hook runs ahead
+   of the function).
 1. `unlocks` (listed unlocked, **and the current dialogue locked**), `unlock but keep me` (listed unlocked), `locks`: the speaker's own
    lock map (the state `FUN_140680560` runs on: the owner's, or for a chained bubble line its speaker's, [chain](#ambient-conversations)).
 2. `interrupt` stored as the pending event-1 dialogue.
