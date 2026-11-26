@@ -831,7 +831,7 @@ public sealed partial class ProductionSystem
         if (craft.Queue.Count == 0 || !Supplied(world, site, m, cold)) return false;
 
         // A bench held by its first craft's store works again once its finished items can go to a storage (#762).
-        return !CraftFull(craft) || Settings.AutoHaul && craft.Done.Any(i => StorageFor(world, site, i, cold) is not null);
+        return !CraftFull(craft) || Settings.AutoHaul && craft.Done.Any(i => CanTake(cold, i) && StorageFor(world, site, i, cold) is not null);
     }
 
     /// <summary>
@@ -869,10 +869,25 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The output has room, or with AutoHaul a storage or machine <paramref name="cold"/> uses takes it (<see cref="StorageFor"/>).
+    /// The output has room, or with AutoHaul <paramref name="cold"/> can take some of it (<see cref="CanTake"/>) and a storage or machine it uses
+    /// takes it (<see cref="StorageFor"/>).
     /// </summary>
-    bool Room(World world, BuildSite site, Machine m, CharacterCold cold) =>
-        m.Output is { } o && (!o.Full || Settings.AutoHaul && _items.Create(o.Recipe.Item, 1) is { } one && StorageFor(world, site, one, cold) is not null);
+    bool Room(World world, BuildSite site, Machine m, CharacterCold cold)
+    {
+        if (m.Output is not { } o) return false;
+        if (!o.Full) return true;
+
+        return Settings.AutoHaul && _items.Create(o.Recipe.Item, 1) is { } one && CanTake(cold, one) && StorageFor(world, site, one, cold) is not null;
+    }
+
+    /// <summary>
+    /// Whether an operator can haul a full output or bench's <paramref name="item"/>: it carries some already (<see cref="StartHaul"/> takes that
+    /// to the storage) or a unit finds room in its inventory or backpack (state 82, which the original's take, row 92, needs). Without either the
+    /// haul moves nothing, so the job is skipped as the original skips operating a full machine and the character goes down its list (#1484: an
+    /// operator with a cluttered inventory stood at a full mine).
+    /// </summary>
+    static bool CanTake(CharacterCold cold, ItemInstance item) =>
+        Carries(cold, item.Record) || cold.Inventory is { } inv && inv.HasRoomFor(item);
 
     /// <summary>
     /// A carried item a "Hauling to" job takes to its storage: a loose stack (not the character's own kit), that the storage takes and has room for,
