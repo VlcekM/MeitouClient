@@ -1559,7 +1559,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     all of that form; 116 with a colour; also mod items; `data/icons/buildings/` holds BUILDING pictures, see "Building icons"). Every picture of a base-game record is of a drawn kind
     (test `Every_picture_the_game_saved_of_a_base_game_item_is_of_a_kind_it_draws`) except limbs.mod's eight severed limbs (ITEM with a static icon). The group also holds each enabled mod's `icons`
     folder (resources.cfg lists `./data/icons` in `[Icons]`; mod folders join the group of the matching data folder), so a picture a mod ships as `icons/<item>.<material>.png` is that item's
-    icon and the game never draws it. The colour is
+    icon and the game never draws it (a worn unarmed weapon also takes its own material's picture, [characters](../characters.md#worn-unarmed-weapons)). The colour is
     mostly not the record's own `color` reference (15 of 116 are), so it is the instance's colour ([clothing colours](../characters.md#clothing-colours)).
     A WEAPON's material is a manufacturer's model: the 19 saved Katana (476) pictures are named by exactly the `weapon models` (MATERIAL_SPECS_WEAPON) of the WEAPON_MANUFACTURERs
     whose `weapon types` list it (**Observed**, `meitou-tools icons` against the saved pictures). `meitou-tools icons <folder>` draws every item's icon by these names (a weapon once a model).
