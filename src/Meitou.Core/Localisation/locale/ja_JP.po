@@ -5811,3 +5811,11 @@ msgstr "建物に独自の名前を付けます。パネル、インベントリ
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "空にすると建物本来の名前に戻ります。"
+
+#. machine-translated
+msgid "Mod: {1}"
+msgstr "MOD：{1}"
+
+#. machine-translated
+msgid "Mods: {1}"
+msgstr "MOD：{1}"
