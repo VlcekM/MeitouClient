@@ -1106,7 +1106,8 @@ left 56 square cells uncovered, a strip of ground and ramp beside the tile line 
 stair foot. At 0.9 the tile is covered whole (337 → 353 polygons). Over the 10 zones above, 19.33 and base 12.35, five watershed tiles are left
 uncovered: 18.35 (296 square cells, 216 → 345 polygons at 0.7) and 19.33 (74, 78 → 135 at 0.6) are covered whole; 23.22 (16), 18.39 (1.5) and
 19.33 (26.5) need more than twice their polygons and stay. `--compare`: 18.35 ours-only 8,977 → 9,027, original-only 1,022 → 1,021; 19.33
-original-only 1,557 → 1,555. A walker shut out of its goal whose own polygon is the reachable one
+original-only 1,557 → 1,555; 18.35's new ground (x -64440..-64360, z 14348..14392, terrain on a ~29° slope) adjoins ground already ours
+only, the original's tile having none within 48 of it. Building interiors too, no interior polygon changed in the 12 zones. A walker shut out of its goal whose own polygon is the reachable one
 nearest the goal walks across it to the point nearest the goal; before, it got no path (`NavigationTests`: a gate's closed door, the polygon up to the wall).
 
 ## Gate codes
