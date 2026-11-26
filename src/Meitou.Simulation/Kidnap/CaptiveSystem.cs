@@ -933,8 +933,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// the nearest (engine choice; the original takes the first) live character within sight range that the watcher senses
     /// (<see cref="CharacterFacts.Perceives"/>: one it has not seen or heard, a sneaking one or one in another building, is none, #649), in slave
     /// state 1 or 2, not carried, free or caged (the list's prisoner bit 9 is not masked out, so a caged slave in sight is taken wherever its cage
-    /// stands; one in a bed is left out, engine choice), no animal, not another job's, and <see cref="NeedsProcessing"/>. No distance bound. -1:
-    /// none.
+    /// stands; one in a bed is left out, engine choice), no animal, not another job's, and <see cref="NeedsProcessing"/>. The scan skips
+    /// targets for which the restraining step cannot plan (<see cref="CanRestrainForProcessing"/>). No distance bound. -1: none.
     /// </summary>
     internal int FreeSlaveToProcess(World world, int slot, CharacterCold me)
     {
@@ -947,7 +947,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                     || !c.CarriedBy.IsNone || c.InSomething is not (HeldState.None or HeldState.Imprisoned)
                 || c.Fighter is { IsAnimal: true } || c.Appearance?.Animal is not null) return;
             var id = table.IdOf(v);
-            if (st.System.Busy(id) || !st.System.NeedsProcessing(st.Me, c)) return;
+            if (st.System.Busy(id) || !st.System.NeedsProcessing(st.Me, c) || !CanRestrainForProcessing(c)) return;
 
             if (!CharacterFacts.Perceives(st.World, st.Self, v)) return;
 
@@ -997,6 +997,12 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     bool NeedsProcessing(CharacterCold watcher, CharacterCold c) =>
         c.SlaveOwner < 0 || Allied(watcher.Faction, c.SlaveOwner) && (c.SlaveState is 2 or 3 || !c.Shaved || !LooksLikeASlave(watcher, c));
+
+    /// <summary>
+    /// Processing (182) requires a chained target. Restraining (166) can supply that state only when the target counts as down,
+    /// including when it is in a cage (docs/game/ai-tasks.md, states 7 and 134).
+    /// </summary>
+    static bool CanRestrainForProcessing(CharacterCold target) => LockSystem.Chained(target) || CharacterFacts.TargetDown(target);
 
     /// <summary>
     /// The looks-like-a-slave test with the watcher's faction (<c>FUN_1405a6bb0</c>, <b>Verified</b>, docs/game/ai-tasks.md "Looks like a slave"): an
@@ -1282,7 +1288,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     {
         var table = world.Characters;
         if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { Medical: { Dead: false }, SlaveState: not 0 } cc
-                || !cc.CarriedBy.IsNone || cc.InSomething != HeldState.None)
+                || !cc.CarriedBy.IsNone || cc.InSomething != HeldState.None || !CanRestrainForProcessing(cc))
             return End(world, j, CaptiveEventKind.GaveUp);
 
         ref var n = ref table.Next[w];
@@ -1694,7 +1700,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The processing of a new slave once the kneel is over (<c>Task_ProcessNewSlave</c>, <b>Verified</b>): it is stripped (<see cref="Strip"/>) and,
     /// only when its legs slot is empty then, dressed in each of the worker's faction's <c>slave clothing</c> it does not wear already. Event 35, or
     /// 37 for one whose head is shaven already, from the worker to it, and its head is shaven; it becomes the worker's faction's slave unless it has
-    /// an owner already (it keeps that one), and its one-shot orders and perma-jobs are cleared. A captive without locked shackles is cuffed first
+    /// an owner already (it keeps that one), and its one-shot orders and perma-jobs are cleared. A captive without worn shackles is cuffed first
     /// (<see cref="Restrain"/>).
     /// </summary>
     void Process(World world, int w, CharacterCold wc, int c, CharacterCold cc)
@@ -1734,14 +1740,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// The plan's cuff before <see cref="Process"/>: 182 needs 134 <c>isChained</c>, which only 166 Restraining (<c>Task_CuffTarget</c>) gives, and
-    /// its <c>setChainedMode</c> makes the cuffer the owner. So a human captive without locked shackles is chained
+    /// its <c>setChainedMode</c> makes the cuffer the owner. So a human captive without worn shackles is chained
     /// (<see cref="CharacterAssembly.Chain"/>) and becomes a slave of the worker's faction and squad, whose medics then treat it in its cage
-    /// (<c>FirstAidSystem.ChainedTo</c>). 166 also needs 7 <c>isTargetDown</c>, which Meitou does not ask of a caged or loose slave (<b>engine
-    /// choice</b>: unchained, it never looks like a slave and was processed again forever, #508, #509).
+    /// (<c>FirstAidSystem.ChainedTo</c>). 166 also needs 7 <c>isTargetDown</c> (see <see cref="CanRestrainForProcessing"/>).
     /// </summary>
     void Restrain(World world, CharacterCold wc, CharacterCold cc)
     {
-        if (cc.Fighter is { IsAnimal: true } || LockSystem.WornShackles(cc) is not null) return;
+        if (cc.Fighter is { IsAnimal: true } || LockSystem.Chained(cc)) return;
 
         _assembly.Chain(cc);
         FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);

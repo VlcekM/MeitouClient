@@ -202,7 +202,7 @@ public sealed partial class LockSystem
             if (cage.Owner >= 0 && cage.Owner != c.Faction)
                 Crimes?.SetPending(world, s, CrimeCode.Terrorism, cage.Owner, prisoner, CrimeSystem.MinTimer);
 
-            if (FreeBy(world, table.IdOf(s), c.Faction, prisoner))
+            if (FreeBy(world, table.IdOf(s), c.Faction, prisoner, Crimes))
                 world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
         }
     }
@@ -213,22 +213,22 @@ public sealed partial class LockSystem
     /// tells it it may go (event 46 from the releaser), else a releaser of the player's faction is thanked (event 13 from the prisoner); in those two
     /// cases the prisoner gets order 133 (<see cref="FreedPrisoner"/>).
     /// </summary>
-    bool FreeBy(World world, CharacterId releaser, int faction, CharacterId prisoner)
+    internal static bool FreeBy(World world, CharacterId releaser, int faction, CharacterId prisoner, CrimeSystem? crimes)
     {
         if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { } pc) pc.Freed = true;
-        if (!world.Fixtures.Release(world, prisoner, faction, Crimes, jailer: true)) return false;
+        if (!world.Fixtures.Release(world, prisoner, faction, crimes, jailer: true)) return false;
 
         // The release message goes with Create_Character on the interface, for a player-faction prisoner with no slave state.
         if (world.Characters.Cold(p) is { IsPlayer: true, SlaveState: 0 })
             world.EmitSound(SoundKind.ReleasedFromPrison, p, world.Characters.Next[p].Position);
         var talk = world.SystemOf<Dialogue.DialogueSystem>();
+        bool books = crimes?.Factions.Books(faction) == true;
         if (world.Characters.TryResolveNext(releaser, out int r) && talk is not null)
         {
             talk.Forgive(world, p, releaser);   // the prisoner forgives the releaser (FUN_14067aca0, both orders)
-            if (Crimes?.Factions.Books(faction) == true) talk.Forgive(world, r, prisoner);
+            if (books) talk.Forgive(world, r, prisoner);
         }
 
-        bool books = Crimes?.Factions.Books(faction) == true;
         if (books)
             world.Defer(new Dialogue.DialogueEvent(releaser, prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
         else if (faction == world.Player.Faction)

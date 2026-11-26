@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Simulation.Crime;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
@@ -25,8 +26,8 @@ namespace Meitou.Simulation.Kidnap;
 /// gatherer walks there and takes the captive
 /// (<c>Task_GetSlave</c>, 174, whose effect is TARGET_IS_MY_SLAVE): its queued message is replayed as <c>setChainedMode</c> only
 /// (<c>FUN_1407b65b0</c> kind 5 -> <c>FUN_14032e590</c>, <b>Verified</b>): the captive becomes the gatherer's faction's slave, owned by the
-/// gatherer, and stays in its own squad, planning with the owner squad's Slave AI Goals (job 187, <see cref="Ai.AiSystem.ObeyedRoles"/>). The
-/// cage is opened (<b>engine reading</b>: which task does it in the original is <b>Unknown</b>). A player character is gathered too.</item>
+/// gatherer, and stays in its own squad, planning with the owner squad's Slave AI Goals (job 187, <see cref="Ai.AiSystem.ObeyedRoles"/>).
+/// The gatherer's release uses the same task start as Set Free (<c>FUN_14035a7a0</c> → <c>FUN_1403570a0</c>, <b>Verified</b>).</item>
 /// <item><b>Deliver</b> (192 "Delivering slaves", wanted at 0.25 per slave, AI slot 65): the leader walks to the shipping package's town
 /// (<see cref="Blackboard.MissionTown"/>). <b>Sell</b> (194 / 218 "Selling slaves", 218 only in a prison or slave camp, AI slot 66): in the town it
 /// stands in it says event 39 SLAVE_DELIVERY to the keeper of a slave pen there, whose line DA 24 hands its slaves over (<see cref="GiveSlaves"/>).</item>
@@ -220,24 +221,7 @@ public sealed partial class CaptiveSystem
         switch (j.Kind)
         {
             case CaptiveJobKind.Gather:
-                {
-                    var cage = world.Fixtures.Find(j.Cage);
-                    if (cage is null || !table.TryResolveNext(j.Captive, out int c)
-                            || table.Cold(c) is not { IsImprisoned: true, Medical.Dead: false } cc || cc.InWhat != cage.Id)
-                        return End(world, j, CaptiveEventKind.GaveUp);
-
-                    if (!Walk(world, j, w, cage, out bool arrived)) return End(world, j, CaptiveEventKind.GaveUp);
-                    if (!arrived) return true;
-                    TaskStart.Stand(table, w);
-                    if (world.Squads.Find(wc.SquadId) is not { } squad) return End(world, j, CaptiveEventKind.GaveUp);
-                    if (cage.Lock is { } l) l.Locked = false;
-                    world.Fixtures.LiftOut(world, j.Captive, w, stepOut: true);
-                    cc.Escaped = false;
-                    FixtureRegistry.Enslave(world, cc, wc.Faction, squad.Id);
-                    cc.Kidnapped = false;
-                    Note(world, CaptiveEventKind.Gathered, j);
-                    return End(world, j, null);
-                }
+                return StepGather(world, j, w, wc);
             case CaptiveJobKind.CageSelf:
                 {
                     var cage = world.Fixtures.Find(j.Cage);
@@ -258,6 +242,57 @@ public sealed partial class CaptiveSystem
         }
 
         return End(world, j, CaptiveEventKind.GaveUp);
+    }
+
+    /// <summary>
+    /// Orders a conscious caged target that is chained (174). If the chains are missing, the worker first restrains the captive (166).
+    /// </summary>
+    bool StepGather(World world, CaptiveJob j, int w, CharacterCold worker)
+    {
+        var table = world.Characters;
+        if (world.Fixtures.Find(j.Cage) is not { } cage || !table.TryResolveNext(j.Captive, out int slot)
+            || table.Cold(slot) is not { IsImprisoned: true } captive || captive.InWhat != cage.Id || !CharacterFacts.Conscious(captive)
+            || world.Squads.Find(worker.SquadId) is not { } squad || !Construction.ConstructionSystem.HasWorkingArm(worker))
+            return End(world, j, CaptiveEventKind.GaveUp);
+
+        if (j.Phase == CaptivePhase.Walk)
+        {
+            if (!Walk(world, j, w, cage, out bool arrived)) return End(world, j, CaptiveEventKind.GaveUp);
+            if (!arrived) return true;
+
+            TaskStart.Stand(table, w);
+            j.Phase = CaptivePhase.Work;
+            j.Time = 0;
+        }
+
+        if (!LockSystem.Chained(captive) && !RestrainForGather(world, j, slot, worker, captive)) return true;
+        if (!LockSystem.FreeBy(world, j.Worker, worker.Faction, j.Captive, world.SystemOf<CrimeSystem>()))
+            return End(world, j, CaptiveEventKind.GaveUp);
+
+        FixtureRegistry.Enslave(world, captive, worker.Faction, squad.Id);
+        Note(world, CaptiveEventKind.Gathered, j);
+        return End(world, j, null);
+    }
+
+    /// <summary>
+    /// The stripping (181) and cuffing (166) before ordering a captive that has no chains.
+    /// </summary>
+    bool RestrainForGather(World world, CaptiveJob job, int slot, CharacterCold worker, CharacterCold captive)
+    {
+        worker.ActionClip = ProcessClip;
+        if (!CharacterFacts.TargetUnarmed(captive))
+        {
+            if (job.Time < Settings.StripSeconds) return false;
+
+            StripWeapons(world, slot, worker, captive);
+            job.Time = 0;
+            return false;
+        }
+
+        if (job.Time < Settings.CuffSeconds) return false;
+
+        _assembly.Chain(captive);
+        return true;
     }
 
     /// <summary>

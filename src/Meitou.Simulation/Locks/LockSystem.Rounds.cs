@@ -549,7 +549,7 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
         {
             case RoundKind.Release:
                 world.Fixtures.SetLocked(f, false);
-                FreeBy(world, r.Worker, r.Faction, r.Prisoner);
+                FreeBy(world, r.Worker, r.Faction, r.Prisoner, Crimes);
                 break;
             case RoundKind.LockDoors:
                 LockDoor(world, r, f, worker);
