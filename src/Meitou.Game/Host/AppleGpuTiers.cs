@@ -7,7 +7,7 @@ namespace Meitou.Game.Host;
 /// <summary>
 /// The quality tier an Apple-silicon GPU suits (an engine choice, docs/launcher.md "Graphics"): its Geekbench 7 Metal score against the frame
 /// rates an M6 measured in the launcher benchmark's bases scenario, where every tier is GPU-bound; the highest tier predicted at
-/// <see cref="TargetFps"/> or more, High at most (Ultra and Extreme, which need hardware ray tracing, have no M6 measurements yet).
+/// <see cref="TargetFps"/> or more, Ultra at most and High at most without hardware ray tracing.
 /// </summary>
 static partial class AppleGpuTiers
 {
@@ -51,6 +51,13 @@ static partial class AppleGpuTiers
     }
 
     /// <summary>
+    /// Whether the GPU Metal names <paramref name="gpu"/> traces rays in hardware: an M3 or later (Metal's Apple9 family, which the
+    /// renderer checks on the device); false for another name.
+    /// </summary>
+    public static bool TracesInHardware(string gpu) =>
+        ChipName().Match(gpu) is { Success: true } m && int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) >= 3;
+
+    /// <summary>
     /// "Apple M&lt;generation&gt;" and an optional variant, as Metal names the GPU.
     /// </summary>
     [GeneratedRegex(@"^Apple M(\d+)(?: (Pro|Max|Ultra))?$")]
@@ -66,8 +73,9 @@ static partial class AppleGpuTiers
     const double TargetFps = 60;
 
     /// <summary>
-    /// The anchor: the M6's Metal score and its average frames per second in the bases scenario at each tier it can run (two runs each, the
-    /// launcher benchmark at 1920x1080 without an upscaler; GPU time was 93-103% of the frame time in every group). Docs/launcher.md "Graphics".
+    /// The anchor: the M6's Metal score and its average frames per second in the bases scenario by tier (two runs each, the launcher benchmark
+    /// at 1920x1080 without an upscaler; GPU-bound). Extreme is not listed, so never recommended: it ran as Ultra there, as the bases have
+    /// no grassland for its traced grass shadows. Docs/launcher.md "Graphics".
     /// </summary>
     const int AnchorScore = 89357;
 
@@ -75,17 +83,23 @@ static partial class AppleGpuTiers
     /// <see cref="AnchorScore"/>'s frames per second by tier, lowest tier first.
     /// </summary>
     static readonly (int Tier, double Fps)[] AnchorFps =
-        [(QualityTiers.LowPreset, 164.0), (QualityTiers.MediumPreset, 136.1), (QualityTiers.HighPreset, 112.7)];
+        [
+            (QualityTiers.LowPreset, 203.5),
+            (QualityTiers.MediumPreset, 131.2),
+            (QualityTiers.HighPreset, 95.6),
+            (QualityTiers.UltraPreset, 35.6),
+        ];
 
     /// <summary>
     /// The highest tier a GPU of Metal score <paramref name="score"/> is predicted to run at <see cref="TargetFps"/> (frame rate in proportion
-    /// to the score); Low when none.
+    /// to the score), a tier with ray-traced switches only where it <paramref name="tracesInHardware"/>; Low when none.
     /// </summary>
-    public static int Tier(int score)
+    public static int Tier(int score, bool tracesInHardware)
     {
         int tier = QualityTiers.LowPreset;
         foreach (var (t, fps) in AnchorFps)
         {
+            if (!tracesInHardware && QualityTiers.NeedsRayQueries(t)) continue;
             if (fps * score / AnchorScore >= TargetFps) tier = t;
         }
         return tier;

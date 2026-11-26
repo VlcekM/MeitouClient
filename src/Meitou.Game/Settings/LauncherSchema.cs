@@ -30,6 +30,12 @@ static class LauncherSchema
     const string VulkanRenderer = "vulkan", MetalRenderer = "metal";
 
     /// <summary>
+    /// The switches that need tessellation shaders: Vulkan only (the Metal renderer has none, docs/metal-backend.md "Tessellation").
+    /// </summary>
+    static readonly string[] TessellationSwitches =
+        [WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch];
+
+    /// <summary>
     /// The schema key of a <see cref="UserConfig"/> property: its name in camel case.
     /// </summary>
     static string Key(string property) => JsonNamingPolicy.CamelCase.ConvertName(property);
@@ -273,6 +279,7 @@ static class LauncherSchema
             On = on,
             Shown = shown ? 1 : 0,
             Impact = LookPresets.ImpactOf(label),
+            Renderer = TessellationSwitches.Contains(label) ? VulkanRenderer : null,
         };
         // The switches a technique choice stands for are saved but not shown: the choice is their row (the launcher writes it, the game applies it
         // last).

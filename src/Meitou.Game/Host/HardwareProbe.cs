@@ -51,7 +51,7 @@ static class HardwareProbe
         if (AppleGpuTiers.Score(gpu) is not { } score)
             return memoryMb >= 16 * 1024 ? QualityTiers.MediumPreset : QualityTiers.LowPreset;
 
-        int tier = AppleGpuTiers.Tier(score);
+        int tier = AppleGpuTiers.Tier(score, AppleGpuTiers.TracesInHardware(gpu));
         return memoryMb < 12 * 1024 ? Math.Min(tier, QualityTiers.MediumPreset) : tier;
     }
 

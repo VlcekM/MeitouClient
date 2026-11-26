@@ -222,6 +222,9 @@ a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`Prob
   the counter-clockwise option (the earlier Metal path) the grid was culled from above and every object's outside was a back face (**Verified**, the
   trace's ray results on `bench-bases-2026-10-27`: hits 2,400 -> 31,000 of 65,500, back faces 2,660 -> 40). Indirect instances (bottom levels by
   resource ID) missed the terrain; not used.
+- **Zero-area triangles.** Metal's rays hit them (simplified meshes have them); the hit shader (`HitShadeAt`) takes the ray's own direction as
+  their normal. **Observed** (save 111 loaded from the main menu at Low, plain probes): `normalize(0)` gave one hit a NaN normal, the lamp loop
+  (`nl <= 0` false for NaN) a NaN light, and the probes' bounces carried it through the whole atlas within 120 updates: every lit surface black.
 - **Probes and resolve.** Constants, list (`GiFogHide`, `ProbeFogCache` shared with Vulkan), sleep, far period, interior grid, hysteresis and
   defaults (strength 1, indoor gain 1.25) as `GiProbes`. The resolve (`MetalPostChain.RunGiResolve`) draws `GiResolveShaders`' two passes; the
   surface target is RGBA32UI, stored only while the resolve runs (`MetalContext.StoreSurface`); Metal's targets keep row 0 at the top, so the
