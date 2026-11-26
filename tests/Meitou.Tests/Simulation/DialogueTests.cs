@@ -455,7 +455,7 @@ public class DialogueTests
     }
 
     /// <summary>
-    /// The hero walks 300 up to the villager and talks twice (rich, buying; then plain), pinned in <see cref="GoldenHashTests"/>.
+    /// The hero walks 300 up to the villager and talks twice (rich, buying; then plain, said as a bubble), pinned in <see cref="GoldenHashTests"/>.
     /// </summary>
     internal static List<ulong> Scripted(int threads)
     {
@@ -467,7 +467,7 @@ public class DialogueTests
         {
             v.World.RunTicks(target - (int)v.World.Tick);
             if (target == 1) v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
-            if (target is 300 or 320) said += v.Talk?.Text + "|";
+            if (target is 300 or 320) said += (v.Talk?.Text ?? v.Bubble(v.Villager)) + "|";   // the plain "Hello." is childless: a bubble
             if (target == 300) v.Say(new DialogueChoice(0) { Tick = 0 });
             if (target == 310) v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
             hashes.Add(v.World.StateHash());
