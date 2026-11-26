@@ -1050,9 +1050,18 @@ public sealed partial class UiHost
     }
 
     /// <summary>
-    /// A press on a screen's extension control: runs its action (<see cref="Dispatch(UiControl)"/>); false for any other control.
+    /// A press on a screen's extension control: runs its action (<see cref="Dispatch(UiControl)"/>); false for any other control. The action's
+    /// <see cref="UiActionContext.Position"/> is not set; <see cref="DispatchScreen(string, string, System.Numerics.Vector2)"/> sets it.
     /// </summary>
     public bool DispatchScreen(string screen, string widget) => Screens.Shown(screen, widget) is { } control && Dispatch(control);
+
+    /// <summary>
+    /// A press on a screen's extension control at <paramref name="pointer"/> (screen pixels): runs its action with the pointer as
+    /// <see cref="UiActionContext.Position"/> and <see cref="UiActionContext.Start"/>, as an overlay press has them; false for any other control.
+    /// </summary>
+    public bool DispatchScreen(string screen, string widget, System.Numerics.Vector2 pointer) =>
+        Screens.Shown(screen, widget) is { } control
+        && Run(control.Enabled, control.Action, frame => new(frame, control.Argument) { Kind = UiEventKind.Press, Position = pointer, Start = pointer });
 
     /// <summary>
     /// Whether any extension adds dialogue replies (<see cref="DialogueReplies"/>).
