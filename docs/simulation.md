@@ -330,7 +330,8 @@ waits silently until it is up; one with a provider is a step the act-out carries
   whose machine loses power ends and leaves the queue by its list B (state 93, `RowStates`), silently, as the original's plan step ends and pops it
   (`FUN_14050d970` → `FUN_14050d7d0`, **Verified** by decompile; a power cut during the walk ends it once the row starts there); given unpowered it waits
   with "It needs electricity.".
-  A Loot order (26) walks through a fight; once its window is open the loot ends (`TaskEnd.Done`, closing it) while a threat is within 40 (`Task_Loot_Order`'s update,
+  A Loot order (26) walks through a fight; once its window is open the loot ends (`TaskEnd.Done`, closing it) when the window closes or the
+  [inventory pause](#inventory-pause)'s combat rule ends it (the original's at a threat within 40, `Task_Loot_Order`'s update,
   `CarrySystem.HoldWindow`, [carry-loot](game/carry-loot.md)).
 - Group orders keep their pickers (the nearest or first character that can run it: pick up, loot, stealth KO, the turret, item pick-up, containers, lock work); only that character
   gets the order, none when nobody can run it. Per-character orders (move, follow, attack, first aid, splint, rest, the Medic and Rescue buttons, put down, operate, haul, prospect,
@@ -783,7 +784,7 @@ the UI ([independent squads](#autonomous-player-squads) are in `IndependentSquad
 
 Passive/Hold/Block/Taunt/Jobs state belongs to the character (medic and rescue are job-list entries, [job lists](#production)) and relevant
 systems; the rules follow [combat](game/combat.md#fight-lifecycle-and-orders). A player's character defends itself (32 Self preservation, a [decision step](#decision-step) goal) only when no order of its runs or can start (a
-Loot order ends under a threat within 40) and against an attacker within √33000 ≈ 182; Passive does not stop that but keeps it
+held Loot window ends by the [inventory pause](#inventory-pause)'s combat rule) and against an attacker within √33000 ≈ 182; Passive does not stop that but keeps it
 from joining others' defence and from attack on sight. Hold adds attack on sight (goal 16, another decision-step goal; not Passive, sneaking outside a fight, or prone), and every target of a
 holder (sight, self-defence, re-pick) passes the post test (`Orders.HoldPost`); it walks to a target only within 80 (140 when the target is in a fight and heads for it) of
 its hold point (`CharacterCold.HoldPoint`: where Hold was turned on, then each ground move's destination and each follow step's aim at the followed character's height (`MovementSystem.CarryHoldPoint`, as `Task_Follow`, [standing orders](game/combat.md#fight-lifecycle-and-orders)); not saved: a loaded holder holds where it stands, as setStandingOrder 12 does; **Observed**: the loader replays the jobs switch through it, Verified; Hold assumed alike). The player's own attack target (orders 5 and 61) is the exception: a melee fighter on Hold walks to it wherever it is (engine reading of the original's chooser, which returns that focused target without the post test, and of its fight decision, whose only Hold test gates the path chase, [leaving a fight](game/combat.md#leaving-a-fight)); a crossbowman's closing in still reads Hold.
@@ -797,6 +798,23 @@ Ranged (on for every NPC): a crossbow carrier takes the crossbow at any distance
 Passive −1), which both the aggro look and the fighters' re-pick use.
 New games select the squad's first member. The game host also selects the first member after
 loading, before publishing the initial snapshot; the save reader itself retains saved selection.
+
+### Inventory pause
+
+**Engine choice** (Meitou only, `Player.InventoryPause`): a character holding an inventory window it was told to open, the loot window
+(`OpenLootOrder`: a body, an own character, a pickpocket target) or a container's (`OpenContainerOrder`), stands still on that order while the window
+is open.
+- The window opening selects its opener alone and shows its squad, as a click on it (`InventoryPause.Focus`, the player's characters only).
+- The order keeps running while the window is open (the loot's held task; a container's work in place is not `Done` while its opener holds it,
+  `ContainerAccess.Holds`, a walk's arrival turning the walk's provenance into the work in place), so `DecisionSystem.Ordered` keeps every job
+  (workstations, first aid, implicit jobs), goal and reaction off it. The player's next order ends it (a loot's task end closes the loot window; a
+  container's window stays, as the original's).
+- Combat: at the order's give (`InventoryPause.Told`) the character notes whether it, or an ally of its faction within 500
+  (`isWithin50Meters`, flat), fights (in combat or attacking; for itself also a melee threat within 40). Noted fighting, its pause ignores
+  combat; otherwise its pause ends once it or such an ally fights (`InventoryPause.CombatEnds`: the loot's task ends, closing its window; the
+  container's work ends, the window staying).
+- The player closing the window (`CloseContainer`) ends the pause, and the opener's jobs wait 0.5 s (`ResumeSeconds`, 15 ticks;
+  `CharacterCold.JobsWaitUntil`, both job steps answer "an inventory window just closed"); the decision step asks it again when the wait is over.
 
 ## Movement and paths
 
