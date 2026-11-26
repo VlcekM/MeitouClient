@@ -347,8 +347,7 @@ sealed class TitleScreen(GameHost host)
         if (_titleComposition is not { } title) return;
 
         double seconds = host.RealTime.Elapsed.TotalSeconds;
-        PrepareTitleDust(seconds);
-        StartTwisters();
+        var titleParticles = PrepareTitleParticles(seconds);
 
         // Clear sky with a few clouds whatever the region's weather, no placed fog volumes, the sun turned into the right of the view, the moons lit
         // full face so they read by day, and thicker morning air so the hill the sun peeks over casts rays through it.
@@ -374,7 +373,7 @@ sealed class TitleScreen(GameHost host)
         var worldParticles = host.Gpu.Particles;
         float density = host.Gpu.ParticleDensity;
         bool weatherParticles = host.Gpu.WeatherParticles;
-        host.Gpu.Particles = _titleParticles;
+        host.Gpu.Particles = titleParticles;
         host.Gpu.ParticleDensity = 0.3f;
         host.Gpu.WeatherParticles = true;
         if (host.Gpu.Foliage is { } foliage && host.WorldOptions.Screenshot is null) foliage.SwaySeconds = seconds;
@@ -391,6 +390,17 @@ sealed class TitleScreen(GameHost host)
             if (host.Gpu.FogVolumes is { } restoreFog) restoreFog.HidePlaced = false;
             if (host.Gpu.Characters is { } unlit) unlit.Fill = default;
         }
+    }
+
+    /// <summary>
+    /// The title's own particle scene for this frame (the menu's dust, apart from gameplay's and without the map's effect placers): its dust
+    /// prepared and the easter egg's twisters started; null without particles.
+    /// </summary>
+    internal ParticleRenderer? PrepareTitleParticles(double seconds)
+    {
+        PrepareTitleDust(seconds);
+        StartTwisters();
+        return _titleParticles;
     }
 
     /// <summary>
@@ -431,9 +441,9 @@ sealed class TitleScreen(GameHost host)
         if (TitleBattle is not { } battle) return;
 
         foreach (var at in battle.Tornado.TakeTwisters())
-            foreach (var (height, size) in TitleTornado.Funnel)
-                _titleParticles?.Burst(TitleTornado.System, at + new Vector3(0, height, 0), Quaternion.Identity, TitleTornado.FlightSeconds, size,
-                    lifeScale: TitleTornado.LifeScale);
+            foreach (var (height, stretch, life, colour) in TitleTornado.Funnel)
+                _titleParticles?.Burst(TitleTornado.System, at + new Vector3(0, height, 0), Quaternion.Identity, TitleTornado.FlightSeconds,
+                    lifeScale: life, recolour: colour, stretch: stretch);
     }
 
     /// <summary>

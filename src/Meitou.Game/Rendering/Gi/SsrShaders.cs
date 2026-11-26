@@ -174,10 +174,10 @@ static class SsrShaders
         """;
 
     /// <summary>
-    /// One texel per block of what the sky's reflection on this surface becomes, in two parts (<c>uPart</c>, a target each), hazed as the fragment
-    /// was and per unit of the environment BRDF: 0 the light the rays found in place of the sky; 1 the share of the sky's reflection that stays,
-    /// less one (what <see cref="Apply"/> takes of the reflection the lit fragment put there). Apart, because the sky's reflection is each pixel's
-    /// own: on a bumped glossy surface it changes from pixel to pixel, and one texel's difference from the sky left the rest as speckles, the
+    /// One texel per block of what the sky's reflection on this surface becomes, in two parts in one pass (a target each), hazed as the fragment
+    /// was and per unit of the environment BRDF: location 0 the light the rays found in place of the sky; 1 the share of the sky's reflection that
+    /// stays, less one (what <see cref="Apply"/> takes of the reflection the lit fragment put there). Apart, because the sky's reflection is each
+    /// pixel's own: on a bumped glossy surface it changes from pixel to pixel, and one texel's difference from the sky left the rest as speckles, the
     /// brightest things in a dark room. Out: rgb the part, a the signed view depth as <see cref="GiResolveShaders.Resolve"/>'s. Every surface goes
     /// through here: below the gloss threshold the kept share is the specular occlusion alone, the same ratio the lit fragment takes without the
     /// resolve, recovered from the resolve's texel of this block. <c>uHit</c>'s alpha is <c>ssrPackHit</c>'s. A rough surface mirrors a cone: the
@@ -186,9 +186,10 @@ static class SsrShaders
     public static readonly string Shade = "#version 330 core\n" + AtmosphereShaders.Functions + GiResolveShaders.Reconstruct
         + "uniform usampler2D uAlbedo;\n" + Common + $$"""
         in vec2 vUv;
-        out vec4 fragColour;
+        layout(location = 0) out vec4 fragColour;
+        layout(location = 1) out vec4 fragSky;
         uniform sampler2D uHit, uGiLow, uGiLowSky;
-        uniform float uDiv, uHasGi, uPart;
+        uniform float uDiv, uHasGi;
 
         // The probes' light against the sky's at this texel: GiResolveShaders.Resolve stored probes x share x haze and -share x haze, so their sum with the
         // sky is (probes - sky) x share, and 1 + its luminance over the sky's is kenshiLight's mix(1, probes / sky, share), the clamp included.
@@ -246,7 +247,12 @@ static class SsrShaders
             uvec4 surface;
             ivec2 px = ssrPick(cell * int(uDiv), int(uDiv), ivec2(uFullSize), surface);
             float z = px.x < 0 ? 0.0 : depthAt(px);
-            if (z <= 0.0) { fragColour = vec4(0.0); return; }
+            if (z <= 0.0)
+            {
+                fragColour = vec4(0.0);
+                fragSky = vec4(0.0);
+                return;
+            }
             vec3 n = ssrNormal(surface), p = positionAt(px, z), v = normalize(uGiEye - p);
             float gloss = ssrGloss(surface);
             vec3 ambient = atmoAmbientMapAt(p).rgb;
@@ -254,7 +260,9 @@ static class SsrShaders
             float occlusion = ssrOcclusion(cell, n, transmittance, ambient);
             vec4 seen = vec4(0.0, 0.0, 0.0, occlusion);
             if (ssrWeight(gloss) > 0.0) seen = mix(seen, ssrCone(cell, p, n, z, gloss, occlusion), ssrWeight(gloss));
-            fragColour = vec4((uPart < 0.5 ? seen.rgb : vec3(seen.a - 1.0)) * transmittance, (surface.w & 512u) != 0u ? -z : z);
+            float signedZ = (surface.w & 512u) != 0u ? -z : z;
+            fragColour = vec4(seen.rgb * transmittance, signedZ);
+            fragSky = vec4((seen.a - 1.0) * transmittance, signedZ);
         }
         """;
 

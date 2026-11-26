@@ -138,6 +138,17 @@ internal sealed class MetalProgram : IDisposable
     /// The threadgroup size the MSL declares (the GLSL's <c>local_size_x/y/z</c>), for a dispatch.
     /// </summary>
     public (uint X, uint Y, uint Z) Threads { get; }
+
+    /// <summary>
+    /// A discrete-set compute program's sampler index per binding (<see cref="MslTranslator.DenseSamplers"/>; empty for the others).
+    /// </summary>
+    public int[] SamplerSlots { get; init; } = [];
+
+    /// <summary>
+    /// The sampler index of binding <paramref name="binding"/> (-1: the program has no sampler there).
+    /// </summary>
+    public int SamplerSlot(int binding) => binding < SamplerSlots.Length ? SamplerSlots[binding] : -1;
+
     /// <summary>
     /// The compute stage's argument buffer layout.
     /// </summary>
@@ -468,9 +479,31 @@ public sealed class MetalShaders : IGpuShaders
     /// A compute program: the engine's compiler makes the SPIR-V, spirv-cross the MSL (with every set an argument buffer, as the
     /// native model's), and the threadgroup size comes from the source's <c>local_size_x/y/z</c> (the dispatch passes it to Metal).
     /// </summary>
-    public GpuProgram Compute(string glsl, string name, params GpuSetLayout[] extraSets)
+    public GpuProgram Compute(string glsl, string name, params GpuSetLayout[] extraSets) => Compute(glsl, name, null, extraSets);
+
+    /// <summary>
+    /// A compute program whose set 0 is plain bindings (each buffer, texture and sampler at its binding's index; the acceleration structure's buffer
+    /// index too), the bindless table its argument buffer at <see cref="MslTranslator.TableBinding"/>: the ray-traced GI passes, which bind their
+    /// resources on the encoder themselves (<c>Metal/Gi</c>).
+    /// </summary>
+    public GpuProgram ComputeDiscrete(string glsl, string name) => Compute(glsl, name, 0u, [GpuSetLayout.Bindless]);
+
+    /// <summary>
+    /// A compute program, its set <paramref name="discreteSet"/> (when given) as plain bindings and the others as argument buffers.
+    /// </summary>
+    GpuProgram Compute(string glsl, string name, uint? discreteSet, GpuSetLayout[] extraSets)
     {
-        var code = Compiler.CompileCompute(glsl);
+        bool bindless = extraSets.Any(s => s.IsBindless);
+        var code = Compiler.CompileCompute(bindless ? RewriteBindless(glsl) : glsl);
+
+        // The table's ids are the flattened ones the graphics stages use (set x SetStride + binding: MetalTableLayout finds its arrays by them);
+        // set 0's bindings stay as they are.
+        if (bindless)
+        {
+            var remapped = SpirvPatch.RemapBindings(code, 0, 0, SetStride);
+            code = SpirvPatch.BindlessFetchImages(remapped, Frame.NativeShaders.BindlessSet, TableTotal);
+        }
+
         var r = SpirvReflection.Parse(code);
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
         var info = new ProgramInfo
@@ -479,14 +512,17 @@ public sealed class MetalShaders : IGpuShaders
             PushConstantBytes = pc, NeutralSets = [GpuSetLayout.Written([]), .. extraSets],
         };
         var threads = LocalSize(glsl);
-        var msl = MslTranslator.Translate(code, "compute_main", ExecutionModel.GLCompute, argumentBufferSet: Frame.NativeShaders.BindlessSet);
+        var msl = MslTranslator.Translate(code, "compute_main", ExecutionModel.GLCompute, argumentBufferSet: Frame.NativeShaders.BindlessSet,
+            discreteSet: discreteSet);
+        int[] samplerSlots = [];
+        if (discreteSet is not null) msl = MslTranslator.DenseSamplers(msl, out samplerSlots);
         if (Environment.GetEnvironmentVariable("MEITOU_METAL_DUMP") is { } dump)
         {
             Directory.CreateDirectory(dump);
             File.WriteAllBytes(Path.Combine(dump, $"{name}.comp.spv"), code);
             File.WriteAllText(Path.Combine(dump, $"{name}.comp.msl"), msl);
         }
-        _programs.Add(new MetalProgram(info, Stage(msl, "compute_main", name), msl, threads));
+        _programs.Add(new MetalProgram(info, Stage(msl, "compute_main", name), msl, threads) { SamplerSlots = samplerSlots });
         return new GpuProgram(info.Index, info);
     }
 

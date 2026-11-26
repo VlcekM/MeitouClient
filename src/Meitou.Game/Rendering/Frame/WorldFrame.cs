@@ -623,10 +623,10 @@ static partial class WorldFrame
     /// <summary>
     /// Sun shadows (Off / Faithful cascades / Meitou cascades / Traced / Traced near, cascades far), ambient occlusion (Off / SSAO / GTAO) and
     /// global illumination (Off / Probes / Probes + hybrid) as choices: each reads and writes the Faithful / Meitou switches and the shadow distance
-    /// it stands for, so a settings file of the switches still loads. Traced needs the indirect light (the rays use its scene), so choosing it turns
-    /// the GI on, and the GI off leaves the cascades.
+    /// it stands for, so a settings file of the switches still loads. Both settings panels have them (each where it has the switches). Traced needs
+    /// the indirect light (the rays use its scene), so choosing it turns the GI on, and the GI off leaves the cascades.
     /// </summary>
-    static void AddChoiceSliders(List<Slider> sliders, List<Toggle> toggles, WorldGpu g)
+    internal static void AddChoiceSliders(List<Slider> sliders, List<Toggle> toggles, WorldGpu g)
     {
         if (sliders.FirstOrDefault(s => s.Label == ShadowDistanceSlider) is { } distance && g.Shadow is { } shadow
             && ChoiceToggle(toggles, "Shadows") is not null)
@@ -1147,8 +1147,7 @@ static partial class WorldFrame
         bool tessellation = g.Sky.Gpu.HasTessellation;
         var toggles = switches?
             .Where(e => e.Id != "displace" || tessellation)
-            .Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful, Remaster: true,
-                OnOff: e.Faithful is "off" or "none", Optional: e.Optional))
+            .Select(SwitchToggle)
             .ToList() ?? [];
 
         if (g.Post is { } post) AddPostToggles(toggles, post);
@@ -1179,6 +1178,25 @@ static partial class WorldFrame
     }
 
     /// <summary>
+    /// A Faithful / Meitou switch as its checkbox (ticked: Meitou), as both settings panels show it.
+    /// </summary>
+    internal static Toggle SwitchToggle(Enhancement e) =>
+        new(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful, Remaster: true,
+            OnOff: e.Faithful is "off" or "none", Optional: e.Optional);
+
+    /// <summary>
+    /// The hybrid GI's parts (<c>--gi-hybrid</c>), plain on / off rows of <paramref name="options"/>; they act while the Hybrid GI choice is on. Both
+    /// settings panels show them.
+    /// </summary>
+    internal static IEnumerable<Toggle> GiHybridToggles(PostOptions options) =>
+    [
+        new(GiRelocateSwitch, () => options.GiRelocate, v => options.GiRelocate = v),
+        new(GiCloudShadowsSwitch, () => options.GiCloudShadows, v => options.GiCloudShadows = v),
+        new(GiCacheSwitch, () => options.GiCache, v => options.GiCache = v),
+        new(GiRaysSwitch, () => options.GiMoreRays, v => options.GiMoreRays = v),
+    ];
+
+    /// <summary>
     /// The post chain's switches: bloom, the camera effects, the hybrid GI's parts and the traced sun shadows' grass.
     /// </summary>
     static void AddPostToggles(List<Toggle> toggles, PostProcess post)
@@ -1187,11 +1205,7 @@ static partial class WorldFrame
         toggles.Add(new Toggle(CameraEffectsSwitch, () => post.Options.CameraEffectsEverywhere, v => post.Options.CameraEffectsEverywhere = v,
             Remaster: true, OnOff: true, Optional: true));
 
-        // The hybrid GI's parts (--gi-hybrid), plain on / off rows; they act while the Hybrid GI choice is on.
-        toggles.Add(new Toggle(GiRelocateSwitch, () => post.Options.GiRelocate, v => post.Options.GiRelocate = v));
-        toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
-        toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
-        toggles.Add(new Toggle(GiRaysSwitch, () => post.Options.GiMoreRays, v => post.Options.GiMoreRays = v));
+        toggles.AddRange(GiHybridToggles(post.Options));
         toggles.Add(new Toggle(GiCharactersSwitch, () => post.Options.CharacterOcclusion, v => post.Options.CharacterOcclusion = v));
 
         // The traced sun shadows' grass, a plain on / off row, and their far cascades (the sun shadows' choice); they act while the sun is traced.
@@ -1202,7 +1216,7 @@ static partial class WorldFrame
     /// <summary>
     /// The Advanced materials' parts (<see cref="WorldOptions.Chars2Parts"/>), plain on / off rows; they act while it is on.
     /// </summary>
-    static void AddMaterialToggles(List<Toggle> toggles, WorldGpu g, WorldOptions materials)
+    internal static void AddMaterialToggles(List<Toggle> toggles, WorldGpu g, WorldOptions materials)
     {
         var parts = new[]
         {
@@ -1305,7 +1319,7 @@ static partial class WorldFrame
         gpu.Terrain.Activate();
         var post = gpu.PostChain ?? throw new InvalidOperationException("the sky frame needs the post-processing chain");
         post.GiResolve = 0;
-        if (gpu.Post is { } vulkanPost) vulkanPost.SsrSurfaces = false;
+        post.SsrSurfaces = false;
         post.Begin(width, height);
         if (post is PostProcess { Unallocated: true }) return;
         float aspect = width / (float)Math.Max(height, 1);
@@ -1466,7 +1480,7 @@ static partial class WorldFrame
             : (ShadowPass.LandmarkCasters?)null;
         shadow.CameraFlying = gpu.CameraFlying;
         shadow.Traced = gpu.Traced;   // the rays take the sun, characters included (Gi.TracedCharacters)
-        shadow.FarCascades = gpu.Post is { Options.TracedFarCascades: true };   // ... as far as the handoff, the cascades past it
+        shadow.FarCascades = gpu.PostChain is { Options.TracedFarCascades: true };   // ... as far as the handoff, the cascades past it
         shadow.Render(view, light.SunDirection, casters.Draw, sunHeight, landmarks, casters.Prepare);
         shadow.CasterStats = casters.Stats();
     }

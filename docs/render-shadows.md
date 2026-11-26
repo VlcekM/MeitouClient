@@ -82,7 +82,7 @@ ground's relief self-shadow stay, and the probes' sun term keeps its own rays (t
 `TracedSunPass`, `TracedSunShaders`, `TracedGrass`, `TracedCharacters`, `PostProcess.TracedSun`, `kenshiLight`.
 
 Runs when the `gi` scene and the GI resolve run, on the Meitou shadows, with ray queries and storage for RGBA16F (`WorldFrame.BeginFrame`); else the frame is the cascades'.
-Metal: never. `--debug-shadows 4` draws over the scene: blue where the cascades light the sun, green where the rays let it through, red where they block it, dim where no sun
+Metal: the same passes ([render-gi](render-gi.md#metal)). `--debug-shadows 4` draws over the scene: blue where the cascades light the sun, green where the rays let it through, red where they block it, dim where no sun
 falls; with it the log prints every 120th frame whether the frame traces and why (`LogTraced`). **Observed** (siwa-test6 save, 08:40): traced over every lit surface of the view; against the cascades its mean change is 0.17/255 there, a close-up whose first cascade is already fine.
 
 **Frame.** `kenshiLight` leaves the sun out of the colour of every lit surface but impostors (`atmoReceiver` -1: the quad is not the surface), at every depth

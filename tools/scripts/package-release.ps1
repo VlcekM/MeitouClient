@@ -4,7 +4,7 @@
 # NVIDIA's DLSS model and NGX client library and our build of AMD's FidelityFX library, their licences in licenses/; they come from NVIDIA's and AMD's
 # official GitHub repositories (cached in -Cache; the FidelityFX source is built by build-ffx-linux.sh) and none of them is in the repository. Linux and macOS zips are made on a Unix machine with zip(1), which stores the execute
 # bits: the Linux zip on Linux (build-ngx-shim.sh links with GNU ld), macOS zips on a Mac, which ad-hoc signs the binaries (Apple Silicon
-# refuses unsigned code).
+# refuses unsigned code). In the macOS zips everything but the readme and the licences is in the game's app bundle, MeitouClient.app/Contents/MacOS.
 #   pwsh -File tools/scripts/package-release.ps1 -Version 0.1.0 [-Rid win-x64|linux-x64|osx-x64|osx-arm64] [-LegacyMac] [-Output out] [-Cache C:\Temp\release-cache]
 # (PowerShell 7: Windows PowerShell 5.1 writes the zip with backslashes in its paths, which some unzippers reject.)
 param(
@@ -47,8 +47,6 @@ $projects = @("tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meito
 if ($LegacyMac) {
     bash (Join-Path $PSScriptRoot "build-native-macos.sh") $Rid
     if ($LASTEXITCODE -ne 0) { throw "macOS native libraries build failed" }
-
-    Copy-Item (Join-Path $root "macos-runtime/$Rid/LICENSE-*.txt") $stage
 }
 foreach ($project in $projects) {
     dotnet publish (Join-Path $root $project) -c Release -r $Rid --self-contained true `
@@ -62,6 +60,39 @@ Get-ChildItem $stage -Recurse -Include *.dbg, *.dwarf, *.dSYM | Remove-Item -Rec
 # for every runtime, so the host's own build writes it: the staged exe may be for another one.
 dotnet run --project (Join-Path $root "src/Meitou.Game/Meitou.Game.csproj") -c Release -p:MeitouLegacyMac=$legacy -- --settings-schema (Join-Path (Resolve-Path $stage) "settings-schema.json")
 if ($LASTEXITCODE -ne 0) { throw "writing settings-schema.json failed" }
+if (-not (Test-Path (Join-Path $stage "settings-schema.json"))) { throw "settings-schema.json missing from $stage" }
+foreach ($program in $game, "meitou-viewer", "meitou-tools") {
+    if (-not (Test-Path (Join-Path $stage "$program$exe"))) { throw "$program$exe missing from $stage" }
+}
+
+# The executables (and on macOS the libraries) runnable as unpacked: execute bits, and ad-hoc signatures (no Apple identity) that are enough for
+# Apple Silicon to run the code; Gatekeeper still flags browser downloads. Intel dylibs stay as shipped (Intel Macs run unsigned code): Silk.NET's
+# x64 shaderc and spirv-cross have no header padding, so the signature's load command overwrote the start of __text and the game crashed on
+# launch (#461).
+if (-not $windows) {
+    $programs = @($game, "meitou-viewer", "meitou-tools", "createdump") | ForEach-Object { Join-Path $stage $_ } | Where-Object { Test-Path $_ }
+    chmod +x @programs
+    if ($LASTEXITCODE -ne 0) { throw "chmod failed" }
+}
+if ($mac) {
+    $dylibs = if ($Rid -eq "osx-arm64") { @(Get-ChildItem $stage -Filter *.dylib | ForEach-Object FullName) } else { @() }
+    foreach ($file in @($programs) + $dylibs) {
+        codesign --force --sign - $file
+        if ($LASTEXITCODE -ne 0) { throw "codesign $file failed" }
+    }
+}
+
+# macOS: all of it into the game's app bundle, which Game Mode needs (docs/macos-port.md "App bundle"), signed above while still loose: codesign
+# signs a bundle's main executable as the whole bundle, and refuses the .NET .dll files in Contents/MacOS.
+if ($mac) {
+    $published = @(Get-ChildItem $stage)
+    $app = Join-Path $stage "$game.app"
+    $minimum = if ($LegacyMac) { "13.0" } else { "14.0" }
+    bash (Join-Path $PSScriptRoot "macos-bundle.sh") $app $Version $minimum
+    if ($LASTEXITCODE -ne 0) { throw "macos-bundle.sh failed" }
+    $published | Move-Item -Destination (Join-Path $app "Contents/MacOS")
+}
+if ($LegacyMac) { Copy-Item (Join-Path $root "macos-runtime/$Rid/LICENSE-*.txt") $stage }
 
 function Get-Archive([string] $url, [string] $name = [IO.Path]::GetFileName($url)) {
     $file = Join-Path $Cache $name
@@ -201,6 +232,10 @@ amd_fidelityfx_vk.dll is AMD's, under the MIT licence in licenses\AMD. Other com
         "under the licence in licenses/NVIDIA, not the GPL.`n" +
         "libamd_fidelityfx_vk.so is an unofficial Linux build of AMD's FidelityFX SDK (not made or supported by AMD), under the MIT licence in licenses/AMD."
     } else { "" }
+    $bundleNote = if ($mac) {
+        "`nAll three are in the game's app bundle: run them from $game.app/Contents/MacOS (cd $game.app/Contents/MacOS first)." +
+        "`nmacOS turns Game Mode on while the game is in full screen."
+    } else { "" }
     $readme = @"
 $title
 $('=' * $title.Length)
@@ -213,7 +248,7 @@ Three programs
 $($game.PadRight(16))The game: the world with the Kenshi camera.
 meitou-viewer   The world viewer: a free camera over the world, with the Faithful / Meitou switches (F1-F8), frame statistics (F11),
                 the profiler (F12) and every renderer option (./meitou-viewer --world --help lists them).
-meitou-tools    For modders: ./meitou-tools mod-check <save folder> checks code mods for determinism (./meitou-tools alone lists its commands).
+meitou-tools    For modders: ./meitou-tools mod-check <save folder> checks code mods for determinism (./meitou-tools alone lists its commands).$bundleNote
 
 Start
 -----
@@ -234,27 +269,9 @@ Set-Content -Path (Join-Path $stage "README.txt") -Value $readme -Encoding UTF8
 
 $zipPath = Join-Path $Output "$name.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-if (-not (Test-Path (Join-Path $stage "settings-schema.json"))) { throw "settings-schema.json missing from $stage" }
-foreach ($program in $game, "meitou-viewer", "meitou-tools") {
-    if (-not (Test-Path (Join-Path $stage "$program$exe"))) { throw "$program$exe missing from $stage" }
-}
 if ($windows) {
     [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $stage), (Join-Path (Resolve-Path $Output) "$name.zip"), [IO.Compression.CompressionLevel]::Optimal, $true)
 } else {
-    $programs = @($game, "meitou-viewer", "meitou-tools", "createdump") | ForEach-Object { Join-Path $stage $_ } | Where-Object { Test-Path $_ }
-    chmod +x @programs
-    if ($LASTEXITCODE -ne 0) { throw "chmod failed" }
-    if ($mac) {
-        # Ad-hoc signatures (no Apple identity): enough for Apple Silicon to run the code; Gatekeeper still flags browser downloads.
-        # Intel dylibs stay as shipped (Intel Macs run unsigned code): Silk.NET's x64 shaderc and spirv-cross have no header padding, so the
-        # signature's load command overwrote the start of __text and the game crashed on launch (#461).
-        $dylibs = if ($Rid -eq "osx-arm64") { @(Get-ChildItem $stage -Filter *.dylib | ForEach-Object FullName) } else { @() }
-        $code = @($programs) + $dylibs
-        foreach ($file in $code) {
-            codesign --force --sign - $file
-            if ($LASTEXITCODE -ne 0) { throw "codesign $file failed" }
-        }
-    }
     # zip(1) keeps the Unix modes; one top folder, as the launcher expects (docs/launcher.md).
     Push-Location $Output
     try {

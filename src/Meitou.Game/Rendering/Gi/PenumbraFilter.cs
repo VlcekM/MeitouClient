@@ -58,7 +58,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     /// <summary>
     /// The filter's kernel, one pass along rows or columns (<c>size.w</c>) over an area or a list's cells.
     /// </summary>
-    static readonly string Source = SourceFor(1, false);
+    internal static readonly string Source = SourceFor(1, false);
 
     /// <summary>
     /// The kernel over the cells of a list of <see cref="LampShadowPass"/> (<see cref="LampShadowShaders.Classify"/>), each in its entry's slice of
@@ -258,7 +258,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     /// filter asked for a tap's plane at every tap of every pixel, five depths and five unprojections each: most of its time, in the traced sun's
     /// pass and in each lamp's.
     /// </summary>
-    const string PlanesSource = """
+    internal const string PlanesSource = """
         #version 460
         layout(local_size_x = 8, local_size_y = 8) in;
         layout(set = 0, binding = 0) uniform sampler2D uDepth;

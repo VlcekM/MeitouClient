@@ -6323,3 +6323,15 @@ msgstr "Nativa"
 #. machine-translated
 msgid "Native AA"
 msgstr "AA nativo"
+
+#. machine-translated
+msgid "• Full screen at 1920×1080 render resolution, Metal, VSync & frame limit off, HDR off"
+msgstr "• Tela cheia com resolução de renderização 1920×1080, Metal, VSync e limite de FPS desligados, HDR desligado"
+
+#. machine-translated
+msgid "• Chosen quality tier (Meitou look), no upscaler or anti-aliasing"
+msgstr "• Nível de qualidade escolhido (visual Meitou), sem upscaler nem antisserrilhamento"
+
+#. machine-translated
+msgid "• No ray tracing: Low, Medium and High only"
+msgstr "• Sem ray tracing: apenas Baixo, Médio e Alto"

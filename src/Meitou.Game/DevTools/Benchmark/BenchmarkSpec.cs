@@ -82,7 +82,28 @@ static class BenchmarkSpec
         + "finite values only";
 
     /// <summary>
-    /// The settings every run has whatever the scenario and tier (GameOptions, WorldOptions.ApplyBenchmarkTier, QualityTiers.ApplyBenchmarkTier).
+    /// The Vulkan renderer's name as <c>--renderer</c> takes it.
+    /// </summary>
+    public const string Vulkan = "vulkan";
+
+    /// <summary>
+    /// The Metal renderer's name as <c>--renderer</c> takes it.
+    /// </summary>
+    public const string Metal = "metal";
+
+    /// <summary>
+    /// The renderers this build runs the benchmark on (the list's <c>renderers</c>): Metal only in a macOS build.
+    /// </summary>
+    public static IReadOnlyList<string> Renderers { get; } =
+#if MEITOU_METAL
+        [Vulkan, Metal];
+#else
+        [Vulkan];
+#endif
+
+    /// <summary>
+    /// The settings every Vulkan run has whatever the scenario and tier (GameOptions, WorldOptions.ApplyBenchmarkTier,
+    /// QualityTiers.ApplyBenchmarkTier).
     /// </summary>
     static readonly string[] FixedSettings =
     [
@@ -94,6 +115,27 @@ static class BenchmarkSpec
         "look Meitou",
         "anti-aliasing: Low its own at its render scale; the other tiers TAA for an upscaler, render scale 1",
         "ray queries and indirect light only for a tier with traced switches",
+        "texture quality: the tier's table value, before the device",
+        "scene-npc " + GameOptions.DefaultSceneNpc,
+        "the whole script; settings neither read nor written; no autosave",
+    ];
+
+    /// <summary>
+    /// The settings every Metal run has whatever the scenario and tier (GameOptions, MetalBenchmark, QualityTiers.ApplyBenchmarkTier): a
+    /// full-screen Space (a window is held to the display's refresh rate), the scene and the interface 1920x1080 pixels on any display, and the
+    /// Metal path has no upscaler or anti-aliasing here, no ray queries and no indirect light.
+    /// </summary>
+    static readonly string[] MetalFixedSettings =
+    [
+        string.Create(CultureInfo.InvariantCulture,
+            $"native full screen, scene and interface {WorldOptions.BenchmarkBaselineSize.Width}x{WorldOptions.BenchmarkBaselineSize.Height} pixels"),
+        "the picture stretched to the screen with its aspect ratio kept, whatever the screen's size",
+        "frame limit off, vsync off, HDR off",
+        "renderer metal",
+        "no mods: base data and core mods only, no code mods",
+        "look Meitou",
+        "no upscaler and no anti-aliasing at every tier",
+        "no ray queries and no indirect light; tiers with traced switches are refused",
         "texture quality: the tier's table value, before the device",
         "scene-npc " + GameOptions.DefaultSceneNpc,
         "the whole script; settings neither read nor written; no autosave",
@@ -155,6 +197,18 @@ static class BenchmarkSpec
     }
 
     /// <summary>
+    /// <c>--benchmark</c> at a tier that needs ray queries on a device without them (on Metal: before the M3): says so on stderr, true when the
+    /// run must not start (exit <see cref="NoRayQueriesExit"/>).
+    /// </summary>
+    public static bool LacksRayQueries(GameOptions game, bool hasRayQuery, string deviceName)
+    {
+        if (game.Benchmark is not { } tier || !QualityTiers.NeedsRayQueries(tier) || hasRayQuery) return false;
+
+        Console.Error.WriteLine($"--benchmark {TierName(tier)} needs ray queries, which {deviceName} lacks");
+        return true;
+    }
+
+    /// <summary>
     /// Tier <paramref name="tier"/>'s name in result.json and on the command line.
     /// </summary>
     public static string TierName(int tier) => QualityTiers.PresetNames[tier].ToLowerInvariant();
@@ -173,9 +227,15 @@ static class BenchmarkSpec
     #region Fingerprint and list
 
     /// <summary>
-    /// <paramref name="scenario"/>'s fingerprint: SHA-256 hex of <see cref="CanonicalText"/>.
+    /// <paramref name="scenario"/>'s fingerprint on <paramref name="renderer"/>: SHA-256 hex of <see cref="CanonicalText"/>. A Vulkan
+    /// fingerprint is what it was before Metal ran the benchmark.
     /// </summary>
-    public static string Fingerprint(BenchmarkScenario scenario) => Sha256Hex(CanonicalText(scenario));
+    public static string Fingerprint(BenchmarkScenario scenario, string renderer) => Sha256Hex(CanonicalText(scenario, renderer));
+
+    /// <summary>
+    /// <paramref name="renderer"/>'s fixed settings.
+    /// </summary>
+    static string[] FixedSettingsOf(string renderer) => renderer == Metal ? MetalFixedSettings : FixedSettings;
 
     /// <summary>
     /// The applied hash: SHA-256 hex of <paramref name="settings"/> (key and value) sorted by key, one <c>key=value\n</c> each.
@@ -189,8 +249,8 @@ static class BenchmarkSpec
     public static string Sha256Hex(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
     /// <summary>
-    /// <c>--benchmark-list</c>: writes the version and the scenarios (id, save, save hash, groups, measured seconds) to <paramref name="path"/>;
-    /// the exit code (0; 1 when the file cannot be written).
+    /// <c>--benchmark-list</c>: writes the version, the renderers and the scenarios (id, save, save hash, groups, measured seconds) to
+    /// <paramref name="path"/>; the exit code (0; 1 when the file cannot be written).
     /// </summary>
     public static int WriteList(string path)
     {
@@ -207,7 +267,8 @@ static class BenchmarkSpec
             });
         }
 
-        var list = new JsonObject { ["version"] = Version, ["scenarios"] = scenarios };
+        var renderers = new JsonArray([.. Renderers.Select(r => (JsonNode)r)]);
+        var list = new JsonObject { ["version"] = Version, ["renderers"] = renderers, ["scenarios"] = scenarios };
         try
         {
             File.WriteAllText(path, list.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
@@ -221,16 +282,17 @@ static class BenchmarkSpec
     }
 
     /// <summary>
-    /// <paramref name="scenario"/>'s static spec as one text, lines ending in \n: version, metrics, the scenario (start, save, segments with a
-    /// world-set length by name only, groups), fixed settings, the benchmark's user settings but the neutral ones and each tier's table.
+    /// <paramref name="scenario"/>'s static spec on <paramref name="renderer"/> as one text, lines ending in \n: version, metrics, the scenario
+    /// (start, save, segments with a world-set length by name only, groups), fixed settings, the benchmark's user settings but the neutral ones and
+    /// each tier's table.
     /// </summary>
-    internal static string CanonicalText(BenchmarkScenario scenario)
+    internal static string CanonicalText(BenchmarkScenario scenario, string renderer)
     {
         var sb = new StringBuilder();
         Line(sb, $"meitou benchmark {Version}");
         Line(sb, "metrics " + Metrics);
         AppendScenario(sb, scenario);
-        foreach (var setting in FixedSettings) Line(sb, "fixed " + setting);
+        foreach (var setting in FixedSettingsOf(renderer)) Line(sb, "fixed " + setting);
         Line(sb, "config " + UserConfig.BenchmarkText());
         AppendTierTables(sb);
         return sb.ToString();

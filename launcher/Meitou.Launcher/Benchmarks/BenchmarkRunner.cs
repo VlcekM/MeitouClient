@@ -106,7 +106,8 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
         var (exe, listed) = await PrepareBuildAsync(job, view, ct);
         var scenarios = Runnable(job, listed, view);
         if (scenarios.Any(scenario => scenario.Save is not null)) await PrepareSaveAsync(view, ct);
-        var hardware = await ProbeAsync(job, exe, view, ct);
+        string? renderer = job.Platform.Renderer(job.Release.Version);
+        var hardware = await ProbeAsync(job, exe, renderer, view, ct);
         bool rayQueries = hardware["rayQueries"] is JsonValue value && value.TryGetValue(out bool has) && has;
         int count = scenarios.Count * job.Tiers.Count * BenchmarkTiers.RunsPerTier, index = 0;
         foreach (var scenario in scenarios)
@@ -116,7 +117,7 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
                 if (BenchmarkTiers.NeedsRayQueries(tier) && !rayQueries)
                     view.Notice(Tr("{1} skipped: it needs ray tracing, which this graphics card does not have.", BenchmarkTiers.Label(tier)));
                 else
-                    await RunSessionAsync(job, exe, scenario, tier, view, index, count, ct);
+                    await RunSessionAsync(job, exe, renderer, scenario, tier, view, index, count, ct);
                 index += BenchmarkTiers.RunsPerTier;
                 view.SessionDone();
             }
@@ -164,6 +165,7 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
     async Task<string> InstallAsync(BenchmarkJob job, IBenchmarkView view, CancellationToken ct)
     {
         var (release, platform) = (job.Release, job.Platform);
+        if (release.IsLocal) return CopyLocal(release, platform);
         if (platform.FindGame(release.Version) is { } installed) return installed;
 
         var asset = release.GameAsset(platform.Channel)
@@ -172,6 +174,21 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
         var progress = new Progress<(long Done, long Total)>(p => view.Download(p.Done, p.Total));
         string folder = platform.BuildFolder(release.Version);
         await installer.InstallAsync(asset, BenchmarkFolders.Downloads, folder, platform.Executables, progress, ct);
+        return platform.FindGame(release.Version) ?? throw new BenchmarkStoppedException(Tr("{1} has no game in its download.", release.Title));
+    }
+
+    /// <summary>
+    /// A local build (made from source, in the Play install folder) copied anew into the benchmark's builds folder each time, so it is the build
+    /// as it is now and what the benchmark writes beside it (the scenario list) stays out of the install.
+    /// </summary>
+    static string CopyLocal(Release release, BenchmarkPlatform platform)
+    {
+        string source = Releases.VersionDirectory(release.Version);
+        if (Releases.FindGame(source) is null) throw new BenchmarkStoppedException(Tr("Meitou {1} is not installed any more.", release.Version));
+
+        string folder = platform.BuildFolder(release.Version);
+        if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        BenchmarkSave.CopyDirectory(source, folder);
         return platform.FindGame(release.Version) ?? throw new BenchmarkStoppedException(Tr("{1} has no game in its download.", release.Title));
     }
 
@@ -185,7 +202,7 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
 
         view.Step(Tr("Asking the build for its benchmarks..."));
         string file = BenchmarkScenario.ListPath(folder);
-        var start = Start(job, exe, ["--benchmark-list", job.Platform.GamePath(file)]);
+        var start = Start(job, exe, ["--benchmark-list", job.Platform.GamePath(file)], renderer: null);
         int code = await RunGameAsync(start, ProbeLimit, ct);
         if (code == 0 && BenchmarkScenario.ReadList(folder) is { } listed) return listed;
 
@@ -236,13 +253,15 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
     /// <summary>
     /// The hardware record <c>--benchmark-probe</c> writes, handed to the view.
     /// </summary>
-    async Task<JsonObject> ProbeAsync(BenchmarkJob job, string exe, IBenchmarkView view, CancellationToken ct)
+    async Task<JsonObject> ProbeAsync(BenchmarkJob job, string exe, string? renderer, IBenchmarkView view, CancellationToken ct)
     {
         view.Step(Tr("Probing the hardware..."));
         string file = Path.Combine(BenchmarkFolders.Root, "hardware.json");
         Directory.CreateDirectory(BenchmarkFolders.Root);
         File.Delete(file);
-        var start = Start(job, exe, ["--benchmark-probe", job.Platform.GamePath(file)]);
+        List<string> arguments = ["--benchmark-probe", job.Platform.GamePath(file)];
+        if (renderer == "metal") arguments.AddRange(["--renderer", renderer]);
+        var start = Start(job, exe, arguments, renderer);
         int code = await RunGameAsync(start, ProbeLimit, ct);
         if (code != 0 || ReadObject(file) is not { } hardware)
         {
@@ -275,8 +294,8 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
     /// <summary>
     /// The runs of one session into its folder (emptied first); stops the whole Start on a failed run.
     /// </summary>
-    async Task RunSessionAsync(BenchmarkJob job, string exe, BenchmarkScenario scenario, string tier, IBenchmarkView view, int index, int count,
-        CancellationToken ct)
+    async Task RunSessionAsync(BenchmarkJob job, string exe, string? renderer, BenchmarkScenario scenario, string tier, IBenchmarkView view,
+        int index, int count, CancellationToken ct)
     {
         string session = BenchmarkFolders.Session(job.Release.Version, job.Platform.Wire, scenario.Id, tier);
         if (Directory.Exists(session)) Directory.Delete(session, recursive: true);
@@ -291,7 +310,8 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
             }
 
             view.RunStarted(scenario, tier, run, index + run, count);
-            int code = await RunGameAsync(Start(job, exe, RunArguments(job.Platform, scenario, tier, output)), RunLimit, ct);
+            var arguments = RunArguments(job.Platform, scenario, tier, output, renderer);
+            int code = await RunGameAsync(Start(job, exe, arguments, renderer), RunLimit, ct);
             if (Skipped(code, scenario, tier, view)) return;
             CheckRun(code, output, exe, tier, run);
         }
@@ -313,11 +333,13 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
     }
 
     /// <summary>
-    /// The game's arguments for one run (paths as the game sees them); <c>--load</c> only for a scenario with a save.
+    /// The game's arguments for one run (paths as the game sees them); <c>--load</c> only for a scenario with a save, <c>--renderer</c> where
+    /// the platform names one.
     /// </summary>
-    static List<string> RunArguments(BenchmarkPlatform platform, BenchmarkScenario scenario, string tier, string output)
+    static List<string> RunArguments(BenchmarkPlatform platform, BenchmarkScenario scenario, string tier, string output, string? renderer)
     {
         List<string> arguments = ["--benchmark", tier, "--benchmark-scenario", scenario.Id, "--benchmark-out", platform.GamePath(output)];
+        if (renderer is not null) arguments.AddRange(["--renderer", renderer]);
         if (scenario.Save is not null) arguments.AddRange(["--load", platform.GamePath(BenchmarkSave.Copy)]);
         return arguments;
     }
@@ -341,10 +363,10 @@ sealed class BenchmarkRunner(ReleaseInstaller installer, BenchmarkSave save)
     }
 
     /// <summary>
-    /// The start of the game for <paramref name="job"/>'s platform; stops the Start when it cannot start here.
+    /// The start of the game for <paramref name="job"/>'s platform on <paramref name="renderer"/>; stops the Start when it cannot start here.
     /// </summary>
-    static ProcessStartInfo Start(BenchmarkJob job, string exe, IEnumerable<string> arguments) =>
-        job.Platform.Start(exe, job.Kenshi, arguments)
+    static ProcessStartInfo Start(BenchmarkJob job, string exe, IEnumerable<string> arguments, string? renderer) =>
+        job.Platform.Start(exe, job.Kenshi, arguments, renderer)
         ?? throw new BenchmarkStoppedException(
             Tr("The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then try again."));
 

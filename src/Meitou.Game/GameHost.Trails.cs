@@ -47,6 +47,11 @@ sealed partial class GameHost
     IGpuContext? _trailContext;
 
     /// <summary>
+    /// The GPU the trail renderer is made on (either backend's setup, once the GPU is up).
+    /// </summary>
+    internal void SetUpTrails(IGpuContext context) => _trailContext = context;
+
+    /// <summary>
     /// How soft each ground layer is, made on the first mark that needs it.
     /// </summary>
     GroundSoftness? _groundSoftness;
@@ -257,7 +262,7 @@ sealed partial class GameHost
     /// Once a frame: the posed bodies near what the camera looks at that reach into the water, for the <c>contactfoam</c> switch's waves
     /// (docs/render-water.md "Wakes and ripples"); the field's window follows the camera's target.
     /// </summary>
-    void UpdateWakes()
+    internal void UpdateWakes()
     {
         if (!WaterContact.Enabled || Gpu.Water?.Ripples is not { } ripples || Gpu.Characters is not { } characters) return;
 

@@ -1600,10 +1600,10 @@ public sealed unsafe class WaterRenderer : IDisposable
     Func<Vector2, float, IReadOnlyList<(Vector2 A, Vector2 B)>>? _walls;
 
     /// <summary>
-    /// The <c>contactfoam</c> switch's interactive waves, made the first time they are asked for (Vulkan, Meitou water); null otherwise.
+    /// The <c>contactfoam</c> switch's interactive waves, made the first time they are asked for (Meitou water); null otherwise.
     /// </summary>
     public WaterRipples? Ripples =>
-        WaterContact.Enabled && Meitou && _meitou is not null && Gpu is GpuContext
+        WaterContact.Enabled && Meitou && _meitou is not null
             ? _ripples ??= new WaterRipples(Gpu) { Walls = _walls }
             : null;
 
@@ -1624,10 +1624,11 @@ public sealed unsafe class WaterRenderer : IDisposable
     }
 
     /// <summary>
-    /// The Meitou program to draw with: with the contact foam (Vulkan only: it needs the scene depth), made the first time it is asked for.
+    /// The Meitou program to draw with: with the contact foam (it reads the scene depth, <see cref="CaptureScene"/>), made the first time it is
+    /// asked for.
     /// </summary>
     WaterProgram MeitouProgram() =>
-        !WaterContact.Enabled || Gpu is not GpuContext
+        !WaterContact.Enabled
             ? _meitou!
             : _meitouContact ??= MeitouContactProgram();
 
@@ -2293,7 +2294,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (!colour && !depth) return;
         var cmd = Gpu.BeginNative("water scene copy");
         if (colour) CopyRefraction(cmd, sceneColour);
-        if (depth && Gpu is GpuContext vulkan) CopyDepth(vulkan, cmd, sceneDepth!, near, far);
+        if (depth) CopyDepth(cmd, sceneDepth!, near, far);
         Gpu.EndNative(cmd);
     }
 
@@ -2317,17 +2318,32 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <summary>
     /// The scene's depth copied into the water's own (made again when the size or format changed), with the camera's
-    /// <paramref name="near"/> and <paramref name="far"/> planes it was drawn with.
+    /// <paramref name="near"/> and <paramref name="far"/> planes it was drawn with: Vulkan's image copy, another backend's blit (Metal's copies a
+    /// depth of the same size and format).
     /// </summary>
-    void CopyDepth(GpuContext vulkan, IGpuCommandList cmd, GpuTexture sceneDepth, float near, float far)
+    void CopyDepth(IGpuCommandList cmd, GpuTexture sceneDepth, float near, float far)
     {
         var d = sceneDepth.Desc;
         if (_sceneDepthCopy is not { } c || c.Desc.Width != d.Width || c.Desc.Height != d.Height || c.Desc.Format != d.Format)
         {
             _sceneDepthCopy?.Dispose();
-            _sceneDepthCopy = vulkan.CreateTexture(new TextureDesc(d.Format, d.Width, d.Height,
-                Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget, Name: "water scene depth"), ((CommandList)cmd).Handle);
+            var desc = new TextureDesc(d.Format, d.Width, d.Height, Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.DepthTarget,
+                Name: "water scene depth");
+            _sceneDepthCopy = Gpu is GpuContext vk ? vk.CreateTexture(desc, ((CommandList)cmd).Handle) : Gpu.CreateTexture(desc);
         }
+
+        if (Gpu is GpuContext vulkan) CopyDepthVulkan(vulkan, cmd, sceneDepth);
+        else cmd.Blit(sceneDepth, _sceneDepthCopy!, TextureMinFilter.Nearest);
+        (_sceneDepthFrame, _sceneDepthPlanes) = (Gpu.Frame.Number, new Vector2(near, far));
+    }
+
+    /// <summary>
+    /// Vulkan's depth copy into <see cref="_sceneDepthCopy"/>.
+    /// </summary>
+    void CopyDepthVulkan(GpuContext vulkan, IGpuCommandList cmd, GpuTexture sceneDepth)
+    {
+        var d = sceneDepth.Desc;
+
         // Same size and format: a copy (blitting into a depth format is not guaranteed, BLIT_DST), as ShadowPass.CaptureDepth.
         var region = new Silk.NET.Vulkan.ImageCopy
         {
@@ -2337,7 +2353,6 @@ public sealed unsafe class WaterRenderer : IDisposable
         };
         vulkan.Device.Vk.CmdCopyImage(((CommandList)cmd).Handle, vulkan.Device.NativeImage(sceneDepth), Silk.NET.Vulkan.ImageLayout.General,
             vulkan.Device.NativeImage(_sceneDepthCopy!), Silk.NET.Vulkan.ImageLayout.General, 1, &region);
-        (_sceneDepthFrame, _sceneDepthPlanes) = (Gpu.Frame.Number, new Vector2(near, far));
     }
 
     /// <summary>
@@ -2355,13 +2370,12 @@ public sealed unsafe class WaterRenderer : IDisposable
         (float.IsNaN(NearestWater) || SliceCanTransmit(NearestWater, ClearDistance));
 
     /// <summary>
-    /// Whether the scene's water reads its depth (<see cref="CaptureScene"/>): Vulkan only (Metal keeps the terrain's height), and
-    /// only while water in it can be see-through: Meitou with <see cref="Refraction"/> on, as <see cref="NeedsRefraction"/>; Faithful nearer than
-    /// <see cref="FaithfulOpaqueDistance"/>. With <see cref="NearestWater"/> unknown (reflections off) it is copied whether or not water is in view.
+    /// Whether the scene's water reads its depth (<see cref="CaptureScene"/>): only while water in it can be see-through: Meitou with
+    /// <see cref="Refraction"/> on, as <see cref="NeedsRefraction"/>; Faithful nearer than <see cref="FaithfulOpaqueDistance"/>. With <see cref="NearestWater"/> unknown
+    /// (reflections off) it is copied whether or not water is in view.
     /// </summary>
     internal bool NeedsDepth(float near)
     {
-        if (Gpu is not GpuContext) return false;
         if (!Meitou) return near < FaithfulOpaqueDistance && (float.IsNaN(NearestWater) || NearestWater < FaithfulOpaqueDistance);
         // Without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy, unless the contact foam
         // reads the depth.

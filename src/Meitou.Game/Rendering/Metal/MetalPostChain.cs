@@ -201,9 +201,10 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// </summary>
     public bool InstantAdaptation { get; set; } = true;
     /// <summary>
-    /// The GI resolve divisor; unused (no GI resolve on Metal).
+    /// The GI resolve divisor of the render size (0: off, the lit fragments read the probes themselves). Set before <see cref="Begin"/>.
     /// </summary>
     public int GiResolve { get; set; }
+
     /// <summary>
     /// The sky's exposure band; cleared at each <see cref="Begin"/>.
     /// </summary>
@@ -277,7 +278,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         }
 
         // The scene targets are Metal's own depth and albedo (the GI resolve is off, but the lit programs always write albedo).
-        SceneTargets = PassTargets.Of(_sceneColour, _ctx.Depth, _ctx.Albedo);
+        SceneTargets = PassTargets.Of(_sceneColour, _ctx.Depth, _ctx.Albedo, EnsureTracedTerm(sceneWidth, sceneHeight));
 
         // The full-size particles draw after the GI resolve and were built without the albedo attachment on Metal.
         SceneTargetsForParticles = PassTargets.Of(_sceneColour, _ctx.Depth);
@@ -290,6 +291,9 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _ctx.LodBias = Temporal ? MathF.Log2(sceneWidth / (float)_displayWidth) - 0.5f : 0f;
         AutoExposure = null;
         WaterHeight = null;
+        _ctx.StoreSurface = GiResolve > 0 || SsrSurfaces;
+        _giResolved = false;
+        _reflected = false;
         CharactersDrawn = true;
         _haveScene = false;
     }
@@ -327,10 +331,354 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// </summary>
     public OcclusionView OcclusionFor(Vector3 eye) => default;
 
+    #region GI resolve
+
     /// <summary>
-    /// Nothing: Metal has no GI resolve.
+    /// The GI resolve's passes (made on first use) and whether it ran this frame.
     /// </summary>
-    public void RunGiResolve(bool early = false) { }
+    Gi.MetalGiResolve? _giResolve;
+
+    /// <summary>
+    /// See <see cref="_giResolve"/>.
+    /// </summary>
+    bool _giResolved;
+
+    /// <summary>
+    /// The probes the GI resolve's radiance cache traces with (null: no GI).
+    /// </summary>
+    internal Gi.MetalProbeGi? Probes { get; set; }
+
+    /// <summary>
+    /// Swaps the sky's ambient for the probes' light on the surfaces that wrote their surface (docs/render-gi.md "Resolve"), once a frame: after the
+    /// scene, or over the opaque scene before the water copies it (<paramref name="early"/>).
+    /// </summary>
+    public void RunGiResolve(bool early = false)
+    {
+        if (_giResolved || GiResolve <= 0 || _sceneColour is null || !_haveScene) return;
+
+        _giResolved = true;
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        var cache = Options.GiCaching ? RunGiCache(view) : null;
+        _giResolve.Run(_sceneColour, _ctx.Depth, _ctx.Albedo, view, GiResolve, Options.GiRelocating, cache);
+    }
+
+    /// <summary>
+    /// The radiance cache for this frame's resolve (the <c>gihybrid</c> switch's <c>cache</c> part): its gathered light, or null.
+    /// </summary>
+    GpuTexture? RunGiCache(in Gi.MetalGiResolve.View view)
+    {
+        if (Probes is not { } probes || _sceneColour is null) return null;
+
+        var cacheView = Gi.MetalGiResolve.CacheView(view, _sceneColour.Desc.Width, _sceneColour.Desc.Height, GiResolve);
+        return probes.Cache.Run(_ctx.Depth, _ctx.Albedo, cacheView, Options.GiRelocating, Options.GiCloudShadowing);
+    }
+
+    #endregion
+
+    #region Traced sun
+
+    /// <summary>
+    /// This frame's sun is traced (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the scene targets carry the sun term's target.
+    /// </summary>
+    public bool TracedSun { get; set; }
+
+    /// <summary>
+    /// <c>--debug-shadows 4</c>: the traced share and the rays' mask drawn over the scene (<see cref="Gi.TracedSunShaders.Debug"/>).
+    /// </summary>
+    public bool TracedDebug { get; set; }
+
+    /// <summary>
+    /// The sun term the lit fragments write while the sun is traced (RGBA32F: the alpha packs three levels, <see cref="Gi.MetalGiResolve"/>'s
+    /// shaders read it back), made on the first frame that wants it.
+    /// </summary>
+    GpuTexture? _tracedTerm;
+
+    /// <summary>
+    /// The traced sun's add pass and its samplers (made on first use).
+    /// </summary>
+    (Gi.MetalGiResolve.Pass Pass, SamplerSlot Term, SamplerSlot Mask)? _tracedAdd;
+
+    /// <summary>
+    /// The traced sun's debug view (<c>--debug-shadows 4</c>) and its samplers (made on first use).
+    /// </summary>
+    (Gi.MetalGiResolve.Pass Pass, SamplerSlot Term, SamplerSlot Mask)? _tracedDebug;
+
+    /// <summary>
+    /// The traced sun over the opaque scene (docs/render-shadows.md "Traced sun"): the rays and the penumbra filter over the scene's depth, surface
+    /// and sun term, then term x mask x the haze's multiplier added. <paramref name="sceneToEye"/>: NDC to the position relative to the eye.
+    /// </summary>
+    internal void RunTracedSun(Gi.MetalGiScene scene, Matrix4x4 sceneToEye, Vector3 toSun)
+    {
+        if (_tracedTerm is not { } term || _sceneColour is null || !TracedSun || GiResolve <= 0) return;
+
+        // The kernels compute NDC with row 0 at the bottom (Vulkan's targets); Metal's row 0 is the top: y turned round before the inverse.
+        var inverse = Matrix4x4.CreateScale(1, -1, 1) * sceneToEye;
+        int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        float pixelSlope = 2 * MathF.Tan(_fov * 0.5f) / height;
+        var sun = ((Gi.MetalProbeGi)Probes!).Sun;
+        sun.Run(scene, _ctx.Depth, _ctx.Albedo, term, inverse, _eye, toSun, pixelSlope);
+        if (sun.Filtered is not { } filtered) return;
+
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        var add = _tracedAdd ??= MakeTracedAdd(_giResolve);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        _giResolve.SetView(add.Pass, _ctx.Depth, _ctx.Albedo, view, width, height, 1);
+        add.Pass.P.Bind(add.Term, new SampledTexture(_giResolve.Point, term.View()));
+        add.Pass.P.Bind(add.Mask, new SampledTexture(_giResolve.Point, filtered.View()));
+        add.Pass.P.ApplyGlobals();
+        var cmd = (MetalCommandList)_ctx.BeginNative("traced sun add");
+        _giResolve.Fullscreen(cmd, add.Pass.P, _sceneColour, blend: true);
+        if (TracedDebug)
+        {
+            var dbg = _tracedDebug ??= MakeTracedDebug(_giResolve);
+            _giResolve.SetView(dbg.Pass, _ctx.Depth, _ctx.Albedo, view, width, height, 1);
+            dbg.Pass.P.Bind(dbg.Term, new SampledTexture(_giResolve.Point, term.View()));
+            dbg.Pass.P.Bind(dbg.Mask, new SampledTexture(_giResolve.Point, sun.Mask!.View()));
+            _giResolve.Fullscreen(cmd, dbg.Pass.P, _sceneColour, blend: false, load: true);
+        }
+        _ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The sun term's target at the scene's size, while the sun is traced and the resolve runs (else null).
+    /// </summary>
+    GpuTexture? EnsureTracedTerm(int width, int height)
+    {
+        if (!TracedSun || GiResolve <= 0) return null;
+        if (_tracedTerm is { } made && made.Desc.Width == width && made.Desc.Height == height) return made;
+
+        _tracedTerm?.Dispose();
+        _tracedTerm = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba32F, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled,
+            Name: "traced sun term"));
+        return _tracedTerm;
+    }
+
+    /// <summary>
+    /// The traced sun's add pass (<see cref="Gi.TracedSunShaders.Add"/>) and its samplers.
+    /// </summary>
+    static (Gi.MetalGiResolve.Pass, SamplerSlot, SamplerSlot) MakeTracedAdd(Gi.MetalGiResolve resolve)
+    {
+        var pass = resolve.Program(Rendering.Gi.TracedSunShaders.Add, "metal traced sun add");
+        return (pass, pass.P.Sampler("uTerm"), pass.P.Sampler("uMask"));
+    }
+
+    /// <summary>
+    /// The traced sun's debug view (<see cref="Gi.TracedSunShaders.Debug"/>) and its samplers.
+    /// </summary>
+    static (Gi.MetalGiResolve.Pass, SamplerSlot, SamplerSlot) MakeTracedDebug(Gi.MetalGiResolve resolve)
+    {
+        var pass = resolve.Program(Rendering.Gi.TracedSunShaders.Debug, "metal traced sun debug");
+        return (pass, pass.P.Sampler("uTerm"), pass.P.Sampler("uMask"));
+    }
+
+    #endregion
+
+    #region Lamp shadows
+
+    /// <summary>
+    /// The lamps' traced shadows (made on first use) and their apply and floor passes.
+    /// </summary>
+    Gi.MetalLampShadows? _lampShadows;
+
+    /// <summary>
+    /// See <see cref="_lampShadows"/>.
+    /// </summary>
+    (Gi.MetalGiResolve.Pass Pass, SamplerSlot Lost, SamplerSlot Total, SamplerSlot Total1, SamplerSlot Plain, SamplerSlot Specular,
+        UniformHandle SpecularOn)? _lampApply;
+
+    /// <summary>
+    /// The floor pass after a take-back (made on first use), shared with the characters' light apply.
+    /// </summary>
+    Gi.MetalGiResolve.Pass? _lampFloor;
+
+    /// <summary>
+    /// The scene minus the source, red, green and blue (what occluded lamps gave is taken back); then the larger of the two (no pixel below black).
+    /// </summary>
+    static readonly BlendState LampTakeBack = new(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.ReverseSubtract),
+        LampFloor = new(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Max);
+
+    /// <summary>
+    /// The lamps' traced shadows after the GI resolve (docs/render-lights.md "Traced lamp shadows"): what occluded lamps gave a surface is taken back
+    /// off the scene.
+    /// </summary>
+    internal void RunLampShadows(Gi.MetalGiScene scene, Objects.WorldLamps lamps, Matrix4x4 sceneToEye, uint skinTable)
+    {
+        if (!Options.LampShadows || GiResolve <= 0 || _sceneColour is null || !_haveScene) return;
+        if (scene.Top is null || lamps.Grid.W <= 0) return;
+
+        int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        float tanY = MathF.Tan(_fov * 0.5f);
+        var rot = _view with { M41 = 0, M42 = 0, M43 = 0 };
+        var view = new Gi.MetalLampShadows.View(new Vector3(rot.M11, rot.M21, rot.M31), new Vector3(rot.M12, rot.M22, rot.M32),
+            ViewWindow.BackFor(rot, _fov, _aspect), _eye, new Vector2(_nearPlane, _farPlane), ViewWindow.Tan(tanY * _aspect, tanY), width, height,
+            2 * tanY / height);
+        var inverse = Matrix4x4.CreateScale(1, -1, 1) * sceneToEye;
+        _lampShadows ??= new Gi.MetalLampShadows(_ctx, Probes!.Sun);
+        _lampShadows.Run(scene, lamps, _ctx.Depth, _ctx.Albedo, view, inverse, skinTable);
+        if (_lampShadows.Result is { } result)
+            ApplyLampShadows(result.Filtered, result.Total, result.Total1, width, height);
+    }
+
+    /// <summary>
+    /// The filtered lost light times the albedo and the haze off the scene (<see cref="Rendering.Gi.LampShadowShaders.Apply"/>), then the floor.
+    /// </summary>
+    void ApplyLampShadows(GpuTexture filtered, GpuTexture total, GpuTexture total1, int width, int height)
+    {
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        var resolve = _giResolve;
+        var a = _lampApply ??= MakeLampApply(resolve);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        resolve.SetView(a.Pass, _ctx.Depth, _ctx.Albedo, view, width, height, 1);
+        foreach (var (slot, texture) in (ReadOnlySpan<(SamplerSlot, GpuTexture)>)[(a.Lost, filtered), (a.Total, total), (a.Total1, total1),
+            (a.Plain, total), (a.Specular, total)])
+        {
+            a.Pass.P.Bind(slot, new SampledTexture(resolve.Point, texture.View()));
+        }
+
+        a.Pass.P.Set(a.SpecularOn, 0f);
+        a.Pass.P.ApplyGlobals();
+        var floor = _lampFloor ??= resolve.Program(Rendering.Gi.LampShadowShaders.Floor, "metal lamp shadow floor");
+        var cmd = (MetalCommandList)_ctx.BeginNative("lamp shadows apply");
+        resolve.Fullscreen(cmd, a.Pass.P, _sceneColour!, LampTakeBack, load: true);
+        resolve.Fullscreen(cmd, floor.P, _sceneColour!, LampFloor, load: true);
+        _ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The lamp shadows' apply pass and its handles.
+    /// </summary>
+    static (Gi.MetalGiResolve.Pass, SamplerSlot, SamplerSlot, SamplerSlot, SamplerSlot, SamplerSlot, UniformHandle) MakeLampApply(
+        Gi.MetalGiResolve resolve)
+    {
+        var pass = resolve.Program(Rendering.Gi.LampShadowShaders.Apply, "metal lamp shadows");
+        var p = pass.P;
+        return (pass, p.Sampler("uLost"), p.Sampler("uTotal"), p.Sampler("uTotal1"), p.Sampler("uPlain"), p.Sampler("uSpecular"),
+            p.Uniform("uSpecularOn"));
+    }
+
+    #endregion
+
+    #region Reflections
+
+    /// <summary>
+    /// The reflections (made on first use).
+    /// </summary>
+    Gi.MetalReflections? _reflections;
+
+    /// <summary>
+    /// Whether this frame's reflections ran (<see cref="RunReflections"/> once a frame).
+    /// </summary>
+    bool _reflected;
+
+    /// <summary>
+    /// See <see cref="IWorldPostChain.SsrSurfaces"/>.
+    /// </summary>
+    public bool SsrSurfaces { get; set; }
+
+    /// <summary>
+    /// The reflections over the scene (docs/render-gi.md "Reflections"), once a frame, after the GI resolve and the lamps' and characters' passes and
+    /// before the shafts, the fog volumes and the occlusion (<see cref="ApplySsao"/>): at the resolve's size, half without it; the rays while the
+    /// probes traced this frame.
+    /// </summary>
+    void RunReflections()
+    {
+        if (_reflected || !SsrSurfaces || _sceneColour is null || !_haveScene) return;
+
+        _reflected = true;
+        int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        _reflections ??= new Gi.MetalReflections(_ctx);
+        if (Probes is { } probes) _screenRays ??= new Gi.MetalScreenRays(_ctx, probes);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        var resolved = GiResolve > 0 && _giResolved ? _giResolve.Results : null;
+        var frame = new Gi.MetalReflections.Frame(_sceneColour, _ctx.Depth, _ctx.Albedo, view, ScreenRayView(width, height),
+            GiResolve > 0 ? GiResolve : 2, resolved);
+        _reflections.Run(_giResolve, _screenRays, frame);
+    }
+
+    #endregion
+
+    #region Characters' gathered light
+
+    /// <summary>
+    /// The characters' gather (made on first use) and its apply pass.
+    /// </summary>
+    Gi.MetalScreenRays? _screenRays;
+
+    /// <summary>
+    /// See <see cref="_screenRays"/>.
+    /// </summary>
+    (Gi.MetalGiResolve.Pass Pass, SamplerSlot Traced, UniformHandle Strength, SamplerSlot Term, UniformHandle TermOn)? _characterApply;
+
+    /// <summary>
+    /// The characters' gathered light runs this frame: its switch, GTAO and the GI resolve, as on Vulkan.
+    /// </summary>
+    public bool CharacterOcclusionWanted => Options is { CharacterOcclusion: true, Ssao: true, Gtao: true } && GiResolve > 0;
+
+    /// <summary>
+    /// The characters' indirect light gathered by rays (docs/render-gi.md "Characters"), after the lamps' shadows: the gather, then the ambient light
+    /// the fragments took swapped for it (<see cref="Rendering.Gi.CharacterOcclusionPass.Apply"/>) and the floor.
+    /// </summary>
+    internal void RunCharacterOcclusion(Gi.MetalProbeGi probes)
+    {
+        if (!CharacterOcclusionWanted || _sceneColour is null || !_haveScene || probes.Scene.CharactersShown == 0) return;
+
+        int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        _screenRays ??= new Gi.MetalScreenRays(_ctx, probes);
+        if (_screenRays.GatherCharacters(_ctx.Depth, _ctx.Albedo, ScreenRayView(width, height)) is { } gathered)
+            ApplyCharacterLight(gathered, width, height);
+    }
+
+    /// <summary>
+    /// The camera as the screen's ray kernels read it. They rebuild a ray from a pixel's row with ndc y = -1 at row 0: Metal's row 0 is the top, so
+    /// the up axis is turned round.
+    /// </summary>
+    Gi.MetalScreenRays.View ScreenRayView(int width, int height)
+    {
+        float tanY = MathF.Tan(_fov * 0.5f);
+        var rot = _view with { M41 = 0, M42 = 0, M43 = 0 };
+        return new Gi.MetalScreenRays.View(_eye, new Vector3(rot.M11, rot.M21, rot.M31), -new Vector3(rot.M12, rot.M22, rot.M32),
+            ViewWindow.BackFor(rot, _fov, _aspect), ViewWindow.Tan(tanY * _aspect, tanY), new Vector2(_nearPlane, _farPlane), width, height);
+    }
+
+    /// <summary>
+    /// The gathered light over the characters' pixels (the scene minus the apply's difference), then the floor; the sun's term gives the share of
+    /// the sky the fragment took beside its diffuse light while the sun is traced.
+    /// </summary>
+    void ApplyCharacterLight(GpuTexture gathered, int width, int height)
+    {
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        var resolve = _giResolve;
+        var a = _characterApply ??= MakeCharacterApply(resolve);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        resolve.SetView(a.Pass, _ctx.Depth, _ctx.Albedo, view, width, height, 1);
+        a.Pass.P.Bind(a.Traced, new SampledTexture(resolve.Point, gathered.View()));
+        a.Pass.P.Set(a.Strength, PostOptions.CharacterOcclusionStrength);
+
+        var term = TracedSun ? _tracedTerm : null;
+        a.Pass.P.Bind(a.Term, new SampledTexture(resolve.Point, (term ?? gathered).View()));
+        a.Pass.P.Set(a.TermOn, term is not null ? 1f : 0f);
+        a.Pass.P.ApplyGlobals();   // the probes, the sky's ambient and the haze
+
+        var floor = _lampFloor ??= resolve.Program(Rendering.Gi.LampShadowShaders.Floor, "metal lamp shadow floor");
+        var cmd = (MetalCommandList)_ctx.BeginNative("character light apply");
+        resolve.Fullscreen(cmd, a.Pass.P, _sceneColour!, LampTakeBack, load: true);
+        resolve.Fullscreen(cmd, floor.P, _sceneColour!, LampFloor, load: true);
+        _ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The characters' apply pass and its handles.
+    /// </summary>
+    static (Gi.MetalGiResolve.Pass, SamplerSlot, UniformHandle, SamplerSlot, UniformHandle) MakeCharacterApply(Gi.MetalGiResolve resolve)
+    {
+        var pass = resolve.Program(Rendering.Gi.CharacterOcclusionPass.Apply, "metal character light");
+        var p = pass.P;
+        return (pass, p.Sampler("uTraced"), p.Uniform("uTracedStrength"), p.Sampler("uTerm"), p.Uniform("uTermOn"));
+    }
+
+    #endregion
 
     /// <summary>
     /// Darkens the haze where the sun is shadowed along the view (the composite's light shafts).
@@ -355,15 +703,34 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public void BuildShadingRate(Vector3 eye) { }
 
     /// <summary>
-    /// Applies the pending light shafts and fog volumes and the SSAO to the scene colour, when any is on.
+    /// The reflections first (<see cref="RunReflections"/>), then the pending light shafts and fog volumes and the occlusion (SSAO, or GTAO while
+    /// <c>gtao</c> is on) applied to the scene colour, when any is on.
     /// </summary>
     public void ApplySsao()
     {
+        RunReflections();
         if (_sceneColour is null || (!_volumesPending && !Options.Ssao && !_composite.ShaftsPending)) return;
         var cmd = (MetalCommandList)_ctx.BeginNative("post scene effects");
-        _composite.ApplyScene(cmd, _sceneColour, _ctx.Depth, Inputs, _volumesPending, Options.Ssao, Options.ContactParams);
+        _composite.ApplyScene(cmd, _sceneColour, _ctx.Depth, Inputs, _volumesPending, Options.Ssao, Options.ContactParams, GtaoFrame);
         _ctx.EndNative(cmd);
         _volumesPending = false;
+    }
+
+    /// <summary>
+    /// GTAO's march this frame (null: the SSAO): the quality's slices, steps and size, the noise moving over the frames with a temporal resolve to
+    /// average them (a still pattern without one: moving noise would shimmer), and the surface target's normals and albedos while the GI resolve
+    /// writes them.
+    /// </summary>
+    Post.CompositeGtao.Frame? GtaoFrame
+    {
+        get
+        {
+            if (!Options.Gtao) return null;
+
+            float noise = Temporal ? _frame % 64 * 5.588238f : 0f;
+            var surface = GiResolve > 0 ? _ctx.Albedo : null;
+            return new Post.CompositeGtao.Frame(Options.GtaoSlices, Options.GtaoSteps, Options.GtaoFullSize, noise, surface);
+        }
     }
 
     /// <summary>
@@ -538,6 +905,11 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public void Dispose()
     {
         _depthOfField?.Dispose();
+        _giResolve?.Dispose();
+        _lampShadows?.Dispose();
+        _screenRays?.Dispose();
+        _reflections?.Dispose();
+        _tracedTerm?.Dispose();
         _sceneColour?.Dispose();
         foreach (var low in _lowTargets)
         {

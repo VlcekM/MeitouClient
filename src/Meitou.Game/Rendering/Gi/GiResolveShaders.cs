@@ -124,17 +124,17 @@ static partial class GiResolveShaders
 
     /// <summary>
     /// One texel of the low target per <c>uDiv</c> × <c>uDiv</c> block: the first pixel of the block that takes the probes (its surface flag set),
-    /// its position from the depth, its shading normal as the lit fragment wrote it, the probes' irradiance there. Two parts (<c>uPart</c>, a
-    /// target each), both times the haze's transmittance: 0 the probes' light × the GI share × the strength; 1 minus that share: how much of the
-    /// sky's ambient <see cref="Apply"/> takes back, of each pixel's own (the sky's ambient follows the pixel's normal: one texel's taken from
+    /// its position from the depth, its shading normal as the lit fragment wrote it, the probes' irradiance there. Two parts in one pass (a target
+    /// each), both times the haze's transmittance: location 0 the probes' light × the GI share × the strength; location 1 minus that share: how much
+    /// of the sky's ambient <see cref="Apply"/> takes back, of each pixel's own (the sky's ambient follows the pixel's normal: one texel's taken from
     /// every pixel of a bumped wall left the difference as speckles in the sky's colour, bright in a dark room). Out: rgb the part, a = signed
     /// view depth (negative: interior, positive: exterior, 0: nothing in the block takes the probes).
     /// </summary>
     public static readonly string Resolve = "#version 330 core\n" + AtmosphereShaders.Functions + Reconstruct + $$"""
         in vec2 vUv;
-        out vec4 fragColour;
+        layout(location = 0) out vec4 fragColour;
+        layout(location = 1) out vec4 fragSky;
         uniform usampler2D uAlbedo;
-        uniform float uPart;
         uniform float uDiv;
 
         void main()
@@ -149,7 +149,12 @@ static partial class GiResolveShaders
                 if ((s.w & 256u) != 0u) { px = q; surface = s; }
             }
             float z = px.x < 0 ? 0.0 : depthAt(px);
-            if (z <= 0.0) { fragColour = vec4(0.0); return; }
+            if (z <= 0.0)
+            {
+                fragColour = vec4(0.0);
+                fragSky = vec4(0.0);
+                return;
+            }
             vec3 p = positionAt(px, z);
             vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
             vec3 v = normalize(uGiEye - p);
@@ -164,7 +169,8 @@ static partial class GiResolveShaders
             gi.rgb = giSurfaceIrradiance(gi.rgb, sky, interior);
             // The haze is linear in the colour (colour · T + in-scattering): T from two evaluations, so the added light is hazed as the fragment's was.
             vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
-            fragColour = vec4((uPart < 0.5 ? gi.rgb * share : vec3(-share)) * transmittance, interior ? -z : z);
+            fragColour = vec4(gi.rgb * share * transmittance, interior ? -z : z);
+            fragSky = vec4(-share * transmittance, interior ? -z : z);
         }
         """;
 

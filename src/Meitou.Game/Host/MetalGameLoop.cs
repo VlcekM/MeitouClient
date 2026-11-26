@@ -9,6 +9,7 @@ using Meitou.Data.Save;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 using Meitou.Game.DevTools;
+using Meitou.Game.DevTools.Benchmark;
 using Meitou.Game.Editor;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
@@ -22,7 +23,9 @@ using Meitou.Game.Rendering.Metal;
 using Meitou.Game.Rendering.Metal.Gi;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
 using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
@@ -168,11 +171,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     DebugOverlay? _overlay;
 
     /// <summary>
-    /// The frame-rate lines start shown (not in a still unless MEITOU_METAL_OVERLAY=1).
-    /// </summary>
-    bool _showFrameStats;
-
-    /// <summary>
     /// The world's files read on a worker since <see cref="OpenDisplay"/>, when the host owns the scene (an interactive run; a still's is given).
     /// </summary>
     Task<WorldScene?>? _sceneRead;
@@ -185,6 +183,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         using var display = OpenDisplay();
         using var ctx = OpenContext();
+        bool lacksRayQueries = BenchmarkSpec.LacksRayQueries(host.GameOptions, ctx.HasRayQuery, ctx.Device.Name.ToString() ?? "");
+        if (lacksRayQueries) return BenchmarkSpec.NoRayQueriesExit;
+
         SetUpMemoryAndWindow();
 
         ReadSwitches();
@@ -200,7 +201,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // selection/order clicks), then to the session's bindings so the strategy camera pans, turns and zooms.
         using var input = OpenInput();
         ConnectClipboard();
-        _frameStatsVisible = _showFrameStats;
         HookInput();
         // The agent control channel (--control-dir, --exec, --screenshot-after) and the dev console's commands that read the settings dialog.
         host.AgentChannel.SettingsPanel = _settings;
@@ -210,6 +210,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         RunLoop();
 
         Shutdown();
+
+        // A benchmark whose script did not finish (the window closed) wrote no result.json.
+        if (host.GameOptions.Benchmark is not null && !host.PlayBench.Completed) return 1;
         return host.AgentChannel.ControlExitCode;
     }
 
@@ -341,10 +344,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // MetalFX temporal is the default at every preset scale; spatial is an explicit alternative.
         _metalFx = MetalFxUpscaler.TryCreate(_ctx);
         _metalFxSpatial = MetalFxSpatialUpscaler.TryCreate(_ctx);
-        MetalUpscalerMode mode = ChooseUpscalerMode();
-
-        _upscaling = new MetalUpscaling(host.Config, _ctx, _taa, _metalFx, _metalFxSpatial, () => _display.FullScreen, BackingScale);
-        _upscaling.ApplyMode(mode);
+        _upscaling = new MetalUpscaling(host.Config, _ctx, _taa, _metalFx, _metalFxSpatial, () => _display.FullScreen, BackingScale,
+            () => _display.ScreenPixels);
+        _upscaling.Start(ChooseUpscalerMode());
+        if (host.GameOptions.Benchmark is not null) MetalBenchmark.UseFixedResolution(_upscaling, host.Config);
         if (_upscaling.NoTaa) Console.WriteLine("metal     no TAA/upscaler: no jitter, no temporal resolve");
         // The seam's post chain for the shared WorldFrame.Draw: the scene effects and the composite are the same calls the local
         // loop used, with the jitter and temporal choice decided live as the settings change them.
@@ -357,11 +360,31 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
+    /// Says what the screen chose while the player has not set the Use Metal upscaling switch (<see cref="UserConfig.DefaultMetalUpscaling"/>).
+    /// </summary>
+    void LogScreenDefault()
+    {
+        var screen = _display.ScreenPixels;
+        string size = screen is var (w, h) ? $"{w}x{h}" : "of unknown size";
+        string kind = _upscaling.Retina ? "Retina screen" : "screen";
+        string choice = _upscaling.SavedEnabled ? "MetalFX" : $"no upscaler, full screen at screen / {_upscaling.Divisor}";
+        Console.WriteLine($"metal     upscaling not chosen: {choice} for this {kind} {size}");
+    }
+
+    /// <summary>
     /// The upscaler mode and render scale from the settings, the command line and the environment, as far as the device supports them.
     /// </summary>
     MetalUpscalerMode ChooseUpscalerMode()
     {
-        MetalUpscalerMode mode = host.Config.MetalUseUpscaling ? host.Config.MetalUpscaler : MetalUpscalerMode.Disabled;
+        // The launcher benchmark draws every tier at the window's pixels with no upscaler (the settings and the environment do not apply).
+        if (host.GameOptions.Benchmark is not null)
+        {
+            _ctx.RenderScale = 1f;
+            return MetalUpscalerMode.Disabled;
+        }
+
+        MetalUpscalerMode mode = _upscaling.SavedEnabled ? host.Config.MetalUpscaler : MetalUpscalerMode.Disabled;
+        if (host.Config.MetalUseUpscaling is null) LogScreenDefault();
         float scale = Math.Clamp(host.Config.MetalRenderScale, 0.33f, 1f);
         if (_noTaaRequested)
         {
@@ -411,10 +434,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         _openSettingsForStill = Environment.GetEnvironmentVariable("MEITOU_METAL_SETTINGS") is "1" or "true";
         Console.WriteLine($"metal     upscaler {_upscaling.Mode.ToString().ToLowerInvariant()} at {_ctx.RenderScale:0.00}");
-        // The text/quad painter, shared by the HUD and the optional frame-stats lines. It is created even for a screenshot:
-        // the game's HUD is part of the picture. MEITOU_METAL_OVERLAY=1 adds the stats lines to a still.
+        // The text/quad painter, shared by the HUD and the debug panels. It is created even for a screenshot: the game's HUD is part of the picture.
         _overlay = DebugOverlay.TryCreate(_ctx);
-        _showFrameStats = host.WorldOptions.Screenshot is null || Environment.GetEnvironmentVariable("MEITOU_METAL_OVERLAY") == "1";
+        if (_overlay is not null) host.DebugMenu.Profiler = new FrameProfiler(new MetalStageTimer(_ctx), ProfilerMemory);
+        _simProfile = new SimProfileWindow(host);
         CreateLoadingScreen();
 
         // Shown before the first loading frame (a still draws none): the layer of a window not shown yet gives no drawable, nor does it for the
@@ -550,7 +573,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void Shutdown()
     {
-        _bench.Finish(_window.FramebufferSize);
+        _bench.Finish(host.GameOptions.Benchmark is null ? _window.FramebufferSize : new Vector2D<int>(_ctx.SceneWidth, _ctx.SceneHeight));
 
         // Let the queue finish before the renderers release views, buffers and bindless entries; a quit during a
         // streaming upload otherwise freed resources the GPU was still reading and could fault on the way out.
@@ -559,7 +582,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Loading = null;
         _ctx.Finish();
         _hud?.DisposeUi();
+        host.DebugMenu.Profiler?.Dispose();
+        host.DebugMenu.Profiler = null;
+        _profilerFace?.Dispose();
         _overlay?.Dispose();
+        host.TitleScreen.DisposeTitleScene();   // its particles' buffers are this context's, released before it goes (as on Vulkan)
         // The shared world owns terrain (and its textures), sky, weather surfaces, particles, lamps, objects, foliage,
         // water, characters, interior masks, streamer and shadow. Metal's post chain and the picture target are local.
         host.Gpu?.Dispose();
@@ -672,27 +699,30 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             vramSample: _guardEnabled ? () => ((ulong)_ctx.Device.CurrentAllocatedSize, _memoryBudget) : null);
         _worldGpu.PostChain = _postChain;
         host.Gpu = _worldGpu;
+        if (metalParticles && !host.WorldOptions.NoParticles)
+            host.TitleScreen.TitleParticleFactory = () => ParticleRenderer.Create(_ctx, host.Assets, _worldGpu.Particles?.Library);
         // The combat aftermath's renderers and store exist before a loaded save's decals are read and before the first frame.
         host.BloodDecals.SetUpBlood(_ctx);
+        host.SetUpTrails(_ctx);
     }
 
     /// <summary>
-    /// The experimental native probe GI, when asked for and the device ray traces.
+    /// The native probe GI, unless <c>--no-gi</c>, on a GPU that traces rays in hardware (<see cref="MetalContext.HasRayQuery"/>: M3 and later).
     /// </summary>
     void CreateGi()
     {
-        // Native Metal GI is experimental and opt-in: on this M1 Pro it could freeze the machine during a save load.
-        // Keep the unfinished path out of normal launches; --no-gi still wins, and F10 can turn it off after it is on.
-        bool metalGi = host.WorldOptions.Gi && Environment.GetEnvironmentVariable("MEITOU_METAL_GI") is "1" or "true";
-        if (metalGi && _ctx.Device.SupportsRaytracing)
+        if (!host.WorldOptions.Gi) return;
+
+        if (!_ctx.HasRayQuery)
         {
-            _worldGpu.ProbeGi = new MetalProbeGi(_ctx) { Enabled = host.WorldOptions.GiProbes, InteriorEnabled = host.WorldOptions.InteriorGi };
-            Console.WriteLine($"gi        {_worldGpu.ProbeGi.Describe()} (experimental, MEITOU_METAL_GI=1)");
+            Console.WriteLine("gi        metal off: the GPU has no hardware ray tracing (Apple9 family, M3 and later)");
+            return;
         }
-        else if (metalGi)
-            Console.WriteLine("gi        metal off: the device does not support ray tracing");
-        else if (host.WorldOptions.Gi)
-            Console.WriteLine("gi        metal off: experimental (set MEITOU_METAL_GI=1 to enable)");
+
+        var probes = new MetalProbeGi(_ctx) { Enabled = host.WorldOptions.GiProbes, InteriorEnabled = host.WorldOptions.InteriorGi };
+        _worldGpu.ProbeGi = probes;
+        _postChain.Probes = probes;
+        Console.WriteLine($"gi        {_worldGpu.ProbeGi.Describe()}");
     }
 
     /// <summary>
@@ -738,14 +768,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _foliage.SwaySeconds = 0;   // a still picture: the grass holds still, so it repeats
             _foliage.DrawGrass = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_GRASS") != "1";
             _foliage.DrawMeshes = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_FOLIAGE_MESHES") != "1";
-            // The CPU cull is the reference path (and the A/B diagnostic for the Metal GPU cull). The GPU cull is
-            // opt-in on Metal after the 2026-10-23 progress timeouts; `MEITOU_METAL_CPU_CULL=1` still forces CPU.
-            bool gpuCullWanted = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";
-            _foliage.GpuCull = gpuCullWanted && Environment.GetEnvironmentVariable("MEITOU_METAL_CPU_CULL") != "1";
+            // The GPU cull is the default; the CPU cull is the reference path and the A/B diagnostic (MEITOU_METAL_GPU_CULL=0 or
+            // MEITOU_METAL_CPU_CULL=1, see MetalGpuCull).
+            _foliage.GpuCull = MetalGpuCull.Enabled;
             Console.WriteLine(_foliage.GpuCull
-                ? "warning   metal foliage GPU cull is experimental (MEITOU_METAL_GPU_CULL=1): it has produced GPU progress timeouts "
-                    + "after a few minutes"
-                : "metal     foliage CPU cull (GPU cull off by default; MEITOU_METAL_GPU_CULL=1 enables the experimental path)");
+                ? "metal     foliage GPU cull"
+                : "metal     foliage CPU cull (MEITOU_METAL_GPU_CULL=0 or MEITOU_METAL_CPU_CULL=1)");
         }
     }
 
@@ -1340,6 +1368,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void CreateSettingsMenu(PlayerInterface hud)
     {
+        QualityTiers.MetalTiers = true;   // the presets' Metal rows (QualityTiers.AllPresetToggles)
         _settingsValues = CreateMetalSettings();
         _settings = new SettingsMenu(hud, _settingsValues, host.Session.Bindings, SaveSettings,
             new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v), "0",
@@ -1390,6 +1419,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             CameraRotateSpeedChanged = ApplyCameraRotateSpeed,
             CameraChanged = () => host.Config.ApplyCamera(host.Session.Camera.Settings),
             AudioChanged = host.Sound.AudioSettingsChanged,
+            NoDiskWrites = host.GameOptions.Benchmark is not null,   // nor the look presets beside meitou.user.json
         };
         ApplySavedSettings(_settingsValues, _settings);
     }
@@ -1408,15 +1438,21 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             SettingsMenu.MetalUiResolutionSlider,
         };
         foreach (var slider in settingsValues.Sliders)
-            if (!GameHost.RunOnlyKeys().Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label) &&
-                host.Config.Graphics.TryGetValue(slider.Label, out float value))
+            if (!GameHost.RunOnlyKeys().Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label)
+                    && !WorldFrame.ChoiceSliders.Contains(slider.Label) && host.Config.Graphics.TryGetValue(slider.Label, out float value))
                 slider.Set(Math.Clamp(value, slider.Min, slider.Max));
-        foreach (var toggle in settingsValues.Toggles)
-            if (!LookPresets.HiddenSwitch(toggle.Label) && !GameHost.RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label)
-                    && host.Config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value)
-                    && (value >= 0.5f) != toggle.Get())
-                toggle.Set(value >= 0.5f);
-        settings.Tiers.ApplySavedPreset();
+
+        // The switches as saved, the technique choices after them, then the saved preset, as the Vulkan loop (GameLoop.ApplySavedGraphics): unless
+        // the command line chose the switches (--meitou / --faithful).
+        if (!Environment.GetCommandLineArgs().Any(a => a is "--meitou" or "--faithful"))
+        {
+            ApplySavedSwitches(settingsValues);
+            ApplySavedChoices(settingsValues);
+            settings.Tiers.ApplySavedPreset();
+        }
+
+        if (host.GameOptions.Benchmark is { } tier)
+            host.PlayBench.Applied = MetalBenchmark.ApplyTier(settings, settingsValues, tier);
         // The impostor atlas path is re-enabled after the frame-slot fence. Keep the diagnostic off switch as a
         // fallback; the saved "Far impostors" toggle is otherwise allowed through.
         if (_foliage is not null && !_metalImpostors) _foliage.DisableImpostors();
@@ -1425,6 +1461,29 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (!_metalCloudShadows) _sky.CloudShadows = false;
         if (!_metalShadows) _shadow.Enabled = false;
         if (_openSettingsForStill) settings.Visible = true;
+    }
+
+    /// <summary>
+    /// The saved switches (not the hidden ones, nor those the command line sets for this run).
+    /// </summary>
+    void ApplySavedSwitches(SettingsPanel settingsValues)
+    {
+        foreach (var toggle in settingsValues.Toggles)
+            if (!LookPresets.HiddenSwitch(toggle.Label) && !GameHost.RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label)
+                    && host.Config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value)
+                    && (value >= 0.5f) != toggle.Get())
+                toggle.Set(value >= 0.5f);
+    }
+
+    /// <summary>
+    /// The saved technique choices (<see cref="WorldFrame.ChoiceSliders"/>) after the switches they stand for: the launcher writes the choice
+    /// alone, and it wins.
+    /// </summary>
+    void ApplySavedChoices(SettingsPanel settingsValues)
+    {
+        foreach (var choice in settingsValues.Sliders.Where(s => WorldFrame.ChoiceSliders.Contains(s.Label)))
+            if (host.Config.Graphics.TryGetValue(choice.Label, out float c) && MathF.Round(c) != MathF.Round(choice.Get()))
+                choice.Set(Math.Clamp(c, choice.Min, choice.Max));
     }
 
     /// <summary>
@@ -1438,8 +1497,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         AddWorldSettings(sliders, toggles);
         AddLightingSettings(sliders, toggles);
         AddCharacterSettings(sliders, toggles);
-        AddWaterSettings(sliders);
+        AddWaterSettings(sliders, toggles);
         AddEffectSettings(sliders, toggles);
+        WorldFrame.AddChoiceSliders(sliders, toggles, _worldGpu);   // the launcher's technique choices, over the switches above
         var actions = new List<PanelAction>();
         if (_foliage?.ImpostorDiskCache is { } cache)
             actions.Add(new PanelAction("Delete billboard cache", () =>
@@ -1477,7 +1537,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             Text: RenderScaleText, Step: 0.01f));
         sliders.Add(new Slider(SettingsMenu.MetalRetinaResolutionSlider, 0, 1, () => host.Config.MetalRetinaResolution ? 1 : 0,
             v => _upscaling.SetRetinaResolution(v >= 0.5f), "0"));
-        sliders.Add(new Slider(SettingsMenu.MetalRenderResolutionSlider, 1, UserConfig.MetalRenderDivisorMax, () => host.Config.MetalRenderDivisor,
+        sliders.Add(new Slider(SettingsMenu.MetalRenderResolutionSlider, 1, UserConfig.MetalRenderDivisorMax, () => _upscaling.Divisor,
             v => _upscaling.SetDivisor((int)MathF.Round(v)), "0"));
         sliders.Add(new Slider(SettingsMenu.MetalUiResolutionSlider, 0, 1, () => host.Config.MetalUiAtScreenResolution ? 1 : 0,
             v => _upscaling.SetUiAtScreen(v >= 0.5f), "0"));
@@ -1566,6 +1626,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 v => _foliage.LodTolerance = FoliageRenderer.DefaultLodTolerance / v, "0.00", Logarithmic: true));
             toggles.Add(new Toggle("Foliage ranges", () => _foliage.MeitouRange, v => _foliage.MeitouRange = v));
             toggles.Add(new Toggle(WorldFrame.NearTreeFadeSwitch, () => _foliage.NearFade.Enabled, v => _foliage.NearFade.Enabled = v));
+            toggles.Add(new Toggle(WorldFrame.GrassCoverSwitch, () => _foliage.GrassFarCover, v => _foliage.GrassFarCover = v));
             toggles.Add(new Toggle("Far impostors", () => _foliage.Impostors, v => _foliage.Impostors = v));
             sliders.Add(new Slider("Impostor distance (F7 Meitou)", 500, 40000, () => _foliage.ImpostorDistance,
                 v => _foliage.ImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
@@ -1597,6 +1658,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             () => Array.IndexOf(Meitou.Data.World.KenshiShadows.QualitySizes, _shadow.Settings.MapSize),
             v => _shadow.Settings = _shadow.Settings with { MapSize = Meitou.Data.World.KenshiShadows.MapSize((int)MathF.Round(v)) }, "0",
             Text: v => Meitou.Data.World.KenshiShadows.MapSize((int)MathF.Round(v)).ToString(CultureInfo.InvariantCulture) + "²"));
+        toggles.Add(SwitchToggle("shadows"));
         if (_shadow.Meitou)
         {
             sliders.Add(new Slider("Shadow filter 0-2 (Meitou; 0 low-end)", 0, 2, () => _shadow.FilterQuality,
@@ -1620,7 +1682,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             toggles.Add(new Toggle("Indirect light", () => probeGi.Enabled, v => probeGi.Enabled = v));
             toggles.Add(new Toggle("Indoor GI", () => probeGi.InteriorEnabled, v => probeGi.InteriorEnabled = v));
+            AddTracedSettings(toggles);
         }
+        toggles.Add(SwitchToggle("ssr"));
         toggles.Add(new Toggle("Cloud shadows", () => _sky.CloudShadows, v => _sky.CloudShadows = v));
         toggles.Add(new Toggle("Night air", () => _sky.NightAir, v => _sky.NightAir = v));
         toggles.Add(new Toggle("Planetshine", () => _sky.Planetshine, v => _sky.Planetshine = v));
@@ -1628,6 +1692,38 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         toggles.Add(new Toggle("Clouds", () => _sky.LitClouds, v => _sky.LitClouds = v));
         toggles.Add(new Toggle("High Altitude Clouds", () => HighClouds.Enabled, v => HighClouds.Enabled = v));
     }
+
+    /// <summary>
+    /// The switches that need the indirect light's traced scene, under the same names as the Vulkan panel's (so the saved values and the quality
+    /// tiers reach them): the hybrid GI and its parts, the traced sun shadows and their grass, the lamp shadows and the GI traced on characters.
+    /// </summary>
+    void AddTracedSettings(List<Toggle> toggles)
+    {
+        var post = host.WorldOptions.Post;
+        toggles.Add(SwitchToggle("gihybrid"));
+        toggles.AddRange(WorldFrame.GiHybridToggles(post));
+        toggles.Add(SwitchToggle("traced"));
+        toggles.Add(new Toggle(WorldFrame.TracedGrassSwitch, () => post.TracedGrass, v => post.TracedGrass = v));
+        toggles.Add(new Toggle(WorldFrame.TracedFarCascadesSwitch, () => post.TracedFarCascades, v => post.TracedFarCascades = v));
+        toggles.Add(SwitchToggle("lampshadows"));
+        toggles.Add(new Toggle(WorldFrame.GiCharactersSwitch, () => post.CharacterOcclusion, v => post.CharacterOcclusion = v));
+    }
+
+    /// <summary>
+    /// The row of the Faithful / Meitou switch <paramref name="id"/> over the live renderer (<see cref="WorldFrame.LiveSwitches"/>).
+    /// </summary>
+    Toggle SwitchToggle(string id) => WorldFrame.SwitchToggle(LiveSwitches.First(e => e.Id == id));
+
+    /// <summary>
+    /// See <see cref="LiveSwitches"/>.
+    /// </summary>
+    IReadOnlyList<Enhancement>? _liveSwitches;
+
+    /// <summary>
+    /// The Faithful / Meitou switches over the live renderer, made the first time a row asks.
+    /// </summary>
+    IReadOnlyList<Enhancement> LiveSwitches =>
+        _liveSwitches ??= WorldFrame.LiveSwitches(host.WorldOptions, () => _worldGpu, () => host.Camera, () => host.Render);
 
     /// <summary>
     /// The character and icon switches, and ground relief.
@@ -1639,7 +1735,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             toggles.Add(new Toggle("Skin scattering", () => _characters.SkinShading, v => _characters.SkinShading = v));
             toggles.Add(new Toggle("Enhanced item icons", () => _characters.EnhancedIcons, v => _characters.EnhancedIcons = v));
+            toggles.Add(SwitchToggle("chars2"));
+            WorldFrame.AddMaterialToggles(toggles, _worldGpu, host.WorldOptions);
         }
+        toggles.Add(SwitchToggle("trails"));
+        toggles.Add(new Toggle(WorldFrame.SimpleTerrainSwitch, () => TerrainSimpleShading.Enabled, v => TerrainSimpleShading.Enabled = v));
         // Ground relief (docs/render-terrain.md): the Tab panel's quality, depth, parallax distance and toggle.
         if (GroundRelief.Enabled)
         {
@@ -1657,10 +1757,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The water reflection and the Meitou water clarity.
+    /// The water reflection, the Meitou water clarity and its contact foam.
     /// </summary>
-    void AddWaterSettings(List<Slider> sliders)
+    void AddWaterSettings(List<Slider> sliders, List<Toggle> toggles)
     {
+        toggles.Add(SwitchToggle("contactfoam"));
         // Water reflection: the same game setting and reflection range the Vulkan panel exposes; the reflection pass is seam-neutral.
         if (_worldGpu.Reflection is { } reflection)
         {
@@ -1731,7 +1832,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         sliders.Add(new Slider("Light shafts air at dawn and dusk (x)", 0, 6, () => host.WorldOptions.Post.ShaftAirDawn,
             v => host.WorldOptions.Post.ShaftAirDawn = MathF.Round(v * 10) / 10, "0.0"));
         sliders.Add(WorldFrame.ShaftQuality(host.WorldOptions.Post));
-        sliders.Add(WorldFrame.OcclusionQuality(host.WorldOptions.Post));   // the SSAO's taps: Metal has no GTAO
+        sliders.Add(WorldFrame.OcclusionQuality(host.WorldOptions.Post));
+        toggles.Add(SwitchToggle("ao"));
+        toggles.Add(SwitchToggle("gtao"));
         toggles.Add(new Toggle("Dithering", () => host.WorldOptions.Post.Dither, v => host.WorldOptions.Post.Dither = v));
     }
 
@@ -1782,7 +1885,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _shiftDown;
 
     /// <summary>
-    /// The last left press went to the debug menu, so its release is not the interface's.
+    /// The last left press went to the debug menu or the profiler's legend, so its release is not the interface's.
     /// </summary>
     bool _debugMenuClick;
 
@@ -1791,11 +1894,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// repeats here, to scroll its lists and edit its line: after 0.5 s, then 30 times a second (the Windows defaults). No other key repeats.
     /// </summary>
     (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? _heldMenuKey;
-
-    /// <summary>
-    /// The CycleProfiler key (F12 by default): the frame-rate lines (the profiler chart waits for Metal timestamps).
-    /// </summary>
-    bool _frameStatsVisible;
 
     /// <summary>
     /// This frame's picture is saved (a screenshot key, the control channel's <c>screenshot</c>): the debug panels and the pointer stay out of it.
@@ -2155,6 +2253,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 return;
             }
             bool select = host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left;
+            // F12's legend opens and closes rows
+            if (select && host.DebugMenu.Profiler?.Click(at) == true)
+            {
+                _debugMenuClick = true;
+                return;
+            }
             if (_hud is { UiVisible: true } && select && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true)
                 return;
             if (_hud is { UiVisible: true } && select && host.Sandbox.SandboxToggleClick(at)) return;
@@ -2261,7 +2365,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (actions.Pressed(InputAction.Screenshot)) host.ScreenshotRequested = true;
         if (actions.Pressed(InputAction.ToggleStats)) host.DebugMenu.StatsVisible = !host.DebugMenu.StatsVisible;
         if (actions.Pressed(InputAction.ToggleFps)) host.DebugMenu.FpsVisible = !host.DebugMenu.FpsVisible;
-        if (actions.Pressed(InputAction.CycleProfiler)) _frameStatsVisible = !_frameStatsVisible;
+        if (actions.Pressed(InputAction.CycleProfiler) && host.DebugMenu.Profiler is { } profiler)
+            profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3);
         if (actions.Pressed(InputAction.QuickSave)) host.Saves.QuickSaveRequested = true;
         if (actions.Pressed(InputAction.QuickLoad)) host.Saves.QuickLoadRequested = true;
         if (actions.Pressed(InputAction.FloorUp)) host.Interiors.StepFloor(1);
@@ -2511,6 +2616,28 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _worldHasRendered;
 
     /// <summary>
+    /// The overlay pass every frame reuses (<see cref="DrawOverlayPass"/>): its vertex, chunk and run lists keep their capacity, where a pass made
+    /// each frame grew them from empty (several MB of large arrays a frame).
+    /// </summary>
+    DebugOverlay.OverlayPass? _overlayPass;
+
+    /// <summary>
+    /// F12's simulation row and its parts, from the world's tick profile.
+    /// </summary>
+    SimProfileWindow _simProfile = null!;
+
+    /// <summary>
+    /// The overlay F12's chart draws with: the debug face baked at <see cref="_profilerFacePixels"/> (made on first use, again when the scale
+    /// changes).
+    /// </summary>
+    DebugOverlay? _profilerFace;
+
+    /// <summary>
+    /// The size <see cref="_profilerFace"/>'s glyphs are baked at.
+    /// </summary>
+    float _profilerFacePixels;
+
+    /// <summary>
     /// The loop's clock.
     /// </summary>
     Stopwatch _clock = null!;
@@ -2642,6 +2769,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     bool Frame()
     {
+        Rendering.Frame.FrameTick.Advance();
         RepeatMenuKey();
         if (host.DevConsoleHost.ControlQuit) return false;
         double now = _clock.Elapsed.TotalSeconds, frameStart = now, dt = now - _last;
@@ -2686,6 +2814,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.ShotNoFrame = 0;
         (_shotFrame, host.ScreenshotRequested) = (host.ScreenshotRequested, false);
         _bench.FrameBegun();
+        if (!_bench.Active) host.DebugMenu.Profiler?.BeginFrame();   // the play benchmark runs the stage clock itself
         SettleBeforeDraw();
         long recordStart = Stopwatch.GetTimestamp();
         // The world draws into the picture: the backbuffer, or while it is stretched a target of the render size.
@@ -2712,6 +2841,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_overlay is not null) DrawOverlays(_overlay, size, dt, eye, view, aspect, shown, feedbackShot, pointerMouse, pointerAt);
         PresentFrame(gpuCapture, recordStart);
         _bench.FramePresented(_lastRecord);
+        if (!_bench.Active) host.DebugMenu.Profiler?.EndFrame();
         TrimManagedHeap(now);
         SavePictures(shown, feedbackShot);
         if (!CaptureStill(shown)) return false;
@@ -2864,15 +2994,22 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void AdvanceTicks(double dt)
     {
-        if (_bench.Active) host.Session.World.Profile.Enabled = true;
+        host.Session.World.Profile.Enabled = _bench.Active || host.DebugMenu.Profiler is { Showing: not FrameProfiler.Mode.Off };
         long started = Stopwatch.GetTimestamp();
 
         host.UpdateLoadingPause();
         if (!host.Covered) host.Session.Advance(dt);
         if (_hud is not null) host.Duel.DuelHoldClock();
 
-        _bench.Updated(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        double ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        _bench.Updated(ms);   // before SimProfile, which clears the world's tick profile
+        if (host.DebugMenu.Profiler is { } profiler) _simProfile.SimProfile(profiler, ms);   // F12's sim row and its parts
     }
+
+    /// <summary>
+    /// The profiler header's video memory: Metal's allocated size against the game's GPU budget.
+    /// </summary>
+    (ulong Used, ulong Budget) ProfilerMemory() => ((ulong)_ctx.Device.CurrentAllocatedSize, _memoryBudget);
 
     /// <summary>
     /// The tour or the rig moves the camera, the editors and the title stage it, and the focus follows.
@@ -3081,12 +3218,14 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // effects, the particles and the post chain, then the overlays over the finished picture. The Metal chain fills the
         // seam's Vulkan-only gaps (no reflection, GI, low-resolution particles or fog-rate target).
         PrepareSharedDraw();
-        var savedParticles = host.Gpu.Particles;
-        // the staged title sky and its own dust, not the world's weather
+        var (savedParticles, savedDensity, savedWeatherParticles) = (host.Gpu.Particles, host.Gpu.ParticleDensity, host.Gpu.WeatherParticles);
+        // the staged title sky and its own particles (its dust and the fight's twisters), not the world's weather: as the title's world pass
         if (titleLook)
         {
             host.Gpu.Weather = null;
-            host.Gpu.Particles = null;
+            host.Gpu.Particles = host.TitleScreen.PrepareTitleParticles(host.RealTime.Elapsed.TotalSeconds);
+            host.Gpu.ParticleDensity = 0.3f;
+            host.Gpu.WeatherParticles = true;
         }
         if (host.TickAhead) host.Session.BeginTickAhead();
         try
@@ -3099,7 +3238,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             if (host.TickAhead) host.Session.EndTickAhead();
             host.Gpu.Weather = savedWeather;
-            host.Gpu.Particles = savedParticles;
+            (host.Gpu.Particles, host.Gpu.ParticleDensity, host.Gpu.WeatherParticles) = (savedParticles, savedDensity, savedWeatherParticles);
             if (titleLook)
             {
                 host.Scene.Clock = savedClock;
@@ -3161,7 +3300,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         host.Gpu.GameHours = host.Session.Clock.HoursSinceStart;
         host.BloodDecals.UpdateBlood();
-        host.UpdateTrails();   // no trail renderer here: only the footfalls for the blood prints
+        host.UpdateTrails();
+        host.UpdateWakes();
+        host.UpdateSplashes();
         host.Modding.UpdateModHits();
         host.Modding.UpdateModFrames();
         host.Modding.UpdateModProjectiles();
@@ -3186,6 +3327,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         overlay.Target = target;
         // One overlay pass: the HUD, the direct HUD lines and the stats/settings text would otherwise each load/store the whole backbuffer.
         DrawOverlayPass(overlay, size, dt, eye, view, aspect, feedbackShot, pointerMouse, pointerAt);
+        // F12's chart flushes the overlay itself: after the pass, never in a saved picture.
+        if (!feedbackShot && !_shotFrame) DrawProfiler(target, size);
         // The scene changes use the same Kenshi loading screen as Vulkan; it covers the world until the sky arrival is done.
         if (host.Loading is not null && (host.ActiveSceneLoad is not null || host.Loading.Exiting))
         {
@@ -3196,12 +3339,33 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
+    /// F12's chart (it flushes on its own: after the overlay pass) in <see cref="_profilerFace"/>, at the debug text's scale.
+    /// </summary>
+    void DrawProfiler(GpuTexture target, Vector2D<int> size)
+    {
+        if (host.DebugMenu.Profiler is not { Showing: not FrameProfiler.Mode.Off } profiler) return;
+
+        // The framebuffer is 2x the window's points on a Retina display: the chart lays itself out by its face's size, baked at the scale.
+        float pixels = 16 * MathF.Max(1, size.X / (float)Math.Max(_window.Size.X, 1));
+        if (_profilerFace is null || _profilerFacePixels != pixels)
+        {
+            _profilerFace?.Dispose();
+            (_profilerFace, _profilerFacePixels) = (DebugOverlay.TryCreate(_ctx, pixelHeight: pixels), pixels);
+        }
+        if (_profilerFace is not { } face) return;
+
+        face.Target = target;
+        profiler.Draw(face, size.X, size.Y);
+    }
+
+    /// <summary>
     /// One overlay pass: the HUD, the stats and settings text and the pointer.
     /// </summary>
     void DrawOverlayPass(DebugOverlay overlay, Vector2D<int> size, double dt, Vector3 eye, Matrix4x4 view, float aspect, bool feedbackShot,
         Silk.NET.Input.IMouse? pointerMouse, Vector2 pointerAt)
     {
-        using var overlayPass = overlay.BeginPass(size.X, size.Y);
+        // Disposing the pass draws its runs; Reset empties it for the frame.
+        using var overlayPass = (_overlayPass ??= overlay.BeginPass(size.X, size.Y)).Reset(size.X, size.Y);
         if (_hud is not null)
         {
             _hud.Width = size.X;
@@ -3262,13 +3426,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (host.DebugMenu.StatsVisible)
         {
             panelsBottom = DrawStatsPanel(overlay, size, dt, panelsBottom, textScale);
-            wrote = true;
-        }
-        if (_frameStatsVisible)
-        {
-            overlay.TextScaled("Meitou - Metal", 16 * textScale, 16 * textScale, DebugOverlay.TextColour, textScale);
-            overlay.TextScaled($"{_frames + 1} frames  {_fpsText}  {dt * 1000:0.00} ms  {ResolutionText()}", 16 * textScale,
-                (16 + overlay.LineHeight) * textScale, DebugOverlay.TextColour, textScale);
             wrote = true;
         }
         if (DrawToolPanels(overlay, overlayPass, size, panelsBottom, textScale)) wrote = true;
@@ -3392,40 +3549,48 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// Compacts the managed heap once the streamers have been quiet (at most once a minute) or past 4 GB.
+    /// Collects the managed heap once the streamers have been quiet or the heap is past 4 GB (at most once a minute): compacting, the large object
+    /// heap too, only where a loading screen or a menu covers the pause; else in the background.
     /// </summary>
     void TrimManagedHeap(double now)
     {
         // Once the terrain, object and foliage streamers have been quiet for two seconds, the large decode/upload
-        // buffers are garbage. Compact at that idle point (at most once a minute) so the LOH does not keep them
+        // buffers are garbage. Collect at that idle point (at most once a minute) so the LOH does not keep them
         // for the rest of the session. Active streaming is never interrupted.
         bool streamingIdle = (_streamer?.Idle ?? true) && (_objects?.Pending ?? 0) == 0 && (_foliage?.Pending ?? 0) == 0;
         if (!streamingIdle) _streamingIdleSince = 0;
         else if (_streamingIdleSince == 0) _streamingIdleSince = now;
-        var managedBefore = GC.GetGCMemoryInfo();
-        bool managedHighWater = managedBefore.HeapSizeBytes > 4L << 30;
-        if ((streamingIdle && now - _streamingIdleSince >= 2 || managedHighWater) && now - _lastManagedTrim >= 60)
+        var before = GC.GetGCMemoryInfo();
+        bool managedHighWater = before.HeapSizeBytes > 4L << 30;
+        bool wanted = streamingIdle && now - _streamingIdleSince >= 2 || managedHighWater;
+        if (!wanted || now - _lastManagedTrim < 60) return;
+
+        _lastManagedTrim = now;
+
+        // Compacting the LOH is a stop-the-world move of every large object: 270-585 ms in play on a 4 GB heap (0.9 GB of it live), 1.6 s on a
+        // larger one. Only where a loading screen or a menu covers the pause; in play a background collection, which does not move live arrays.
+        // Neither the heap's size (it counts the garbage gen2 holds) nor a background collection's survivors (they count what was allocated while
+        // it ran) tells the live data, so no size makes the pause worth it in play.
+        bool compact = host.TitleScreen.TitleVisible || _settings?.Modal == true || host.ActiveSceneLoad is not null || host.Loading?.Exiting == true;
+        if (compact)
         {
-            _lastManagedTrim = now;
-            var before = managedBefore;
-            // Compacting the LOH is a stop-the-world move of every large object: on a 4+ GB heap it stalled
-            // this loop for 1.6 s. Do it where a loading screen or a menu covers the pause, or when the heap
-            // has grown past 4 GB; otherwise a background collection is enough and does not move live arrays.
-            bool safePoint = host.TitleScreen.TitleVisible || _settings?.Modal == true || host.ActiveSceneLoad is not null
-                || host.Loading?.Exiting == true;
-            bool compact = safePoint || managedHighWater;
-            if (compact)
-            {
-                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
-            }
-            else GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: false, compacting: false);
-            var after = GC.GetGCMemoryInfo();
-            long loh = after.GenerationInfo.Length > 3 ? after.GenerationInfo[3].SizeAfterBytes : 0;
-            if (_trace)
-                Console.WriteLine($"metal     idle trim ({(compact ? "compacting" : "background")}): " +
-                    $"heap {before.HeapSizeBytes / 1048576} -> {after.HeapSizeBytes / 1048576} MB, LOH {loh / 1048576} MB");
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
         }
+        else GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: false, compacting: false);
+
+        if (_trace) TraceTrim(before, compact);
+    }
+
+    /// <summary>
+    /// The trace line of a trim: the heap before and after, and the LOH left.
+    /// </summary>
+    static void TraceTrim(GCMemoryInfo before, bool compact)
+    {
+        var after = GC.GetGCMemoryInfo();
+        long loh = after.GenerationInfo.Length > 3 ? after.GenerationInfo[3].SizeAfterBytes : 0;
+        Console.WriteLine($"metal     idle trim ({(compact ? "compacting" : "background")}): " +
+            $"heap {before.HeapSizeBytes / 1048576} -> {after.HeapSizeBytes / 1048576} MB, LOH {loh / 1048576} MB");
     }
 
     /// <summary>

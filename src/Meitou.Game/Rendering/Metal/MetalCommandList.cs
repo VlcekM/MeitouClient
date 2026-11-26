@@ -29,6 +29,13 @@ public sealed class MetalCommandList : IGpuCommandList
     /// (Metal System Trace) lists each pass by name.
     /// </summary>
     readonly Stack<string> _labels = new();
+
+    /// <summary>
+    /// The labels opened as the command buffer's own debug groups (no encoder open then) and not yet closed, innermost last: a split of the frame
+    /// (<see cref="MoveTo"/>) closes them on the old command buffer and opens them again on the new one.
+    /// </summary>
+    readonly List<string> _commandGroups = [];
+
     /// <summary>
     /// The command buffer the encoders record into.
     /// </summary>
@@ -211,47 +218,59 @@ public sealed class MetalCommandList : IGpuCommandList
         var descriptor = new MTLRenderPassDescriptor(
             ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("MTLRenderPassDescriptor"), "renderPassDescriptor"));
 
-        if (!d.Colour.IsNull)
-        {
-            // The attachments come back as struct copies, so a value-type property (the clear colour) has to be written back
-            // into the array, or the pass clears to whatever the descriptor's memory held (docs/metal-backend.md).
-            var attachments = descriptor.ColorAttachments;
-            var attachment = attachments.Object(0);
-            attachment.Texture = _ctx.ViewTexture(d.Colour.View);
-            attachment.LoadAction = LoadAction(d.Colour.Load);
-            attachment.StoreAction = _ctx.StoreActionFor(d.Colour.View, depth: false);
-            attachment.ClearColor = new MTLClearColor
-            {
-                red = d.Colour.Clear.R, green = d.Colour.Clear.G, blue = d.Colour.Clear.B, alpha = d.Colour.Clear.A,
-            };
-            attachments.SetObject(attachment, 0);
-        }
-
-        if (!d.Extra.IsNull)
-        {
-            // The second colour target (the lit fragments' albedo for the GI resolve).
-            var attachments = descriptor.ColorAttachments;
-            var extra = attachments.Object(1);
-            extra.Texture = _ctx.ViewTexture(d.Extra.View);
-            extra.LoadAction = LoadAction(d.Extra.Load);
-            extra.StoreAction = _ctx.StoreActionFor(d.Extra.View, depth: false);
-            extra.ClearColor = new MTLClearColor { red = d.Extra.Clear.R, green = d.Extra.Clear.G, blue = d.Extra.Clear.B, alpha = d.Extra.Clear.A };
-            attachments.SetObject(extra, 1);
-        }
-
-        if (!d.Depth.IsNull)
-        {
-            var depth = descriptor.DepthAttachment;
-            depth.Texture = _ctx.ViewTexture(d.Depth.View);
-            depth.LoadAction = LoadAction(d.Depth.Load);
-            depth.StoreAction = _ctx.StoreActionFor(d.Depth.View, depth: true);
-            depth.ClearDepth = d.Depth.DepthClear;
-        }
+        // The colour targets: the main one, the second (the lit fragments' albedo for the GI resolve) and the third (the traced sun's term,
+        // docs/render-shadows.md "Traced sun").
+        if (!d.Colour.IsNull) SetColourAttachment(descriptor, 0, d.Colour);
+        if (!d.Extra.IsNull) SetColourAttachment(descriptor, 1, d.Extra);
+        if (!d.Extra2.IsNull) SetColourAttachment(descriptor, 2, d.Extra2);
+        if (!d.Depth.IsNull) SetDepthAttachment(descriptor, d.Depth);
 
         _render = _command.RenderCommandEncoder(descriptor);
         _render.Label = EncoderLabel();
         _encoderSerial++;
 
+        ForgetEncoderState();
+
+        _depthAttachment = !d.Depth.IsNull;
+        _renderDesc = d;
+        _hasViewport = _hasScissor = false;
+        _depthStateKnown = false;
+        if (_name.Length > 0) _render.PushDebugGroup((NSString)_name);
+    }
+
+    /// <summary>
+    /// Colour attachment <paramref name="index"/> of <paramref name="descriptor"/> set from <paramref name="target"/>.
+    /// </summary>
+    void SetColourAttachment(MTLRenderPassDescriptor descriptor, ulong index, in RenderTarget target)
+    {
+        // The attachments come back as struct copies, so a value-type property (the clear colour) has to be written back
+        // into the array, or the pass clears to whatever the descriptor's memory held (docs/metal-backend.md).
+        var attachments = descriptor.ColorAttachments;
+        var attachment = attachments.Object(index);
+        attachment.Texture = _ctx.ViewTexture(target.View);
+        attachment.LoadAction = LoadAction(target.Load);
+        attachment.StoreAction = _ctx.StoreActionFor(target.View, depth: false);
+        attachment.ClearColor = new MTLClearColor { red = target.Clear.R, green = target.Clear.G, blue = target.Clear.B, alpha = target.Clear.A };
+        attachments.SetObject(attachment, index);
+    }
+
+    /// <summary>
+    /// The depth attachment of <paramref name="descriptor"/> set from <paramref name="target"/>.
+    /// </summary>
+    void SetDepthAttachment(MTLRenderPassDescriptor descriptor, in RenderTarget target)
+    {
+        var depth = descriptor.DepthAttachment;
+        depth.Texture = _ctx.ViewTexture(target.View);
+        depth.LoadAction = LoadAction(target.Load);
+        depth.StoreAction = _ctx.StoreActionFor(target.View, depth: true);
+        depth.ClearDepth = target.DepthClear;
+    }
+
+    /// <summary>
+    /// What a new encoder starts without: no bindings, no sent push constants.
+    /// </summary>
+    void ForgetEncoderState()
+    {
         // A new encoder has no bindings: a program that last pushed its sets to the encoder before must push them again (LegacyProgram.Flush skips
         // a push in the same epoch; two passes of one program with the same bindings in one native segment read nothing in the second).
         Invalidate();
@@ -266,11 +285,6 @@ public sealed class MetalCommandList : IGpuCommandList
         Array.Clear(_fragmentSamplerState);
         Array.Clear(_fragmentSamplerBias);
         _pushSent.Clear();
-        _depthAttachment = !d.Depth.IsNull;
-        _renderDesc = d;
-        _hasViewport = _hasScissor = false;
-        _depthStateKnown = false;
-        if (_name.Length > 0) _render.PushDebugGroup((NSString)_name);
     }
 
     /// <inheritdoc/>
@@ -283,6 +297,33 @@ public sealed class MetalCommandList : IGpuCommandList
         _render.EndEncoding();
         _render = default;
     }
+
+    /// <summary>
+    /// Ends the open rendering mid-way, for a split of the frame inside it (<see cref="MetalContext.SplitFrame"/>; its attachments are stored, as
+    /// <see cref="MetalContext.StoreAll"/> makes them): its description, to go on with <see cref="ResumeRendering"/>.
+    /// </summary>
+    internal RenderingDesc SuspendRendering()
+    {
+        var d = _renderDesc;
+        EndRendering();
+        return d;
+    }
+
+    /// <summary>
+    /// Opens rendering <paramref name="d"/> again after <see cref="SuspendRendering"/>: every attachment loads what the first part stored.
+    /// </summary>
+    internal void ResumeRendering(in RenderingDesc d) => BeginRendering(d with
+    {
+        Colour = Loaded(d.Colour),
+        Extra = Loaded(d.Extra),
+        Extra2 = Loaded(d.Extra2),
+        Depth = Loaded(d.Depth),
+    });
+
+    /// <summary>
+    /// <paramref name="t"/> loading its contents (none: as it is).
+    /// </summary>
+    static RenderTarget Loaded(in RenderTarget t) => t.IsNull ? t : t with { Load = LoadOp.Load };
 
     /// <summary>
     /// Clears a depth area (a shadow tile, the depth between slices): a fullscreen triangle under the rect's scissor.
@@ -828,14 +869,20 @@ public sealed class MetalCommandList : IGpuCommandList
     /// Tells the open encoder, in one call, the textures the argument buffer's entries hold (the first <paramref name="count"/> native pointers of
     /// <paramref name="textures"/>): the shaders read them through the table, not through a binding the encoder could see.
     /// </summary>
-    internal unsafe void UseResources(nint[] textures, int count)
+    internal unsafe void UseResources(nint[] textures, int count) => UseResources(textures, count, MTLResourceUsage.Read);
+
+    /// <summary>
+    /// Tells the open encoder, in one call, resources it reaches by address with <paramref name="usage"/> (a write declared, the encoders after it
+    /// that read them are ordered after it).
+    /// </summary>
+    internal unsafe void UseResources(nint[] resources, int count, MTLResourceUsage usage)
     {
         var encoder = _render.NativePtr != IntPtr.Zero ? _render.NativePtr : _compute.NativePtr;
         if (count == 0 || encoder == IntPtr.Zero) return;
 
-        fixed (nint* resources = textures)
+        fixed (nint* list = resources)
         {
-            UseResourcesMessage(encoder, UseResourcesSelector.SelPtr, resources, (ulong)count, (ulong)MTLResourceUsage.Read);
+            UseResourcesMessage(encoder, UseResourcesSelector.SelPtr, list, (ulong)count, (ulong)usage);
         }
     }
 
@@ -1152,7 +1199,11 @@ public sealed class MetalCommandList : IGpuCommandList
         _labels.Push(name);
         if (_render.NativePtr != IntPtr.Zero) _render.PushDebugGroup((NSString)name);
         else if (_blit.NativePtr != IntPtr.Zero) _blit.PushDebugGroup((NSString)name);
-        else _command.PushDebugGroup((NSString)name);
+        else
+        {
+            _command.PushDebugGroup((NSString)name);
+            _commandGroups.Add(name);
+        }
     }
 
     /// <inheritdoc/>
@@ -1161,7 +1212,11 @@ public sealed class MetalCommandList : IGpuCommandList
         if (_labels.Count > 0) _labels.Pop();
         if (_render.NativePtr != IntPtr.Zero) _render.PopDebugGroup();
         else if (_blit.NativePtr != IntPtr.Zero) _blit.PopDebugGroup();
-        else _command.PopDebugGroup();
+        else
+        {
+            _command.PopDebugGroup();
+            if (_commandGroups.Count > 0) _commandGroups.RemoveAt(_commandGroups.Count - 1);
+        }
     }
 
     #endregion
@@ -1200,7 +1255,24 @@ public sealed class MetalCommandList : IGpuCommandList
     /// <summary>
     /// The frame's list is reused every frame of its slot: the next frame's command buffer comes in here.
     /// </summary>
-    internal void Rebind(MTLCommandBuffer next) => _command = next;
+    internal void Rebind(MTLCommandBuffer next)
+    {
+        _command = next;
+        _commandGroups.Clear();
+    }
+
+    /// <summary>
+    /// Recording moves on to <paramref name="next"/> mid-frame (the profiler's split, <see cref="MetalContext.SplitFrame"/>): the open encoders
+    /// end, the command buffer's open debug groups close on the old one and open again on <paramref name="next"/>.
+    /// </summary>
+    internal void MoveTo(MTLCommandBuffer next)
+    {
+        Finish();
+        for (int i = _commandGroups.Count - 1; i >= 0; i--) _command.PopDebugGroup();
+        _command = next;
+        foreach (var name in _commandGroups) _command.PushDebugGroup((NSString)name);
+        Invalidate();
+    }
 
     /// <summary>
     /// Closes what is open (the upload batch's own encoder is the caller's).

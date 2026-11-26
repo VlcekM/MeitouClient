@@ -1022,12 +1022,13 @@ public sealed partial class MainWindow : Window
         ModsEmpty.IsVisible = false;
         SyncWorkshopButton.IsVisible = MacSteam.CanSync;
         var gameInstall = _install;
+        var unsubscribed = _config.WorkshopUnsubscribed.ToHashSet();
         List<ModRow> rows;
 
         try
         {
             rows = gameInstall is null ? [] : await Task.Run(() =>
-                ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall))
+                ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall, unsubscribed))
                     .Select(ReadModRow)
                     .ToList());
         }
@@ -1252,6 +1253,7 @@ public sealed partial class MainWindow : Window
         Status(Tr("Asking Steam to subscribe..."));
         var result = await WorkshopSubscribeRunner.RunAsync(library, [.. ports.Select(p => p.PortWorkshopId)]);
         _subscribing = false;
+        KeepSubscribed(result);
 
         var failed = ports
             .Where(p => result.Items.FirstOrDefault(i => i.Id == p.PortWorkshopId) is not { Problem: null })
@@ -1260,6 +1262,15 @@ public sealed partial class MainWindow : Window
         if (failed.Count > 0) await OfferPagesOfFailed(result, failed);
 
         if (failed.Count < ports.Count) LoadMods();
+    }
+
+    /// <summary>
+    /// Shows again the items just subscribed to that the last sync found unsubscribed.
+    /// </summary>
+    void KeepSubscribed(WorkshopSubscribeResult result)
+    {
+        int removed = _config.WorkshopUnsubscribed.RemoveAll(id => result.Items.Any(i => i.Id == id && i.Problem is null));
+        if (removed > 0) _config.Save();
     }
 
     /// <summary>
@@ -1517,6 +1528,11 @@ public sealed partial class MainWindow : Window
 
         SetText(SyncWorkshopText, "Sync workshop");
         Status(SyncSummary(result));
+        if (result is { Problem: null, Stopped: false })
+        {
+            _config.WorkshopUnsubscribed = [.. result.Unsubscribed];
+            _config.Save();
+        }
         LoadMods();
     }
 
@@ -2086,6 +2102,10 @@ public sealed partial class MainWindow : Window
             .Where(r => r.Kind == ReleaseKind.Game && (_config.IncludePrereleases || !r.Prerelease || installed.Contains(r.Version)))
             .Select(r => new ReleaseRow(r, installed.Contains(r.Version), r.Version == PlayVersion))
             .ToList();
+
+        // A build made from source and copied into versions/ is not on GitHub: it is listed first, so it can be selected.
+        var local = Releases.LocalReleases(_allReleases).Select(r => new ReleaseRow(r, true, r.Version == PlayVersion)).ToList();
+        rows.InsertRange(0, local);
         ReleaseListBox.ItemsSource = rows;
         ReleaseListBox.SelectedItem = rows.FirstOrDefault(r => r.Release.Tag == selected);
         NotesEmpty.IsVisible = ReleaseListBox.SelectedItem is null;
@@ -2093,7 +2113,7 @@ public sealed partial class MainWindow : Window
         ReleasesEmpty.Text = Tr(_allReleases.Any(r => r.Kind == ReleaseKind.Game)
             ? "Only nightly builds so far: tick Nightly builds beside Play to list them."
             : "No releases listed yet. Check for releases below.");
-        VersionCount.Text = Tr("{1} releases · {2} installed", rows.Count, installed.Count);
+        VersionCount.Text = Tr("{1} releases · {2} installed", rows.Count - local.Count, installed.Count);
         ShowVersionButtons();
         ShowFooter();
     }
@@ -2505,7 +2525,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// The game's start: the executable run from the launcher's data folder (its settings file shared by every version), the install in KENSHI_PATH,
-    /// the Metal GPU cull variables removed.
+    /// the Metal memory budget variable removed (the launcher's setting passes it).
     /// </summary>
     static ProcessStartInfo GameStartInfo(string exe, GameInstall gameInstall)
     {
@@ -2520,8 +2540,6 @@ public sealed partial class MainWindow : Window
         };
         start.Environment[GameInstall.EnvironmentVariable] = gameInstall.Root;
 
-        // The Metal GPU cull is experimental and has caused GPU progress timeouts; it is not a user setting.
-        start.Environment.Remove("MEITOU_METAL_GPU_CULL");
         start.Environment.Remove("MEITOU_METAL_GPU_BUDGET_MB");
         return start;
     }

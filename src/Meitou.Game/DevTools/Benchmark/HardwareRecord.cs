@@ -2,13 +2,21 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Gpu.Core;
+#if MEITOU_METAL
+using Meitou.Game.Rendering.Metal;
+using SharpMetal.Metal;
+using SharpMetal.ObjectiveCCore;
+#endif
 
 namespace Meitou.Game.DevTools.Benchmark;
 
 /// <summary>
 /// The launcher benchmark's hardware record (docs/bench.md "Launcher benchmark"): the CPU, its threads, the memory, the GPU the game picks, its
-/// driver and video memory, whether it offers ray queries, and the OS. <c>--benchmark-probe</c> writes it alone; result.json carries it.
+/// driver and video memory, whether it offers ray queries, and the OS. <c>--benchmark-probe</c> writes it alone; result.json carries it. On
+/// Metal the GPU is the Mac's, the driver "Metal", the video memory the device's recommended working set and ray queries hardware ray tracing
+/// (<see cref="MetalContext.TracesInHardware"/>: M3 and later).
 /// </summary>
 sealed record HardwareRecord(string Cpu, int Threads, int RamGb, string Gpu, string Driver, long VramMb, bool RayQueries, string Os,
     string Kernel, string OsFamily)
@@ -21,32 +29,60 @@ sealed record HardwareRecord(string Cpu, int Threads, int RamGb, string Gpu, str
     /// <summary>
     /// The record of this computer with <paramref name="device"/>'s GPU (null: none found).
     /// </summary>
-    public static HardwareRecord Of(VulkanDevice? device)
+    public static HardwareRecord Of(VulkanDevice? device) =>
+        Of(device?.DeviceName ?? "", device?.DriverName ?? "", device is null ? 0 : (long)(device.DeviceLocalBytes() >> 20),
+            device?.OffersRayQuery ?? false);
+
+    /// <summary>
+    /// The record of this computer with the GPU the running game draws with (<paramref name="gpu"/>: Vulkan's or Metal's).
+    /// </summary>
+    public static HardwareRecord Of(IGpuContext gpu) => gpu switch
+    {
+        GpuContext vulkan => Of(vulkan.Device),
+#if MEITOU_METAL
+        MetalContext metal => OfMetal(metal.Device),
+#endif
+        _ => Of((VulkanDevice?)null),
+    };
+
+    /// <summary>
+    /// The record of this computer with the GPU fields given.
+    /// </summary>
+    static HardwareRecord Of(string gpu, string driver, long vramMb, bool rayQueries)
     {
         var (os, kernel, family) = OperatingSystemInfo();
         int ramGb = (int)Math.Round(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (double)(1L << 30));
-        return new(CpuName(), Environment.ProcessorCount, ramGb, device?.DeviceName ?? "", device?.DriverName ?? "",
-            device is null ? 0 : (long)(device.DeviceLocalBytes() >> 20), device?.OffersRayQuery ?? false, os, kernel, family);
+        return new(CpuName(), Environment.ProcessorCount, ramGb, gpu, driver, vramMb, rayQueries, os, kernel, family);
     }
 
+#if MEITOU_METAL
+#pragma warning disable CA1416
     /// <summary>
-    /// <c>--benchmark-probe</c>: makes the Vulkan device the game would pick (headless, ray queries asked for), writes the record to
-    /// <paramref name="path"/> and returns the exit code (0; 1 when the file cannot be written). Without a device the GPU fields stay empty.
+    /// The record with the Metal GPU <paramref name="device"/>: its name, "Metal" as the driver, its recommended working set as the video memory,
+    /// ray queries where it traces rays in hardware.
     /// </summary>
-    public static int WriteProbe(string path)
-    {
-        HardwareRecord record;
-        try
-        {
-            using var device = VulkanDevice.Create(new VulkanDeviceOptions { Validation = false, RayTracing = true });
-            record = Of(device);
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"--benchmark-probe: no Vulkan device ({e.Message})");
-            record = Of(null);
-        }
+    static HardwareRecord OfMetal(MTLDevice device) =>
+        Of(device.Name.ToString() ?? "", "Metal", (long)(device.RecommendedMaxWorkingSetSize >> 20), MetalContext.TracesInHardware(device));
 
+    /// <summary>
+    /// The record with the Mac's default Metal device (no window needed).
+    /// </summary>
+    static HardwareRecord ProbeMetal()
+    {
+        ObjectiveC.LinkMetal();
+        return OfMetal(MTLDevice.CreateSystemDefaultDevice());
+    }
+#pragma warning restore CA1416
+#endif
+
+    /// <summary>
+    /// <c>--benchmark-probe</c>: makes the GPU device the game would pick (Vulkan: headless, ray queries asked for; <paramref name="renderer"/>
+    /// <c>metal</c>: the Mac's Metal device), writes the record to <paramref name="path"/> and returns the exit code (0; 1 when the file cannot
+    /// be written). Without a device the GPU fields stay empty.
+    /// </summary>
+    public static int WriteProbe(string path, string renderer = "vulkan")
+    {
+        var record = ProbeDevice(renderer);
         try
         {
             File.WriteAllText(path, record.ToJson().ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
@@ -59,6 +95,28 @@ sealed record HardwareRecord(string Cpu, int Threads, int RamGb, string Gpu, str
 
         Console.WriteLine($"hardware  {record.Gpu}, {record.Cpu}, {record.RamGb} GB, {record.Os}");
         return 0;
+    }
+
+    /// <summary>
+    /// The record of this computer with the GPU of <paramref name="renderer"/>; the GPU fields stay empty when there is none.
+    /// </summary>
+    static HardwareRecord ProbeDevice(string renderer)
+    {
+        try
+        {
+#if MEITOU_METAL
+            if (renderer == "metal") return ProbeMetal();
+#endif
+            if (renderer != "vulkan") throw new NotSupportedException($"no {renderer} renderer in this build");
+
+            using var device = VulkanDevice.Create(new VulkanDeviceOptions { Validation = false, RayTracing = true });
+            return Of(device);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"--benchmark-probe: no {renderer} device ({e.Message})");
+            return Of((VulkanDevice?)null);
+        }
     }
 
     /// <summary>

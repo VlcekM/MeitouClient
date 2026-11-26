@@ -45,7 +45,6 @@
     <PackageReference Include="SharpMetal" Version="1.1.0" />
     <PackageReference Include="Silk.NET.SPIRV.Cross" Version="2.23.0" />
     <PackageReference Include="Silk.NET.SPIRV.Cross.Native" Version="2.23.0" />
-    <EmbeddedResource Include="Rendering/Metal/Gi/ProbeGi.metal" LogicalName="Meitou.Metal.Gi.ProbeGi.metal" />
   </ItemGroup>
   <ItemGroup Condition="'$(MeitouMetal)' != 'true'">
     <Compile Remove="Rendering/Metal/**" />

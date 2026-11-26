@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Meitou.Game.Rendering.Display;
 using Silk.NET.GLFW;
 using Silk.NET.Windowing;
 using SharpMetal.Foundation;
@@ -59,6 +60,11 @@ public sealed unsafe class MetalDisplay : IDisposable
     /// The <c>setCollectionBehavior:</c> selector.
     /// </summary>
     static readonly Selector CollectionBehaviorSelector = new("setCollectionBehavior:");
+
+    /// <summary>
+    /// <c>frame</c> and <c>backingScaleFactor</c>, for the screen's pixels (<see cref="ScreenPixels"/>).
+    /// </summary>
+    static readonly Selector FrameSelector = new("frame"), BackingScaleSelector = new("backingScaleFactor");
 
     /// <summary>
     /// NSWindowCollectionBehaviorManaged | NSWindowCollectionBehaviorFullScreenPrimary: the window may take a full-screen Space of its own (the
@@ -125,6 +131,7 @@ public sealed unsafe class MetalDisplay : IDisposable
     public MetalDisplay(WindowOptions options, bool vsync = true)
     {
         ObjectiveC.LinkMetal();
+        GlfwStartup.KeepWorkingDirectory();
         Window = Silk.NET.Windowing.Window.Create(options);
         Window.Initialize();
         Device = MTLDevice.CreateSystemDefaultDevice();
@@ -256,6 +263,23 @@ public sealed unsafe class MetalDisplay : IDisposable
     }
 
     /// <summary>
+    /// The size in pixels of the screen the window is on (its frame in points times its pixels per point), null when AppKit gives no screen: the
+    /// size native full screen draws at.
+    /// </summary>
+    public (int Width, int Height)? ScreenPixels
+    {
+        get
+        {
+            var screen = ObjectiveC.IntPtr_objc_msgSend(_nsWindow, "screen");
+            if (screen == IntPtr.Zero) return null;
+
+            var frame = SendRect(screen, FrameSelector.SelPtr);
+            double scale = SendDouble(screen, BackingScaleSelector.SelPtr);
+            return ((int)Math.Round(frame.Width * scale), (int)Math.Round(frame.Height * scale));
+        }
+    }
+
+    /// <summary>
     /// Whether the window is in native macOS full screen, its own Space: the state last asked for while the animation into or out of it runs,
     /// then AppKit's, which the green button and Ctrl+Cmd+F also change.
     /// </summary>
@@ -316,6 +340,35 @@ public sealed unsafe class MetalDisplay : IDisposable
     /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     static extern void SendUInteger(IntPtr receiver, IntPtr selector, ulong value);
+
+    /// <summary>
+    /// <c>objc_msgSend</c> returning a CGRect (four doubles, returned in registers on arm64), for <c>frame</c>.
+    /// </summary>
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    static extern ScreenRect SendRect(IntPtr receiver, IntPtr selector);
+
+    /// <summary>
+    /// <c>objc_msgSend</c> returning a CGFloat, for <c>backingScaleFactor</c>.
+    /// </summary>
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    static extern double SendDouble(IntPtr receiver, IntPtr selector);
+
+    /// <summary>
+    /// A CGRect as <c>objc_msgSend</c> returns it: origin, then size, in points.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    readonly struct ScreenRect
+    {
+        /// <summary>
+        /// The origin.
+        /// </summary>
+        public readonly double X, Y;
+
+        /// <summary>
+        /// The size.
+        /// </summary>
+        public readonly double Width, Height;
+    }
 
     #endregion
 

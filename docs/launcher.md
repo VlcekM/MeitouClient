@@ -30,7 +30,7 @@ flipped above the pointer near the screen's bottom covered the cursor and took t
   outside `news/`, `site/`, `launcher/`, `docs/` and `.github/workflows/` changed since the newest game tag (nightly or full). Only the newest 14
   nightlies are kept, so the releases page and the launcher's Versions list stay short. Each nightly's commit list, and each full or launcher release's changelog section, is posted to Discord
   as the Tinfist bot (secret `DISCORD_BOT_TOKEN`, repository variable `DISCORD_NIGHTLY_CHANNEL`), else through the `DISCORD_WEBHOOK_URL`
-  channel webhook, when set. The launcher shows them with the Nightly builds checkbox beside Play ticked ("Play latest nightly"; ticking it asks first, with Yes under the pointer, warning of crashes and corrupted saves) (GitHub pre-releases; `IncludePrereleases` in `launcher.json`). Installed versions stay listed either way; an update is offered only for a release newer than the newest installed.
+  channel webhook, when set. The launcher shows them with the Nightly builds checkbox beside Play ticked ("Play latest nightly"; ticking it asks first, with Yes under the pointer, warning of crashes and corrupted saves) (GitHub pre-releases; `IncludePrereleases` in `launcher.json`). Installed versions stay listed either way; an update is offered only for a release newer than the newest installed. An installed version GitHub does not list (a build made from source and copied into `versions/`, e.g. `99.0.0-dev`; `Releases.LocalReleases`) is a row at the top of the Versions list, selectable, uninstallable and openable like the others, and is the arrow menu's "Latest" while it is the newest.
 - Game assets: `Meitou-<version>-<rid>.zip`, `<rid>` as .NET's `RuntimeInformation.RuntimeIdentifier` (`win-x64`, `linux-x64`,
   `osx-x64`, `osx-arm64`). Legacy Mac assets append `-legacy` to the RID. The legacy launcher selects only those assets and uses
   matching Velopack channels (`osx-x64-legacy`, `osx-arm64-legacy`), so self-updates stay on .NET 10. Its pack ID and app title are
@@ -40,8 +40,10 @@ flipped above the pointer near the screen's bottom covered the cursor and took t
   cached together with page 1's ETag in `releases-cache.json`; an unchanged page 1 is a 304 that costs no quota and keeps the cache. Downloads use the asset URLs, which don't count
   against the quota.
 - A download is checked against the asset's `digest` (`sha256:<hex>`) when GitHub lists one. The zip's single top folder becomes
-  `versions/<version>/`. The game is `MeitouClient[.exe]` since 0.15 (`meitou[.exe]` before; the launcher takes either); on Unix
-  it gets its execute bits. Cancelling a download removes the partial zip and unpacked folder.
+  `versions/<version>/`. The game is `MeitouClient[.exe]` since 0.15 (`meitou[.exe]` before); on macOS the launcher looks for
+  `MeitouClient.app/Contents/MacOS/MeitouClient` first ([macos-port](macos-port.md#app-bundle)), so flat older builds still run
+  (`Releases.GameExecutables`). The version's own files (`settings-schema.json`, `log.txt`) are read beside the executable it finds. On Unix
+  the executable gets its execute bits. Cancelling a download removes the partial zip and unpacked folder.
 
 ## One executable (Native AOT)
 
@@ -115,7 +117,8 @@ binary in `package-release.ps1` is the real fix (not set up).
 
 `release.yml` and `nightly.yml` run `tools/scripts/package-release.ps1 -Rid <rid>` on one runner per RID (win-x64 on Windows, linux-x64 on Ubuntu,
 both osx RIDs on macOS) and attaches all four zips to the one `v<version>` release. Each zip has a single top folder
-`Meitou-<version>-<rid>/` with the game (named by `Meitou.Game`'s `AssemblyName`), `meitou-viewer` and the self-contained .NET runtime. Unix zips are made with
+`Meitou-<version>-<rid>/` with the game (named by `Meitou.Game`'s `AssemblyName`), `meitou-viewer` and the self-contained .NET runtime; macOS zips hold
+them in `MeitouClient.app/Contents/MacOS`, the readme and licences beside the bundle. Unix zips are made with
 `zip(1)` (execute bits kept), macOS binaries (and Apple Silicon dylibs; Intel ones stay as shipped, as re-signing corrupts the unpadded shaderc and spirv-cross) are
 ad-hoc signed, runtime debug symbols (`*.dbg`, ~250 MB) are dropped.
 
@@ -166,8 +169,8 @@ Macs, High 8120 MB. Auto passes nothing and the game sizes the ceiling to the Ma
 8192 on 24 GB). It is the game's soft `VramGuard` ceiling, not a hard VRAM reservation; Apple silicon uses unified memory
 shared with macOS and other apps. The launcher passes a chosen size as `MEITOU_METAL_GPU_BUDGET_MB` only when it starts Metal. A
 `launcher.json` that stored 5120 before Auto existed keeps it. The
-experimental GPU foliage cull is deliberately not exposed here or in the game: it has caused GPU progress timeouts, so the
-launcher clears any inherited `MEITOU_METAL_GPU_CULL` before Play.
+GPU foliage cull is on by default in the game ([metal-gpu-cull-plan](metal-gpu-cull-plan.md)); `MEITOU_METAL_GPU_CULL=0` is a
+diagnostic the launcher passes through.
 
 ### Kenshi data
 
@@ -207,8 +210,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   is on the game's Advanced page only, as is Lamp warmth.
 - Mutually exclusive techniques are one choice each (`WorldFrame.ChoiceSliders`): `Sun shadows` (Off / Faithful cascades / Meitou cascades /
   Traced / Traced near, cascades far), `Ambient occlusion type` (Off / SSAO / GTAO), `Global illumination` (Off / Probes / Probes + hybrid).
-  The switches they stand for (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game applies a saved choice after them at
-  start, so the launcher's choice wins and an older file of switches alone keeps its look.
+  The switches they stand for (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game (Vulkan and Metal) applies a saved choice after
+  them at start, so the launcher's choice wins and an older file of switches alone keeps its look.
 - A section's `groups` (null in older schemas: flat rows) are the menu's features (`FeatureGrouping.FeatureGroups`): one row headed by
   a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
   open while the launcher runs), named without the feature's name they repeat, as in the game. The Display section has two: the upscaler (render scale and its custom value, sharpness, DLSS preset) and HDR output (white and peak brightness).
@@ -230,8 +233,18 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - Detect (when `presets.detect` names the game's option, `--recommend-preset <file>`) runs the played version's game, which makes a
   headless Vulkan device (the GPU it would pick), reads the memory and the cores, and writes `{ preset, summary, gpu, integrated,
   videoMemoryMb, memoryMb, cores, problem }`; the launcher saves `preset` as above and shows `summary`. Without Vulkan (a Metal-only
-  Mac, a driver that fails `vkCreateInstance`) the memory and cores decide alone; off macOS the summary names the failure
-  (`no Vulkan device: <problem>`). A GeForce goes by its model against the classes the tiers are meant for (`GeForceTier`: RTX 3060
+  Mac, a driver that fails `vkCreateInstance`) Apple silicon takes the GPU's name from Metal (`Apple M6`) and other machines go by memory
+  and cores alone; off macOS the summary names the failure (`no Vulkan device: <problem>`).
+  Apple silicon goes by its GPU (`AppleGpuTiers`, an engine choice): the chip's Geekbench 7 Metal score (Geekbench Browser, M1 to M6: the
+  base chips 28,496 / 43,540 / 48,180 / 54,230 / 72,805 / 89,357; Pro, Max and Ultra in the class) predicts its frame rate in proportion,
+  against an M6 that ran the launcher benchmark's bases scenario at 204 fps Low, 131 Medium, 96 High and 49 Ultra (**Observed** 2026-11-26,
+  two runs each, 1920x1080 without an upscaler; GPU time about the whole frame, so GPU-bound). Extreme (35 fps: on Metal it adds the GI
+  radiance cache, 64 probe rays and full-size GTAO, `QualityTiers`) is never recommended. The tier is the highest predicted at 60 fps or
+  more, Ultra only on an M3 or later (hardware ray tracing): from a score of 40.9k Medium, from 56.1k High, from 109.6k Ultra: M1 Low; M2,
+  M3 and M4 Medium; M5, M6 and the M1 to M3 Pro High (M1 and M2 Max and Ultra too, without ray tracing); the M4 to M6 Pro (M6 estimated),
+  the M3 to M5 Max and the M3 to M5 Ultra Ultra. A chip not in the table: a later generation counts as the
+  newest, a missing variant is that variant's newest score scaled by the base chips (M6 Pro: M5 Pro x M6 / M5). Under 12 GB of memory Medium at
+  most, under 8 GB Low; a GPU name that is not an Apple chip's goes by memory (Medium from 16 GB, else Low). A GeForce goes by its model against the classes the tiers are meant for (`GeForceTier`: RTX 3060
   Medium, 3070 to 4070 High, 4070 Ti to 4080 Ultra, 4080 Super and 4090 Extreme, other series by their place among these, a laptop
   GPU a class lower); any other card by video memory (under 6 GB Medium, under 12 GB High, under 24 GB Ultra, else Extreme); under
   12 GB memory or 6 threads Medium at most. Observed: Intel Iris Xe (integrated) is Low, in 2.5 s.
@@ -245,7 +258,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   at any other value, and with `and` another condition must hold too (older launchers ignore both). A setting with `renderer` (`vulkan`
   or `metal`) is shown only while Play would start the game with that renderer (`GraphicsRenderer`, as `SetUpRenderer` picks it; no
   `renderer`: always): the Vulkan anti-aliasing and upscaling rows are Vulkan's, and on macOS the schema adds Metal's Display rows
-  after the world tick: the switch `metalUseUpscaling` (default on) and two trees under it. On: `metalUpscaler` (MetalFX temporal, MetalFX
+  after the world tick: the switch `metalUseUpscaling` and two trees under it. The switch and `metalRenderDivisor` show a Retina screen's
+  defaults (off, screen / 2), every Apple-silicon Mac's own screen's; unsaved, the game takes its screen's ([metal-backend](metal-backend.md)). On: `metalUpscaler` (MetalFX temporal, MetalFX
   spatial, TAA) and `metalRenderScale` (modes). Off: `metalRetinaResolution` (while `fullScreen` is off), `metalRenderDivisor` (while it is on) and `metalUiAtScreenResolution` (always;
   [metal-backend](metal-backend.md)). A look setting that differs from the look's
   value has its name in brass and a Reset link that writes it, and so does its feature's header (for all of them, as in the game); quality and display settings are never marked (the Quality row reads Custom),
@@ -364,9 +378,19 @@ or update the subscribed items and waits until they are installed; unsubscribing
   "Kenshi" when quitting (**Observed**: `gameprocess_log.txt` tracked the launcher's PID from the sync until Steam itself quit, while the spike's
   short-lived processes were untracked at exit).
 - The child sets `SteamAppId`/`SteamGameId` (233860) in the real process environment (`setenv`; .NET's own copy is not seen by native code),
-  calls `SteamAPI_InitFlat`, lists `GetSubscribedItems`, calls `DownloadItem` for each item not installed and current, polls `GetItemState`
-  (current = Installed without NeedsUpdate, Downloading or DownloadPending) every 0.5 s and prints `installed of total`; then `SteamAPI_Shutdown`
-  and it exits. The mod list is read again at the end.
+  calls `SteamAPI_InitFlat`, then every 0.5 s (`WorkshopSyncWatch`) runs the callbacks, reads `GetSubscribedItems` and each item's
+  `GetItemState` (current = Installed without NeedsUpdate, Downloading or DownloadPending), calls `DownloadItem` for an item that is not current,
+  and prints `installed of total` when either changes. It ends once every item is current and neither the subscriptions nor a state has
+  changed for 5 s (an engine choice); then `SteamAPI_Shutdown` and it exits. The mod list is read again at the end. A process that has just
+  started as Kenshi gets the client's cached answers: **Observed** (Steam restarted, 3 items subscribed on the Workshop since): the first
+  `GetSubscribedItems` listed the 10 old items, the next poll 0.5 s later 13, the new ones `Subscribed|NeedsUpdate`, and the client began
+  downloading them without a `DownloadItem` (installed after 3.5, 14.6 and 16.2 s). **Observed** (the owner, with updates pending): a sync
+  that read the subscriptions and states once reported every item current, and a second one seconds later found the updates.
+- An item unsubscribed keeps its folder while a process runs as Kenshi: **Observed** (one item unsubscribed on the Workshop): its folder was
+  still there after a sync had run 60 s, and gone right after the next sync started. So the child also prints the item folders that are not
+  subscribed (`unsubscribed <id>...`); the launcher keeps them in `launcher.json` (`WorkshopUnsubscribed`, replaced by each finished sync, an
+  item dropped when the Subscribe button subscribes to it) and the Mods page leaves them out (`ModList.Discover`), as the original game, which
+  asks Steam for the subscribed items, does.
 - While it runs, Steam shows the account as playing Kenshi. The button reads **Stop syncing** meanwhile; stopping (or closing the launcher) kills
   the child, Steam keeps downloading by itself.
 - Items land in the client's `steamapps/workshop/content/233860/<id>/` (one `.mod` each). `GameInstall.WorkshopDirectory` falls back to that
@@ -462,12 +486,16 @@ folder, never in the installed versions or Kenshi's save folder:
 
 - Build: every game release GitHub lists, marked target or not from `GET /bench/targets`; the newest target is chosen. Install (shown when
   not yet installed) or Start unpacks its zip for the platform (`win-x64` under Proton) into `builds/`, then `--benchmark-list <file>` names
-  its scenarios.
+  its scenarios. A version installed in `versions/` that GitHub does not list (a build made from source, such as a `99.0.0-dev` copied there)
+  is offered first, never a target (so never submitted); Install or Start copies it anew into `builds/`, so its list is asked for again.
 - Platform: the host's build (`native` on Linux, `windows`, `macos`), and on Linux each Proton with a `proton` script in
   `steamapps/common/Proton*` of every Steam library (`libraryfolders.vdf`) or in `compatibilitytools.d/` (Flatpak Steam's are not used).
   Proton runs `python3 <proton> run ./MeitouClient.exe` from the build's folder with `STEAM_COMPAT_DATA_PATH` = `proton-prefix/` (made
   first: Proton refuses a missing one) and `STEAM_COMPAT_CLIENT_INSTALL_PATH` = the Steam folder; every path the game gets (arguments,
-  `KENSHI_PATH`) is `Z:` + the path with backslashes. macOS adds the Vulkan loader's environment like Play and refuses without one.
+  `KENSHI_PATH`) is `Z:` + the path with backslashes. On macOS (`BenchmarkPlatform.Renderer`) Apple silicon runs the benchmark on **Metal** when the
+  build's list names it in `renderers` (`--renderer metal` on the probe and every run, no Vulkan loader needed), else on Vulkan with the
+  loader's environment like Play, refusing without one. The listing starts the game with neither. Every inherited `MEITOU_METAL_*`
+  variable is cleared from the game's environment.
 - Choices: scenario check boxes from the build's list (`bases` ticked; before install only `bases`), tiers Low..Extreme with Medium and the
   tier the played version's `--recommend-preset` names ticked (nothing is saved to `meitou.user.json`) and Recommended / All quick links;
   Ultra and Extreme are greyed ("Needs ray tracing") once a probe said `rayQueries: false`. The estimate is two runs per ticked scenario

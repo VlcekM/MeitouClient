@@ -22,10 +22,11 @@ static class BenchmarkResult
     const string SlowWorldColumn = "sim_slow-world";
 
     /// <summary>
-    /// What the run was, for <see cref="Write"/>: its scenario and tier, the hash of the settings in effect, the machine, the frame size and
-    /// when the script started.
+    /// What the run was, for <see cref="Write"/>: its scenario, tier and renderer, the hash of the settings in effect, the machine, the frame size
+    /// and when the script started.
     /// </summary>
-    public sealed record Run(BenchmarkScenario Scenario, int Tier, string Applied, HardwareRecord Hardware, int Width, int Height, DateTime StartedAt);
+    public sealed record Run(BenchmarkScenario Scenario, int Tier, string Renderer, string Applied, HardwareRecord Hardware, int Width, int Height,
+        DateTime StartedAt);
 
     /// <summary>
     /// Reads <paramref name="dir"/>'s frames.csv and writes result.json beside it.
@@ -41,7 +42,8 @@ static class BenchmarkResult
         {
             ["schema"] = BenchmarkSpec.Schema,
             ["benchmarkVersion"] = BenchmarkSpec.Version,
-            ["fingerprint"] = BenchmarkSpec.Fingerprint(run.Scenario),
+            ["fingerprint"] = BenchmarkSpec.Fingerprint(run.Scenario, run.Renderer),
+            ["renderer"] = run.Renderer,
             ["applied"] = run.Applied,
             ["tier"] = BenchmarkSpec.TierName(run.Tier),
             ["scenario"] = run.Scenario.Id,

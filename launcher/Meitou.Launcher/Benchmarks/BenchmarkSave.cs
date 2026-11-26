@@ -174,7 +174,7 @@ sealed class BenchmarkSave(HttpClient http)
     /// <summary>
     /// Copies <paramref name="from"/> and everything below it to <paramref name="to"/>.
     /// </summary>
-    static void CopyDirectory(string from, string to)
+    internal static void CopyDirectory(string from, string to)
     {
         Directory.CreateDirectory(to);
         foreach (var file in Directory.EnumerateFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)));

@@ -173,16 +173,24 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     }
 
     /// <summary>
-    /// Multi-line tooltip detailing the fixed settings the game enforces during <c>--benchmark</c>.
+    /// Multi-line tooltip detailing the fixed settings the game enforces during <c>--benchmark</c>: Metal's on an Apple-silicon Mac (where the
+    /// benchmark runs on Metal), Vulkan's elsewhere.
     /// </summary>
-    static string BenchmarkSettingsTip() => string.Join("\n", new[]
+    static string BenchmarkSettingsTip()
     {
-        Tr("Benchmarks always use fixed settings so results stay comparable:"),
-        Tr("• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"),
-        Tr("• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"),
-        Tr("• Ray tracing only on Ultra and Extreme"),
-        Tr("• Your saved graphics settings and mods are ignored and never modified"),
-    });
+        bool metal = MacSupport.MetalAvailable;
+        return string.Join("\n", new[]
+        {
+            Tr("Benchmarks always use fixed settings so results stay comparable:"),
+            metal ? Tr("• Full screen at 1920×1080 render resolution, Metal, VSync & frame limit off, HDR off")
+                : Tr("• Windowed 1920×1080, Vulkan, VSync & frame limit off, HDR off"),
+            metal ? Tr("• Chosen quality tier (Meitou look), no upscaler or anti-aliasing")
+                : Tr("• Chosen quality tier (Meitou look), TAA at 100% scale (Low: no AA at 83%), no upscaler"),
+            // A Mac before the M3 cannot run Ultra and Extreme (no hardware ray tracing); the page marks those tiers itself.
+            Tr("• Ray tracing only on Ultra and Extreme"),
+            Tr("• Your saved graphics settings and mods are ignored and never modified"),
+        });
+    }
 
     /// <summary>
     /// The primary screen's size in pixels, for the machine record; empty when unknown.
@@ -235,11 +243,13 @@ public sealed class BenchmarkPage : UserControl, IBenchmarkView
     bool IsTarget => _release is { } release && _targets?.Contains(release.Tag) == true;
 
     /// <summary>
-    /// The window's game releases; the chosen one kept, else the newest target (the newest release while the targets are unknown).
+    /// The window's game releases and the local builds; the chosen one kept, else the newest target (the first while the targets are unknown).
     /// </summary>
     void TakeReleases()
     {
-        _releases = [.. _host!.Releases().Where(release => release.Kind == ReleaseKind.Game)];
+        // A build made from source and copied into versions/ is offered too (never a target, so never submitted).
+        var listed = _host!.Releases();
+        _releases = [.. Releases.LocalReleases(listed), .. listed.Where(release => release.Kind == ReleaseKind.Game)];
         _release = _releases.FirstOrDefault(release => release.Tag == _release?.Tag)
             ?? _releases.FirstOrDefault(release => _targets?.Contains(release.Tag) == true)
             ?? _releases.FirstOrDefault();

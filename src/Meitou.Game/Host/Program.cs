@@ -46,6 +46,8 @@ static class Program
         if (args is ["--settings-schema", var schema]) return LauncherSchema.Write(schema);
         if (args is [HardwareProbeFlag, var report]) return HardwareProbe.Write(report);
         if (args is [HardwareRecord.ProbeFlag, var record]) return HardwareRecord.WriteProbe(record);
+        if (args is [HardwareRecord.ProbeFlag, var probeFile, "--renderer", var probeRenderer])
+            return HardwareRecord.WriteProbe(probeFile, probeRenderer.ToLowerInvariant());
         if (args is [BenchmarkSpec.ListFlag, var list]) return BenchmarkSpec.WriteList(list);
         GameConsole.StartLog();
         RenderJobs.RaiseRenderThread();
@@ -107,7 +109,8 @@ static class Program
         }
 
         bool low = tier == QualityTiers.LowPreset;
-        world.ApplyBenchmarkTier(low, QualityTiers.NeedsRayQueries(tier), BenchmarkSpec.TextureQuality(tier));
+        bool windowed = game.Renderer != BenchmarkSpec.Metal;
+        world.ApplyBenchmarkTier(low, QualityTiers.NeedsRayQueries(tier), BenchmarkSpec.TextureQuality(tier), windowed);
         return scenario.Save is null ? null : SaveDigest.Check(game.Load!, scenario);
     }
 

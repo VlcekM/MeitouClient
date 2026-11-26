@@ -34,11 +34,11 @@ Parsed in `src/Meitou.Game/Host/GameOptions.cs` and `Program.cs`. Any flags not 
 | `--quit-after <s>` | seconds | none | Exits automatically after `s` seconds and prints the frame rate (smoke test). |
 | `--no-precompile` | | off | Disables background JIT precompilation; methods compile on first use instead. |
 | `--play-bench <dir>` | folder | none | Runs a scripted benchmark, logs every frame to `frames.csv` and `summary.md`, and exits. Forces unlimited FPS and vsync off (a later `--vsync` turns vsync back on). Works with `--load` or `--new-game` on Vulkan and Metal ([bench](bench.md#play-benchmark)). |
-| `--benchmark <tier>` | `low`, `medium`, `high`, `ultra`, `extreme` | none | Runs the launcher benchmark at the given quality tier using default settings (ignores and doesn't touch `meitou.user.json`). Requires `--benchmark-out`. Exit codes: `0` ok, `5` GPU lacks ray queries required by tier, `6` wrong save for scenario, `7` unknown scenario ([bench](bench.md#launcher-benchmark)). |
+| `--benchmark <tier>` | `low`, `medium`, `high`, `ultra`, `extreme` | none | Runs the launcher benchmark at the given quality tier using default settings (ignores and doesn't touch `meitou.user.json`). Requires `--benchmark-out`. On macOS runs on Vulkan or, with `--renderer metal`, in a full-screen Space with a fixed 1920x1080 scene. Exit codes: `0` ok, `5` GPU lacks ray queries required by tier, `6` wrong save for scenario, `7` unknown scenario ([bench](bench.md#launcher-benchmark)). |
 | `--benchmark-scenario <id>` | `bases`, `shark-flyby` | `bases` | Selects the benchmark scenario. `bases` requires `--load` with its save; `shark-flyby` forbids `--load`. |
 | `--benchmark-out <dir>` | folder | none | Output directory for `--benchmark` (`frames.csv`, `summary.md`, `result.json`). |
-| `--benchmark-list <file>` | file path | | Writes benchmark version and available scenarios as JSON and exits. Must be the only arguments. |
-| `--benchmark-probe <file>` | file path | | Probes hardware via a headless Vulkan device, writes a JSON report, and exits. Must be the only arguments. |
+| `--benchmark-list <file>` | file path | | Writes benchmark version, the renderers it runs on and available scenarios as JSON and exits. Must be the only arguments. |
+| `--benchmark-probe <file> [--renderer metal]` | file path | | Probes hardware via a headless Vulkan device (with `--renderer metal` the Mac's Metal device), writes a JSON report, and exits. Must be the only arguments. |
 | `--settings-schema <file>` | file path | | Writes the launcher's settings schema and exits. Must be the first two arguments; creates no log or window. |
 | `--recommend-preset <file>` | file path | | Writes the recommended graphics preset for this hardware (`HardwareProbe`, [launcher](launcher.md#graphics)) as JSON and exits. Must be the first two arguments; creates no log or window. |
 | `--wiki-export <dir>` | folder | | Exports game data (zones, towns, factions, squads, NPCs, items, buildings, shops, characters, research, animals, spawns, including active mods) as JSON for agent playtesting and exits ([agent playtest](agent-playtest.md)). |
@@ -299,7 +299,7 @@ Environment variables managed by the launcher:
 
 - Sets `KENSHI_PATH`.
 - On Windows with `steam_api64.dll` and **Launch as Kenshi on Steam** enabled, sets `SteamAppId`, `SteamGameId`, and creates a temporary `steam_appid.txt`.
-- On macOS, clears any inherited `MEITOU_METAL_GPU_CULL` and `MEITOU_METAL_GPU_BUDGET_MB`, then sets `MEITOU_METAL_GPU_BUDGET_MB` (when using Metal with a non-Auto budget) or the Vulkan loader path (`DYLD_LIBRARY_PATH`, `MacSupport.cs`).
+- On macOS, clears any inherited `MEITOU_METAL_GPU_BUDGET_MB`, then sets it (when using Metal with a non-Auto budget) or the Vulkan loader path (`DYLD_LIBRARY_PATH`, `MacSupport.cs`). The Benchmark page clears every inherited `MEITOU_METAL_*` variable (the result must not depend on them).
 
 ## Development executables
 
@@ -369,17 +369,14 @@ All environment variables starting with `MEITOU_` are automatically recorded in 
 | `MEITOU_METAL_NO_TERRAIN_TEXTURES` | `Host/MetalGameLoop.cs` | `1`: disables terrain textures on Metal (prints a notice). |
 | `MEITOU_METAL_NO_PARTICLES` | `Host/MetalGameLoop.cs` | `1`: disables weather particles on Metal. |
 | `MEITOU_METAL_GROUND_RELIEF` | `Host/MetalGameLoop.cs` | `0`/`false`: disables ground parallax relief on Metal. |
-| `MEITOU_METAL_GI` | `Host/MetalGameLoop.cs` | `1`/`true`: enables experimental native Metal probe GI. |
-| `MEITOU_METAL_GI_LOG` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: logs Metal probe GI diagnostics. |
-| `MEITOU_METAL_GI_FALLBACK` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: disables the sky-light term in Metal probe GI (A/B test). |
+| `MEITOU_METAL_GI_LOG` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: logs the Metal probes and traced scene every 600 updates. |
 | `MEITOU_METAL_NO_GRASS` | `Host/MetalGameLoop.cs` | `1`: disables grass blades on Metal. |
 | `MEITOU_METAL_NO_FOLIAGE_MESHES` | `Host/MetalGameLoop.cs` | `1`: disables foliage meshes on Metal (keeps grass). |
-| `MEITOU_METAL_GPU_CULL` | `Host/MetalGameLoop.cs`, `MetalFrame.cs`, `FoliageRenderer.cs` | `1`/`true`: experimental GPU foliage culling (unsafe; stripped by launcher). |
-| `MEITOU_METAL_CPU_CULL` | `Host/MetalGameLoop.cs` | `1`: forces CPU foliage culling over GPU culling. |
+| `MEITOU_METAL_GPU_CULL` | `Rendering/Foliage/MetalGpuCull.cs` (read by `MetalGameLoop.cs`, `MetalFrame.cs`, `FoliageRenderer.cs`) | GPU foliage culling is the default on Metal; `0`/`false`: the CPU cull. |
+| `MEITOU_METAL_CPU_CULL` | `Rendering/Foliage/MetalGpuCull.cs` | `1`: forces CPU foliage culling over GPU culling. |
 | `MEITOU_METAL_TRACE` | `Host/MetalGameLoop.cs`, `MetalPipelines.cs`, `MetalStage.cs` | `1`: traces the Metal frame loop plus pipeline state and shader library compile times. |
 | `MEITOU_METAL_NO_BUILDINGS` | `Host/MetalGameLoop.cs` | `1`: skips runtime building, ground-item, and lamp updates (freeze diagnostic). |
 | `MEITOU_METAL_NO_PARTICLE_COVERAGE` | `src/Meitou.Game/Rendering/Metal/MetalPostChain.cs` | `1`/`true`: stops particles from writing TAA coverage alpha. |
-| `MEITOU_METAL_OVERLAY` | `Host/MetalGameLoop.cs` | `1`: draws frame-stats overlay onto screenshots. |
 | `MEITOU_METAL_SETTINGS` | `Host/MetalGameLoop.cs` | `1`/`true`: opens the Settings panel automatically for still captures. |
 | `MEITOU_METAL_FAST_MATH` | `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` | Controls Metal fast-math compilation (`1` on, `0` off, unset = Metal default on). |
 | `MEITOU_METAL_DUMP` | `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` | Dumps translated MSL shader source files into this folder. |

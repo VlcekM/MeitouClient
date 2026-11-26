@@ -876,7 +876,7 @@ sealed partial class GameHost(
 
         Player.Markers = Gpu.Markers ??= MarkerRenderer.Create(context, Assets.Find);
         BloodDecals.SetUpBlood(context);
-        _trailContext = context;
+        SetUpTrails(context);
         Gpu.HoverOutline ??= new HoverOutlineRenderer(context);
         Gpu.NavmeshOverlay ??= new NavmeshOverlayRenderer(context);
         DebugOverlays.NavOverlayRenderer = Gpu.NavmeshOverlay;

@@ -196,7 +196,11 @@ operation a later pass needs first throws (`InvalidOperationException` naming it
   description's is applied at bind, as clamps), `MetalUploads` (a batch is its own command buffer:
   blit copies from a shared staging ring, committed in order before the frame's own; `IGpuUploads.Scope` lets the render thread's batches
   share one command buffer, which `WorldTextureCache.Pump` uses: a queue holds 64 command buffers and `commandBuffer` blocks while it is full, so
-  one per 512 KB texture slab stalled the render thread 8-17 ms **Observed** 2026-11-13, M6, outstanding 59-107 at each stall). Encoders are labelled with the
+  one per 512 KB texture slab stalled the render thread 8-17 ms **Observed** 2026-11-13, M6, outstanding 59-107 at each stall). A batch's staging
+  is freed once its command has completed: at each frame's start and whenever 64 MB more has been retired (`RetiredSweepBytes`). With the frame
+  start alone, the first frame's object and foliage settles left 2,016 completed staging buffers (1.86 GB) held for about 6 s on the title scene,
+  the device allocation reached 92% of a 5120 MB budget and the guard clamped the ranges to x0.36, recovering over about 30 s (**Observed**,
+  2026-11-25, M-series 24 GB, `--metal-gpu-budget 5120`, the title scene: the scene itself held 2.5-3.0 GB). Encoders are labelled with the
   innermost `BeginLabel` (else the list's name), for Metal System Trace.
 - Resources: textures (`MTLTextureDescriptor`, shared storage - Apple silicon's unified memory is
   the device-local memory; a colour or depth target that is not a storage image is private, without `shaderWrite` or
@@ -507,8 +511,8 @@ the hover outline, move marker and navmesh debug overlay (Shift+F11).
 move the strategy camera; edge scrolling, left click/box select, right-click move orders and the HUD keys work;
 Ctrl+/ writes one frame's Metal capture (`.gputrace`), Alt+Enter toggles full screen. The view keys are the Controls page's bindings, as on Vulkan:
 `ToggleInterface` (F7) hides the interface, `Screenshot` (F8, Print Screen) saves the picture as `_screens/screenshot_<n>.png`
-([ui-input](game/ui-input.md) "Screenshots"), `ToggleStats` (F11) lists the frame, `CycleProfiler` (F12) shows the frame-rate lines (the profiler
-chart waits for Metal timestamps), `ToggleFps` (unbound; Shift+F9) the fps counter. Insert or Ctrl+` opens the dev console ([ui-input](game/ui-input.md)
+([ui-input](game/ui-input.md) "Screenshots"), `ToggleStats` (F11) lists the frame, `CycleProfiler` (F12) cycles the profiler chart (gpu, cpu, off;
+[metal-performance-memory](metal-performance-memory.md#metal-profiler)), `ToggleFps` (unbound; Shift+F9) the fps counter. Insert or Ctrl+` opens the dev console ([ui-input](game/ui-input.md)
 "Dev console"), and the F10 menu's Tools rows open the pick & collision inspector's menu (its hulls drawn by the shared frame) and the interior
 editor. The agent control channel (`--control-dir`, `--exec`, `--screenshot-after`, `screenshot`, `state`, `hud`) is polled each frame; its `mouse`
 and `click` need the window's pointer path and are not done. Full screen on macOS is native (`NSWindow toggleFullScreen:`, the window
@@ -557,7 +561,7 @@ context is Vulkan; the reflection pass and Meitou water are seam-neutral. Metal 
 shadows, the scene host, the post-chain scene effects (fog volumes, shafts, SSAO), particles, the post chain,
 and the finished-picture overlays. Metal's local scene/post loop is gone; its host keeps the title staging, the
 interface and the present. Both backends draw the scene over one depth (Vulkan reversed, Metal conventional:
-[renderer-native](renderer-native.md) "Depth"); Metal's chain has no GI. The shared draw runs the reflection pass and low-resolution particles on both backends.
+[renderer-native](renderer-native.md) "Depth"); Metal's GI is its own probe path ([render-gi](render-gi.md#metal)). The shared draw runs the reflection pass and low-resolution particles on both backends.
 
 **Combat feedback and deterministic stills (2026-10-22).** `SetUpBlood` takes `IGpuContext`; Metal checks the blood
 setting and makes the decal store and debris renderer before a loaded save's decals are read. `UpdateBlood` runs
@@ -608,9 +612,8 @@ Vulkan at default settings, the remaining scope is:
    `--ticks`/`--move-to` stills).
 3. **Rendering parity.** The Meitou volumetric fog; post (`FogRate`, full TAA with character/grass motion, MetalFX
    reactive mask); and the character motion/stage/hover passes.
-4. **GI decision.** On this Mac Vulkan also reports `gi off: the device has no ray queries (VK_KHR_ray_query)`,
-   so the local parity shots are no-GI; on a machine where Vulkan traces GI the target includes it. Either port
-   `GiScene`/`GiProbes` to Metal ray tracing or make no-GI the documented macOS baseline.
+4. **GI.** The probes run on Metal ray tracing from the M3 ([render-gi](render-gi.md#metal), which lists what Vulkan's GI has that
+   Metal's lacks); the other traced effects are not ported.
 5. **Performance and robustness.** GPU culls and grass kernels, VRAM/texture budgets, Metal timestamps, the
    intermittent `encoding in progress` validation assertion at the inland water view, and the known arm64
    `GoldenHashTests` failure.
@@ -620,9 +623,8 @@ Vulkan at default settings, the remaining scope is:
 **Practical order:** the frontend shell (title, New Game, save/load, audio) and the shared trade/dialogue/build/editor
 interaction layer are in; next is its runtime acceptance pass and the remaining effects, then the
 [performance and memory plan](metal-performance-memory.md) (same-window benchmark, present pacing, GPU culls/indirect,
-cache/native lifetime, memory soak), water refraction, post/GI, parity and default. If no-GI is accepted as the
-macOS look, the GI item leaves the target; the upscaler and timestamps are quality/performance work, not
-correctness blockers.
+cache/native lifetime, memory soak), water refraction, post/GI, parity and default. The upscaler and timestamps are
+quality/performance work, not correctness blockers.
 
 **The next steps, in order.** Each ends with the gates below (build 0/0 and a Metal shot under
 `MTL_DEBUG_LAYER=1`; tests and a Vulkan comparison only when the step changed shared code).
@@ -767,21 +769,21 @@ default.
 
 ### Decisions still open
 
-- **GI**: the probe GI needs ray queries; Metal's ray tracing is a different model. Vulkan on this Mac reports GI
-  off (MoltenVK exposes no `VK_KHR_ray_query`), so local parity is no-GI; on a machine where Vulkan has ray
-  queries the target includes GI. Either port `GiScene`/`GiProbes` to Metal ray queries (a project of its own) or
-  accept the no-GI look as the macOS baseline. **Observed** (the Metal spike's `--rt-bench`, since removed; M1 Pro): one
-  524k-triangle terrain acceleration structure took about 75–100 ms to build (88 MB plus 97 MB scratch), while
-  the 131k-ray probe batch took about 0.25–0.31 ms. That is traversal only; real scene builds, object/foliage
-  structures, refit and resolve are still unmeasured. The trace cost looks promising; memory and scene-build
-  cadence are the constraints to check in a port. The in-game Metal path is **experimental and opt-in**
-  (`MEITOU_METAL_GI=1`): a save load with it enabled froze the test M1 Pro, so normal launches leave it off.
+- **GI**: Metal's probe GI ([render-gi](render-gi.md#metal)), from the M3 only. **Observed** (the Metal spike's `--rt-bench`, since
+  removed; M1 Pro): one 524k-triangle terrain acceleration structure took about 75–100 ms to build (88 MB plus 97 MB scratch), the
+  131k-ray probe batch about 0.25–0.31 ms.
 - **Volumetric clouds and fog**: parity shots use `--faithful clouds,cloudshadows`; the Meitou cloud/fog path is
   step 6.
-- **Upscaler**: the **Use Metal upscaling** switch (`metalUseUpscaling`, default on) splits the Display settings into two trees: on, the
-  upscaler (preset row and render scale); off, no upscaler (below). MetalFX Balanced at render scale 0.50 is the default; the switch turns
-  itself off when MetalFX is unavailable; the choice is saved in `meitou.user.json` (`metalUpscaler` keeps the upscaler while the switch is
-  off). A file of layout 2 or older with `metalUpscaler` 0 (the released Native) migrates to the switch off, without `metalUpscaler` and
+- **Upscaler**: the **Use Metal upscaling** switch (`metalUseUpscaling`) splits the Display settings into two trees: on, the
+  upscaler (preset row and render scale); off, no upscaler (below). Until the player sets it (the key absent from `meitou.user.json`) the
+  screen decides at each start (`UserConfig.DefaultMetalUpscaling`, logged as `upscaling not chosen`): off on a Retina screen (two pixels per
+  point; `MetalUpscaling.Retina`), which in full screen then renders at half the screen's size (`metalRenderDivisor` 2); off on a screen up
+  to 1200 pixels tall (1080p class), which renders at its own size; on elsewhere (a larger one-pixel-per-point screen, or a screen AppKit does
+  not name: `MetalDisplay.ScreenPixels`, the window's `NSScreen` frame times its backing scale). MetalFX costs too much for a Retina screen's
+  output: upscaling 1080p to 4K took 30-40% of the GPU time (**Observed**, M6). With the switch on, MetalFX temporal at render scale
+  0.50 is the default. The switch turns itself off when MetalFX is unavailable; a choice in the game or the launcher is saved (`metalUpscaler`
+  keeps the upscaler while the switch is off), a start never saves it. Layout 6 drops `metalUseUpscaling` and `metalRenderDivisor` from a
+  file that has all four display keys at the earlier defaults (on, MetalFX temporal, 0.50, division 1), which every game-written file had. A file of layout 2 or older with `metalUpscaler` 0 (the released Native) migrates to the switch off, without `metalUpscaler` and
   `metalRenderScale`. TAA remains available for comparison; MEP-1
   fixed its Metal depth convention and sun-motion term, but it is still labelled experimental. The **F10 settings
   panel** exposes the presets Super Quality 0.77, Quality 0.67, Balanced 0.59,
@@ -803,7 +805,8 @@ other composite passes stay as the options set them. Where the picture is as lar
   off, in a window only) its virtual Retina pixels, one per point (`MetalRenderFraction`, the framebuffer's width over the window's),
   stretched as below. Where the window has one pixel per point the switch changes nothing. The render scale and render resolution rows are not
   shown.
-- In full screen the scene renders at the screen's size divided by `metalRenderDivisor` (1 to 4, whole numbers, default 1; the rows read
+- In full screen the scene renders at the screen's size divided by `metalRenderDivisor` (1 to 4, whole numbers; unset, 2 on a Retina screen
+  and 1 elsewhere; the rows read
   "WxH (screen / n)") and is stretched to the screen with the **nearest** pixel, sharp blocks of pixels, no filtering. Nearest is used for
   every division: it is exact whenever the render size divides the screen's, and off by at most one pixel when it does not.
   `metalRetinaResolution` is not used there.
@@ -815,7 +818,7 @@ other composite passes stay as the options set them. Where the picture is as lar
   `ShowPicture` copies it to the backbuffer (`PostComposite.Stretch`, one nearest pass) and the overlays draw on the backbuffer;
   otherwise the overlays draw into the picture and the present stretches it (`PresentPicture`). The present was already a nearest
   sample into the drawable. Screenshots read the target the interface was drawn into.
-- The stats lines (F11/F12) always read `render WxH  screen WxH`.
+- The stats lines (F11) always read `render WxH  screen WxH`.
 - Rows: the game's Display page (`Render resolution`, `Render UI in screen resolution`, via `SettingsMenu.DisplayRowShown`) and the
   launcher's (schema keys `metalUseUpscaling`, `metalUpscaler`, `metalRenderScale`, `metalRetinaResolution`, `metalRenderDivisor`,
   `metalUiAtScreenResolution`, [launcher](launcher.md)); `metalUpscaler` and `metalRenderScale` shown with the switch on, the last three with it off.
@@ -869,8 +872,8 @@ other composite passes stay as the options set them. Where the picture is as lar
   function detects the replacement, reattaches the Metal layer and restores the picture. Tested with a drag
   (1280x856 -> 900x600 -> back) and with AppKit's zoom; the zoom's restored frame/HUD was captured. A missing
   drawable sleeps 1 ms rather than spinning the main thread.
-- **Debug text scale.** The HUD scales with the screen; the fixed-pixel debug overlay (F11/F12) must be scaled by
-  framebuffer/points (2 on the Retina test display), or it is half size.
+- **Debug text scale.** The HUD scales with the screen; the fixed-pixel debug overlay (F11) must be scaled by
+  framebuffer/points (2 on the Retina test display), or it is half size. F12's chart draws with the debug face baked at 16 px times that.
 - **Far foliage.** The purple/red far trees are the impostor atlases (some assets are red, e.g.
   `FOLIAGE_DeadPineType-red`); the same view on Vulkan shows the same purple impostors. Impostors are enabled by
   default again; `MEITOU_METAL_NO_IMPOSTORS=1` is the diagnostic fallback.
@@ -916,7 +919,7 @@ other composite passes stay as the options set them. Where the picture is as lar
   can abort the Metal compiler with fast math enabled. A standalone Metal pipeline probe compiled when the shader selected the diffuse
   term first and called the shared lighting routine once. Both diffuse terms retain their original formulas.
 - UI shots: the Metal HUD is part of every screenshot. `--new-game --ui-panel inventory|stats|overview|menu`
-  opens a panel; `MEITOU_METAL_OVERLAY=1` adds the frame-stats lines at the top-left. The Vulkan HUD/panel still
+  opens a panel. The Vulkan HUD/panel still
   renders (verified with `--ui-panel inventory` after the shared changes).
 - Character shots: `--crowd 6 --no-population --at -50000,8000 --time 12 --distance 180 --pitch 18
   --no-objects --no-foliage --no-water --faithful clouds,cloudshadows --no-gi` (the open hillside; six characters).
@@ -958,7 +961,7 @@ DYLD_LIBRARY_PATH=/opt/homebrew/lib MTL_DEBUG_LAYER=1 dotnet run --project src/M
 ```
 
 Live check: `--renderer metal --new-game --time 12 --distance 250 --pitch 20 --faithful
-clouds,cloudshadows --no-gi` (WASD/arrows, Q/E, wheel, middle drag; F11 frame list, F12 fps). `--quit-after N`
+clouds,cloudshadows --no-gi` (WASD/arrows, Q/E, wheel, middle drag; F11 frame list, F12 profiler). `--quit-after N`
 prints the final camera and frame rate. Present/layer changes must also be seen in the live window: `--screenshot`
 reads the backbuffer and never exercises the drawable present.
 
@@ -983,10 +986,8 @@ plumbing, profiling, docs) need no Vulkan run.
 
 ## Constraints
 
-- **GI**: the probe GI needs ray queries (`VK_KHR_ray_query`), which have no Metal
-  translation; Metal's ray tracing is a different programming model. The engine already runs
-  without GI where the device has no ray queries (macOS today), so a Metal path starts with GI
-  off, like the Vulkan path on macOS.
+- **GI**: `VK_KHR_ray_query` has no Metal translation; Metal's probe GI is its own path on Metal ray tracing
+  ([render-gi](render-gi.md#metal)).
 - **Upscaler**: MetalFX is the Metal default (balanced, 0.50) and is implemented behind `IUpscaler`:
   `MetalFxUpscaler` is the temporal scaler at the 0.77/0.67/0.59/0.50/0.40 presets; `MetalFxSpatialUpscaler` covers
   the explicit 0.50/0.40 alternatives. 0.40 is the floor; 0.33 crashed before the first frame on this device and is

@@ -314,10 +314,13 @@ sealed class GameOptions
                                      the launcher benchmark (tier low, medium, high, ultra, extreme; scenario bases, the default, on its save with --load, or
                                      shark-flyby, a new game): its script at that tier from the
                                      default settings (meitou.user.json neither read nor written, no autosave), a 1920x1080 window, the Meitou look, frame limit
-                                     and vsync off, Vulkan only; writes frames.csv, summary.md and result.json there. Exit 7: unknown scenario; 6: the save is
-                                     not the scenario's; 5: the tier needs ray queries the GPU lacks
+                                     and vsync off, on Vulkan or with --renderer metal (a window of 1920x1080 pixels, Retina or not, no upscaler); writes
+                                     frames.csv, summary.md and result.json there. Exit 7: unknown scenario; 6: the save is not the scenario's; 5: the tier
+                                     needs ray queries the GPU lacks (on Metal: before the M3)
           --benchmark-list <file>    the only arguments: writes the benchmark's version and scenarios as JSON and exits
-          --benchmark-probe <file>   the only arguments: writes the benchmark's hardware record (CPU, memory, GPU, driver, ray queries, OS) as JSON and exits
+          --benchmark-probe <file> [--renderer metal]
+                                     the only arguments: writes the benchmark's hardware record (CPU, memory, GPU, driver, ray queries, OS) as JSON and exits;
+                                     with --renderer metal the Mac's Metal GPU, else the Vulkan one
           --benchmark-baseline       the benchmarks' fixed graphics: a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
@@ -379,7 +382,7 @@ sealed class GameOptions
     }
 
     /// <summary>
-    /// <c>--benchmark</c>'s needs (an output folder, its scenario's save or none, Vulkan, no other bench), then what it fixes for the run whatever
+    /// <c>--benchmark</c>'s needs (an output folder, its scenario's save or none, no other bench), then what it fixes for the run whatever
     /// came after it: the play bench into its folder, frame limit, vsync and HDR off, the default fight NPC; a scenario without a save is a new
     /// game at the default start and seed. An unknown scenario is left to Program (exit 7).
     /// </summary>
@@ -397,7 +400,7 @@ sealed class GameOptions
             throw new ArgumentException($"--benchmark-scenario {scenario.Id} needs --load <save folder> ({scenario.Save})");
         if (scenario.Save is null && (g.Load is not null || g.Continue || g.NewGame))
             throw new ArgumentException($"--benchmark-scenario {scenario.Id} makes its own new game: drop --load, --continue and --new-game");
-        if (g.Renderer != "vulkan") throw new ArgumentException("--benchmark runs on Vulkan only: drop --renderer metal");
+
         if (g.PlayBench is not null || g.BenchmarkBaseline)
             throw new ArgumentException("--benchmark runs its own play bench: drop --play-bench and --benchmark-baseline");
 

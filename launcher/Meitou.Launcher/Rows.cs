@@ -371,7 +371,7 @@ public sealed class ReleaseRow(Release release, bool installed, bool played)
     {
         Release.Published.ToString("yyyy-MM-dd"),
         Release.Prerelease ? LauncherText.Translate("nightly") : null,
-        Release.Asset is null ? Loc.Format(LauncherText.Translate("no {1} build"), Releases.Rid) : null,
+        Release.Asset is null && !Release.IsLocal ? Loc.Format(LauncherText.Translate("no {1} build"), Releases.Rid) : null,
     }.OfType<string>());
 
     /// <summary>

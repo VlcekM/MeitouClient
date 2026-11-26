@@ -50,14 +50,23 @@ public static class ModList
         Discover(install).ToDictionary(m => m.Name, m => m.Path, StringComparer.Ordinal);
 
     /// <summary>
-    /// <see cref="FindMods"/> with each mod's source and whether it is an RE_Kenshi plugin mod, in name order.
+    /// <see cref="FindMods"/> with each mod's source and whether it is an RE_Kenshi plugin mod, in name order (the released signature, kept for
+    /// built mods: docs/modding.md "API compatibility").
     /// </summary>
-    public static List<ModInfo> Discover(GameInstall install)
+    public static List<ModInfo> Discover(GameInstall install) => Discover(install, null);
+
+    /// <summary>
+    /// <see cref="FindMods"/> with each mod's source and whether it is an RE_Kenshi plugin mod, in name order; without the workshop items in
+    /// <paramref name="unsubscribed"/> (the launcher's, docs/launcher.md "Workshop sync": still on disk, no longer subscribed).
+    /// </summary>
+    public static List<ModInfo> Discover(GameInstall install, IReadOnlySet<ulong>? unsubscribed)
     {
         var mods = new Dictionary<string, ModInfo>(StringComparer.Ordinal);
         if (install.WorkshopDirectory is { } workshop)
             foreach (var item in Directory.EnumerateDirectories(workshop).Order(StringComparer.Ordinal))
             {
+                if (IsUnsubscribed(item, unsubscribed)) continue;
+
                 var file = Directory.EnumerateFiles(item)
                     .Where(f => Path.GetExtension(f) == ".mod")
                     .Order(StringComparer.Ordinal)
@@ -76,6 +85,12 @@ public static class ModList
             }
         return [.. mods.Values.OrderBy(m => m.Name, StringComparer.Ordinal)];
     }
+
+    /// <summary>
+    /// Whether the workshop item folder <paramref name="item"/> is named by an id in <paramref name="unsubscribed"/>.
+    /// </summary>
+    static bool IsUnsubscribed(string item, IReadOnlySet<ulong>? unsubscribed) =>
+        unsubscribed is not null && ulong.TryParse(Path.GetFileName(item), out ulong id) && unsubscribed.Contains(id);
 
     /// <summary>
     /// Adds the Workshop mod of <paramref name="file"/> under its file stem as the original has it: a stem the code page cannot hold keeps its

@@ -104,7 +104,7 @@ sealed class UserConfig
     /// retyped or read with a new meaning, and convert older files in <see cref="Migrate"/>. A Tab panel slider whose numbering changes
     /// takes a new label instead (<c>WorldFrame.UpscalerSliders</c>), so its old value is not misread.
     /// </summary>
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
     /// <summary>
     /// The default of <see cref="CharacterFlightSeconds"/>, and the distance from the view a squad member must be past for a double click to
     /// fly there.
@@ -230,11 +230,13 @@ sealed class UserConfig
         }
     }
     /// <summary>
-    /// Whether the Metal path uses an upscaler (the default) or none: with it off the scene renders at the window's size, or in full screen at
-    /// <see cref="MetalRenderDivisor"/> of the screen's. Switched off by itself when MetalFX is unavailable.
+    /// Whether the Metal path uses an upscaler or none: with it off the scene renders at the window's size, or in full screen at
+    /// <see cref="MetalRenderDivisor"/> of the screen's. Null until the player chooses: the screen decides at each start
+    /// (<see cref="DefaultMetalUpscaling"/>). Off by itself when MetalFX is unavailable.
     /// </summary>
     [BenchmarkNeutral]
-    public bool MetalUseUpscaling { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? MetalUseUpscaling { get; set; }
     /// <summary>
     /// The Metal upscaler used while <see cref="MetalUseUpscaling"/> is on, kept while it is off: MetalFX balanced (temporal at 0.50) by default.
     /// Never <see cref="MetalUpscalerMode.Disabled"/>.
@@ -248,10 +250,34 @@ sealed class UserConfig
     public float MetalRenderScale { get; set; } = 0.5f;
     /// <summary>
     /// Without the Metal upscaler, in full screen: the screen's size divided by this (1 to <see cref="MetalRenderDivisorMax"/>, whole
-    /// numbers) is the size the scene renders at. In a window the scene is as large as the window.
+    /// numbers) is the size the scene renders at. In a window the scene is as large as the window. Null until the player chooses: the screen
+    /// decides at each start (<see cref="DefaultMetalRenderDivisor"/>).
     /// </summary>
     [BenchmarkNeutral]
-    public int MetalRenderDivisor { get; set; } = 1;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MetalRenderDivisor { get; set; }
+
+    /// <summary>
+    /// The tallest screen (pixels) that renders at its own size without MetalFX until the player chooses: the 1080p class (1920x1200, a 2560x1080
+    /// ultrawide).
+    /// </summary>
+    public const int MetalUpscalingNativeHeight = 1200;
+
+    /// <summary>
+    /// <see cref="MetalUseUpscaling"/> before the player chooses, for a screen <paramref name="screenHeight"/> pixels tall (null: unknown): off on a
+    /// Retina screen (two pixels per point), whose half resolution renders faster without MetalFX, which took 30-40% of the GPU time from 1080p
+    /// to 4K (Observed, M6); off on a screen up to <see cref="MetalUpscalingNativeHeight"/> pixels, where every Apple-silicon GPU renders the
+    /// screen's own size and MetalFX at 0.50 would make a quarter of the pixels; on elsewhere.
+    /// </summary>
+    public static bool DefaultMetalUpscaling(bool retina, int? screenHeight) =>
+        !retina && !(screenHeight <= MetalUpscalingNativeHeight);
+
+    /// <summary>
+    /// <see cref="MetalRenderDivisor"/> before the player chooses: half the screen's size on a Retina screen (one pixel per point), else the
+    /// screen's.
+    /// </summary>
+    public static int DefaultMetalRenderDivisor(bool retina) => retina ? 2 : 1;
+
     /// <summary>
     /// Without the Metal upscaler, in a window (full screen has <see cref="MetalRenderDivisor"/>): whether the scene renders at the window's real
     /// pixels (the default) or at its virtual Retina pixels, one per point, stretched to the window. It changes nothing where the window has one
@@ -1121,6 +1147,23 @@ sealed class UserConfig
         if (from < 3) MigrateMetalUpscaling(json);
         if (from < 4) MigrateShadowCascades(json);
         if (from < 5) MigrateTickAhead(json);
+        if (from < 6) MigrateMetalDisplayDefaults(json);
+    }
+
+    /// <summary>
+    /// Layout 6 leaves <c>metalUseUpscaling</c> and <c>metalRenderDivisor</c> unsaved until the player chooses them (the screen decides). The game
+    /// wrote all four Metal display keys into every file, so one with all four at the earlier defaults (the switch on with MetalFX temporal at
+    /// 0.50, the division 1) loses those two; a file the launcher alone wrote has only the keys chosen there, and keeps them.
+    /// </summary>
+    static void MigrateMetalDisplayDefaults(JsonObject json)
+    {
+        bool Is(string key, double value) => json[key] is JsonValue v && v.TryGetValue(out double d) && Math.Abs(d - value) < 1e-3;
+        bool untouched = json["metalUseUpscaling"] is JsonValue on && on.TryGetValue(out bool upscaling) && upscaling
+            && Is("metalUpscaler", (int)MetalUpscalerMode.Temporal) && Is("metalRenderScale", 0.5) && Is("metalRenderDivisor", 1);
+        if (!untouched) return;
+
+        json.Remove("metalUseUpscaling");
+        json.Remove("metalRenderDivisor");
     }
 
     /// <summary>
@@ -1261,7 +1304,7 @@ sealed class UserConfig
         MetalRenderScale = Math.Clamp(MetalRenderScale, 0.33f, 1f);
         if (!Enum.IsDefined(MetalUpscaler) || MetalUpscaler == MetalUpscalerMode.Disabled) MetalUpscaler = MetalUpscalerMode.Temporal;
         if (MetalUpscaler is MetalUpscalerMode.Temporal or MetalUpscalerMode.Spatial) MetalRenderScale = Math.Clamp(MetalRenderScale, 0.4f, 1f);
-        MetalRenderDivisor = Math.Clamp(MetalRenderDivisor, 1, MetalRenderDivisorMax);
+        MetalRenderDivisor = MetalRenderDivisor is { } divisor ? Math.Clamp(divisor, 1, MetalRenderDivisorMax) : null;
         ModSettings ??= [];
         ModSettingPresets ??= [];
         AdoptedMods ??= [];

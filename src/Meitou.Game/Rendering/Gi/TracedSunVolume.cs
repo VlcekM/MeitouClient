@@ -18,7 +18,7 @@ sealed unsafe class TracedSunVolume : IDisposable
     /// <summary>
     /// The compute shader: per texel of each traced layer, the nearest of the solids' and the fine and coarse terrain's first hits along the ray.
     /// </summary>
-    static readonly string Source = $$"""
+    internal static readonly string Source = $$"""
         #version 460
         #extension GL_EXT_ray_query : require
         #extension GL_EXT_buffer_reference : require

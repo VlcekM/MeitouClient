@@ -84,6 +84,14 @@ counted; play benchmark from an empty navmesh cache with DotRecast's own tile he
 and 0 of 10. The heap count and `ConserveMemory` stay as they are: **Observed** (same benchmark, pooled heightfields, one run each) 8 heaps halve
 the gen0 collections (330 for 699) for 2.2 s of pauses against 2.9 s, with longer single ones (gen0 21 ms for 14, gen1 52 for 42) and frame times
 within the runs' spread; `ConserveMemory` 5 changed nothing (2.9 s of pauses, no blocking gen2 either way).
+**Metal idle trim** (`MetalGameLoop.TrimManagedHeap`, at most once a minute, after 2 s of quiet streaming or with the heap past 4 GB): a blocking,
+compacting collection (LOH too) only where the title, a menu, a loading screen or the exit covers it; in play a background one. **Observed**
+(2026-11-25, Mac mini M6, Metal, save `bench-bases-2026-10-27`, High): with the heap past 4 GB compacting in play, the heap sat at 4.1-4.6 GB
+(~1 GB fragmented, 0.9 GB live in a `dotnet-gcdump`), so every minute a gen2 of reason 10 (induced compacting) paused 270-643 ms; a background
+collection's `PromotedBytes` read 2.9 GB (what was allocated while it ran counts as surviving), so it is no live measure either. Background only,
+150 s with the travel: no blocking gen2, the longest GC pause 14 ms, the trims ~1 ms. Per-frame garbage the Metal host no longer makes (allocation
+trace, [bench.md](bench.md)): an overlay pass a frame (`DrawOverlayPass`, ~22 MB/s) and the bindless table's residency set
+(`MetalBindlessTable.GatherResident`, ~25 MB/s, at every entry change).
 Process memory beyond the GC heap is mostly untouched write-combined commit (~6 GB at 6.7 GB of VRAM in use), not resident RAM.
 **Pooled buffers** (allocation is the GC lever): streaming garbage is mostly LOH arrays from worker jobs. **Observed** in flights: gen0/gen1 pauses under
 ~40 ms; single blocking gen2s (`NonConcurrentGC`, reason `AllocSmall`) of 0.3-1.7 s in some runs despite SustainedLowLatency, with or without pooling. Pooled now:
@@ -179,9 +187,12 @@ while the title draws or shows and cleared when it closes; simulation and saves 
   They start three seconds into combat. The world has no fight footwork (pursuit/movement), so `TitleSpacing` holds each pair
   at least both radii + 1 apart at the end of every tick; without it they overlapped and face-the-target turned them round each
   tick. Easter egg (`TitleTornado`, display only, off for `--screenshot`): one landed melee blow in 500, every blow on 1 April and
-  25 October, throws its victim 210 up (fast rise, bobbing hover, falling back), spinning six turns over 4.5 s, inside a funnel of
-  24 `kenshi_twister_dust1` bursts stacked to 330 (size 0.04 at the foot to 1.8 at the top, growing with the cube of the height; 0.6 of
-  their particles' life, so each ring stays near its height).
+  25 October, throws its victim (one fighter at a time) 210 up (fast rise, bobbing hover, falling back), spinning six turns over 4.5 s, inside a funnel of
+  16 `kenshi_twister_dust2` bursts (the narrow dust devil) stacked to 330, each scaled 1 at the foot to 6 at the top (growing with the
+  square of the height) and living 0.35 / scale of its particles' life, so every ring climbs about as far. Its light is faked: not lit
+  by the scene (lit, it glowed orange against the title's sun) but recoloured from (0.7, 0.6, 0.48) at the foot to (1.35, 1.27, 1.12)
+  at the top, with the square root of the height. Built from the wide `kenshi_twister_dust1` with only its particle sizes scaled, the rings stayed 140-260 wide and
+  read as a grey column (**Observed**, Metal and Vulkan).
 The title menu is the [Meitou UI kit](meitou-ui.md)'s main menu (`MeitouTitleMenu`): its stack, save card and plate buttons at the kit's
 1600×900 sizes scaled with the height, over the kit's vignette. The card (paper, edge, rounded corners, drop shadow), the plates (Button1Skin
 9-slice at 70%, pushed skin at 85% under the mouse) and the key chip are baked on the CPU from crops of `Kenshi_UI.png` and uploaded as

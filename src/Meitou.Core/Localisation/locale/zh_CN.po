@@ -6726,3 +6726,15 @@ msgstr "原生"
 #. machine-translated
 msgid "Native AA"
 msgstr "原生抗锯齿"
+
+#. machine-translated
+msgid "• Full screen at 1920×1080 render resolution, Metal, VSync & frame limit off, HDR off"
+msgstr "• 全屏，渲染分辨率 1920×1080，Metal，关闭垂直同步与帧率上限，关闭 HDR"
+
+#. machine-translated
+msgid "• Chosen quality tier (Meitou look), no upscaler or anti-aliasing"
+msgstr "• 所选画质档位（Meitou 风格），不使用超分和抗锯齿"
+
+#. machine-translated
+msgid "• No ray tracing: Low, Medium and High only"
+msgstr "• 无光线追踪：仅限低、中、高档位"

@@ -76,7 +76,8 @@ against the appropriate air/water bounds; ordinary camera fog cannot be applied 
 
 Both waters measure their depth as the game does ([terrain](formats/terrain.md) "LOD, water and sun"): the distance
 along the view ray from the surface to what is behind it, from the scene depth copied before the water
-(`CaptureScene`, Vulkan only; Metal and Meitou without refraction keep the slant path to the terrain's height).
+(`CaptureScene`: Vulkan's image copy, Metal's depth blit; Meitou without refraction keeps the slant path to the terrain's height). **Observed**
+(save water_day, a pond in the dunes, Metal against Vulkan): the same clear shallows, blue deeper water and wet band.
 Faithful uses it as the game's alpha. Meitou absorbs along it and fades the last 2 units into the scene behind
 (0.5 for the swash); both widen that fade to the two stored depths' precision (`2 * depthStep`, derived: 2.4e-7 z on
 Vulkan's reversed float depth, 0.03 units at 120000; 2.4e-7 z^2 / near on Metal's conventional one), so distant shores
@@ -93,7 +94,8 @@ pass restart was there), 0.05 ms with Faithful (a pass restart plus a full-size 
 
 ## Contact foam, wakes and ripples
 
-Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam, wakes and ripples"), off by default. Vulkan only. A second Meitou program pair
+Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam, wakes and ripples"), off by default, on both backends (Metal: the same programs and ripple kernel, the depth from `CaptureScene`; **Observed** in save
+water_day: the foam band at a wading character's waterline as on Vulkan). A second Meitou program pair
 (`WATER_CONTACT`, made on first use), so off the water has none of it. Contact foam and the field's foam reach 1200 units, fading over the last 400, and join the foam
 `amount`, so they take the lace, light and colour of the water's other foam.
 

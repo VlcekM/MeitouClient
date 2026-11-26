@@ -133,6 +133,14 @@ public sealed class MetalPipelines : IGpuPipelines
             d.ColorAttachments.SetObject(extra, 1);
         }
 
+        if (desc.Targets.Extra2 != InternalFormat.None)
+        {
+            var extra2 = d.ColorAttachments.Object(2);
+            extra2.PixelFormat = MetalConventions.Pixel(desc.Targets.Extra2);
+            extra2.WriteMask = MTLColorWriteMask.All;
+            d.ColorAttachments.SetObject(extra2, 2);
+        }
+
         if (desc.Targets.Depth != InternalFormat.None) d.DepthAttachmentPixelFormat = MetalConventions.Pixel(desc.Targets.Depth);
         if (desc.Vertex.Inputs.Length > 0) d.VertexDescriptor = VertexDescriptor(desc.Vertex);
         NSError error = default;

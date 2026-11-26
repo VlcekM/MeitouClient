@@ -30,6 +30,12 @@ static class LauncherSchema
     const string VulkanRenderer = "vulkan", MetalRenderer = "metal";
 
     /// <summary>
+    /// The switches that need tessellation shaders: Vulkan only (the Metal renderer has none, docs/metal-backend.md "Tessellation").
+    /// </summary>
+    static readonly string[] TessellationSwitches =
+        [WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch];
+
+    /// <summary>
     /// The schema key of a <see cref="UserConfig"/> property: its name in camel case.
     /// </summary>
     static string Key(string property) => JsonNamingPolicy.CamelCase.ConvertName(property);
@@ -273,6 +279,7 @@ static class LauncherSchema
             On = on,
             Shown = shown ? 1 : 0,
             Impact = LookPresets.ImpactOf(label),
+            Renderer = TessellationSwitches.Contains(label) ? VulkanRenderer : null,
         };
         // The switches a technique choice stands for are saved but not shown: the choice is their row (the launcher writes it, the game applies it
         // last).
@@ -361,9 +368,13 @@ static class LauncherSchema
     /// The Metal renderer's upscaling (docs/metal-backend.md "Upscaling"): the Use Metal upscaling switch, and two trees under it. On: the upscaler
     /// (MetalFX, TAA) and the render scale. Off: in a window whether to render in its real or virtual Retina pixels, in full screen the render
     /// resolution (the screen's pixels divided by 1 to 4), and whether the interface is drawn at the screen's size over the stretched picture.
+    /// The switch and the division show a Retina screen's defaults (every Apple-silicon Mac's own screen): until they are saved the game takes
+    /// its screen's (<see cref="UserConfig.DefaultMetalUpscaling"/>).
     /// </summary>
     static SettingDescription[] MetalUpscalingSettings(UserConfig defaults)
     {
+        int upscalingDefault = UserConfig.DefaultMetalUpscaling(retina: true, screenHeight: null) ? 1 : 0;
+        int divisorDefault = UserConfig.DefaultMetalRenderDivisor(retina: true);
         var useUpscaling = Key(nameof(UserConfig.MetalUseUpscaling));
         var upscalingOn = new SettingCondition { Key = useUpscaling, Value = 1 };
         var upscalingOff = new SettingCondition { Key = useUpscaling, Value = 0 };
@@ -375,7 +386,7 @@ static class LauncherSchema
             new()
             {
                 Key = useUpscaling, Kind = SettingKind.Toggle, Name = SettingsMenu.MetalUseUpscalingSlider,
-                Description = SettingHints.SliderHint(SettingsMenu.MetalUseUpscalingSlider), Default = defaults.MetalUseUpscaling ? 1 : 0,
+                Description = SettingHints.SliderHint(SettingsMenu.MetalUseUpscalingSlider), Default = upscalingDefault,
                 On = "On", Off = "Off", Renderer = MetalRenderer,
             },
             new()
@@ -401,8 +412,8 @@ static class LauncherSchema
             new()
             {
                 Key = Key(nameof(UserConfig.MetalRenderDivisor)), Kind = SettingKind.Slider, Name = SettingsMenu.MetalRenderResolutionSlider,
-                Description = SettingHints.SliderHint(SettingsMenu.MetalRenderResolutionSlider), Default = defaults.MetalRenderDivisor,
-                Shown = defaults.MetalRenderDivisor, Min = 1, Max = UserConfig.MetalRenderDivisorMax, Step = 1,
+                Description = SettingHints.SliderHint(SettingsMenu.MetalRenderResolutionSlider), Default = divisorDefault,
+                Shown = divisorDefault, Min = 1, Max = UserConfig.MetalRenderDivisorMax, Step = 1,
                 Labels = ["Screen resolution", .. Enumerable.Range(2, UserConfig.MetalRenderDivisorMax - 1).Select(d => $"Screen / {d}")],
                 ShownWhen = upscalingOffInFullScreen, Renderer = MetalRenderer,
             },

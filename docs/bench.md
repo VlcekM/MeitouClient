@@ -133,7 +133,8 @@ Loading the same autosave and resaving after 300 headless ticks gave matching SH
 - The render-thread stages (`cpu_*`) come from the shared `WorldFrame` laps; `cpu_sim` stays 0 (`update_ms` has the ticks).
 - The summary's run line names the device, scene and window sizes, the upscaler, the pacing, the GPU budget
   (`--metal-gpu-budget`) and the memory guard's state at the end. The saved graphics apply; `--benchmark-baseline` is
-  not applied on Metal, so its numbers do not compare with Vulkan benchmark runs.
+  not applied on Metal, so its numbers do not compare with Vulkan benchmark runs. The GPU foliage cull is the Metal default
+  ([metal-gpu-cull-plan](metal-gpu-cull-plan.md)); the Metal numbers below were taken before it became the default.
 - The Metal loop saves vsync, frame limit, full screen, upscaler and graphics at exit whatever the run's options were:
   point a bench run at a copy of `meitou.user.json` (the file is read from the working directory first).
 
@@ -227,7 +228,23 @@ is the launcher's benchmark: the play bench machinery with a fixed workload, com
   `MEITOU_MODS_CFG` list (`ModList.NoMods`). The install's `settings.cfg` defaults (language, edge scroll, markers, camera) still apply. Before the device: a 1920x1080 window, the tier's texture quality, no GI and no ray queries unless the tier
   has traced switches (Ultra, Extreme), anti-aliasing Low's own (none at 0.83) or TAA at render scale 1. After the settings panel exists:
   the Meitou look, the tier, its traced switches, an upscaler (FSR, DLSS) turned TAA and render scale 1 (not Low). Frame limit, vsync and
-  HDR off, Vulkan only, default `--scene-npc`, `MEITOU_BENCH_ONLY` ignored. Later options do not override these.
+  HDR off, default `--scene-npc`, `MEITOU_BENCH_ONLY` ignored. Later options do not override these. Vulkan by default; the Metal run is below.
+- Metal (`--renderer metal`, macOS builds: `BenchmarkSpec.Renderers`, `MetalBenchmark`): the game runs in a **full-screen Space**, not a
+  window: a window gets drawables at the display's refresh rate whatever vsync says (**Observed**, 2026-11-25, Apple M6, macOS 27.2,
+  `shark-flyby` Medium: windowed circle-high p50 16.7 ms, 60 fps, GPU 16.6 ms; in the Space p50 14.9 ms, 72 fps, GPU 13.9 ms; one run each).
+  Whatever the screen (Retina or not, any size), the scene and the interface are drawn at 1920x1080 pixels with no upscaler and no
+  anti-aliasing at every tier (`MetalUpscaling.FixedSize`), and the present stretches the picture to the screen with the nearest pixel, its
+  aspect ratio kept, black bars where the screen's shape differs (`MetalContext.LetterboxPicture`; **Observed** only on a 16:9 screen, where there
+  are none). `resolution` in result.json is that render size. Tried, not kept (**Observed**, 2026-11-25, same machine and scenario, 3840x2160
+  screen, one run each): a layer whose drawable is 1920x1080 and which the compositor shows unscaled in the middle of the screen
+  (`contentsGravity` center) gave the same frame times as the stretch (all-groups 64.5 and 65.6 fps, GPU p50 15.9 and 15.8 ms; circle-high 71 and
+  72 fps, the Space's refresh cap lifted in both), so the full-screen stretch costs nothing measurable here. Tiers apply to the sliders and switches the Metal panel has (`MetalBenchmark.ApplyTier`); hardware `driver`
+  is "Metal", `vramMb` the recommended working set, `rayQueries` hardware ray tracing (M3 and later, [render-gi](render-gi.md#metal)): an
+  M1 or M2 exits 5 at Ultra and Extreme. There those tiers turn on the probe GI, Metal's only traced effect; the panel has none of their other
+  traced switches. The GPU foliage cull is on (its default); the memory guard's budget is the game's default for the Mac. The Metal fingerprint
+  differs from the Vulkan one (its own fixed settings, `BenchmarkSpec.Fingerprint(scenario, renderer)`; the Vulkan one is unchanged), and
+  result.json names the `renderer`. `frame_ms` is bound by the display refresh only in a window, so use the Space for comparable numbers; the
+  Metal columns are those of the [play benchmark](#play-benchmark) (`gpu_total`, no GPU stages).
 - Scenarios (`BenchmarkSpec.Scenarios`; `--benchmark-list <file>` writes them with their groups and measured seconds):
   - `bases` (default): the whole play bench script on save `bench-bases-2026-10-27` (`--load` required). Groups: camera (idle, orbit,
     zoom, pan), streaming (travel, return), simulation (speed-x2 to loot), ui (panels, panels-warm), views (horizon, overview, flights: the first 6 player characters, twice each, 72 s).
@@ -242,13 +259,13 @@ is the launcher's benchmark: the play bench machinery with a fixed workload, com
     and applied hash; the applied hash differed between tiers.
 - Save hash: SHA-256 of the manifest `<sha256>  ./<relative path>\n` per file, sorted by path (ordinal), as `sha256sum` prints it;
   `bench-bases-2026-10-27` is `ceb2fb18…dac4ff` (**Observed**: the release zip's 1448 files with `find | sort | sha256sum` and the game's check agree).
-- Exit codes: 0 done, 1 the script did not finish (no result.json), 2 bad options (`--renderer metal`, a missing `--benchmark-out`
-  or `--load`), 5 a tier that needs ray queries on a device without them (checked on the made device, before loading), 6 the save's hash
+- Exit codes: 0 done, 1 the script did not finish (no result.json), 2 bad options (a missing `--benchmark-out` or `--load`), 5 a tier that needs ray queries on a device without them (checked on the made device, before loading), 6 the save's hash
   is not the scenario's (checked before the window), 7 an unknown scenario.
-- `--benchmark-probe <file>` writes the hardware record alone (`HardwareRecord`): cpu, threads, ramGb, gpu, driver, vramMb, rayQueries
-  (the device offers the three ray query extensions, whatever the run enabled), os, kernel, osFamily.
+- `--benchmark-probe <file> [--renderer metal]` writes the hardware record alone (`HardwareRecord`): cpu, threads, ramGb, gpu, driver, vramMb,
+  rayQueries (the device offers the three ray query extensions, whatever the run enabled), os, kernel, osFamily; with `--renderer metal` the Mac's
+  Metal device. `--benchmark-list` also names the `renderers` the build runs the benchmark on (a list without the key: Vulkan only).
 
-`result.json` beside `frames.csv` and `summary.md` (`BenchmarkResult`): `schema` 1, `benchmarkVersion`, `fingerprint`, `applied`,
+`result.json` beside `frames.csv` and `summary.md` (`BenchmarkResult`): `schema` 1, `benchmarkVersion`, `fingerprint`, `renderer`, `applied`,
 `tier`, `scenario`, `game` (`version`: the tag without `v`; `commit`: 8 characters), `save` (null without one), `resolution`, `startedAt`
 (the script's start, UTC), `hardware`, and `groups`: per group `frames`, `seconds`, `avgFps`, `p50Ms`, `p99Ms`, `maxMs`, `over33Pct`,
 `over100`, `slowWorldP99Ms`, `slowWorldMaxMs`, `vramPeakMb`, `sysmemPeakMb` and `stages` (p50 and p99 of every `cpu_*`/`gpu_*` column,
@@ -258,11 +275,12 @@ keys with `_` for `-` and no `_ms`). Read back from frames.csv: percentile = sor
 Version and fingerprint: `BenchmarkSpec.Version` is bumped by hand when the workload changes (tiers, fixed settings, default settings,
 a scenario's start, segments, groups or save, metrics), never for faster code. The fingerprint is SHA-256 of `BenchmarkSpec.CanonicalText`:
 the version, metric text, the scenario (start, save and hash, segments with seconds,
-groups), fixed settings, the benchmark's `UserConfig` as compact JSON without the `[BenchmarkNeutral]` settings (ones the benchmark overrides,
-Metal's, and ones no run reads: file bookkeeping, menus the script never opens, key bindings) and each tier's table values and switches;
-nothing from the machine. So it is per scenario, and a version with two fingerprints is a missed bump. A fingerprint that changed without the
-workload is retired in the service's `BenchFingerprints`, which maps submissions and stored sessions to its replacement: version 1 builds up to
-0.23.1 hashed every setting, so each release that added one had its own (**Verified**: all six recomputed from the 0.23.1 text minus the added keys). `applied` is SHA-256 of the settings panel's sliders and
+groups), the renderer's fixed settings, the benchmark's `UserConfig` as compact JSON without the `[BenchmarkNeutral]` settings (ones the
+benchmark overrides, Metal's, and ones no run reads: file bookkeeping, menus the script never opens, key bindings) and each tier's table values
+and switches; nothing from the machine. So it is per scenario and renderer, and a version with two fingerprints for one of them is a missed bump.
+A fingerprint that changed without the workload is retired in the service's `BenchFingerprints`, which maps submissions and stored sessions to its
+replacement: version 1 builds up to 0.23.1 hashed every setting, so each release that added one had its own (**Verified**: all six recomputed from
+the 0.23.1 text minus the added keys). `applied` is SHA-256 of the settings panel's sliders and
 switches after the tier (`key=value\n`, sorted), which differs by device (ray queries, DLSS).
 
 Detailed logs/screenshots belong outside the repository. Evidence for original-game claims

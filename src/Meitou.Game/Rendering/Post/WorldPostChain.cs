@@ -84,6 +84,28 @@ interface IWorldPostChain
     int GiResolve { get; set; }
 
     /// <summary>
+    /// This frame's sun is traced (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the scene targets carry the sun term's target.
+    /// </summary>
+    bool TracedSun { get; set; }
+
+    /// <summary>
+    /// <c>--debug-shadows 4</c>: the traced share and the rays' mask drawn over the scene.
+    /// </summary>
+    bool TracedDebug { get; set; }
+
+    /// <summary>
+    /// Whether the characters' gathered light runs this frame (docs/render-gi.md "Characters"): the characters mark themselves as its receivers and
+    /// the traced scene holds them.
+    /// </summary>
+    bool CharacterOcclusionWanted { get; }
+
+    /// <summary>
+    /// The lit surfaces store their gloss for the reflections (docs/render-gi.md "Reflections"): the scene keeps the surface target even without
+    /// <see cref="GiResolve"/>. Set before <see cref="Begin"/>.
+    /// </summary>
+    bool SsrSurfaces { get; set; }
+
+    /// <summary>
     /// The sky's exposure band, read by the composite's exposure adaptation.
     /// </summary>
     (float Min, float Max)? AutoExposure { get; set; }

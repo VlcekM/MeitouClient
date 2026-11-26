@@ -23,6 +23,11 @@ public sealed unsafe class MetalFrame : IGpuFrame
     readonly MetalContext _ctx;
 
     /// <summary>
+    /// The scene's command buffers committed earlier in the frame by <see cref="Split"/> (the profiler's GPU stage times), in order.
+    /// </summary>
+    readonly List<MTLCommandBuffer> _splits = [];
+
+    /// <summary>
     /// The frame of ring slot <paramref name="slot"/>, with a 1 MB constants chunk and its command lists.
     /// </summary>
     internal MetalFrame(MetalContext ctx, int slot)
@@ -70,9 +75,25 @@ public sealed unsafe class MetalFrame : IGpuFrame
 
     /// <summary>
     /// The command buffer this frame's commands are recorded into: the scene's work, committed by <see cref="MetalContext.EndFrame"/> before the
-    /// drawable is asked for.
+    /// drawable is asked for (after a <see cref="Split"/>, the work since the last split).
     /// </summary>
     internal MTLCommandBuffer SceneCommand { get; private set; }
+
+    /// <summary>
+    /// The frame's first scene command buffer: the first split's, else <see cref="SceneCommand"/>.
+    /// </summary>
+    internal MTLCommandBuffer FirstSceneCommand => _splits.Count > 0 ? _splits[0] : SceneCommand;
+
+    /// <summary>
+    /// Recording moves on to <paramref name="next"/> (retained by the caller): the commands so far stay in the old scene command buffer, which the
+    /// caller commits.
+    /// </summary>
+    internal void Split(MTLCommandBuffer next)
+    {
+        _splits.Add(SceneCommand);
+        Commands.MoveTo(next);
+        SceneCommand = next;
+    }
 
     /// <summary>
     /// The frame's last command buffer, the one that completes last: the present's once <see cref="AdoptPresent"/> made it, else the scene's.
@@ -103,6 +124,8 @@ public sealed unsafe class MetalFrame : IGpuFrame
         _presentCommand = default;
         if (SceneCommand.NativePtr != IntPtr.Zero) SceneCommand.Dispose();
         SceneCommand = default;
+        foreach (var split in _splits) split.Dispose();
+        _splits.Clear();
     }
 
     /// <summary>
@@ -110,6 +133,7 @@ public sealed unsafe class MetalFrame : IGpuFrame
     /// </summary>
     void ReportFailure()
     {
+        foreach (var split in _splits) Report(split, "scene split");
         Report(SceneCommand, "scene");
         Report(_presentCommand, "present");
     }
@@ -200,16 +224,21 @@ public sealed unsafe class MetalFrame : IGpuFrame
     /// </summary>
     readonly MetalCommandList _preFrame;
     /// <summary>
-    /// The separate pre-frame command buffer; default until the first <see cref="PreFrame"/> of the frame asks for it.
+    /// The separate pre-frame command buffer; default until the first <see cref="PreFrame"/> of the frame (or since the last split) asks for it.
     /// </summary>
     MTLCommandBuffer _preCommand;
 
     /// <summary>
-    /// Whether the pre-frame gets a command buffer of its own (<c>MEITOU_METAL_GPU_CULL</c>): part of the opt-in Metal GPU-cull path. With the CPU
-    /// cull, the upstream pre-frame work (uploads, the ocean's FFT, impostor bakes) stays in the frame's own command list as before the 2026-10-23
-    /// cull change: the extra command buffer is not needed and is one more ordering point on a path that has produced GPU progress timeouts.
+    /// The pre-frame command buffers committed earlier in the frame by <see cref="CommitPreFrameSoFar"/> (a split's), in order.
     /// </summary>
-    static readonly bool SeparatePreFrame = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";
+    readonly List<MTLCommandBuffer> _earlierPre = [];
+
+    /// <summary>
+    /// Whether the pre-frame gets a command buffer of its own: part of the Metal GPU-cull path (<see cref="Foliage.MetalGpuCull"/>). With the CPU
+    /// cull (the reference path), the pre-frame work (uploads, the ocean's FFT, impostor bakes) stays in the frame's own command list: the extra
+    /// command buffer is not needed.
+    /// </summary>
+    static readonly bool SeparatePreFrame = Foliage.MetalGpuCull.Enabled;
 
     /// <summary>
     /// The commands recorded ahead of the frame's passes (the GPU cull's dispatches, the ocean's FFT, the impostor
@@ -220,6 +249,30 @@ public sealed unsafe class MetalFrame : IGpuFrame
 
     /// <inheritdoc/>
     IGpuCommandList IGpuFrame.PreFrame => PreFrame;
+
+    /// <summary>
+    /// The separate pre-frame command buffer being recorded (default without one).
+    /// </summary>
+    internal MTLCommandBuffer PreFrameCommand => _preCommand;
+
+    /// <summary>
+    /// Before a split's scene command buffer is committed: the pre-frame recorded so far is committed ahead of it, and later pre-frame work
+    /// starts another (committed ahead of the next split, or of the frame's last scene command buffer). Each scene part thus runs after the
+    /// pre-frame work recorded while it was (the GPU cull is recorded inside the shadows' passes that draw with it). Returns the committed one
+    /// (default: none). Enqueuing the one pre-frame at the first split to commit it at the end hung the game; recording later pre-frame work into
+    /// the frame's list put the cull inside a rendering.
+    /// </summary>
+    internal MTLCommandBuffer CommitPreFrameSoFar()
+    {
+        if (!SeparatePreFrame || _preCommand.NativePtr == IntPtr.Zero) return default;
+
+        var committed = _preCommand;
+        _preFrame.Finish();
+        committed.Commit();
+        _earlierPre.Add(committed);
+        _preCommand = default;
+        return committed;
+    }
 
     /// <summary>
     /// Commits the pre-frame before the frame's own command buffer.
@@ -233,15 +286,26 @@ public sealed unsafe class MetalFrame : IGpuFrame
     }
 
     /// <summary>
-    /// The slot's previous pre-frame has completed; release its wrapper.
+    /// The slot's previous pre-frame has completed; release its wrappers.
     /// </summary>
     internal void ReleasePreFrame()
     {
-        if (_preCommand.NativePtr != IntPtr.Zero && _preCommand.Status == MTLCommandBufferStatus.Error)
-            Console.WriteLine($"metal     frame slot {Slot} pre-frame command buffer failed: {_preCommand.Error.LocalizedDescription}");
-
-        if (_preCommand.NativePtr != IntPtr.Zero) _preCommand.Dispose();
+        foreach (var earlier in _earlierPre) ReleasePre(earlier);
+        _earlierPre.Clear();
+        ReleasePre(_preCommand);
         _preCommand = default;
+    }
+
+    /// <summary>
+    /// Releases pre-frame command buffer <paramref name="command"/>, logging its failure.
+    /// </summary>
+    void ReleasePre(MTLCommandBuffer command)
+    {
+        if (command.NativePtr == IntPtr.Zero) return;
+        if (command.Status == MTLCommandBufferStatus.Error)
+            Console.WriteLine($"metal     frame slot {Slot} pre-frame command buffer failed: {command.Error.LocalizedDescription}");
+
+        command.Dispose();
     }
 
     /// <summary>

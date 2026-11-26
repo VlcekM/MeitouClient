@@ -11,10 +11,10 @@ namespace Meitou.Game.Host;
 /// TAA at the render scale the Display page's preset row sets, with it off (<see cref="MetalUpscalerMode.Disabled"/>) a render at the window's
 /// real pixels, or at its virtual Retina pixels (Full Retina resolution off), and in full screen at a whole division of the screen's, which the
 /// present stretches with the nearest pixel (<see cref="Stretched"/>). <paramref name="backingScale"/> is the window's pixels per point (2 on
-/// Retina).
+/// Retina), <paramref name="screenPixels"/> its screen's size in pixels (null when unknown).
 /// </summary>
 sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, MetalFxUpscaler? metalFx, MetalFxSpatialUpscaler? metalFxSpatial,
-    Func<bool> fullScreen, Func<float> backingScale)
+    Func<bool> fullScreen, Func<float> backingScale, Func<(int Width, int Height)?> screenPixels)
 {
     /// <summary>
     /// The upscaler mode now: <see cref="MetalUpscalerMode.Disabled"/> while the switch is off.
@@ -37,10 +37,41 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     internal bool Spatial;
 
     /// <summary>
-    /// Selects the mode: the TAA pass's external upscaler, no jitter for Disabled and Spatial; the switch and the upscaler are kept in the config
-    /// (the upscaler stays while the switch is off, so turning it on returns to it).
+    /// The screen has two pixels per point (Retina): the window's backing scale, read at 1.5 for its rounding.
+    /// </summary>
+    internal bool Retina => backingScale() >= 1.5f;
+
+    /// <summary>
+    /// The Use Metal upscaling switch as saved, or the screen's default until the player chooses (<see cref="UserConfig.DefaultMetalUpscaling"/>).
+    /// </summary>
+    internal bool SavedEnabled => config.MetalUseUpscaling ?? UserConfig.DefaultMetalUpscaling(Retina, screenPixels()?.Height);
+
+    /// <summary>
+    /// The full-screen division as saved, or the screen's default until the player chooses (<see cref="UserConfig.DefaultMetalRenderDivisor"/>).
+    /// </summary>
+    internal int Divisor => config.MetalRenderDivisor ?? UserConfig.DefaultMetalRenderDivisor(Retina);
+
+    /// <summary>
+    /// Starts in <paramref name="mode"/> (the settings, the command line and the device decided it) without saving it: an unchosen switch stays
+    /// unchosen, for the screen to decide at the next start.
+    /// </summary>
+    internal void Start(MetalUpscalerMode mode) => SelectMode(mode);
+
+    /// <summary>
+    /// The player's choice of mode: selected, and the switch and the upscaler kept in the config (the upscaler stays while the switch is off, so
+    /// turning it on returns to it).
     /// </summary>
     internal void ApplyMode(MetalUpscalerMode next)
+    {
+        SelectMode(next);
+        config.MetalUseUpscaling = Enabled;
+        if (Enabled) config.MetalUpscaler = Mode;
+    }
+
+    /// <summary>
+    /// Selects the mode: the TAA pass's external upscaler, no jitter for Disabled and Spatial.
+    /// </summary>
+    void SelectMode(MetalUpscalerMode next)
     {
         Mode = next;
         NoTaa = Mode == MetalUpscalerMode.Disabled;
@@ -51,8 +82,6 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
             MetalUpscalerMode.Spatial => metalFxSpatial,
             _ => null,
         };
-        config.MetalUseUpscaling = Enabled;
-        if (Enabled) config.MetalUpscaler = Mode;
         Update();
     }
 
@@ -74,15 +103,22 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     }
 
     /// <summary>
-    /// Whether the scene renders below the screen's size and is stretched to it: Disabled, at a fraction below 1 (in a window virtual Retina pixels
-    /// on a Retina display, in full screen a division above 1).
+    /// A render size the Disabled mode keeps whatever the screen is (the launcher benchmark's 1920x1080; <see cref="MetalBenchmark"/>): the
+    /// picture is made at it, stretched to the screen with its aspect ratio kept (black bars), and the interface is drawn at it too. Null: the
+    /// screen's size or its division decides.
     /// </summary>
-    internal bool Stretched => Mode == MetalUpscalerMode.Disabled && RenderFraction < 1f;
+    internal (int Width, int Height)? FixedSize { get; set; }
+
+    /// <summary>
+    /// Whether the scene renders at a size of its own and is stretched to the screen: Disabled, at a <see cref="FixedSize"/>, or at a fraction below
+    /// 1 (in a window virtual Retina pixels on a Retina display, in full screen a division above 1).
+    /// </summary>
+    internal bool Stretched => Mode == MetalUpscalerMode.Disabled && (FixedSize is not null || RenderFraction < 1f);
 
     /// <summary>
     /// The share of the screen's pixels the scene renders at without the upscaler (<see cref="MetalRenderFraction.Of"/>).
     /// </summary>
-    float RenderFraction => MetalRenderFraction.Of(fullScreen(), config.MetalRenderDivisor, config.MetalRetinaResolution, backingScale());
+    float RenderFraction => MetalRenderFraction.Of(fullScreen(), Divisor, config.MetalRetinaResolution, backingScale());
 
     /// <summary>
     /// Whether the interface is drawn at the render size with the picture (the screen's is the default), which the present then stretches.
@@ -93,7 +129,7 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     /// The render size of a <paramref name="width"/> x <paramref name="height"/> screen at the saved division (the screen's own when not stretched).
     /// </summary>
     internal (int Width, int Height) RenderSize(int width, int height) =>
-        Stretched ? MetalContext.SceneSize(width, height, RenderFraction) : (width, height);
+        FixedSize ?? (Stretched ? MetalContext.SceneSize(width, height, RenderFraction) : (width, height));
 
     /// <summary>
     /// The interface's size on a <paramref name="width"/> x <paramref name="height"/> screen: the render size when it is drawn with the picture,
@@ -103,13 +139,15 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
 
     /// <summary>
     /// Brings the context to the state the mode and full screen ask for, before a frame: the render scale of Disabled (<see cref="RenderFraction"/>)
-    /// and whether the picture is made apart and stretched.
+    /// or its <see cref="FixedSize"/>, and whether the picture is made apart and stretched.
     /// </summary>
     internal void Update()
     {
         bool stretched = Stretched;
         ctx.StretchPicture = stretched;
-        if (Mode == MetalUpscalerMode.Disabled) ctx.RenderScale = stretched ? RenderFraction : 1f;
+        ctx.FixedSceneSize = Mode == MetalUpscalerMode.Disabled ? FixedSize : null;
+        ctx.LetterboxPicture = FixedSize is not null;
+        if (Mode == MetalUpscalerMode.Disabled) ctx.RenderScale = FixedSize is null && stretched ? RenderFraction : 1f;
     }
 
     /// <summary>
@@ -235,6 +273,7 @@ sealed class MetalUpscaling(UserConfig config, MetalContext ctx, PostTaa taa, Me
     /// </summary>
     internal string UpscalerStatusText() => Mode switch
     {
+        MetalUpscalerMode.Disabled when FixedSize is { } fixedSize => $"No upscaler, fixed {fixedSize.Width}x{fixedSize.Height}",
         MetalUpscalerMode.Disabled => Stretched ? $"No upscaler, {RenderFraction:0.##} of the screen's size" : "No upscaler",
         MetalUpscalerMode.Temporal => $"MetalFX temporal {ctx.RenderScale:0.00}",
         MetalUpscalerMode.Spatial => $"MetalFX spatial {ctx.RenderScale:0.00}",

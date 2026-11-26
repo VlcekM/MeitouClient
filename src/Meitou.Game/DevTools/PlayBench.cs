@@ -468,9 +468,8 @@ sealed class PlayBench(GameHost host)
             return;
         }
 
-        var device = host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk ? vk.Device : null;
-        var hardware = Benchmark.HardwareRecord.Of(device);
-        Benchmark.BenchmarkResult.Write(dir, new(scenario, tier, Applied ?? "", hardware, size.X, size.Y, _startedAt));
+        var hardware = Benchmark.HardwareRecord.Of(host.Gpu.Sky.Gpu);
+        Benchmark.BenchmarkResult.Write(dir, new(scenario, tier, host.GameOptions.Renderer, Applied ?? "", hardware, size.X, size.Y, _startedAt));
     }
 
     /// <summary>
@@ -511,7 +510,7 @@ sealed class PlayBench(GameHost host)
         foreach (var (type, bytes) in allocated.OrderByDescending(kv => kv.Value).Take(40))
             sb.Append(ci, $"| `{type}` | {bytes / 1048576.0:0} | {100.0 * bytes / Math.Max(total, 1):0.0}% |\n");
         sb.Append("\nGC reasons: 0 small allocation, 1 induced, 2 low memory, 3 empty, 4 large allocation, 5 out of space (small), "
-            + "6 out of space (large), 7 induced not forced.\n");
+            + "6 out of space (large), 7 induced not forced, 10 induced compacting.\n");
         return sb.ToString();
     }
 

@@ -39,14 +39,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             return float4(xy * 2.0 - 1.0, 0.0, 1.0);
         }
 
-        fragment float4 present_fragment(float4 position [[position]], constant float2& targetSize [[buffer(1)]],
+        fragment float4 present_fragment(float4 position [[position]], constant float4& target [[buffer(1)]],
             texture2d<float> source, sampler source_sampler)
         {
             // No flip: the engine's GL-style shaders land right side up in the backbuffer on Metal (the NDC points up as GL's
             // does), so row for row is the picture (the Vulkan path's blit flips instead - its backbuffer is upside down).
             // Divide by the drawable, not the source: on a scaled display the drawable is larger than the framebuffer the
-            // scene and HUD are drawn into, and dividing by the source there showed only its top-left part.
-            float2 uv = position.xy / targetSize;
+            // scene and HUD are drawn into, and dividing by the source there showed only its top-left part. The target is the
+            // picture's rectangle in the drawable (x, y, width, height): the whole drawable, or a letterboxed part of it.
+            float2 uv = (position.xy - target.xy) / target.zw;
             return source.sample(source_sampler, uv);
         }
         """;
@@ -139,6 +140,12 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// The largest MSAA sample count the device supports (from the constructor's probe).
     /// </summary>
     readonly int _maxSampleCount;
+
+    /// <summary>
+    /// The GPU traces rays in hardware (<see cref="TracesInHardware"/>).
+    /// </summary>
+    readonly bool _hardwareRayTracing;
+
     /// <summary>
     /// The frame-slot wait mode from <c>MEITOU_METAL_SLOT_WAIT</c>: wait for the reused slot's command buffer (the default, as Vulkan's fence), and
     /// with "serial" for the previous frame instead; "0"/"false" turns the wait off for A/B diagnostics.
@@ -264,6 +271,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             if (device.SupportsTextureSampleCount((ulong)count)) supportedSamples = count;
 
         _maxSampleCount = supportedSamples;
+        _hardwareRayTracing = TracesInHardware(device);
         string slotWait = Environment.GetEnvironmentVariable("MEITOU_METAL_SLOT_WAIT") ?? "";
 
         // Vulkan waits for the slot's fence before reusing it. That rule is now the Metal default; "0"/"false" restores
@@ -349,7 +357,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     static bool TryGpuSpan(MetalFrame frame, out double start, out double end)
     {
         (start, end) = (0, 0);
-        var scene = frame.SceneCommand;
+        var scene = frame.FirstSceneCommand;
         var last = frame.Command;
         if (scene.NativePtr == IntPtr.Zero || last.Status != MTLCommandBufferStatus.Completed) return false;
 
@@ -357,6 +365,59 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         end = Time_objc_msgSend(last.NativePtr, GpuEndTime.SelPtr);
         return end > start;
     }
+
+    /// <summary>
+    /// <paramref name="command"/>'s GPU start and end in seconds once it has completed; false before then or when it reported no time.
+    /// </summary>
+    internal static bool TryGpuTimes(MTLCommandBuffer command, out double start, out double end)
+    {
+        (start, end) = (0, 0);
+        if (command.NativePtr == IntPtr.Zero || command.Status != MTLCommandBufferStatus.Completed) return false;
+
+        start = Time_objc_msgSend(command.NativePtr, GpuStartTime.SelPtr);
+        end = Time_objc_msgSend(command.NativePtr, GpuEndTime.SelPtr);
+        return end >= start && start > 0;
+    }
+
+    /// <summary>
+    /// <c>objc_retain</c> on <paramref name="command"/>, for a holder that releases it with <c>Dispose</c> once done with it.
+    /// </summary>
+    internal static void Retain(MTLCommandBuffer command) => Retain_objc_retain(command.NativePtr);
+
+    /// <summary>
+    /// The frame's commands so far committed as a command buffer of their own, recording going on in a new one (the profiler's GPU stage times,
+    /// <see cref="MetalStageTimer"/>): the separate pre-frame recorded so far, committed first (default: none), and the scene's part, which the
+    /// frame keeps; both default when the frame cannot be split now (none open, or a pass or native segment open: its work then goes with the
+    /// next split).
+    /// </summary>
+    internal (MTLCommandBuffer Pre, MTLCommandBuffer Scene) SplitFrame()
+    {
+        if (_slot < 0 || !Frame.Open || _guest is not null) return default;
+
+        // Inside the host pass (between its guests) the rendering is ended and opened again on the new command buffer, loading what it stored
+        // (StoreAll); another native segment may hold an encoder of its list, so it is not split.
+        var frame = Frame;
+        bool inPass = PassOpen;
+        if (inPass ? !ReferenceEquals(_passList, frame.Commands) || !StoreAll : _segment is not null) return default;
+
+        var rendering = inPass ? frame.Commands.SuspendRendering() : default;
+        var pre = frame.CommitPreFrameSoFar();
+        var done = frame.SceneCommand;
+        var next = Queue.CommandBuffer();
+        Retain_objc_retain(next.NativePtr);
+        next.Label = (NSString)$"Meitou frame {frame.Number} (split)";
+        frame.Split(next);
+        frame.States.AssumeFullBarrier();
+        done.Commit();
+        if (inPass) frame.Commands.ResumeRendering(rendering);
+        return (pre, done);
+    }
+
+    /// <summary>
+    /// Every render attachment is stored, those the frame does not read later too (the profiler's GPU chart: a split inside a rendering ends it
+    /// and loads its attachments back, <see cref="SplitFrame"/>).
+    /// </summary>
+    internal bool StoreAll { get; set; }
 
     /// <summary>
     /// Tells <see cref="OnGpuFrame"/> the GPU time of the frame a slot held, before the slot takes the next frame (the slot wait has seen its
@@ -530,9 +591,28 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     readonly List<(long Frame, MTLCommandBuffer Command, MTLTexture[] Views)> _retiredLevelViews = [];
     /// <summary>
-    /// Upload batches' staging buffers, kept until the command buffer that reads them has completed.
+    /// Upload batches' staging buffers, kept until the command buffer that reads them has completed. Batches retire them from any thread
+    /// (<see cref="_retiredUploadsLock"/>).
     /// </summary>
     readonly List<(long Frame, MTLCommandBuffer Command, MTLBuffer Buffer, string Label)> _retiredUploads = [];
+
+    /// <summary>
+    /// Guards <see cref="_retiredUploads"/> and <see cref="_retiredSinceSweep"/>.
+    /// </summary>
+    readonly Lock _retiredUploadsLock = new();
+
+    /// <summary>
+    /// The staging bytes retired since completed ones were last released.
+    /// </summary>
+    ulong _retiredSinceSweep;
+
+    /// <summary>
+    /// The staging retired between two releases of the completed ones (bytes), besides the release at each frame's start: the first frame's
+    /// settles (the objects' and the foliage's <c>Settle</c>) stream for seconds inside one frame, and released only by the next frame their
+    /// completed staging reached 1.8 GB on the title scene and put the memory guard into pressure (docs/metal-backend.md, MetalUploads).
+    /// </summary>
+    const ulong RetiredSweepBytes = 64 << 20;
+
     /// <summary>
     /// Whether a failed upload command buffer has been logged (only the first is).
     /// </summary>
@@ -592,6 +672,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         d.Usage = usage;
         d.ResourceOptions = gpuOnly ? MTLResourceOptions.ResourceStorageModePrivate : MTLResourceOptions.ResourceStorageModeShared;
         var image = Device.NewTexture(d);
+        d.Dispose();
         if (desc.Name.Length > 0) image.Label = (NSString)desc.Name;
 
         var texture = new MetalTexture { Image = image, Desc = desc };
@@ -600,14 +681,16 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     }
 
     /// <summary>
-    /// The store action of a render pass attachment. Always <see cref="MTLStoreAction.Store"/> but where nothing reads the result: the GI albedo
-    /// (the lit programs write it, but the GI resolve is not on Metal) and a multisampled depth (the reflection's: cleared by its one pass and never
-    /// resolved). Those stay in tile memory.
+    /// The store action of a render pass attachment. Always <see cref="MTLStoreAction.Store"/> but where nothing reads the result: the GI surface
+    /// target while the GI resolve is off (<see cref="StoreSurface"/>; the lit programs write it all the same) and a multisampled depth (the
+    /// reflection's: cleared by its one pass and never resolved). Those stay in tile memory.
     /// </summary>
     internal MTLStoreAction StoreActionFor(GpuView view, bool depth)
     {
+        if (StoreAll) return MTLStoreAction.Store;
+
         var of = _views[view.Index]!.Of;
-        bool albedo = _albedo is { } a && ReferenceEquals(of, _textures[a.Index]);
+        bool albedo = !StoreSurface && _albedo is { } a && ReferenceEquals(of, _textures[a.Index]);
         bool unresolvedDepth = depth && of.Desc.Samples > 1;
         return albedo || unresolvedDepth ? MTLStoreAction.DontCare : MTLStoreAction.Store;
     }
@@ -843,7 +926,12 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
 
         Retain_objc_retain(command.NativePtr);
-        _retiredUploads.Add((_frameNumber, command, buffer, label));
+        lock (_retiredUploadsLock)
+        {
+            _retiredUploads.Add((_frameNumber, command, buffer, label));
+            _retiredSinceSweep += buffer.Length;
+            if (_retiredSinceSweep >= RetiredSweepBytes) ReleaseCompletedUploads(force: false);
+        }
     }
 
     /// <summary>
@@ -852,6 +940,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     void ReleaseRetiredUploads(bool force = false)
     {
+        lock (_retiredUploadsLock) ReleaseCompletedUploads(force);
+    }
+
+    /// <summary>
+    /// <see cref="ReleaseRetiredUploads"/> with the lock held.
+    /// </summary>
+    void ReleaseCompletedUploads(bool force)
+    {
+        _retiredSinceSweep = 0;
         if (_retiredUploads.Count == 0) return;
 
         for (int i = 0; i < _retiredUploads.Count;)
@@ -1203,7 +1300,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         }
 
         float scale = Math.Clamp(RenderScale, 0.25f, 1f);
-        (SceneWidth, SceneHeight) = SceneSize(width, height, scale);
+        (SceneWidth, SceneHeight) = FixedSceneSize ?? SceneSize(width, height, scale);
 
         if (_depth is not { } currentDepth || currentDepth.Desc.Width != SceneWidth || currentDepth.Desc.Height != SceneHeight)
         {
@@ -1212,7 +1309,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             _depth = CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, SceneWidth, SceneHeight,
                 Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "depth"));
             _albedo?.Dispose();
-            _albedo = CreateTexture(new TextureDesc(InternalFormat.Rgba8Ui, SceneWidth, SceneHeight, Use: TextureUse.ColourTarget, Name: "gi albedo"));
+
+            // The lit fragments' surface (normal, albedo, flags; GiResolveShaders.WithAlbedo): four 32-bit words, as Vulkan's.
+            _albedo = CreateTexture(new TextureDesc(InternalFormat.Rgba32Ui, SceneWidth, SceneHeight,
+                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "gi albedo"));
         }
 
         EnsurePicture(width, height);
@@ -1278,6 +1378,18 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     public bool PresentPicture { get; set; }
 
     /// <summary>
+    /// A render size that does not follow the backbuffer or <see cref="RenderScale"/> (the launcher benchmark's, whatever the screen is); null:
+    /// the scale decides. The host sets <see cref="StretchPicture"/> with it, so the picture is made apart where the sizes differ.
+    /// </summary>
+    public (int Width, int Height)? FixedSceneSize { get; set; }
+
+    /// <summary>
+    /// The present keeps the picture's aspect ratio when it stretches it, black where it does not reach (a picture of another shape than the
+    /// screen); off, it fills the drawable.
+    /// </summary>
+    public bool LetterboxPicture { get; set; }
+
+    /// <summary>
     /// The target the scene's composite writes: the backbuffer, or while it is stretched a target of the render size.
     /// </summary>
     public GpuTexture Picture => _picture ?? Backbuffer;
@@ -1293,10 +1405,16 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     public GpuTexture Depth => _depth ?? throw new InvalidOperationException("no frame is open");
 
     /// <summary>
-    /// The scene's second colour target (the lit fragments' GI albedo; the GI resolve is not on Metal yet, but the lit programs write it, so the pass
+    /// The scene's second colour target: the lit fragments' GI surface, which the GI resolve reads (the lit programs write it either way, so the pass
     /// has the attachment they expect).
     /// </summary>
     public GpuTexture Albedo => _albedo ?? throw new InvalidOperationException("no frame is open");
+
+    /// <summary>
+    /// Whether the scene's surface target (<see cref="Albedo"/>) is kept after its passes: the GI resolve reads it (set by the post chain each
+    /// frame).
+    /// </summary>
+    internal bool StoreSurface { get; set; }
 
     /// <summary>
     /// The scene's render scale (the Vulkan path's TAA/upscaler scale): 1 = native, 0.67 = the Vulkan path's Meitou default.
@@ -1406,18 +1524,39 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("MTLRenderPassDescriptor"), "renderPassDescriptor"));
         var attachments = descriptor.ColorAttachments;
         var attachment = attachments.Object(0);
+        var source = PresentPicture ? Picture : _backbuffer!;
+        int drawableWidth = (int)drawable.Texture.Width, drawableHeight = (int)drawable.Texture.Height;
+        var (x, y, width, height) = PictureRect(source.Desc.Width, source.Desc.Height, drawableWidth, drawableHeight);
+        bool bars = width < drawableWidth || height < drawableHeight;
         attachment.Texture = drawable.Texture;
-        attachment.LoadAction = MTLLoadAction.DontCare;
+        attachment.LoadAction = bars ? MTLLoadAction.Clear : MTLLoadAction.DontCare;
+        attachment.ClearColor = new MTLClearColor { red = 0, green = 0, blue = 0, alpha = 1 };
         attachment.StoreAction = MTLStoreAction.Store;
         attachments.SetObject(attachment, 0);
         var encoder = command.RenderCommandEncoder(descriptor);
         encoder.SetRenderPipelineState(_presentPipeline);
-        encoder.SetFragmentTexture(TextureAt(PresentPicture ? Picture : _backbuffer!), 0);
+        encoder.SetFragmentTexture(TextureAt(source), 0);
         encoder.SetFragmentSamplerState(Samplers.Backend(Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest))), 0);
-        var targetSize = stackalloc float[2] { (float)drawable.Texture.Width, (float)drawable.Texture.Height };
-        encoder.SetFragmentBytes((nint)targetSize, 8, 1);
+        encoder.SetViewport(new MTLViewport { originX = x, originY = y, width = width, height = height, znear = 0, zfar = 1 });
+        var target = stackalloc float[4] { x, y, width, height };
+        encoder.SetFragmentBytes((nint)target, 16, 1);
         encoder.DrawPrimitives(MTLPrimitiveType.Triangle, 0, 3);
         encoder.EndEncoding();
+    }
+
+    /// <summary>
+    /// Where a <paramref name="sourceWidth"/> x <paramref name="sourceHeight"/> picture goes in a <paramref name="width"/> x
+    /// <paramref name="height"/> drawable (x, y, width, height in pixels): all of it, or with <see cref="LetterboxPicture"/> the largest part of its
+    /// shape, centred.
+    /// </summary>
+    (int X, int Y, int Width, int Height) PictureRect(int sourceWidth, int sourceHeight, int width, int height)
+    {
+        if (!LetterboxPicture || (long)sourceWidth * height == (long)sourceHeight * width) return (0, 0, width, height);
+
+        float scale = MathF.Min(width / (float)sourceWidth, height / (float)sourceHeight);
+        int fitWidth = Math.Clamp((int)MathF.Round(sourceWidth * scale), 1, width);
+        int fitHeight = Math.Clamp((int)MathF.Round(sourceHeight * scale), 1, height);
+        return ((width - fitWidth) / 2, (height - fitHeight) / 2, fitWidth, fitHeight);
     }
 
     /// <inheritdoc/>
@@ -1654,7 +1793,14 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     #region Capabilities and the frame ring
 
     /// <inheritdoc/>
-    public bool HasRayQuery => false;
+    public bool HasRayQuery => _hardwareRayTracing;
+
+    /// <summary>
+    /// Whether <paramref name="device"/> traces rays in hardware: Metal's Apple9 family (M3 and later). Older Apple GPUs report ray tracing too, but
+    /// in software, too slow for the traced effects (a save load with the probe GI froze an M1 Pro), so they count as having none.
+    /// </summary>
+    internal static bool TracesInHardware(MTLDevice device) => device.SupportsRaytracing && device.SupportsFamily(MTLGPUFamily.Apple9);
+
     /// <summary>
     /// No tessellation stages on Metal.
     /// </summary>
@@ -1720,8 +1866,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <summary>
     /// Clear pipelines by attachment formats, sample count and what they write (<see cref="MakeClearPipeline"/>), made on first use.
     /// </summary>
-    readonly Dictionary<(MTLPixelFormat Colour, MTLPixelFormat Extra, MTLPixelFormat Depth, ulong Samples, bool WritesColour, bool WritesDepth),
-        MTLRenderPipelineState> _clearPipelines = [];
+    readonly Dictionary<(MTLPixelFormat Colour, MTLPixelFormat Extra, MTLPixelFormat Extra2, MTLPixelFormat Depth, ulong Samples, bool WritesColour,
+        bool WritesDepth), MTLRenderPipelineState> _clearPipelines = [];
     /// <summary>
     /// The compiled clear shaders (<c>ClearMsl</c>), compiled on first use.
     /// </summary>
@@ -1844,11 +1990,12 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
 
         var colourFormat = colourTexture.NativePtr != IntPtr.Zero ? colourTexture.PixelFormat : MTLPixelFormat.Invalid;
         var extraFormat = desc.Extra.IsNull ? MTLPixelFormat.Invalid : ViewTexture(desc.Extra.View).PixelFormat;
+        var extra2Format = desc.Extra2.IsNull ? MTLPixelFormat.Invalid : ViewTexture(desc.Extra2.View).PixelFormat;
         var depthFormat = depthTexture.NativePtr != IntPtr.Zero ? depthTexture.PixelFormat : MTLPixelFormat.Invalid;
         ulong samples = Math.Max(1ul, colourTexture.NativePtr != IntPtr.Zero ? colourTexture.SampleCount : depthTexture.SampleCount);
-        var key = (colourFormat, extraFormat, depthFormat, samples, colour, depth);
+        var key = (colourFormat, extraFormat, extra2Format, depthFormat, samples, colour, depth);
         if (!_clearPipelines.TryGetValue(key, out var pipeline))
-            _clearPipelines[key] = pipeline = MakeClearPipeline(colourFormat, extraFormat, depthFormat, samples, colour, depth);
+            _clearPipelines[key] = pipeline = MakeClearPipeline(colourFormat, (extraFormat, extra2Format), depthFormat, samples, colour, depth);
 
         encoder.SetRenderPipelineState(pipeline);
         if (depth) encoder.SetDepthStencilState(DepthState(true, true, DepthFunction.Always));
@@ -1882,8 +2029,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <summary>
     /// A pipeline drawing a clear rectangle into the given attachment formats, writing colour, depth or both.
     /// </summary>
-    MTLRenderPipelineState MakeClearPipeline(MTLPixelFormat colour, MTLPixelFormat extra, MTLPixelFormat depth, ulong samples, bool writesColour,
-        bool writesDepth)
+    MTLRenderPipelineState MakeClearPipeline(MTLPixelFormat colour, (MTLPixelFormat First, MTLPixelFormat Second) extras, MTLPixelFormat depth,
+        ulong samples, bool writesColour, bool writesDepth)
     {
         NSError error = default;
         var library = _clearLibrary ??= Device.NewLibrary((NSString)ClearMsl, new MTLCompileOptions(), ref error);
@@ -1905,13 +2052,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             d.ColorAttachments.SetObject(attachment, 0);
         }
 
-        if (extra != MTLPixelFormat.Invalid)
+        // The further colour targets (the GI surface, the traced sun's term): the clear never writes them, but the pass's pipeline must name them.
+        foreach (var (format, index) in (ReadOnlySpan<(MTLPixelFormat, ulong)>)[(extras.First, 1), (extras.Second, 2)])
         {
-            // The second colour target (the GI mask): the clear never writes it, but the pass's pipeline must name it.
-            var attachment = d.ColorAttachments.Object(1);
-            attachment.PixelFormat = extra;
+            if (format == MTLPixelFormat.Invalid) continue;
+
+            var attachment = d.ColorAttachments.Object(index);
+            attachment.PixelFormat = format;
             attachment.WriteMask = MTLColorWriteMask.None;
-            d.ColorAttachments.SetObject(attachment, 1);
+            d.ColorAttachments.SetObject(attachment, index);
         }
 
         if (depth != MTLPixelFormat.Invalid)

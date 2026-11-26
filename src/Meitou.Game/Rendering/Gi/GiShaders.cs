@@ -352,7 +352,10 @@ static class GiShaders
             vec3 a = Position(offsetBy(g.vertices, tri.x * g.stride)).v;
             vec3 b = Position(offsetBy(g.vertices, tri.y * g.stride)).v;
             vec3 cc = Position(offsetBy(g.vertices, tri.z * g.stride)).v;
-            vec3 n = normalize(cross(b - a, cc - a) * mat3(rayQueryGetIntersectionWorldToObjectEXT(rq, true)));
+            // A triangle with no area (its corners on a line: simplified meshes have them, and Metal's rays hit them) has no normal: the ray's own
+            // direction stands in, as normalize(0) is NaN and one NaN hit spread through the probes' bounces until the whole atlas was NaN.
+            vec3 face = cross(b - a, cc - a) * mat3(rayQueryGetIntersectionWorldToObjectEXT(rq, true));
+            vec3 n = dot(face, face) > 1e-24 ? normalize(face) : -dir;
             if (dot(n, dir) > 0.0) n = -n;
             vec3 hit = world + dir * t;
             vec3 colour = albedo.rgb;

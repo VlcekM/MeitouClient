@@ -39,8 +39,8 @@ commitment, not a proven single leak.
   as a like-for-like target.
 - **Memory:** `MapWindows` retains 4 overlay/2 colour decoded tiles only during a compose and clears them afterwards
   (was 24 + 12 full decoded maps, hundreds of MB of LOH at 2048²/4096²). `TerrainTextures.Source` drops its blend/ground/world-colour/biome
-  CPU images after upload. When terrain/object/foliage streaming has been quiet for two seconds, the host does one
-  compacting LOH collection (at most once a minute).
+  CPU images after upload. When terrain/object/foliage streaming has been quiet for two seconds, the host collects
+  (at most once a minute; compacting the LOH only behind a loading screen or menu: [engine.md](engine.md) "Metal idle trim").
 - **Result:** over a 75 s Release run at the Hub, managed LOH fell from ~1.8 GB to **~0.67-0.69 GB**, managed heap to
   ~1.3-1.6 GB and RSS stayed ~0.9-1.7 GB without OOM or monotonic growth. The overview/map screenshot and the
   `MTL_DEBUG_LAYER=1` gate are clean.
@@ -148,7 +148,7 @@ the game's default applies; its fixed Safe, Balanced and High sizes are unchange
 
 ### A2. Port the GPU-side draw path
 
-The mesh/rock cull is ported but opt-in on Metal (`MEITOU_METAL_GPU_CULL=1`; status in
+The mesh/rock cull is ported and on by default on Metal (`MEITOU_METAL_GPU_CULL=0` or `MEITOU_METAL_CPU_CULL=1` keeps the CPU cull; status in
 [metal-gpu-cull-plan](metal-gpu-cull-plan.md)): `FoliageGpuCull` uses `IGpuContext`, `FrameScratch` is
 backend-neutral, and `MetalFrame.PreFrame` is a command buffer of its own committed before the frame. The remaining
 A2 work is grass and the other indirect draw producers; the concrete plan is in
@@ -221,6 +221,17 @@ RSS alone is not enough: it includes native, GPU, driver and compressed pages th
 - Trim `MetalFrame` constant chunks to the observed high-water and release unused chunks.
 - Use `MTLHeap`/purgeable resources for large transient targets if the driver keeps freed allocations; verify with
   `MTLDevice.CurrentAllocatedSize`, not RSS.
+
+### Acceleration-structure descriptors
+
+SharpMetal's descriptor constructors `alloc`/`init` (owned: release with `Dispose`), and Metal's descriptors hold their buffers and structures
+strongly. Released after encoding: a bottom level's primitive descriptor (`MetalBuilds.Bottom`), its geometries (`MetalGiScene.Keep`,
+`MetalTerrainGrid`), the top level's instance descriptor (`BuildTop`, it lists every bottom level). A refittable structure's descriptor and
+geometries go with its entry (`MetalTracedCharacters`, `MetalTracedGrass`). Before, none was released: each top-level build kept every bottom
+level it listed, and each geometry its mesh's vertex and index buffers, so evicted meshes stayed allocated. **Observed** (M6, 24 GB, a save
+moved through five towns 3 s apart, Ultra): GPU memory outside the context's tracked textures and buffers grew from 0.6 to 1.5 GB and stayed;
+in play the guard stayed in pressure (above 80%) and memory kept rising with the camera still, to 116% of the budget, while streaming
+showed no buildings or trees. With the releases: 0.46 GB after the same moves, and no pressure.
 
 ### B3. GC and pools
 
@@ -376,13 +387,30 @@ Use the manual `Ctrl+/` capture after the world has warmed up; capture one frame
 from the game loop. The unattended `MEITOU_METAL_CAPTURE_AT`/`MEITOU_METAL_CAPTURE_PATH` trigger was removed after
 a capture-related system restart; do not reintroduce it.
 
-## Metal timestamp limitation and private statics
+## Metal profiler
 
-Apple silicon supports GPU counter sampling only at **stage boundaries**. A mid-encoder
-`sampleCountersInBuffer` is unsupported (the render and blit encoders assert), and configuring the pass descriptor's
-sample-buffer attachments for our render passes also crashed the process in the 2026-10-23 experiment. Do not wire
-per-lap Metal timestamps yet. Prefer `MEITOU_METAL_TRACE` and the existing A/B timings. If a capture is unavoidable,
-quit the game before opening one frame in Xcode and do not capture multiple frames (one trace is already 2.3-2.6 GB).
+F12 cycles the shared profiler chart (`FrameProfiler`: gpu, cpu, off; nothing shown at start) with the CPU stages, the sim rows and the
+header's memory (Metal's allocated size against the GPU budget). Not on Metal: the VRAM pie and dump (Shift/Ctrl+Shift+F12) and the spike
+log's GPU side.
+
+Apple silicon supports GPU counter sampling only at **stage boundaries**: a mid-encoder `sampleCountersInBuffer` is unsupported (the render and
+blit encoders assert), and configuring the pass descriptor's sample-buffer attachments for our render passes crashed the process (2026-10-23).
+So the GPU chart (`MetalStageTimer`) does not sample counters: while it is shown, each stage lap commits the frame's commands so far as a command
+buffer of their own (`MetalContext.SplitFrame`) and a stage's time is its command buffers' `GPUStartTime`-`GPUEndTime`, each counted from the
+previous one's end (consecutive buffers overlap; the idle gaps are not counted). The separate pre-frame (GPU cull, FFT, bakes) recorded so far is
+committed just before each split, so every scene part runs after the pre-frame work recorded with it; its time is charted as uploads. A lap inside
+the host pass ends the rendering and opens it again loading its attachments, every attachment stored while the chart is shown (`StoreAll`); a
+lap inside another native segment is not split (its work goes to the next stage). The CPU chart shows no GPU column (no splits then).
+
+**Observed** (2026-11-26, M6, title scene, windowed Retina, the user's Ultra-class settings): 41 fps over 26 s both with the chart off and
+with the gpu chart's splits (before laps inside the pass were split); with the pass split too, the gpu chart read about 13 ms a frame (foliage
+3.1, shadows 1.4, terrain 1.2, objects and characters 1.0 each) at the window's 60 fps cap, and the picture was unchanged. Two approaches
+failed: enqueuing the one pre-frame ahead of the first split and committing it at the frame's end hung the game (the queue waited for it while
+the frame waited for work behind it), and recording later pre-frame work into the frame's list put the GPU cull inside the shadows' rendering.
+
+For one frame's detail, quit the game before opening a capture in Xcode and do not capture multiple frames (one trace is already 2.3-2.6 GB).
+
+## Private statics
 
 The static terrain experiment is behind `MEITOU_METAL_PRIVATE_STATIC=1`: it gives the static terrain textures and the
 terrain patch vertex/index buffers private Metal storage (Microsoft's staging uploads stay shared). A 20-second A/B was

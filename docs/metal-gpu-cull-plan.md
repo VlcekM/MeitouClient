@@ -1,8 +1,9 @@
 # Metal GPU foliage cull plan
 
-Status: **mesh/rock cull implemented, opt-in on Metal (`MEITOU_METAL_GPU_CULL=1`); the CPU cull is the default; grass still on the CPU**.
-The GPU progress timeouts it caused had one **Verified** cause, fixed: see "The timeout" below. The opt-in stays until a longer soak and the
-`MTL_DEBUG_LAYER` gate. Generated rock LODs and rock impostors need the GPU cull, so the default Metal path has neither. This is the
+Status: **mesh/rock cull implemented and on by default on Metal (`MetalGpuCull`); `MEITOU_METAL_GPU_CULL=0` or `MEITOU_METAL_CPU_CULL=1`
+keeps the CPU cull, the reference path; grass still on the CPU**. The GPU progress timeouts it caused had one **Verified** cause, fixed: see
+"The timeout" below. **Observed** (the maintainer, hours of play after the fix): stable, so it became the default (2026-11-25); no
+`MTL_DEBUG_LAYER` run yet. Generated rock LODs and rock impostors need the GPU cull, so the CPU-cull path has neither. This is the
 Metal port of the existing Vulkan GPU foliage cull and grass submission. It is the A2 item in
 [metal-performance-memory](metal-performance-memory.md), not a new renderer feature; the visible result must stay
 the same.

@@ -182,7 +182,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     const double CoveredBudgetMs = 16;
 
     /// <summary>
-    /// The GPU cull (null where it is off: Metal without <c>MEITOU_METAL_GPU_CULL</c>).
+    /// The GPU cull (null where it is off: Metal with <c>MEITOU_METAL_GPU_CULL=0</c> or <c>MEITOU_METAL_CPU_CULL=1</c>).
     /// </summary>
     readonly FoliageGpuCull? _gpuCull;
 
@@ -306,7 +306,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>
     /// Loads the catalog and the layout cache, compiles the mesh, prepass and grass programs, and makes the texture cache, the traced scene, the
-    /// level jobs, the GPU cull (Vulkan; Metal only with <c>MEITOU_METAL_GPU_CULL</c>) and the grass store.
+    /// level jobs, the GPU cull (Vulkan; Metal unless <see cref="MetalGpuCull"/> turns it off) and the grass store.
     /// </summary>
     public FoliageRenderer(IGpuContext gpu, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
     {
@@ -339,10 +339,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         NearFade = new FoliageNearFade(gpu);
         _lodJobs = new FoliageLodJobs(assets, Messages, Decode);
 
-        // Metal's GPU cull and its separate pre-frame command buffer are opt-in after the 2026-10-23 progress
-        // timeouts; the CPU cull is the stable reference. Vulkan keeps the GPU path.
-        bool metalGpuCull = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";
-        _gpuCull = gpu is GpuContext || metalGpuCull ? new FoliageGpuCull(gpu) : null;
+        // Vulkan always has the GPU cull; Metal has it unless MetalGpuCull turns it off (the CPU cull is the reference path).
+        _gpuCull = gpu is GpuContext || MetalGpuCull.Enabled ? new FoliageGpuCull(gpu) : null;
         _grass = new FoliageGrassStore(gpu, _grassProgram, _grassMotionProgram, _uploads, GrassRangeSetting, _areas);
         _workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
         var used = _catalog.ByBiome.Values.SelectMany(l => l).Distinct().ToList();
@@ -2353,10 +2351,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (gpu)
         {
             _gpuResult = DispatchGpuCull(eye, terrain, coverage);
-            if (_gpuResult.IsEmpty)   // the scratch memory is over its cap: this view has no foliage this frame
+            // Over the scratch cap, or every group refused by the guard: this view has no foliage this frame. The impostors go too: on this
+            // path their instances are only in the cull's output (UploadInstances leaves _instances unset), so nothing else could feed them.
+            if (_gpuResult.IsEmpty)
             {
                 _meshDraws.Clear();
                 _rockDraws.Clear();
+                _impostorDraws.Clear();
             }
         }
         if (_meshDraws.Count == 0 && _impostorDraws.Count == 0) return;

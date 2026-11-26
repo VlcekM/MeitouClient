@@ -57,22 +57,41 @@ sealed record BenchmarkPlatform(string Wire, ProtonInstall? Proton)
     public string GamePath(string path) => Proton is null ? path : ProtonInstall.WindowsPath(path);
 
     /// <summary>
-    /// The start of <paramref name="exe"/> with <paramref name="arguments"/> (paths already <see cref="GamePath"/>), the Kenshi folder in
-    /// <c>KENSHI_PATH</c>, no Steam app id; under Proton through <c>python3 proton run</c> with the benchmark's own prefix. Null when it cannot
-    /// start here (macOS without a Vulkan loader).
+    /// The renderer the benchmark runs on for the build of <paramref name="version"/>: on macOS <c>metal</c> on Apple silicon when the build's list
+    /// says it runs the benchmark on Metal, else <c>vulkan</c> (MoltenVK); null elsewhere (the game's own, Vulkan).
     /// </summary>
-    public ProcessStartInfo? Start(string exe, GameInstall kenshi, IEnumerable<string> arguments)
+    public string? Renderer(string version)
+    {
+        if (!OperatingSystem.IsMacOS() || Proton is not null) return null;
+
+        bool metal = MacSupport.MetalAvailable && BenchmarkScenario.ReadRenderers(BuildFolder(version)).Contains("metal");
+        return metal ? "metal" : "vulkan";
+    }
+
+    /// <summary>
+    /// The start of <paramref name="exe"/> with <paramref name="arguments"/> (paths already <see cref="GamePath"/>), the Kenshi folder in
+    /// <c>KENSHI_PATH</c>, no Steam app id and none of the game's Metal variables (the result must not depend on them); under Proton through
+    /// <c>python3 proton run</c> with the benchmark's own prefix. On macOS <paramref name="renderer"/> <c>vulkan</c> is MoltenVK through the
+    /// loader the launcher links in, <c>metal</c> needs nothing, null (a start that draws nothing: the list) either. Null when it cannot start
+    /// here (macOS Vulkan without a loader).
+    /// </summary>
+    public ProcessStartInfo? Start(string exe, GameInstall kenshi, IEnumerable<string> arguments, string? renderer)
     {
         var start = Proton is { } proton ? ProtonStart(proton, exe) : new ProcessStartInfo(exe) { WorkingDirectory = LauncherConfig.DataDirectory };
         start.UseShellExecute = false;
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
 
         start.Environment[GameInstall.EnvironmentVariable] = GamePath(kenshi.Root);
-        foreach (string name in new[] { "SteamAppId", "SteamGameId", "MEITOU_METAL_GPU_CULL", "MEITOU_METAL_GPU_BUDGET_MB" })
+        foreach (string name in start.Environment.Keys.Where(name => name.StartsWith("MEITOU_METAL_", StringComparison.Ordinal)).ToList())
             start.Environment.Remove(name);
 
-        // The benchmark is Vulkan only; on macOS that is MoltenVK through the loader the launcher links in.
-        if (OperatingSystem.IsMacOS() && !MacSupport.AddVulkanEnvironment(start.Environment)) return null;
+        foreach (string name in new[] { "SteamAppId", "SteamGameId" })
+            start.Environment.Remove(name);
+
+        if (!OperatingSystem.IsMacOS()) return start;
+
+        if (renderer == "metal") start.Environment.Remove("DYLD_LIBRARY_PATH");
+        if (renderer == "vulkan" && !MacSupport.AddVulkanEnvironment(start.Environment)) return null;
         return start;
     }
 
