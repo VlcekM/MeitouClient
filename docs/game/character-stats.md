@@ -798,7 +798,9 @@ replaced, 3 crushed) and the fitted item (holder `FUN_1400cd3f0`; **Verified** b
 | legs | `athletics mult`, `stealth mult` | 17, 16 |
 
 Part HP is `HP` to `HP 1` by quality (level x 0.01), rounded to the nearest 5, half up (**Verified**, `FUN_1400ce2d0` -> `FUN_1409b2310` with 5; 70..200 at level 95 gives 195).
-A race switched in the character creator keeps the prosthetics fitted at the start (Meitou, #360).
+A race switched in the character creator (`setRace` -> `FUN_14064dd10`, **Verified** by decompile) rebuilds the parts fresh from the new race's
+`combat anatomy` and keeps the 4-slot limb table: a stump or crushed limb stays so, a fitted prosthetic is fitted again; `starting health` is not
+applied again. Meitou: `CharacterEditing.CarryLimbs` (#360, #1491: Rock Bottom's left-arm stump had come back as a healing arm on a skeleton).
 
 ### Races
 

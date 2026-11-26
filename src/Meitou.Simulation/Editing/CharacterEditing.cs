@@ -214,14 +214,14 @@ public static class CharacterEditing
         var look = cold.Appearance!;
         var record = data.Appearances?.Sanitize(appearance, proposedRace) ?? CharacterDraft.Copy(appearance);
 
-        // A new race at creation: a body of that race (its stats and limbs, the start's prosthetics kept on it), its walk and footprint.
+        // A new race at creation: a body of that race (its stats, fresh parts with the old body's limbs kept on them), its walk and footprint.
         if (proposedRace.StringId != look.Race.StringId)
         {
-            var prosthetics = Prosthetics(cold.Medical);
-            var (raceData, stats, medical) = data.Bodies.Create(proposedRace, data.Db.Find(cold.RecordId), world.Seed, Rng.Key(id));
+            var (raceData, stats, _) = data.Bodies.Create(proposedRace, data.Db.Find(cold.RecordId), world.Seed, Rng.Key(id));
+            var medical = MedicalState.Create(raceData, stats.Strength);
             if (!raceData.IsRobot && cold.Medical is { } previous) medical.Hunger = previous.Hunger;
 
-            foreach (var (limb, item) in prosthetics) medical.FitReplacement(limb, item);
+            CarryLimbs(cold.Medical, medical);
             cold.Race = raceData;
             cold.Stats = stats;
             cold.Medical = medical;
@@ -248,18 +248,21 @@ public static class CharacterEditing
     }
 
     /// <summary>
-    /// The prosthetics a body wears (a start's <c>robot limbs</c>), to fit on the body a race switched in the creator gives it: without them the new
-    /// body has natural limbs while their items still sit in the limb sections, so only the default race kept them (#360).
+    /// Puts the old body's limbs on the body a race switched in the creator gives it, as the original's <c>setRace</c> keeps its limb table over the
+    /// rebuilt parts (<c>FUN_14064dd10</c>): a stump or crushed limb stays so and a prosthetic is fitted again; <c>starting health</c> is not applied
+    /// again (re-applied to the new race's parts, Rock Bottom's left-arm stump came back as a healing arm on a skeleton: #1491). Without this the new
+    /// body has natural limbs while the prosthetics' items still sit in the limb sections (#360).
     /// </summary>
-    static List<(Meitou.Data.Gameplay.Bodies.LimbReplacement Limb, Items.ItemInstance? Item)> Prosthetics(MedicalState? medical)
+    static void CarryLimbs(MedicalState? previous, MedicalState medical)
     {
-        var list = new List<(Meitou.Data.Gameplay.Bodies.LimbReplacement, Items.ItemInstance?)>();
         for (int k = 0; k < 4; k++)
         {
-            if (medical?.LimbPart(k) is { Limb: LimbState.Replaced, Replacement: { } limb } part) list.Add((limb, part.ReplacementItem));
-        }
+            if (previous?.LimbPart(k) is not { } old || medical.LimbPart(k) is not { } part) continue;
 
-        return list;
+            if (old is { Limb: LimbState.Replaced, Replacement: { } limb }) medical.FitReplacement(limb, old.ReplacementItem);
+            else if (old.Limb is LimbState.Stump or LimbState.Crushed) part.Limb = old.Limb;
+            part.WasDown = part.IsDown;
+        }
     }
 
     /// <summary>
