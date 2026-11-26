@@ -498,7 +498,15 @@ sealed class BuildMode(PlayerInterface player)
         var snapshot = player.Session.CurrentSnapshot;
         var query = new PlacementQuery(building, position, rotation, _ghostYaw, on?.Floor ?? 0, host.Parts(building.Id),
             BuildQueue, snapshot.Characters, snapshot.Buildings, host.Towns(), host.PlayerFactionId(), host.Placement)
-        { On = on, Surface = surface, Lift = _ghostLift, PassThrough = surface is null ? null : IsWall };
+        {
+            On = on,
+            Surface = surface,
+            Lift = _ghostLift,
+            PassThrough = surface is null ? null : IsWall,
+            // An unsnapped wall ghost outside a line passes queued connectors and wedges, not placed ones (Verified, FUN_1404283e0,
+            // FUN_140428290); a snapped one passes every wall (SnapToWall).
+            QueuedPassThrough = building.LinksTogether ? IsConnectorOrWedge : null,
+        };
         query = SnapToWall(query) ?? SnapToTarget(host, query, hit, ray) ?? Settled(query);
         _ghostSnappedOn = query.SnappedOn;
 
@@ -767,6 +775,11 @@ sealed class BuildMode(PlayerInterface player)
     /// Whether a BUILDING record is a wall (<c>links together</c>).
     /// </summary>
     bool IsWall(string record) => BuildData(record) is { LinksTogether: true };
+
+    /// <summary>
+    /// Whether a BUILDING record is a wall connector or lower wedge (<c>link type</c> 1 or 2).
+    /// </summary>
+    bool IsConnectorOrWedge(string record) => BuildData(record) is { LinksTogether: true, LinkType: 1 or 2 };
 
     /// <summary>
     /// The ghost settled on the ground by itself (the original nudges it every frame, FUN_1404d1680): the height it keeps is what the placement is
