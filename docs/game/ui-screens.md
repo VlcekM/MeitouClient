@@ -587,7 +587,7 @@ sits above another one instead.
 
 Meitou (`MessageRoller`, both UI modes): its own notices (Saved, Loaded, errors) share the queue, errors in `Bad` red; always at the HUD's spot; real-time timers.
 A sale or purchase posts no message (**Verified**: neither 1.0.68's `kenshi_x64.exe` nor its interface catalog `locale/en_GB/LC_MESSAGES/main.pot`
-holds a "sold"/"bought" line; their only "for c." text is the building purchase prompt), so a long run of sales does not hold the panel for minutes (#1434).
+holds a "sold"/"bought" line; their only "for c." text is the building purchase prompt).
 
 ### Dialogue log
 
