@@ -288,6 +288,16 @@ public sealed unsafe class WorldTextureCache : IDisposable
     long _lastTrim;
 
     /// <summary>
+    /// When <see cref="Pump"/> last ran without waiting, <see cref="Environment.TickCount64"/> (0 before the first).
+    /// </summary>
+    long _lastPump;
+
+    /// <summary>
+    /// A gap between two <see cref="Pump"/> calls longer than this (milliseconds) is a hitch: <see cref="Trim"/> then waits its second again.
+    /// </summary>
+    public const long HitchMs = 1000;
+
+    /// <summary>
     /// An empty cache of the textures <paramref name="assets"/> finds, made on <paramref name="gpu"/>.
     /// </summary>
     /// <param name="name">The images' allocation name, by owner ("object textures", "foliage textures").</param>
@@ -899,12 +909,24 @@ public sealed unsafe class WorldTextureCache : IDisposable
         }
         if (!wait)
         {
+            long now = Environment.TickCount64;
+            _lastTrim = TrimAfterGap(_lastTrim, _lastPump, now);
+            _lastPump = now;
+
             var trim = System.Diagnostics.Stopwatch.StartNew();
             Trim();
             if (trim.Elapsed.TotalMilliseconds > 3)
                 SpikeLog.Note("slow texture trim", ms: trim.Elapsed.TotalMilliseconds);
         }
     }
+
+    /// <summary>
+    /// <see cref="_lastTrim"/> for a pump at <paramref name="now"/> after one at <paramref name="lastPump"/>: after a hitch (<see cref="HitchMs"/>),
+    /// <paramref name="now"/>, so the users mark what they draw again (the characters every 500 ms) before anything is judged idle; else
+    /// <paramref name="lastTrim"/>. A frame of over 2 s (the idle limit under pressure, <see cref="GuardIdleSeconds"/>) otherwise unloaded every
+    /// drawn texture before its users could read a key (issue #1439, frames of up to 2.4 s).
+    /// </summary>
+    internal static long TrimAfterGap(long lastTrim, long lastPump, long now) => now - lastPump > HitchMs ? now : lastTrim;
 
     /// <summary>
     /// Deletes textures that have been idle too long, or the least recently used ones while the cache is over its high-water mark. At most once a

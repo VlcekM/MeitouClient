@@ -24,7 +24,10 @@ changed or went 600 updates undrawn. A body with code mod tints ([modding](moddi
 them with it (`CharacterLookTints`), named in the body record's `alphaChannel.x` with material flag bit 31. An update lists the parts it draws (`CollectSlotParts`): those shown in the world and, for a
 character with a portrait request, the stowed weapon its portrait shows while the weapon is in the hands; a part drawn unlisted would read
 a stale record or slot -1. Texture needs
-are offered, and the textures marked used, only on the frame `CharacterTextureBudget` commits (every 500 ms, under the cache's 2 s idle limit).
+are offered, and the textures marked used, only on the frame `CharacterTextureBudget` commits (every 500 ms, under the cache's 2 s idle limit), and
+it commits only on a frame that offered: `Due` and `Commit` read one clock. **Observed** (#1439 log, 4 GB card under pressure): with a second clock
+for the commit, runs of commits without offers let the drawn textures pass 2 s idle, and characters drew untextured grey (10555 unloads of 381
+textures).
 CharacterShaders set0 bindings: bones6, materials7 (persistent), morphs8, previous bones9; material20 texture
 slots. CharacterLayoutTests pins CPU/GLSL layouts. Push depthIndex is near-depth bindless index
 for motion,0 otherwise. Camera-relative transforms preserve precision; previous bone/transform
