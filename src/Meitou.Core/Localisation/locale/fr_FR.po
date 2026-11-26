@@ -5817,3 +5817,51 @@ msgstr "Laissez vide pour le nom d'origine du bâtiment."
 
 msgid "Take off Shackles"
 msgstr "Retirer les fers"
+
+#. machine-translated
+msgid "High Altitude Clouds"
+msgstr "Nuages d'altitude"
+
+#. machine-translated
+msgid "altocumulus and cirrus"
+msgstr "altocumulus et cirrus"
+
+#. machine-translated
+msgid "the game's sky has only its one low cloud layer; Meitou can add altocumulus 10 km up and faint cirrus 26 km up that drift and change shape over time, bend down to a real horizon, glow at sunset after the land is dark and hide the stars at night; the lower clouds pass in front of them (Vulkan; docs/render-clouds.md \"High clouds\")"
+msgstr "le ciel du jeu n'a que sa seule couche de nuages bas ; Meitou peut ajouter des altocumulus à 10 km et de fins cirrus à 26 km d'altitude qui dérivent et changent de forme au fil du temps, s'incurvent vers un véritable horizon, rougeoient au coucher du soleil quand le sol est déjà sombre et cachent les étoiles la nuit ; les nuages plus bas passent devant (Vulkan ; docs/render-clouds.md \"High clouds\")"
+
+#. machine-translated
+msgid "Adds high altitude clouds to the skybox. From ImpulseSpecifix's Dynamic Skies."
+msgstr "Ajoute des nuages d'altitude à la skybox. Issu de Dynamic Skies d'ImpulseSpecifix."
+
+#. machine-translated
+msgid "Altocumulus amount"
+msgstr "Quantité d'altocumulus"
+
+#. machine-translated
+msgid "Controls the coverage of the thicker Altocumulus clouds."
+msgstr "Règle la couverture des altocumulus, plus épais."
+
+#. machine-translated
+msgid "Altocumulus density"
+msgstr "Densité des altocumulus"
+
+#. machine-translated
+msgid "Controls the density (thickness/visibility) of the Altocumulus clouds."
+msgstr "Règle la densité (épaisseur/visibilité) des altocumulus."
+
+#. machine-translated
+msgid "Cirrus amount"
+msgstr "Quantité de cirrus"
+
+#. machine-translated
+msgid "Controls the coverage of the thinner Cirrus clouds."
+msgstr "Règle la couverture des cirrus, plus fins."
+
+#. machine-translated
+msgid "Cirrus density"
+msgstr "Densité des cirrus"
+
+#. machine-translated
+msgid "Controls the density (thickness/visibility) of the Cirrus clouds."
+msgstr "Règle la densité (épaisseur/visibilité) des cirrus."

@@ -73,6 +73,8 @@
     <EmbeddedResource Include="../../assets/branding/kenshi-logo.png" LogicalName="kenshi-logo.png" Link="Assets/kenshi-logo.png" />
     <!-- The picture under the luckyren Mode setting (SettingsMenuArt). -->
     <EmbeddedResource Include="../../assets/luckyren-mode.png" LogicalName="luckyren-mode.png" Link="Assets/luckyren-mode.png" />
+    <!-- The high clouds' cirrus wisps, two shapes in R and G (HighClouds). -->
+    <EmbeddedResource Include="../../assets/high-cirrus.png" LogicalName="high-cirrus.png" Link="Assets/high-cirrus.png" />
     <!-- How soft each ground texture is, for the ground trails (GroundSoftness). -->
     <EmbeddedResource Include="../../assets/ground-softness.cfg" LogicalName="ground-softness.cfg" Link="Assets/ground-softness.cfg" />
   </ItemGroup>

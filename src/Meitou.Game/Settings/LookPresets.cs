@@ -331,7 +331,7 @@ sealed class LookPresets(SettingsMenu menu)
             or WorldFrame.GrassDensitySlider or "Impostor distance (F7 Meitou)" or "Large impostor distance (F7 Meitou)"
             or "Ground displacement distance (m)" or WorldFrame.MaterialDistanceSlider or "Character draw distance" or WorldFrame.GroundReliefQualitySlider
             or WorldFrame.VignetteSwitch or WorldFrame.FilmGrainSwitch or WorldFrame.VignetteStrengthSlider or WorldFrame.GrainStrengthSlider
-            => "Low impact",
+            or "High Altitude Clouds" => "Low impact",
         "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" or "Shadows" => "Faster with Meitou",
         _ when label == WorldFrame.ParticleSliders[0] || label == WorldFrame.ParticleSliders[1] => "Low impact",
         _ when IsLook(label, false) || IsLook(label, true) => "No impact",

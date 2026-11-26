@@ -106,6 +106,11 @@ public sealed unsafe class SkyRenderer : IDisposable
     (double X, double Z) _cloudOffset;
 
     /// <summary>
+    /// The high clouds' clock in seconds.
+    /// </summary>
+    double _highCloudSeconds;
+
+    /// <summary>
     /// The real time since the clouds last stepped.
     /// </summary>
     readonly Stopwatch _cloudClock = new();
@@ -446,6 +451,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         vec3 cloudsNormal(vec2 uv) { return texture(uCloudsNormal, uv).rgb; }
         float cloudsSmooth(vec2 uv) { return texture(uCloudsSmooth, uv).r; }
         {{CloudLayerShaders.Dome}}
+        {{HighClouds.Functions}}
         void main()
         {
             vec4 a = uInverseViewProjection * vec4(vNdc, DEPTH_NEAREST, 1.0);   // the near plane, then the far one, under either depth convention
@@ -516,6 +522,8 @@ public sealed unsafe class SkyRenderer : IDisposable
                 vec4 p = planet(dir, uPlanetBody1, uPlanetSpin.z, uPlanetSpin.w, uPlanet1);
                 col = mix(col, p.rgb * (1.0 - veil) + air, p.a);
             }
+            // The Meitou high clouds (HighClouds), under the cloud layer below.
+            col = highClouds(dir, col, skyBehind, uCloudKey.rgb, uCloudKeyDir.xyz, uCloudAmbient.rgb);
             // Clouds: SkyX's cloud layer on the dome (SkyX_Clouds.hlsl, docs/formats/clouds.md), after the sky, the stars and the planets;
             // alpha-blended over them in HDR. The dome direction below the horizon is evaluated at a hair above it (alpha is then the horizon value).
             if (uCloudMeitou.x > 1.5)
@@ -876,9 +884,13 @@ public sealed unsafe class SkyRenderer : IDisposable
     public (double X, double Z) CloudOffset => _cloudOffset;
 
     /// <summary>
-    /// Advances the clouds' drift by <paramref name="dt"/> seconds of the caller's frame clock (0 holds them still).
+    /// Advances the clouds' drift and the high clouds' clock by <paramref name="dt"/> seconds of the caller's frame clock (0 holds them still).
     /// </summary>
-    public void StepClouds(float dt) => _cloudOffset = CloudLayer.Advance(_cloudOffset, CloudWind, dt);
+    public void StepClouds(float dt)
+    {
+        _cloudOffset = CloudLayer.Advance(_cloudOffset, CloudWind, dt);
+        _highCloudSeconds += dt * HighClouds.Pace;
+    }
 
     /// <summary>
     /// Advances the drift by the real time since the last call (at most 0.25 s, game speed 1), or holds it still for a still picture (<paramref
@@ -1359,6 +1371,7 @@ public sealed unsafe class SkyRenderer : IDisposable
         program.SetExtra(PlanetFill, coverage, StarHours);
         program.SetPlanets(Day, Hour, PlanetTurn);
         program.SetClouds(CloudPass());
+        program.SetHighClouds(HighClouds.Uniform, (float)(_highCloudSeconds % HighClouds.Period));
         _textures.SetPresence(program);
         BindSkyTextures(program);
     }
