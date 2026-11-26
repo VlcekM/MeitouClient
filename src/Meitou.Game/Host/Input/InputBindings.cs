@@ -577,11 +577,18 @@ public sealed class InputBindings
         _mod is null ? saved : _mod.Changes(this, saved);
 
     /// <summary>
-    /// Whether <paramref name="key"/> is bound to an action outside the build map, the game's or a code mod's (the host then keeps it from the
-    /// cinema's numpad keys). Once per key press.
+    /// Whether a code mod's key action has <paramref name="key"/>.
     /// </summary>
-    public bool IsBound(Key key)
+    public bool IsModBound(Key key) => _mod is not null && _mod.Actions.Any(a => Get(a.Action).Contains(Binding.Of(key)));
+
+    /// <summary>
+    /// Whether numpad key <paramref name="key"/> is bound to an action outside the build map, the game's or a code mod's (the host then keeps it
+    /// from the cinema's numpad keys); false for any other key. Once per key press.
+    /// </summary>
+    public bool IsNumpadBound(Key key)
     {
+        if (key is < Key.Keypad0 or > Key.KeypadSubtract) return false;
+
         var binding = Binding.Of(key);
         foreach (var (action, list) in _map)
             if (!IsBuildMap(action) && list.Contains(binding)) return true;

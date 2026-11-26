@@ -18,7 +18,8 @@ sealed class GameHotkeys(PlayerInterface player)
     static readonly InputAction[] SelectMemberActions = [.. Enumerable.Range(0, 10).Select(i => InputAction.SelectMember1 + i)];
 
     /// <summary>
-    /// The actions handled by <see cref="Key"/> and <see cref="PlayerInterface.UiKey"/>.
+    /// The actions handled by <see cref="Key"/> and <see cref="PlayerInterface.UiKey"/>: a key bound to one of them is the game's, not the cinema's
+    /// numpad key.
     /// </summary>
     static readonly InputAction[] HotkeyActions =
     [
@@ -45,6 +46,11 @@ sealed class GameHotkeys(PlayerInterface player)
         Bound(InputAction.ToggleInventory, key) || Bound(InputAction.ToggleCharacterStats, key) || Bound(InputAction.ToggleHelp, key)
         || Bound(InputAction.ToggleMap, key) || Bound(InputAction.ToggleFaction, key) || Bound(InputAction.ToggleResearch, key)
         || Bound(InputAction.ToggleCrafting, key);
+
+    /// <summary>
+    /// Whether <paramref name="key"/> is bound to a game-view hotkey or a code mod's key action (the host then keeps it from the cinema's numpad keys).
+    /// </summary>
+    public bool IsHotkey(EngineKey key) => HotkeyActions.Any(a => Bound(a, key)) || player.Session.Bindings.IsModBound(key);
 
     /// <summary>
     /// The order toggle an orders hotkey stands for (toggle_block .. toggle_taunt), or null.
