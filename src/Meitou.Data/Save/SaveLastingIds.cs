@@ -5,8 +5,9 @@ namespace Meitou.Data.Save;
 /// <summary>
 /// The lasting ids code mods gave characters (Meitou-only, docs/formats/save.md "Character ids"), kept in <see cref="SaveFolder.LastingIdsName"/>
 /// beside the original's files, which are not touched: UTF-8 JSON <c>{ "format": 1, "prefix": p, "next": n, "characters": [ { "hand": [type, C, CS,
-/// I, S], "id", "record" } ] }</c>, each entry keyed by the character's save handle as written by the same save, with the record the character was
-/// made from. A missing file reads as no ids; one that is not JSON of this format reads as unreadable.
+/// I, S], "id", "record", "tags": { mod id: tag } } ] }</c>, each entry keyed by the character's save handle as written by the same save, with the
+/// record the character was made from and, only when it has some, the code mods' tags on it (docs/modding.md "Character tags"). A missing file
+/// reads as no ids; one that is not JSON of this format reads as unreadable.
 /// </summary>
 public static class SaveLastingIds
 {
@@ -16,9 +17,10 @@ public static class SaveLastingIds
     const int Format = 1;
 
     /// <summary>
-    /// One character's id: its save handle, the id (never 0) and the string id of the record the character was made from.
+    /// One character's id: its save handle, the id (never 0), the string id of the record the character was made from and the code mods' tags on
+    /// it by mod id (null: none).
     /// </summary>
-    public readonly record struct Entry(Hand Hand, ulong Id, string Record);
+    public readonly record struct Entry(Hand Hand, ulong Id, string Record, IReadOnlyDictionary<string, string>? Tags = null);
 
     /// <summary>
     /// What a file holds: the entries, the high half of the ids the game gives (0: none chosen) and the counter their low half is made from.
@@ -59,6 +61,20 @@ public static class SaveLastingIds
         w.WriteEndArray();
         w.WriteNumber("id", e.Id);
         w.WriteString("record", e.Record);
+        WriteTags(w, e.Tags);
+        w.WriteEndObject();
+    }
+
+    /// <summary>
+    /// An entry's tags, only when it has some, by mod id in ordinal order; empty mod ids and tags are left out.
+    /// </summary>
+    static void WriteTags(Utf8JsonWriter w, IReadOnlyDictionary<string, string>? tags)
+    {
+        if (tags is null || !tags.Any(t => t.Key.Length > 0 && t.Value.Length > 0)) return;
+
+        w.WriteStartObject("tags");
+        foreach (var (mod, tag) in tags.OrderBy(t => t.Key, StringComparer.Ordinal))
+            if (mod.Length > 0 && tag.Length > 0) w.WriteString(mod, tag);
         w.WriteEndObject();
     }
 
@@ -136,7 +152,22 @@ public static class SaveLastingIds
             if (part.ValueKind != JsonValueKind.Number || !part.TryGetInt32(out parts[k++])) return null;
         }
 
-        return new Entry(new Hand(parts[0], parts[1], parts[2], parts[3], parts[4]), id, r.GetString()!);
+        return new Entry(new Hand(parts[0], parts[1], parts[2], parts[3], parts[4]), id, r.GetString()!, ReadTags(item));
+    }
+
+    /// <summary>
+    /// An entry's tags (null: none): each string property of its <c>tags</c> object whose name and value are not empty; anything else in it is
+    /// skipped, so a damaged tag never drops the entry's id.
+    /// </summary>
+    static SortedDictionary<string, string>? ReadTags(JsonElement item)
+    {
+        if (!item.TryGetProperty("tags", out var t) || t.ValueKind != JsonValueKind.Object) return null;
+
+        var tags = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var p in t.EnumerateObject())
+            if (p.Name.Length > 0 && p.Value.ValueKind == JsonValueKind.String && p.Value.GetString() is { Length: > 0 } tag) tags[p.Name] = tag;
+
+        return tags.Count > 0 ? tags : null;
     }
 
     #endregion

@@ -992,6 +992,17 @@ holds refuses the second mod.
   `IWorldReady` run, an NPC when its platoon is made. A character the save does not write loses its id, which is never given again. An import starts
   with none. Until a mod asks (or a save with ids loads) nothing is held, hashed or written; then the ids enter the state hash. Engine API, not in
   the original.
+- **Character tags:** `world.CharacterTags` (`CharacterTags`) keeps one free string per mod id on a character, so several mods mark one
+  character without overwriting each other (a rival, a war leader, the mod that named a character). `Set(character, context.Id, tag)` sets it
+  (null or empty removes it; an empty mod id throws; false for a character not in the world) and gives the character its lasting id (Character
+  ids, above) when it has none, so it runs where `GetOrGive` may and throws where `GetOrGive` would. Tags are kept by lasting id, so a tag goes
+  where the id goes (saves and loads, squad moves, renames, an NPC's platoon leaving the world and coming back), and a new character in a reused
+  slot starts with none. `Get(character or LastingId, mod)` reads one (null: none) and `Of(character or LastingId)` every mod's, by mod id in
+  ordinal order; reads run in any phase, and the `LastingId` forms also for a character out of the world. `Find(mod, tag)` is the character in
+  the world with that mod's tag (the lowest lasting id when several have it; none when none in the world has), `FindIds(mod, tag)` the lasting ids
+  of all, in or out of the world (`LastingIds.KeptIds` tells which are gone for good); both scan every tagged character, so call them at a load or
+  an event, not per character per tick. Saved with the ids in `meitou-mods/character-ids.json` ([save](formats/save.md#character-ids)); the tags
+  of living characters in the world enter the state hash once any tag is set or loaded. Engine API, not in the original.
 - **Character save fields:** `world.SaveFields` (`CharacterSaveFields`, `Meitou.Simulation.Saving`) keeps a mod's per-character values in
   the vanilla save, under keys of its choosing (an original plugin's own, so a save taken to the original keeps them):
   `SetInt`/`SetFloat`/`SetBool`/`SetString(character, CharacterSaveRecord, key, value)` and `Remove`, read back with `Int`/`Float`/`Bool`/
