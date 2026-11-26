@@ -38,13 +38,13 @@ public sealed partial class CombatSystem
         if (cold is not { Fighter: { } fighter, Stats: { } stats, Medical: not null }) return null;
 
         float str = Eff(cold, StatsEnumerated.Strength);
-        float dex = Eff(cold, StatsEnumerated.Dexterity) * fighter.DexterityMult;
+        float dex = Eff(cold, StatsEnumerated.Dexterity);
         float tough = stats.ScaledToughness;
         var fists = DamageFormulas.Unarmed(UnarmedRating(world, slot, cold, fighter), tough, str, _combat);
         float cut = fists.Cut, blunt = fists.Blunt;
         if (!fighter.Unarmed)
         {
-            float skill = Eff(cold, fighter.WeaponSkill);
+            float skill = WeaponSkillLevel(cold, fighter);
             cut = DamageFormulas.Cut(skill, dex, fighter.Weapon!.Stats, _combat);
             blunt = DamageFormulas.Blunt(skill, str, fighter.Weapon.Stats, _combat);
         }

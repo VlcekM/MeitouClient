@@ -46,7 +46,7 @@ but light and dust. Meitou: `MedicalState.Light` from `SightMap.Light` each tick
 **Verified** (decompile; in game "no hunger or arm term", #46): the getter sends stat 16 not to the table but
 to `FUN_140884850`: s = clamp(stored x 0.75 if carrying (Character +0x348) x 2 while the posture is not 0
 (vfunc 0x368 = `FUN_1405c7e10`, Character +0xe0: crawling or ragdolled, [ragdolls](ragdolls.md#forced-crawl)) x encumbrance (CharStats +0x190) x the body term (medical +0xb4) x the gear's stealth
-(CharStats +0x3c) x the fitted limbs' factor `FUN_140644b90(16)` x 0.01, 0, 1); the getter returns s x 100 and
+(CharStats +0x3c) x the fitted limbs' factor `FUN_140644b90(16)` x 0.01, 0, 1), the stored stat without the scale (no `+0x34` read); the getter returns s x 100 and
 the sneak speed `FUN_140884920` reads s. Body term (`FUN_140644da0`): clamp(lowest health fraction over TORSO and
 LEG parts, 1 with none, + toughness x scale x 0.01, 0, 1). Its only caller is the sense update `FUN_1408586d0`,
 past an early return on a Character +0xd4 byte (stealth on), so otherwise it keeps its last value (1 at start; **Observed**,
@@ -65,7 +65,18 @@ and dexterity times the stats' scale (CharStats `+0x34`: 1 for people, the age f
 stealth](#effective-stealth) x 100; strength and dexterity (`FUN_140338090`) the scaled value x `FUN_1406457e0` with the hunger, limb,
 fitted-limb and gear terms (no light, no dust); perception (the worn gear's `perception bonus`, CharStats `+0x30`, + stored) x the multiplier
 with every term; every other stat stored x the multiplier with every term (no scale). The multiplier's six flags, in argument order: hunger,
-limbs, light, fitted limbs, dust, gear factor. Meitou: `StatGetter.Get` (stealth through `Orders.Stealth`, which also applies the scale).
+limbs, light, fitted limbs, dust, gear factor. Meitou: `StatGetter.Get` (stealth through `Orders.Stealth`).
+
+Combat's readers (**Verified**, disassembly, 1.0.68). The modified getter (third argument 0) serves the ranged and turret code: the deviation
+`FUN_140435160` (skill and perception), the gunner's skill `FUN_140437ce0`, the shot `FUN_14043a730` (skill, perception, friendly fire, which so
+takes the gear's `ranged skill mult`), the friendly-fire avoidance `FUN_140440300` and the skill blend `FUN_140885ce0`. The damage packet and the
+play rates inline the strength and dexterity branches (`FUN_140338090`, `FUN_140883a80`, `FUN_140883ba0`, `FUN_140883c60`, `FUN_140883d10`).
+Their weapon skill is vslot 0x18: `CharStats` (vtable `0x141724288`, `FUN_1408a8bb0`) the float at `+0x1f8`, the bound weapon's skill, raw;
+`CharStatsAnimal` (vtable `0x1416f9e68`, `FUN_1406414a0`) martial arts x scale; both share slot 0x10 = strength x scale (`FUN_140641480`). The
+ratings take no multiplier: attack (`FUN_140884ee0`) (`+0x120` + its int bonus) x the owner's slot 0x398 (1 for a person, an animal's age); fists
+(`FUN_140884e00`) the same with martial arts; defence (`FUN_140884f50`, the block contest `FUN_1408862d0`) the stored `+0x124`, no scale; dodge
+(`FUN_140885190`) the stored `+0xf0` and the gear's `+0x38`, no scale; toughness `+0x90` x `+0x34`. Meitou: `CombatSystem.Eff` is `StatGetter.Get`,
+`CombatSystem.WeaponSkillLevel` vslot 0x18, `AttackRating`, `DefenceRating`, `UnarmedRating`, `DodgeRating`, `CharacterStats.ScaledToughness`.
 
 ### Gear factors
 
@@ -100,9 +111,9 @@ the `Fighter` product. The stun row factor `FUN_1406439f0`
 is the dust storm: lerp(1, 0.5, v) while medical +0x148 = 1, v = medical +0x14c = the storm strength x (1 -
 the gear's protection), clamped 0..1 (`FUN_140648ef0`, which also posts "You are in a dust storm, it affects
 your accuracy in combat."). Meitou: `Fighter.Factors` / `Naked` / `StealthMult`, `ArmourPiece.Stealth` (the dust value is `MedicalState.DustStatFactor`,
-[weather](../formats/weather.md#effects-on-characters)); crossbow and assassination skills take their factor in `CombatSystem.Eff`,
-dexterity and damage output stay applied by the combat formulas (`DexterityMult`, `DamageOutput`; **Verified** `FUN_1408868b0`: the latter scales the whole packet
-once, only when above 0 and not 1, and the weapon skill is read raw).
+[weather](../formats/weather.md#effects-on-characters)); combat reads the assassination, dexterity and ranged factors through the getter
+(`CombatSystem.Eff`, [the stat getter](#the-stat-getter)); the damage output scales the packet (`DamageOutput`; **Verified** `FUN_1408868b0`: the whole
+packet once, only when above 0 and not 1, and the weapon skill is read raw).
 
 ## Hunger, blood and parts
 
@@ -433,8 +444,8 @@ Stats are `float`s inside `CharStats`. The number is what RACE `heal stat`, `sta
 
 | Activity | Function | Effect (**Observed**) |
 | --- | --- | --- |
-| Hit landed (events 0 and 1) | `FUN_1408c6980` | **Verified** (decompile): `attack` (or `unarmed` when the stat-set kind at +0x1f0 is 5, still with the race's `map[2]`) gets 0.075 x skill-diff(own attack vs opponent defence) x `map[2]`; the current weapon skill (not for unarmed) gets 0.075 x skill-diff(skill x `map[20]` vs opponent defence), with no race factor in the gain; `dexterity` gets 0.075 x the attack's skill-diff x `map[18]` (unarmed too). Event 1 uses 0.5 (attack, dexterity) and 0.4 (weapon skill). Dexterity is also scaled by a CharStats factor from +0x19c/+0x1a0/+0x1a8 (`(+0x1a8 + +0x19c) / sum` when the sum is above 0, else 1; Meitou uses 1) |
-| Attack defended (event 2) | same | **Verified**: `defence` at 0.25 of base with skill-diff(own defence x `map[19]` vs opponent attack) and no race factor in the gain; weapon skill at 0.1 (diff against the opponent's defence, Meitou uses the attack). No attack or dexterity gain |
+| Hit landed (events 0 and 1) | `FUN_1408c6980` | **Verified** (decompile): `attack` (or `unarmed` when the stat-set kind at +0x1f0 is 5, still with the race's `map[2]`) gets 0.075 x skill-diff(own attack vs the opponent's defence rating `FUN_140886290(x, 0)`) x `map[2]`; the current weapon skill (not for unarmed) gets 0.075 x skill-diff(skill x `map[20]` vs opponent defence), with no race factor in the gain; `dexterity` gets 0.075 x the attack's skill-diff x `map[18]` (unarmed too). Event 1 uses 0.5 (attack, dexterity) and 0.4 (weapon skill). Dexterity is also scaled by a CharStats factor from +0x19c/+0x1a0/+0x1a8 (`(+0x1a8 + +0x19c) / sum` when the sum is above 0, else 1; Meitou uses 1) |
+| Attack defended (event 2) | same | **Verified**: `defence` at 0.25 of base with skill-diff(own defence x `map[19]` vs the opponent's attack rating `FUN_140884ee0`) and no race factor in the gain; weapon skill at 0.1 (diff against the opponent's defence, Meitou uses the attack). No attack or dexterity gain |
 | Being hit (event 4) | same | `defence` 2.0 of base (**Verified**: the stat written is the CharStats slot +0x124, the same slot event 2 uses for `defence`, and [combat.md](character-stats.md#stats-and-xp) lists the same); for stat-set kind 5 (fists: unarmed, or the right arm out) `dodge` instead, through `FUN_1408c6360` with k 0.8 (row below), and `toughness` = 0.075 x `xp rate toughness` (1.33) x skill-diff(own, other) x `map[21]`, own = toughness x CharStats `+0x34` (the stat scale), other = cut + blunt + pierce + stun of the packet the hit carries (**Verified** `FUN_1408c6980`; callers the melee hit `FUN_1404394f0`, its copy of the blow's packet, and the bolt hit `FUN_140439c90`, pierce only; that the melee packet is the powered one is **Observed**). Meitou: `XpService.Combat` `damageTaken`; the hit also pays the per-damage gain below |
 | Dodge | `FUN_1408c6360` | **Verified** (decompile; its only callers): `dodge` (CharStats +0xf0) rises by 0.075 x k x the encumbrance factor (+0x190) x `map[32]` x skill-diff(effective dodge `FUN_140885190` with its guard flag, the attacker's rating `FUN_140884ee0`); k 0.4 when the defence start (`FUN_140609290`) picks a dodge technique, 0.8 when it picks none (a failed roll), when a stumble break-out roll fails (`FUN_1406085e0`) and when a kind-5 fighter is hit (event 4). A dodged blow itself gives the defender nothing. Meitou: `XpService.Dodge`, `CombatSystem.DodgeXp` (`DodgeXpEffect` from the defence start and the break-out) |
 | Event 6 | same | **Verified**: `attack`/`unarmed` 0.25 (`map[2]`) and weapon skill 0.1 against the opponent defence; no defence or dexterity gain (meaning of event 6 not decoded) |

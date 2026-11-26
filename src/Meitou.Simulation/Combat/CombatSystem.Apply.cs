@@ -141,7 +141,7 @@ public sealed partial class CombatSystem
             case BlowOutcome.Dodged:
                 aSlot.Evaded++;
                 dSlot.Dodges++;
-                GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
+                GainCombatXp(world, a, d, ac, dc, XpEvent.GlancingHit, null);
                 Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 ReportDefence(world, a, d, seq, blow, CombatDefenceKind.Dodged, ac, dc, tech);
@@ -196,7 +196,7 @@ public sealed partial class CombatSystem
         ref var dSlot = ref _write[d];
         aSlot.Parried++;
         dSlot.Blocks++;
-        GainCombatXp(ac, dc, XpEvent.GlancingHit, XpEvent.Defended);
+        GainCombatXp(world, a, d, ac, dc, XpEvent.GlancingHit, XpEvent.Defended);
 
         // A dodge technique that counts as a block (the base game's "Dodge back" rows are flagged both) is silent: it looks like a dodge, and
         // the block impact sounds like a hit.
@@ -224,7 +224,7 @@ public sealed partial class CombatSystem
         int a = e.Source, d = e.Target, blow = e.Arg, seq = (int)e.Amount, now = (int)world.Tick;
         var fighter = ac.Fighter!;
         var target = dc.Fighter!;
-        float toughness = Eff(dc, StatsEnumerated.Toughness);
+        float toughness = dc.Stats!.ScaledToughness;
         var ctx = MakeContext(world, d, dc);
         var events = _hitEvents;   // Apply is serial, so one list serves every hit
         events.Clear();
@@ -256,7 +256,7 @@ public sealed partial class CombatSystem
         if (ShackledKnockOut(world, a, seq, blow, d, dc, medical, ctx)) knockout = true;
 
         BlowReaction(world, ref dSlot, d, dc, medical, damage, toughness, now, table.IdOf(a), seq, blow);
-        GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
+        GainCombatXp(world, a, d, ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
 
         // An unarmed one (stat-set kind 5) hit trains dodge in place of melee defence (FUN_1408c6980 event 4 -> FUN_1408c6360), against the
         // attacker's rating.
@@ -288,11 +288,11 @@ public sealed partial class CombatSystem
     {
         var race = dc.Race!;
         TargetKind kind = race.IsRobot ? TargetKind.Robot : target.IsAnimal ? TargetKind.Animal : TargetKind.Human;
-        float skill = Eff(ac, fighter.WeaponSkill);
-        float dex = Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult;
+        float skill = WeaponSkillLevel(ac, fighter);
+        float dex = Eff(ac, StatsEnumerated.Dexterity);
         float str = Eff(ac, StatsEnumerated.Strength);
         var packet = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind,
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), ac.Stats!.ScaledToughness, str, fighter.FistsItem, kind,
                 race.StringId, fighter.DamageOutput, _combat)
             : DamageFormulas.Packet(skill, dex, str, fighter.Weapon!, kind, race.StringId, fighter.DamageOutput, _combat);
 
@@ -630,23 +630,23 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// The XP of a blow for both sides: the attacker's weapon skill (or unarmed) and strength, the defender's defence and toughness by the damage
-    /// it took.
+    /// it took. The opponent's skill is a rating (<c>FUN_1408c6980</c>, <b>Observed</b>): the attacker's events read the defender's defence
+    /// rating without the guard term (<c>FUN_140886290(x, 0)</c>), the defender's the attacker's attack rating (<c>FUN_140884ee0</c>).
     /// </summary>
-    void GainCombatXp(CharacterCold attacker, CharacterCold defender, XpEvent attackerEvent, XpEvent? defenderEvent, float damageTaken = 0)
+    void GainCombatXp(World world, int a, int d, CharacterCold attacker, CharacterCold defender, XpEvent attackerEvent, XpEvent? defenderEvent,
+        float damageTaken = 0)
     {
         var af = attacker.Fighter!;
         var df = defender.Fighter!;
         float aStrength = StrengthFactor(attacker, af);
         var attackerWeapon = af.Unarmed ? StatsEnumerated.None : af.Weapon!.Skill;
-        _xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, attackerWeapon,
-            Eff(defender, StatsEnumerated.MeleeDefence), aStrength);
-        if (defenderEvent is { } ev)
-        {
-            float dStrength = StrengthFactor(defender, df);
-            var weaponStat = df.Unarmed || ev == XpEvent.HitTaken ? StatsEnumerated.None : df.Weapon!.Skill;
-            var attackerStat = af.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack;
-            _xp.Combat(defender.Stats!, defender.Race!, ev, df.Unarmed, weaponStat, Eff(attacker, attackerStat), dStrength, damageTaken);
-        }
+        _xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, attackerWeapon, DefenceRating(world, d, defender, df, guard: false),
+            aStrength);
+        if (defenderEvent is not { } ev) return;
+
+        float dStrength = StrengthFactor(defender, df);
+        var weaponStat = df.Unarmed || ev == XpEvent.HitTaken ? StatsEnumerated.None : df.Weapon!.Skill;
+        _xp.Combat(defender.Stats!, defender.Race!, ev, df.Unarmed, weaponStat, AttackRating(world, a, attacker, af), dStrength, damageTaken);
     }
 
     /// <summary>

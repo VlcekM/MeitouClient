@@ -289,17 +289,16 @@ public sealed partial class CombatSystem
         int a = e.Target, blow = e.Arg & 0xff, left = (int)e.Position.X;
         ref var aSlot = ref _write[a];
         if (aSlot.CancelTick == (int)world.Tick) return;
-        if (world.Characters.Cold(a) is not { Fighter: { } fighter, Stats: { } stats, Medical: { } medical } cold) return;
+        if (world.Characters.Cold(a) is not { Fighter: { } fighter, Stats: { } stats, Medical: not null } cold) return;
 
         var tech = _techniques[(int)e.Position.Y];
         var zone = ZoneOf(world, a, aSlot, cold, tech, blow);
-        float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * medical.StatMultiplier(stat);
-        float str = Eff(StatsEnumerated.Strength);
+        float str = Eff(cold, StatsEnumerated.Strength);
         var raw = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str,
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), stats.ScaledToughness, str,
                 fighter.FistsItem, TargetKind.None,
                 null, fighter.DamageOutput, _combat)
-            : DamageFormulas.Packet(Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str,
+            : DamageFormulas.Packet(WeaponSkillLevel(cold, fighter), Eff(cold, StatsEnumerated.Dexterity), str,
                 fighter.Weapon!, TargetKind.None,
                 null, fighter.DamageOutput, _combat);
         var packet = Powered(raw, tech, blow);

@@ -102,11 +102,11 @@ public static class RangedFormulas
     public const float FriendlyPassXp = 20, FriendlyHitXp = 100;
 
     /// <summary>
-    /// The general skill blend <c>FUN_140885ce0</c>: 0.01 x (0.6 x skill + 0.4 x dexterity x m), with both stats already times their injury
-    /// multipliers and m the stats multiplier (<c>CharStats +0x34</c>, taken as the gear's dexterity product here). The reload uses it with the
-    /// crossbow skill.
+    /// The general skill blend <c>FUN_140885ce0</c> (<b>Verified</b>): 0.01 x (0.6 x skill + 0.4 x dexterity), skill the modified stat getter's,
+    /// dexterity stored x the stats' scale x the stat multiplier with the gear's <c>dexterity mult</c> (no light, no dust). The reloads use it
+    /// with the crossbow or turret skill.
     /// </summary>
-    public static float SkillBlend(float skill, float dexterity, float m = 1) => 0.01f * (0.6f * skill + 0.4f * dexterity * m);
+    public static float SkillBlend(float skill, float dexterity) => 0.01f * (0.6f * skill + 0.4f * dexterity);
 
     /// <summary>
     /// Reload seconds (<c>FUN_140436010</c>): clamp(lerp(s, reload max, reload min), reload min, reload max). Spring Bat's max above its min at high

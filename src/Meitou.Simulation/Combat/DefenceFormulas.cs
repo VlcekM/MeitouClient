@@ -43,10 +43,10 @@ public static class DefenceFormulas
         meleeDefence + (weaponCanBlock ? weaponDefenceMod : 0) + equipmentBonus + (guarding ? GuardBonus : 0);
 
     /// <summary>
-    /// The "effective defence" of the unarmed variant (<c>FUN_140885190</c>): the stat minus (1 - e) x stat minus (1 - l) x stat plus the multiplier
-    /// term, with e the encumbrance factor clamped to [0.4, 1] and l the leg factor (the worse leg's health fraction x 1.8, clamped to [0, 1] by
-    /// <c>FUN_140884970</c>, then to [0.5, 1] here). The multiplier term is not decoded: <paramref name="bonus"/> is added as given. Plus
-    /// <see cref="GuardBonus"/> when guarding.
+    /// The effective dodge (<c>FUN_140885190</c> with its flag set, <b>Verified</b>): the stored dodge stat (no scale) minus (1 - e) x stat minus
+    /// (1 - l) x stat, with e the encumbrance factor clamped to [0.4, 1] and l the leg factor (the worse leg's health fraction x 1.8, clamped to
+    /// [0, 1] by <c>FUN_140884970</c>, then to [0.5, 1] here), plus <paramref name="bonus"/>, the gear's term (dodge x the gear's
+    /// <c>dodge mult</c> - dodge), and <see cref="GuardBonus"/> when guarding.
     /// </summary>
     public static float EffectiveDefence(float stat, float encumbrance, float legFactor, float bonus, bool guarding)
     {

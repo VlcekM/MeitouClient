@@ -39,13 +39,20 @@ public sealed partial class CombatSystem
     static float IndoorsAttackBonus(float bonus, int mod) => (bonus > 0 && mod < 0 ? 0 : bonus) + mod;
 
     /// <summary>
-    /// A stat as the combat formulas read it: times the injury, hunger and light multiplier and the stats' read-time scale (an animal's age,
-    /// docs/game/animals.md); crossbows and assassination also times the worn gear's factor (<see cref="Fighter.Factors"/>; the original's stat
-    /// getter <c>FUN_140884ac0</c> asks for all of them). Dexterity's and the weapon skills' gear factors are applied by the formulas themselves
-    /// (<see cref="Fighter.DexterityMult"/>, <see cref="Fighter.DamageOutput"/>).
+    /// A stat as the combat code reads it: the modified stat getter (<see cref="StatGetter.Get"/>, <c>FUN_140884ac0</c>), whose strength and
+    /// dexterity are what the packet's and the rates' own readers compute (<c>FUN_140338090</c>, the dexterity reads of <c>FUN_140883a80</c>,
+    /// <c>FUN_140883ba0</c>, <c>FUN_140885ce0</c>): dexterity already carries the gear's <c>dexterity mult</c>, and only strength and dexterity take
+    /// the stats' scale. Not for a weapon skill in the damage packet (<see cref="WeaponSkillLevel"/>) or toughness (read raw x scale).
     /// </summary>
-    internal static float Eff(CharacterCold c, StatsEnumerated stat) =>
-        (c.Stats![stat] + GearBonus(c, stat)) * c.Stats.Scale * c.Medical!.StatMultiplier(stat) * GearFactor(c, stat);
+    internal static float Eff(CharacterCold c, StatsEnumerated stat) => StatGetter.Get(c, stat, unmodified: false);
+
+    /// <summary>
+    /// The weapon skill the damage packet reads (CharStats vslot 0x18, <b>Verified</b> disassembly): a person's stored level of the bound weapon's
+    /// skill (<c>CharStats</c> <c>+0x1f8</c>, no scale, multiplier or gear factor); an animal's (<c>CharStatsAnimal</c>) martial arts x the stats'
+    /// scale.
+    /// </summary>
+    internal static float WeaponSkillLevel(CharacterCold c, Fighter f) =>
+        f.IsAnimal ? c.Stats![StatsEnumerated.MartialArts] * c.Stats.Scale : c.Stats![f.WeaponSkill];
 
     /// <summary>
     /// The HUD's "Damage:" figure of a melee fighter (the Current Skill line's tooltip) and the stats window's "Martial arts damage"
@@ -57,9 +64,9 @@ public sealed partial class CombatSystem
         if (c is not { Fighter: { } f, Stats: not null, Medical: not null }) return 0;
         float str = Eff(c, StatsEnumerated.Strength);
         return (f.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, slot, c, f), Eff(c, StatsEnumerated.Toughness), str, f.FistsItem,
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, slot, c, f), c.Stats.ScaledToughness, str, f.FistsItem,
                 TargetKind.None, null, f.DamageOutput, _combat)
-            : DamageFormulas.Packet(Eff(c, f.WeaponSkill), Eff(c, StatsEnumerated.Dexterity) * f.DexterityMult, str, f.Weapon!,
+            : DamageFormulas.Packet(WeaponSkillLevel(c, f), Eff(c, StatsEnumerated.Dexterity), str, f.Weapon!,
                 TargetKind.None, null, f.DamageOutput, _combat)).Sum;
     }
 
@@ -85,17 +92,16 @@ public sealed partial class CombatSystem
     /// <summary>
     /// The fist rating (<see cref="DamageFormulas.UnarmedRating"/>, <c>FUN_140884e00</c> with its flag set, as every combat caller passes it): the
     /// raw martial arts stat (no injury multiplier), the gear's unarmed bonus with the indoors modifier inside (<see cref="IndoorsAttackBonus"/>),
-    /// the dust penalty and the load. A fist blow's damage, an unarmed fighter's attack rating (<c>FUN_140884ee0</c>) and its defence rating
-    /// (<c>FUN_140886290</c>) are this number.
+    /// the dust penalty and the load, times the stats' scale (the owner's slot 0x398). A fist blow's damage, an unarmed fighter's attack rating
+    /// (<c>FUN_140884ee0</c>) and its defence rating (<c>FUN_140886290</c>) are this number.
     /// </summary>
     internal static float UnarmedRating(World world, int slot, CharacterCold c, Fighter fighter) =>
-        DamageFormulas.UnarmedRating(c.Stats![StatsEnumerated.MartialArts] * c.Stats.Scale,
-            IndoorsAttackBonus(fighter.UnarmedBonus, IndoorsMod(world, slot, fighter)),
-            c.Medical!.DustAttackPenalty, fighter.EncumbranceFactor);
+        DamageFormulas.UnarmedRating(c.Stats![StatsEnumerated.MartialArts], IndoorsAttackBonus(fighter.UnarmedBonus, IndoorsMod(world, slot, fighter)),
+            c.Medical!.DustAttackPenalty, fighter.EncumbranceFactor, c.Stats.Scale);
 
     /// <summary>
-    /// The worn gear's factor of a stat that <see cref="Eff"/> applies: <c>ranged skill mult</c> for crossbows, <c>asassination mult</c> for
-    /// assassination, else 1.
+    /// The worn gear's factor of a stat for the readers outside the stat getter (the carry rolls): <c>ranged skill mult</c> for crossbows,
+    /// <c>asassination mult</c> for assassination, else 1.
     /// </summary>
     internal static float GearFactor(CharacterCold c, StatsEnumerated stat) => stat switch
     {
@@ -178,29 +184,27 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// The attack rating (<c>FUN_140884ee0</c>, <b>Verified</b>): unarmed, the fist rating; else the trained melee attack (no injury or hunger
-    /// multiplier, times the stats' scale) plus the gear's attack bonus and the weapon's attack mod with the indoors modifier inside, less the dust
-    /// penalty.
+    /// multiplier) plus the gear's attack bonus and the weapon's attack mod with the indoors modifier inside, less the dust penalty, the sum times the
+    /// owner's slot 0x398 factor (the stats' scale: 1 for a person, an animal's age).
     /// </summary>
-    internal static float AttackRating(World world, int slot, CharacterCold c, Fighter f) => f.Unarmed ? UnarmedRating(world, slot, c, f)
-        : Trained(c, StatsEnumerated.MeleeAttack) + IndoorsAttackBonus(f.AttackBonus + (f.Weapon?.Stats.AttackMod ?? 0), IndoorsMod(world, slot, f))
-            - c.Medical!.DustAttackPenalty;
+    internal static float AttackRating(World world, int slot, CharacterCold c, Fighter f)
+    {
+        if (f.Unarmed) return UnarmedRating(world, slot, c, f);
+
+        float bonus = IndoorsAttackBonus(f.AttackBonus + (f.Weapon?.Stats.AttackMod ?? 0), IndoorsMod(world, slot, f)) - c.Medical!.DustAttackPenalty;
+        return (c.Stats![StatsEnumerated.MeleeAttack] + bonus) * c.Stats.Scale;
+    }
 
     /// <summary>
     /// The defence rating (<c>FUN_140886290</c> → <c>FUN_140884f50</c>, <b>Verified</b>): unarmed, the fist rating; else the trained melee defence
-    /// (no injury or hunger multiplier) plus the gear's defence bonus, the weapon's defence mod, the indoors modifier inside and, with
+    /// (no injury or hunger multiplier, no scale) plus the gear's defence bonus, the weapon's defence mod, the indoors modifier inside and, with
     /// <paramref name="guard"/> (the function's flag), 20 when guarding. The block contest's defence (<see cref="DefenceFormulas.Defence"/>) is the
     /// same sum.
     /// </summary>
     internal static float DefenceRating(World world, int slot, CharacterCold c, Fighter f, bool guard = true) =>
         f.Unarmed ? UnarmedRating(world, slot, c, f)
-        : Trained(c, StatsEnumerated.MeleeDefence) + f.DefenceBonus + (f.Weapon?.Stats.DefenceMod ?? 0) + IndoorsMod(world, slot, f)
+        : c.Stats![StatsEnumerated.MeleeDefence] + f.DefenceBonus + (f.Weapon?.Stats.DefenceMod ?? 0) + IndoorsMod(world, slot, f)
             + (guard && Guarding(c) ? 20 : 0);
-
-    /// <summary>
-    /// A trained level as the combat ratings read it (CharStats <c>+0x120</c>, <c>+0x124</c>): the stored level times the stats' read-time scale, no
-    /// multiplier.
-    /// </summary>
-    static float Trained(CharacterCold c, StatsEnumerated stat) => c.Stats![stat] * c.Stats.Scale;
 
     /// <summary>
     /// The attack and block play rates (CharStats <c>+0x188</c> / <c>+0x18c</c>, <c>FUN_1408866b0</c> → <c>FUN_140883a80</c>,
@@ -214,7 +218,7 @@ public sealed partial class CombatSystem
         float f = Math.Clamp(_xp.WeaponWeightStrengthFactor(weight, cold.Stats![StatsEnumerated.Strength],
             cold.Medical!.StatMultiplier(StatsEnumerated.Strength)), 0, 1);
         float g = (0.5f + 0.5f * MathF.Min(1, fighter.EncumbranceFactor + 0.5f) * (1 - f)) * fighter.CombatSpeed;
-        float dex = Eff(cold, StatsEnumerated.Dexterity) * fighter.DexterityMult;
+        float dex = Eff(cold, StatsEnumerated.Dexterity);
         float skill = attack ? AttackRating(world, slot, cold, fighter) : DefenceRating(world, slot, cold, fighter);
         float t = 0.01f * (0.6f * dex + 0.4f * skill);
         float swim = cold.WaterState == 3 ? 0.8f : 1;
@@ -874,8 +878,9 @@ public sealed partial class CombatSystem
 
         // The target is free (deciding or in its pause): one draw for the pair and tick, the lower slot's view.
         int lo = Math.Min(i, t), hi = Math.Max(i, t);
-        float skillI = Eff(cold, cold.Fighter!.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack);
-        float skillT = Eff(tc, tc.Fighter!.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack);
+        // Both sides' attack ratings (FUN_140666a30: FUN_140885e40, the same sum as FUN_140884ee0).
+        float skillI = AttackRating(world, i, cold, cold.Fighter!);
+        float skillT = AttackRating(world, t, tc, tc.Fighter!);
         float lowSkill = lo == i ? skillI : skillT, highSkill = lo == i ? skillT : skillI;
         float a = 1 + _combat.AttackChanceFactor * MathF.Max(0, highSkill - lowSkill);
         float b = 1 + _combat.AttackChanceFactor * MathF.Max(0, lowSkill - highSkill);
@@ -932,8 +937,8 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// The stumble break-out roll (<b>Verified</b>, <c>FUN_1406085e0</c> / <c>FUN_140885d80</c>): of the fighters swinging at it with the swing
-    /// between 10 and 99 per cent, the one with the highest attack skill; a draw under the defender's unarmed dodge chance against that skill (0 to
-    /// 95) breaks out. False with no such swing; <paramref name="against"/> is that attack skill.
+    /// between 10 and 99 per cent, the one with the highest attack skill; a draw under the defender's dodge chance (<see cref="DodgeRating"/>)
+    /// against that skill (0 to 95) breaks out. False with no such swing; <paramref name="against"/> is that attack skill.
     /// </summary>
     bool BreaksOut(World world, int i, CharacterCold cold, ulong key, int now, out bool rolled, out float against)
     {
@@ -954,10 +959,7 @@ public sealed partial class CombatSystem
         if (float.IsNegativeInfinity(best)) return false;
         rolled = true;
         against = best;
-        var fighter = cold.Fighter!;
-        float effective = DefenceFormulas.EffectiveDefence(Eff(cold, StatsEnumerated.MartialArts), fighter.EncumbranceFactor,
-            Speed.LegFactor(cold.Medical!), fighter.DefenceBonus, Guarding(cold));
-        float chance = DefenceFormulas.BlockChance(effective, best, _combat, 0, 95);
+        float chance = DefenceFormulas.BlockChance(DodgeRating(cold, guard: true), best, _combat, 0, 95);
         return CombatRolls.Float(world.Seed, key, CombatRoll.Block, (ulong)(uint)now ^ 0x42524B4FUL) * 100 < chance;
     }
 
@@ -1587,7 +1589,7 @@ public sealed partial class CombatSystem
         var table = world.Characters;
         ref readonly var attack = ref _read[swing.Attacker];
         var fighter = cold.Fighter!;
-        float meleeDefence = Trained(cold, StatsEnumerated.MeleeDefence);
+        float meleeDefence = cold.Stats![StatsEnumerated.MeleeDefence];   // the block contest reads it raw (FUN_1408862d0)
         ulong counter = CombatRolls.BlowCounter(swing.Attacker, attack.AttackSeq, swing.Blow, 0) ^ (ulong)(uint)now * 0x9E3779B97F4A7C15UL;
         float chanceRoll = CombatRolls.Float(world.Seed, key, CombatRoll.Block, counter);
         float pickRoll = CombatRolls.Float(world.Seed, key, CombatRoll.Reaction, counter);
@@ -1603,9 +1605,7 @@ public sealed partial class CombatSystem
         else
         {
             block = 0;
-            float effective = DefenceFormulas.EffectiveDefence(Eff(cold, StatsEnumerated.MartialArts), fighter.EncumbranceFactor,
-                Speed.LegFactor(cold.Medical!), fighter.DefenceBonus, Guarding(cold));
-            dodge = DefenceFormulas.BlockChance(effective, attack.AttackSkill, _combat, 0, 95);
+            dodge = DefenceFormulas.BlockChance(DodgeRating(cold, guard: true), attack.AttackSkill, _combat, 0, 95);
         }
         int direction = BlowSide(world, i, in swing);
 

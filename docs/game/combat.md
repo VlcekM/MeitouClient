@@ -9,7 +9,7 @@ Simulation.Combat and Animation; approximate engine scheduling is not original p
 
 **Verified** (packet `FUN_1408868b0` from `FUN_140883ba0`/`FUN_140883c60`/`FUN_140883d10`, disassembled; item stats `FUN_140897f30`, `FUN_140889cd0`;
 `FUN_14060a2f0` scales it by the impact point's `power`). Inputs: skill = the raw stat of the weapon's category (vslot 0x18: no injury multiplier, no gear
-factor); dex = `FUN_1406457e0` multiplier (hunger, limbs, limb items incl. the gear's `dexterity mult`, no light/dust) x stat x read-time scale m; str = the same
+factor, no scale; an animal's is martial arts x m, [the stat getter](character-stats.md#the-stat-getter)); dex = `FUN_1406457e0` multiplier (hunger, limbs, limb items incl. the gear's `dexterity mult`, no light/dust) x stat x read-time scale m; str = the same
 multiplier x stat x m. cut=lerp((skill+dex)*cutMult/200,cutBase,cut99); blunt=lerp((0.5*skill+1.5*str)*bluntMult/200,bluntBase,blunt99), both unclamped;
 pierce=0.78*(skill+dex)*pierceMult+10*pierceMult (no /200). Stored cut/blunt endpoints 13/52; cutBase 13 and bluntBase 0, but a weapon whose cut multiplier is
 below its blunt one (club, mace) has bluntBase 13 and cutBase 0.4*13. The weapon item's `min cut damage` (mult x manufacturer, item +0x248) is read by **no**
@@ -30,10 +30,12 @@ The kind/race/general multipliers, bleed and penetration are the FISTS item's. S
 
 Technique direction/category/weapon/state/reach/animation flags gate selection. The attack rating (`FUN_140884ee0`) and the
 defence ratings (`FUN_140884f50`, the block contest `FUN_1408862d0`) read the trained melee attack / defence (CharStats `+0x120` / `+0x124`) with
-no injury or hunger multiplier, plus the gear and weapon bonuses, the [indoors](#indoors) modifier, less the dust penalty (attack), +20 guarding
+no injury or hunger multiplier (the attack's sum x the owner's slot 0x398, the defence unscaled), plus the gear and weapon bonuses, the [indoors](#indoors) modifier, less the dust penalty (attack), +20 guarding
 (defence, when the caller's flag is set: not for the dialogue combat rating `FUN_140852a30`); with fists both are the fist rating (**Verified**, disassembly;
 Meitou `CombatSystem.AttackRating` / `DefenceRating`). The attack and block play rates (`FUN_1408866b0` → `FUN_140883a80`) take those ratings and are x 0.8
-while swimming (water state 3). Only the unarmed dodge (`FUN_140885190`) has an injury (leg) term. **Observed** outcome: block5 if matching block
+while swimming (water state 3). Only the dodge (`FUN_140885190`, which the dodge chance `FUN_140885d80` calls with its flag set) has an injury (leg) term: the stored dodge (`+0xf0`, no scale)
+x (e + l - 1), e the encumbrance factor in [0.4, 1], l the leg factor in [0.5, 1], + dodge x (`dodge mult` - 1), + 20 when guarding with fists (category 5)
+(**Verified**, disassembly; Meitou `CombatSystem.DodgeRating`). The initiative roll (`FUN_140666a30`) contests both attack ratings (`FUN_140885e40`, the same sum as `FUN_140884ee0`; **Observed**, decompile). **Observed** outcome: block5 if matching block
 past50% animation; dodge0 within progress0.1..0.98; otherwise hit2. Skill roll r1*A<r2*B,
 A=1+0.05*max(0,s2-s1), B=1+0.05*max(0,s1-s2). Derived chance with k=B/A is1-1/(2k) ifk>=1,
 elsek/2. General skill blend0.01*(0.6*stat+0.4*dexterity*m) feeds dodge/reload, with stat/gear

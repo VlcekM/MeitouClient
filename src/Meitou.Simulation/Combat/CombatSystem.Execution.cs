@@ -27,14 +27,14 @@ public sealed partial class CombatSystem
         if (ac is not { Fighter: { } fighter, Stats: not null, Medical: not null, Race: not null }) return false;
         if (dc is not { Medical: { Dead: false } medical, Race: { } race, Stats: not null }) return false;
 
-        float toughness = Eff(dc, StatsEnumerated.Toughness);
+        float toughness = dc.Stats.ScaledToughness;
         TargetKind kind = race.IsRobot ? TargetKind.Robot : dc.Fighter is { IsAnimal: true } ? TargetKind.Animal : TargetKind.Human;
-        float skill = Eff(ac, fighter.WeaponSkill);
+        float skill = WeaponSkillLevel(ac, fighter);
         float str = Eff(ac, StatsEnumerated.Strength);
         var packet = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind,
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), ac.Stats.ScaledToughness, str, fighter.FistsItem, kind,
                 race.StringId, fighter.DamageOutput, _combat)
-            : DamageFormulas.Packet(skill, Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, kind, race.StringId,
+            : DamageFormulas.Packet(skill, Eff(ac, StatsEnumerated.Dexterity), str, fighter.Weapon!, kind, race.StringId,
                 fighter.DamageOutput, _combat);
         if (!world.CombatHitFilters.Pass(world, CombatHitSource.Execution, table.IdOf(a), table.IdOf(d), 0, blow, true, ref packet)) return false;
 

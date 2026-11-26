@@ -300,14 +300,13 @@ public sealed partial class LockSystem
         if (CombatConstants is not { } k || c.Fighter is not { } f || c.Stats is not { } stats || c.Medical is not { } med)
             return null;
 
-        float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * med.StatMultiplier(stat);
-        float str = Eff(StatsEnumerated.Strength);
+        float str = CombatSystem.Eff(c, StatsEnumerated.Strength);
+        float fists = DamageFormulas.UnarmedRating(stats[StatsEnumerated.MartialArts], f.UnarmedBonus, med.DustAttackPenalty, f.EncumbranceFactor,
+            stats.Scale);
         var packet = f.Unarmed
-            ? DamageFormulas.UnarmedPacket(DamageFormulas.UnarmedRating(stats[StatsEnumerated.MartialArts] * stats.Scale, f.UnarmedBonus,
-                    med.DustAttackPenalty, f.EncumbranceFactor), Eff(StatsEnumerated.Toughness), str, f.FistsItem, TargetKind.Human, null,
-                            f.DamageOutput, k)
-            : DamageFormulas.Packet(Eff(f.WeaponSkill), Eff(StatsEnumerated.Dexterity) * f.DexterityMult, str, f.Weapon!, TargetKind.Human, null,
-                    f.DamageOutput, k);
+            ? DamageFormulas.UnarmedPacket(fists, stats.ScaledToughness, str, f.FistsItem, TargetKind.Human, null, f.DamageOutput, k)
+            : DamageFormulas.Packet(CombatSystem.WeaponSkillLevel(c, f), CombatSystem.Eff(c, StatsEnumerated.Dexterity), str, f.Weapon!,
+                TargetKind.Human, null, f.DamageOutput, k);
         return (packet.Cut, packet.Blunt, f.IsAnimal);
     }
 

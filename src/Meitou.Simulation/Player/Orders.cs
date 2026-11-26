@@ -216,7 +216,7 @@ public static class Orders
     }
 
     /// <summary>
-    /// The stealth term s of a character in [0, 1] (<c>FUN_140884850</c>): its stealth skill x 0.75 while carrying someone, x 2 while crawling
+    /// The stealth term s of a character in [0, 1] (<c>FUN_140884850</c>): its stored stealth skill (no scale) x 0.75 while carrying someone, x 2 while crawling
     /// (posture not 0), x the encumbrance factor, x the body term (<see cref="Bodies.MedicalState.StealthBodyFactor"/>), x the gear's factor
     /// (<see cref="Combat.Fighter.StealthMult"/>), x the fitted limbs' factor, x 0.01. Not the stat multiplier's table: the game never sends stealth
     /// through it.
@@ -224,7 +224,7 @@ public static class Orders
     public static float Stealth(CharacterCold cold)
     {
         if (cold.Stats is not { } stats) return 0;
-        float s = stats[StatsEnumerated.Stealth] * stats.Scale * (cold.Fighter is { } f ? f.EncumbranceFactor * f.StealthMult : 1);
+        float s = stats[StatsEnumerated.Stealth] * (cold.Fighter is { } f ? f.EncumbranceFactor * f.StealthMult : 1);
         if (cold.Medical is { } medical)
         {
             s *= medical.StealthBodyFactor(stats.ScaledToughness)

@@ -597,8 +597,7 @@ public sealed partial class CombatSystem : IProjectileSource
                 return;
             }
 
-            float skill = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Crossbows),
-                Eff(cold, StatsEnumerated.Dexterity), fighter.DexterityMult);
+            float skill = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Crossbows), Eff(cold, StatsEnumerated.Dexterity));
             float rate = Filtered(world, i, CombatSpeedKind.Reload, 1);
             s.ReloadTime = RangedFormulas.ReloadTime(skill, x.Stats.ReloadMin, x.Stats.ReloadMax) / rate;
             s.ReloadLeft = s.ReloadTime;

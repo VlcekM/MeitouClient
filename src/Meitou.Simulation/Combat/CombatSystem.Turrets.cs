@@ -278,8 +278,7 @@ public sealed partial class CombatSystem
         {
             if (t.Loaded > 0) return true;
 
-            float s = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Turrets), Eff(cold, StatsEnumerated.Dexterity),
-                cold.Fighter?.DexterityMult ?? 1);
+            float s = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Turrets), Eff(cold, StatsEnumerated.Dexterity));
             t.ReloadTime = RangedFormulas.ReloadTime(s, gun.ReloadTimeMin, gun.ReloadTimeMax);
             t.ReloadLeft = t.ReloadTime;
             t.Reloading = true;
