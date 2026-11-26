@@ -566,15 +566,32 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public void BuildShadingRate(Vector3 eye) { }
 
     /// <summary>
-    /// Applies the pending light shafts and fog volumes and the SSAO to the scene colour, when any is on.
+    /// Applies the pending light shafts and fog volumes and the occlusion (SSAO, or GTAO while <c>gtao</c> is on) to the scene colour, when any is on.
     /// </summary>
     public void ApplySsao()
     {
         if (_sceneColour is null || (!_volumesPending && !Options.Ssao && !_composite.ShaftsPending)) return;
         var cmd = (MetalCommandList)_ctx.BeginNative("post scene effects");
-        _composite.ApplyScene(cmd, _sceneColour, _ctx.Depth, Inputs, _volumesPending, Options.Ssao, Options.ContactParams);
+        _composite.ApplyScene(cmd, _sceneColour, _ctx.Depth, Inputs, _volumesPending, Options.Ssao, Options.ContactParams, GtaoFrame);
         _ctx.EndNative(cmd);
         _volumesPending = false;
+    }
+
+    /// <summary>
+    /// GTAO's march this frame (null: the SSAO): the quality's slices, steps and size, the noise moving over the frames with a temporal resolve to
+    /// average them (a still pattern without one: moving noise would shimmer), and the surface target's normals and albedos while the GI resolve
+    /// writes them.
+    /// </summary>
+    Post.CompositeGtao.Frame? GtaoFrame
+    {
+        get
+        {
+            if (!Options.Gtao) return null;
+
+            float noise = Temporal ? _frame % 64 * 5.588238f : 0f;
+            var surface = GiResolve > 0 ? _ctx.Albedo : null;
+            return new Post.CompositeGtao.Frame(Options.GtaoSlices, Options.GtaoSteps, Options.GtaoFullSize, noise, surface);
+        }
     }
 
     /// <summary>

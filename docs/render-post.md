@@ -211,7 +211,9 @@ Limits: no HDR metadata; pictures presented without the interface layer (the fir
 ### GTAO
 
 The `gtao` switch (`PostOptions.Gtao`, off by default, on from the High tier) replaces the SSAO gather while `ao` is on; with it off `Ssao` runs unchanged.
-Port of KenshiNative's `fx_gtao_ps` (Jimenez et al. 2016), adapted to a forward scene. Own programs (`GtaoShaders`, `PostProcess.Gtao.cs`); Vulkan only, the Metal chain ignores the switch.
+Port of KenshiNative's `fx_gtao_ps` (Jimenez et al. 2016), adapted to a forward scene. Own programs (`GtaoShaders`, `PostProcess.Gtao.cs`). Metal runs the same programs in the shared composite (`CompositeGtao`, from
+`PostComposite.ApplyScene`): its camera up axis turned round for top-down rows, the surface target while the GI resolve writes it, the SSAO's
+targets and blur; the Metal panel's Ground-truth occlusion row.
 
 - **Gather** (`Gather`): per pixel, slices through the view ray, each searching both ways along the screen for the horizon, with the closed-form integral.
   The result is divided by what the same slices see with nothing on the surface, so open ground stays near 1 at any slice count (**Observed**, a numeric run of the gather on an authored wall and floor: 0.98 to 1 before the blur; the taps snap to texels, so they leave the slice a little). Radius 20 units, 96 to 12 pixels at 1440 rows.
@@ -225,7 +227,7 @@ Port of KenshiNative's `fx_gtao_ps` (Jimenez et al. 2016), adapted to a forward 
 - **Apply** (`Apply`): full size, after the merged layers: the merged pass's factor is grey, so `layer-merge` runs with its occlusion off and this pass multiplies over it,
   which is the old order (shafts, fog, occlusion). Four nearest occlusion texels by depth, none near: open. Then KenshiNative's curve (power 1.6, strength 0.55) and the multi-bounce fit
   per channel of the surface target's albedo (`GtaoAlbedo` where none was written). A caller without `ApplySsao` gets the grey blurred occlusion in the composite.
-- **Quality** (`--gtao-quality`, the "Ambient occlusion quality" slider, also the SSAO's taps; GTAO is Vulkan-only): 0 half size, 2 x 4; 1 half size, 3 x 6 (default); 2 render size, 3 x 6. Full size remakes the occlusion's targets at that size.
+- **Quality** (`--gtao-quality`, the "Ambient occlusion quality" slider, also the SSAO's taps): 0 half size, 2 x 4; 1 half size, 3 x 6 (default); 2 render size, 3 x 6. Full size remakes the occlusion's targets at that size.
   With a temporal upscaler the noise moves per frame.
 
 Shading normals may darken normal-mapped ground

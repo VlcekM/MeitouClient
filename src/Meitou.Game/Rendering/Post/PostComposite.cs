@@ -68,6 +68,11 @@ sealed class PostComposite : IDisposable
     /// The occlusion's multiply pass.
     /// </summary>
     readonly ApplyPass _apply;
+
+    /// <summary>
+    /// GTAO, in place of the SSAO's gather while it is asked for (<see cref="ApplyScene"/>'s <c>gtao</c>).
+    /// </summary>
+    readonly CompositeGtao _gtao;
     /// <summary>
     /// The light shafts' inject pass.
     /// </summary>
@@ -232,6 +237,7 @@ sealed class PostComposite : IDisposable
         _ssao = new SsaoPass(ctx, vertex);
         _blur = new BlurPass(ctx, vertex);
         _apply = new ApplyPass(ctx, vertex);
+        _gtao = new CompositeGtao(ctx, vertex);
         _shaftInjectP = new ShaftInjectPass(ctx, vertex);
         _shaftIntegrateP = new ShaftIntegratePass(ctx, vertex);
         _shaftScatterP = new ShaftScatterPass(ctx, vertex);
@@ -329,12 +335,21 @@ sealed class PostComposite : IDisposable
 
     /// <summary>
     /// The light shafts' apply, the placed fog volumes and the SSAO over the finished scene, before the temporal resolve (<see cref="ApplyLayers"/>). A
-    /// separate native segment or the caller's command list may record it; the passes load the scene colour instead of clearing it.
+    /// separate native segment or the caller's command list may record it; the passes load the scene colour instead of clearing it. With
+    /// <paramref name="gtao"/> GTAO stands in for the SSAO: the layers run without the occlusion and it is multiplied over them (the order shafts, fog,
+    /// occlusion is kept; the merged pass's grey factor cannot carry its colour).
     /// </summary>
     public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn,
-        Vector4 contact = default)
+        Vector4 contact = default, CompositeGtao.Frame? gtao = null)
     {
         EnsureScene(scene.Desc.Width, scene.Desc.Height);
+        if (ssaoOn && gtao is { } g)
+        {
+            ApplyLayers(cmd, scene, depth, inputs, volumes, false, contact);
+            RunGtao(cmd, scene, depth, inputs, g);
+            return;
+        }
+
         ApplyLayers(cmd, scene, depth, inputs, volumes, ssaoOn, contact);
     }
 
@@ -710,7 +725,28 @@ sealed class PostComposite : IDisposable
         s.P.Set(s.Contact, contact);
         s.P.ApplyGlobals();
         Fullscreen(cmd, s.P, _aoA!, w, h);
+        BlurOcclusion(cmd, scene, i, w, h);
+    }
 
+    /// <summary>
+    /// GTAO's gather at half or full size, the SSAO's blur, and its apply over <paramref name="scene"/>.
+    /// </summary>
+    void RunGtao(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i, in CompositeGtao.Frame f)
+    {
+        int w = f.FullSize ? scene.Desc.Width : Math.Max((scene.Desc.Width + 1) / 2, 1);
+        int h = f.FullSize ? scene.Desc.Height : Math.Max((scene.Desc.Height + 1) / 2, 1);
+        EnsureOcclusionTargets(w, h);
+
+        _gtao.Gather(this, cmd, scene, depth, _aoA!, i, f, UpAxis(i.View));
+        BlurOcclusion(cmd, scene, i, w, h);
+        _gtao.Apply(this, cmd, scene, depth, _aoA!, i, f.Surface);
+    }
+
+    /// <summary>
+    /// The occlusion's two blur passes, from <see cref="_aoA"/> back into it; the second takes the occlusion off the characters' pixels.
+    /// </summary>
+    void BlurOcclusion(IGpuCommandList cmd, GpuTexture scene, in SceneInputs i, int w, int h)
+    {
         var b = _blur;
         b.P.Bind(b.Ao, _plainSampler with { View = _aoA!.View() });
         b.P.Bind(b.Mask, _ctx.Dummy(b.P.SamplerInfo(b.Mask)));
@@ -1003,16 +1039,23 @@ sealed class PostComposite : IDisposable
     /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/> (its uniforms and samplers set before).
     /// </summary>
     void Fullscreen(IGpuCommandList cmd, LegacyProgram program, GpuTexture target, int w, int h, DrawState? state = null,
-        LoadOp load = LoadOp.DontCare)
+        LoadOp load = LoadOp.DontCare) =>
+        Fullscreen(cmd, program, target.Attachment(), target.Desc.Format, w, h, state, load);
+
+    /// <summary>
+    /// One fullscreen triangle of <paramref name="program"/> into <paramref name="attachment"/> (a texture's level) of <paramref name="format"/>.
+    /// </summary>
+    internal void Fullscreen(IGpuCommandList cmd, LegacyProgram program, GpuView attachment, InternalFormat format, int w, int h,
+        DrawState? state = null, LoadOp load = LoadOp.DontCare)
     {
-        var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);
+        var formats = new AttachmentFormats(format, InternalFormat.None);
         var s = state ?? DrawState.For(formats, false);
         if (!_pipelines.TryGetValue((program.Program, formats.Colour, s), out var desc))
         {
             _pipelines[(program.Program, formats.Colour, s)] = desc = s.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles,
                     formats, program.Name);
         }
-        cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), load, default), default, w, h));
+        cmd.BeginRendering(new RenderingDesc(new RenderTarget(attachment, load, default), default, w, h));
         cmd.SetViewport(new PixelViewport(0, 0, w, h, 0, 1));
         cmd.SetScissor(new PixelRect(0, 0, (uint)w, (uint)h));
         cmd.SetRaster(CullMode.None, FrontFaceDirection.Ccw);
@@ -1129,6 +1172,7 @@ sealed class PostComposite : IDisposable
         _ssao.P.Dispose();
         _blur.P.Dispose();
         _apply.P.Dispose();
+        _gtao.Dispose();
         _shaftInjectP.P.Dispose();
         _shaftIntegrateP.P.Dispose();
         _shaftScatterP.P.Dispose();

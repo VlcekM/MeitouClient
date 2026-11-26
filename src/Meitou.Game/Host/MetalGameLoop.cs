@@ -1646,6 +1646,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             toggles.Add(new Toggle("Indirect light", () => probeGi.Enabled, v => probeGi.Enabled = v));
             toggles.Add(new Toggle("Indoor GI", () => probeGi.InteriorEnabled, v => probeGi.InteriorEnabled = v));
+            AddTracedSettings(toggles);
         }
         toggles.Add(new Toggle("Cloud shadows", () => _sky.CloudShadows, v => _sky.CloudShadows = v));
         toggles.Add(new Toggle("Night air", () => _sky.NightAir, v => _sky.NightAir = v));
@@ -1654,6 +1655,23 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         toggles.Add(new Toggle("Clouds", () => _sky.LitClouds, v => _sky.LitClouds = v));
         toggles.Add(new Toggle("High Altitude Clouds", () => HighClouds.Enabled, v => HighClouds.Enabled = v));
     }
+
+    /// <summary>
+    /// The switches that need the indirect light's traced scene, under the same names as the Vulkan panel's (so the saved values and the quality
+    /// tiers reach them): the hybrid GI and its parts, the traced sun shadows and the lamp shadows.
+    /// </summary>
+    void AddTracedSettings(List<Toggle> toggles)
+    {
+        toggles.Add(SwitchToggle("gihybrid"));
+        toggles.AddRange(WorldFrame.GiHybridToggles(host.WorldOptions.Post));
+        toggles.Add(SwitchToggle("traced"));
+        toggles.Add(SwitchToggle("lampshadows"));
+    }
+
+    /// <summary>
+    /// The row of the Faithful / Meitou switch <paramref name="id"/> (<see cref="Enhancements"/>).
+    /// </summary>
+    Toggle SwitchToggle(string id) => WorldFrame.SwitchToggle(WorldOptions.Switches(host.WorldOptions).First(e => e.Id == id));
 
     /// <summary>
     /// The character and icon switches, and ground relief.
@@ -1757,7 +1775,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         sliders.Add(new Slider("Light shafts air at dawn and dusk (x)", 0, 6, () => host.WorldOptions.Post.ShaftAirDawn,
             v => host.WorldOptions.Post.ShaftAirDawn = MathF.Round(v * 10) / 10, "0.0"));
         sliders.Add(WorldFrame.ShaftQuality(host.WorldOptions.Post));
-        sliders.Add(WorldFrame.OcclusionQuality(host.WorldOptions.Post));   // the SSAO's taps: Metal has no GTAO
+        sliders.Add(WorldFrame.OcclusionQuality(host.WorldOptions.Post));
+        toggles.Add(SwitchToggle("gtao"));
         toggles.Add(new Toggle("Dithering", () => host.WorldOptions.Post.Dither, v => host.WorldOptions.Post.Dither = v));
     }
 

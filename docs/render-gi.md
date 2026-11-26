@@ -104,7 +104,7 @@ A metal's specular colour (sqrt, 8 bits a channel) goes beside its gloss on a re
 ## Hybrid GI
 
 `gihybrid` (Meitou switch, **off by default**, Graphics > Lighting > Hybrid GI). `--gi-hybrid <relocate,clouds,cache>` turns it on with
-the listed parts only. Each part is also a plain on / off row under Graphics > Lighting > Indirect light ("GI probes out of walls", "GI cloud shadows", "GI radiance cache"), read each frame. Relocation and cloud shadows also on Metal ([Metal](#metal)); the radiance cache Vulkan only: below.
+the listed parts only. Each part is also a plain on / off row under Graphics > Lighting > Indirect light ("GI probes out of walls", "GI cloud shadows", "GI radiance cache"), read each frame. All three also on Metal ([Metal](#metal)).
 
 **Probe relocation** (`relocate`; RTXGI's rule, `GiShaders.ProbeRelocate`, needs the resolve). Offsets stay in world units per atlas
 tile, in `offsets`; relocation reads the frame's rays before the blend. Over a quarter back faces: through the closest back face, half the
@@ -237,7 +237,9 @@ a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`Prob
 - **Lamp shadows** (`MetalLampShadows`, `MetalPostChain.RunLampShadows`, after the resolve): Vulkan's full-screen trace (every lamp of a pixel's
   cell; no tile cache on Metal, so the per-lamp passes do not run), the shared penumbra filter (`named`), the apply (reverse subtract) and floor (max)
   passes. While on, the scene holds the casters and the characters draw as the lamps' receivers (`uGiParams.z` bit 16).
-- **Not on Metal** (Vulkan has them): grass in the scene, GI traced on characters (it needs GTAO, which the Metal chain lacks), reflections' rays.
+- **Settings.** The Metal panel has the switches under the Vulkan panel's names (Hybrid GI and its four parts, Traced sun shadows, Lamp shadows),
+  so the saved values and the quality tiers reach them; it has no technique choices, so they show as plain switches.
+- **Not on Metal** (Vulkan has them): grass in the scene, GI traced on characters, reflections' rays.
   The Metal panel has no rows for the Hybrid GI, traced sun or lamp shadows switches: `--meitou gihybrid,traced,lampshadows` and `--gi-hybrid`
   turn them on.
 - **Observed** (Apple M6, macOS 27.2, play bench settle and orbit on `bench-bases-2026-10-27`, 1920x1080 scene, probes + resolve + relocation, one run

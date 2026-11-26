@@ -1147,8 +1147,7 @@ static partial class WorldFrame
         bool tessellation = g.Sky.Gpu.HasTessellation;
         var toggles = switches?
             .Where(e => e.Id != "displace" || tessellation)
-            .Select(e => new Toggle(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful, Remaster: true,
-                OnOff: e.Faithful is "off" or "none", Optional: e.Optional))
+            .Select(SwitchToggle)
             .ToList() ?? [];
 
         if (g.Post is { } post) AddPostToggles(toggles, post);
@@ -1179,6 +1178,25 @@ static partial class WorldFrame
     }
 
     /// <summary>
+    /// A Faithful / Meitou switch as its checkbox (ticked: Meitou), as both settings panels show it.
+    /// </summary>
+    internal static Toggle SwitchToggle(Enhancement e) =>
+        new(e.Name, () => e.IsMeitou, v => e.IsMeitou = v, () => e.IsMeitou ? e.Meitou : e.Faithful, Remaster: true,
+            OnOff: e.Faithful is "off" or "none", Optional: e.Optional);
+
+    /// <summary>
+    /// The hybrid GI's parts (<c>--gi-hybrid</c>), plain on / off rows of <paramref name="options"/>; they act while the Hybrid GI choice is on. Both
+    /// settings panels show them.
+    /// </summary>
+    internal static IEnumerable<Toggle> GiHybridToggles(PostOptions options) =>
+    [
+        new(GiRelocateSwitch, () => options.GiRelocate, v => options.GiRelocate = v),
+        new(GiCloudShadowsSwitch, () => options.GiCloudShadows, v => options.GiCloudShadows = v),
+        new(GiCacheSwitch, () => options.GiCache, v => options.GiCache = v),
+        new(GiRaysSwitch, () => options.GiMoreRays, v => options.GiMoreRays = v),
+    ];
+
+    /// <summary>
     /// The post chain's switches: bloom, the camera effects, the hybrid GI's parts and the traced sun shadows' grass.
     /// </summary>
     static void AddPostToggles(List<Toggle> toggles, PostProcess post)
@@ -1187,11 +1205,7 @@ static partial class WorldFrame
         toggles.Add(new Toggle(CameraEffectsSwitch, () => post.Options.CameraEffectsEverywhere, v => post.Options.CameraEffectsEverywhere = v,
             Remaster: true, OnOff: true, Optional: true));
 
-        // The hybrid GI's parts (--gi-hybrid), plain on / off rows; they act while the Hybrid GI choice is on.
-        toggles.Add(new Toggle(GiRelocateSwitch, () => post.Options.GiRelocate, v => post.Options.GiRelocate = v));
-        toggles.Add(new Toggle(GiCloudShadowsSwitch, () => post.Options.GiCloudShadows, v => post.Options.GiCloudShadows = v));
-        toggles.Add(new Toggle(GiCacheSwitch, () => post.Options.GiCache, v => post.Options.GiCache = v));
-        toggles.Add(new Toggle(GiRaysSwitch, () => post.Options.GiMoreRays, v => post.Options.GiMoreRays = v));
+        toggles.AddRange(GiHybridToggles(post.Options));
         toggles.Add(new Toggle(GiCharactersSwitch, () => post.Options.CharacterOcclusion, v => post.Options.CharacterOcclusion = v));
 
         // The traced sun shadows' grass, a plain on / off row, and their far cascades (the sun shadows' choice); they act while the sun is traced.
