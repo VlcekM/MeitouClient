@@ -4,6 +4,7 @@ using Meitou.Game.Host;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Water;
 using Meitou.Settings;
 
@@ -127,6 +128,10 @@ static class LauncherSchema
         Graphics(WorldFrame.PlanetshineStrengthSlider, 0, 200, 1, Enhancements.MeitouPlanetshineStrength),
         Graphics(WorldFrame.CloudHeightSlider, VolumetricClouds.MinBottom, VolumetricClouds.MaxBottom, 100, VolumetricClouds.Bottom) with
             { Logarithmic = true },
+        Graphics(WorldFrame.HighCloudAmountSlider, 0, 100, 5, HighClouds.DefaultAmount),
+        Graphics(WorldFrame.HighCloudDensitySlider, 0, 100, 5, HighClouds.DefaultDensity),
+        Graphics(WorldFrame.HighCirrusAmountSlider, 0, 100, 5, HighClouds.DefaultCirrusAmount),
+        Graphics(WorldFrame.HighCirrusDensitySlider, 0, 100, 5, HighClouds.DefaultCirrusDensity),
         Graphics(WorldFrame.AmbientStrengthSlider, 0, 3, 0.05f, 1) with { Format = "0.00" },
         Graphics(WorldFrame.NightAmbientStrengthSlider, 0, 5, 0.05f, 1) with { Format = "0.00" },
         Graphics(WorldFrame.ShaftStrengthSlider, 0, 1, 0.05f, new PostOptions().ShaftStrength) with { Format = "0.00" },

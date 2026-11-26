@@ -91,6 +91,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
         // Sky & weather
         new("Haze", "Haze", ["Haze strength (1 = game)", WorldFrame.HazeDistanceSlider]),
         new("Clouds", "Clouds", [WorldFrame.CloudHeightSlider, "Cloud shadows", "Cloud shadows in fog"]),
+        new("High Altitude Clouds", "High Altitude Clouds", WorldFrame.HighCloudSliders),
         new("Weather particles", WorldFrame.ParticleSliders[0], [WorldFrame.ParticleSliders[1]]),
         new("Fog", "Fog", []),
         new("Lit dust", "Lit dust", []),

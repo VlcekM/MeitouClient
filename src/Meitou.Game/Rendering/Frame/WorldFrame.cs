@@ -399,6 +399,12 @@ static partial class WorldFrame
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
 
     /// <summary>
+    /// The high clouds' sliders.
+    /// </summary>
+    public static readonly string[] HighCloudSliders =
+        [HighCloudAmountSlider, HighCloudDensitySlider, HighCirrusAmountSlider, HighCirrusDensitySlider];
+
+    /// <summary>
     /// The Tab panel sliders' labels: the meitou.user.json keys, and the launcher's settings schema names them (keep them).
     /// </summary>
     public const string ObjectDistanceSlider = "Object draw distance", GrassDensitySlider = "Grass density x",
@@ -437,6 +443,10 @@ static partial class WorldFrame
         HazeStrengthSlider = "Haze strength (1 = game)",
         PlanetshineStrengthSlider = "Planetshine strength (x physical)",
         CloudHeightSlider = "Cloud height (Meitou)",
+        HighCloudAmountSlider = "Altocumulus amount",
+        HighCloudDensitySlider = "Altocumulus density",
+        HighCirrusAmountSlider = "Cirrus amount",
+        HighCirrusDensitySlider = "Cirrus density",
         AmbientStrengthSlider = "Ambient light strength (1 = game)",
         NightAmbientStrengthSlider = "Night ambient light strength (1 = 1.2x game)",
         ToneMapSlider = "Tone map (0 = game)",
@@ -971,6 +981,19 @@ static partial class WorldFrame
             ShadowPass.MaxCascadeSetting), "0", Step: 1);
 
     /// <summary>
+    /// The high clouds' sliders (the altocumulus's and the cirrus's amount and density), shared by the Vulkan and Metal panels.
+    /// </summary>
+    public static void AddHighCloudSliders(List<Slider> sliders)
+    {
+        sliders.Add(new Slider(HighCloudAmountSlider, 0, 100, () => HighClouds.Amount, v => HighClouds.Amount = MathF.Round(v / 5) * 5, "0"));
+        sliders.Add(new Slider(HighCloudDensitySlider, 0, 100, () => HighClouds.Density, v => HighClouds.Density = MathF.Round(v / 5) * 5, "0"));
+        sliders.Add(new Slider(HighCirrusAmountSlider, 0, 100, () => HighClouds.CirrusAmount,
+            v => HighClouds.CirrusAmount = MathF.Round(v / 5) * 5, "0"));
+        sliders.Add(new Slider(HighCirrusDensitySlider, 0, 100, () => HighClouds.CirrusDensity,
+            v => HighClouds.CirrusDensity = MathF.Round(v / 5) * 5, "0"));
+    }
+
+    /// <summary>
     /// The sky's haze, planetshine, cloud height and ambient light.
     /// </summary>
     static void AddSkySliders(List<Slider> sliders, SkyRenderer sky, WorldOptions? options)
@@ -983,6 +1006,7 @@ static partial class WorldFrame
         sliders.Add(new Slider(PlanetshineStrengthSlider, 0, 200, () => sky.PlanetshineStrength, v => sky.PlanetshineStrength = MathF.Round(v), "0"));
         sliders.Add(new Slider(CloudHeightSlider, VolumetricClouds.MinBottom, VolumetricClouds.MaxBottom, () => sky.CloudHeight,
             v => sky.CloudHeight = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
+        AddHighCloudSliders(sliders);
         // Ours: the sky's ambient light (shade, nights, interiors), a multiple of the game's.
         sliders.Add(new Slider(AmbientStrengthSlider, 0, 3, () => sky.AmbientStrength, v => sky.AmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
 

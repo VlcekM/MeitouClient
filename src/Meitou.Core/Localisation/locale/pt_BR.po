@@ -6241,3 +6241,51 @@ msgstr "Dê ao edifício um nome seu, mostrado no painel, no inventário e nas t
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "Deixe vazio para o nome original do edifício."
+
+#. machine-translated
+msgid "High Altitude Clouds"
+msgstr "Nuvens altas"
+
+#. machine-translated
+msgid "altocumulus and cirrus"
+msgstr "altocúmulos e cirros"
+
+#. machine-translated
+msgid "the game's sky has only its one low cloud layer; Meitou can add altocumulus 10 km up and faint cirrus 26 km up that drift and change shape over time, bend down to a real horizon, glow at sunset after the land is dark and hide the stars at night; the lower clouds pass in front of them (Vulkan; docs/render-clouds.md \"High clouds\")"
+msgstr "o céu do jogo tem apenas sua única camada de nuvens baixas; o Meitou pode adicionar altocúmulos a 10 km e cirros tênues a 26 km de altura que se deslocam e mudam de forma com o tempo, curvam-se até um horizonte real, brilham no pôr do sol depois que a terra já escureceu e escondem as estrelas à noite; as nuvens mais baixas passam na frente (Vulkan; docs/render-clouds.md \"High clouds\")"
+
+#. machine-translated
+msgid "Adds high altitude clouds to the skybox. From ImpulseSpecifix's Dynamic Skies."
+msgstr "Adiciona nuvens de grande altitude à skybox. Do Dynamic Skies de ImpulseSpecifix."
+
+#. machine-translated
+msgid "Altocumulus amount"
+msgstr "Quantidade de altocúmulos"
+
+#. machine-translated
+msgid "Controls the coverage of the thicker Altocumulus clouds."
+msgstr "Controla a cobertura dos altocúmulos, mais espessos."
+
+#. machine-translated
+msgid "Altocumulus density"
+msgstr "Densidade dos altocúmulos"
+
+#. machine-translated
+msgid "Controls the density (thickness/visibility) of the Altocumulus clouds."
+msgstr "Controla a densidade (espessura/visibilidade) dos altocúmulos."
+
+#. machine-translated
+msgid "Cirrus amount"
+msgstr "Quantidade de cirros"
+
+#. machine-translated
+msgid "Controls the coverage of the thinner Cirrus clouds."
+msgstr "Controla a cobertura dos cirros, mais finos."
+
+#. machine-translated
+msgid "Cirrus density"
+msgstr "Densidade dos cirros"
+
+#. machine-translated
+msgid "Controls the density (thickness/visibility) of the Cirrus clouds."
+msgstr "Controla a densidade (espessura/visibilidade) dos cirros."

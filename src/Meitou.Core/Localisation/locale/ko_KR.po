@@ -5811,3 +5811,51 @@ msgstr "건물에 직접 이름을 붙입니다. 패널, 인벤토리, 그 건�
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "비워 두면 건물의 원래 이름을 씁니다."
+
+#. machine-translated
+msgid "High Altitude Clouds"
+msgstr "높은 구름"
+
+#. machine-translated
+msgid "altocumulus and cirrus"
+msgstr "고적운과 권운"
+
+#. machine-translated
+msgid "the game's sky has only its one low cloud layer; Meitou can add altocumulus 10 km up and faint cirrus 26 km up that drift and change shape over time, bend down to a real horizon, glow at sunset after the land is dark and hide the stars at night; the lower clouds pass in front of them (Vulkan; docs/render-clouds.md \"High clouds\")"
+msgstr "게임의 하늘에는 낮은 구름층 하나만 있습니다. Meitou는 고도 10km의 고적운과 고도 26km의 옅은 권운을 더할 수 있으며, 구름은 흘러가며 시간이 지남에 따라 모양이 바뀌고, 실제 지평선으로 휘어 내려가며, 땅이 어두워진 뒤에도 해질녘에 빛나고, 밤에는 별을 가리며; 낮은 구름은 그 앞을 지나갑니다(Vulkan; docs/render-clouds.md \"High clouds\")"
+
+#. machine-translated
+msgid "Adds high altitude clouds to the skybox. From ImpulseSpecifix's Dynamic Skies."
+msgstr "스카이박스에 높은 고도의 구름을 추가합니다. ImpulseSpecifix의 Dynamic Skies에서 가져왔습니다."
+
+#. machine-translated
+msgid "Altocumulus amount"
+msgstr "고적운 양"
+
+#. machine-translated
+msgid "Controls the coverage of the thicker Altocumulus clouds."
+msgstr "더 두꺼운 고적운이 하늘을 덮는 정도를 조절합니다."
+
+#. machine-translated
+msgid "Altocumulus density"
+msgstr "고적운 밀도"
+
+#. machine-translated
+msgid "Controls the density (thickness/visibility) of the Altocumulus clouds."
+msgstr "고적운의 밀도(두께/가시성)를 조절합니다."
+
+#. machine-translated
+msgid "Cirrus amount"
+msgstr "권운 양"
+
+#. machine-translated
+msgid "Controls the coverage of the thinner Cirrus clouds."
+msgstr "더 얇은 권운이 하늘을 덮는 정도를 조절합니다."
+
+#. machine-translated
+msgid "Cirrus density"
+msgstr "권운 밀도"
+
+#. machine-translated
+msgid "Controls the density (thickness/visibility) of the Cirrus clouds."
+msgstr "권운의 밀도(두께/가시성)를 조절합니다."

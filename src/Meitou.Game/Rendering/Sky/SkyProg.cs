@@ -46,10 +46,10 @@ sealed class SkyProg : IDisposable
 
     /// <summary>
     /// The physical sky's uniforms: the inverse view-projection, <c>uSkyExtra</c>, the planets' spin, the cloud layer's light, sun and wind, the
-    /// Meitou clouds' mode, key light, key direction and ambient, which textures it has, the Meitou stars and the celestial axes.
+    /// Meitou clouds' mode, key light, key direction and ambient, which textures it has, the Meitou stars, the celestial axes and the high clouds.
     /// </summary>
     public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, CloudMeitou, CloudKey, CloudKeyDir,
-        CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ;
+        CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ, HighClouds, HighCloudSeconds;
 
     /// <summary>
     /// The two planets' bodies (direction, sine of the angular radius).
@@ -62,9 +62,10 @@ sealed class SkyProg : IDisposable
     public readonly SkyColourHandles Colours;
 
     /// <summary>
-    /// The sky's textures: stars, the two planets, the cloud layer (colour, normal, tile and their smooth variants) and the volumetric clouds' image.
+    /// The sky's textures: stars, the two planets, the cloud layer (colour, normal, tile and their smooth variants), the volumetric clouds' image and
+    /// the high clouds' cirrus.
     /// </summary>
-    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth, VolumeImage;
+    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth, VolumeImage, HighCirrus;
 
     /// <summary>
     /// The stars' and clouds' sampler reflection (null when the program has none).
@@ -95,6 +96,8 @@ sealed class SkyProg : IDisposable
         CelX = P.Uniform("uCelX");
         CelY = P.Uniform("uCelY");
         CelZ = P.Uniform("uCelZ");
+        HighClouds = P.Uniform("uHighClouds");
+        HighCloudSeconds = P.Uniform("uHighCloudSeconds");
         Stars = P.Sampler("uStars");
         Planet0 = P.Sampler("uPlanet0");
         Planet1 = P.Sampler("uPlanet1");
@@ -104,6 +107,7 @@ sealed class SkyProg : IDisposable
         CloudsSmooth = P.Sampler("uCloudsSmooth");
         CloudsTileSmooth = P.Sampler("uCloudsTileSmooth");
         VolumeImage = P.Sampler("uVolumeImage");
+        HighCirrus = P.Sampler("uHighCirrus");
         if (Stars.IsValid) StarsInfo = P.SamplerInfo(Stars);
         if (Clouds.IsValid) CloudsInfo = P.SamplerInfo(Clouds);
     }
@@ -173,6 +177,15 @@ sealed class SkyProg : IDisposable
         p.Set(CloudKey, v.Key);
         p.Set(CloudKeyDir, v.KeyDir);
         p.Set(CloudAmbient, v.Ambient);
+    }
+
+    /// <summary>
+    /// The high clouds' densities and amounts (uHighClouds) and clock.
+    /// </summary>
+    public void SetHighClouds(Vector4 look, float seconds)
+    {
+        P.Set(HighClouds, look);
+        P.Set(HighCloudSeconds, seconds);
     }
 
     /// <summary>

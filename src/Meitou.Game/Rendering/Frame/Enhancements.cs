@@ -509,6 +509,12 @@ public static class Enhancements
             "the game's exposure follows the picture's brightness only down to a daytime minimum, so a canyon or a street in a cliff's shadow at "
                 + "noon stays dark; Meitou lets it adapt by day to halfway between the game's day and night minimums (up to 1.7 times brighter in "
                 + "deep shade); nights, open sunny views and rooms are as before (docs/render-post.md \"Adaptive exposure\")"),
+        new("highclouds", "High Altitude Clouds", "none", "altocumulus and cirrus",
+            () => Sky.HighClouds.Enabled, v => Sky.HighClouds.Enabled = v,
+            "the game's sky has only its one low cloud layer; Meitou can add altocumulus 10 km up and faint cirrus 26 km up that drift and change "
+                + "shape over time, bend down to a real horizon, glow at sunset after the land is dark and hide the stars at night; "
+                + "the lower clouds pass in front of them (Vulkan; docs/render-clouds.md \"High clouds\")",
+            optional: true),
     ];
 
     #endregion

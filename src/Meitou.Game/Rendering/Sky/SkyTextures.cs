@@ -9,8 +9,8 @@ using Meitou.Game.Rendering.Gpu;
 namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
-/// The sky's textures (the starfield, the planets, the cloud layer's maps) and the game's lighting textures (the irradiance and specular cubes, the
-/// ambient map), each null when its file was not found.
+/// The sky's textures (the starfield, the planets, the cloud layer's maps, the high clouds' cirrus) and the game's lighting textures (the
+/// irradiance and specular cubes, the ambient map), each null when its file was not found.
 /// </summary>
 sealed class SkyTextures : IDisposable
 {
@@ -25,6 +25,11 @@ sealed class SkyTextures : IDisposable
     /// </summary>
     SampledImage? _starsTexture, _cloudsTexture, _cloudsNormalTexture, _cloudsTileTexture, _cloudsSmooth, _cloudsTileSmooth, _irradianceCube,
         _specularCube, _ambientMap;
+
+    /// <summary>
+    /// The high clouds' cirrus wisps, or null.
+    /// </summary>
+    SampledImage? _highCirrus;
 
     /// <summary>
     /// The game's two planets' textures (<see cref="SkyPlanet.All"/> order); null when the file was not found.
@@ -104,6 +109,7 @@ sealed class SkyTextures : IDisposable
     public void Load(AssetLocator assets)
     {
         LoadTextures(assets);
+        LoadHighCirrus();
         string starfield = YesNo(_starsTexture);
         string planets = string.Join(" ", SkyPlanet.All.Select((p, i) => $"{p.Material} {YesNo(_planetTextures[i])}"));
         string clouds = YesNo(_cloudsTexture);
@@ -163,6 +169,19 @@ sealed class SkyTextures : IDisposable
     }
 
     /// <summary>
+    /// Loads the embedded cirrus texture, if present.
+    /// </summary>
+    void LoadHighCirrus()
+    {
+        using var stream = typeof(SkyTextures).Assembly.GetManifestResourceStream("high-cirrus.png");
+        if (stream is null) return;
+
+        using var bytes = new MemoryStream();
+        stream.CopyTo(bytes);
+        _highCirrus = SampledImage.Rgba8(_gpu, TextureLoader.LoadImage(bytes.ToArray()), repeat: true, mipmaps: true, "sky high cirrus");
+    }
+
+    /// <summary>
     /// The ambient map, built the game's way from <c>biomemap.png</c> and the BIOMES records (<see cref="AmbientMap"/>).
     /// </summary>
     public void LoadAmbientMap(GameInstall install, GameDatabase db)
@@ -206,6 +225,7 @@ sealed class SkyTextures : IDisposable
         if (_cloudsTileTexture is not null) p.Bind(program.CloudsTile, _cloudsTileTexture.Sampled());
         if (_cloudsSmooth is not null) p.Bind(program.CloudsSmooth, _cloudsSmooth.Sampled());
         if (_cloudsTileSmooth is not null) p.Bind(program.CloudsTileSmooth, _cloudsTileSmooth.Sampled());
+        if (_highCirrus is not null) p.Bind(program.HighCirrus, _highCirrus.Sampled());
     }
 
     /// <summary>
@@ -216,7 +236,7 @@ sealed class SkyTextures : IDisposable
         var textures = new[]
         {
             _starsTexture, _cloudsTexture, _cloudsNormalTexture, _cloudsTileTexture, _cloudsSmooth, _cloudsTileSmooth, _irradianceCube,
-            _specularCube, _ambientMap,
+            _specularCube, _ambientMap, _highCirrus,
         };
         foreach (var t in textures) t?.Dispose();
         foreach (var t in _planetTextures) t?.Dispose();

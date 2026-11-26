@@ -59,3 +59,42 @@ Free camera inside/above slab does not occlude foreground geometry with clouds. 
 march interval can omit distant clouds. Fog/haze/overcast tuning is Meitou appearance, not proven
 original parity. Test horizon, sunset/night, rainy colour, clock/region cuts, reflection and
 above-cloud views; compare temporal baseline noise. [Weather](formats/weather.md), [bench](bench.md).
+
+## High clouds
+
+Meitou `highclouds` ("High Altitude Clouds"; optional, off; `HighClouds`): an altocumulus
+layer 10 km up and a cirrus layer 26 km up, drawn in the sky pass after the stars and planets and before the game's cloud layer or the
+volume, so the clouds below cover them. Metal draws it through the same sky pass; its switch and sliders are in the Metal
+settings too.
+Puddle reflections (`CloudLayerShaders.Reflected`) do not show it.
+`Altocumulus amount` slider (0..100, step 5, default 50; `HighClouds.Amount`, `uHighClouds.y`): 0 is clear, 25 and below fades
+the layer out, 50 is the tuned look, and from 60 up the weather patches even out until 100 is a solid overcast sheet.
+`Altocumulus density` slider (0..100, step 5, default 100; `HighClouds.Density`, `uHighClouds.x`): scales the altocumulus's opacity,
+0 invisible (not drawn), 100 the full look.
+`Cirrus amount` and `density` sliders (0..100, step 5, defaults 50 and 50; `HighClouds.CirrusAmount` and
+`CirrusDensity`, `uHighClouds.w` and `.z`): the same for the cirrus; the amount is the share of cells with a wisp, none at 0, 60 % at 50,
+every cell at 100. The other tuning values are constants.
+
+- Geometry: the layer is a shell round a 6371 km Earth (`hcShellDist`), so it bends down to a horizon about 360 km away; 1 pattern unit
+  is 8 km, stretched 1/0.6 along a fixed wind axis.
+- Pattern: the "2D Clouds" Shadertoy's ([notices](../THIRD_PARTY_NOTICES.md)): simplex-noise octave sums (ridges, body, two detail sums)
+  warped by an fbm, moved by the layer's clock (`uHighCloudSeconds`: 0.1 s per second of the clouds' frame clock, so it follows the game
+  speed and a pause freezes it).
+  The clock restarts every 3600 s, 10 hours at 1x (sent modulo 3600, so float precision holds in long sessions); over its last 120 s the layer
+  crossfades from the old pattern to the restarted one.
+  Octaves finer than the pixel footprint fade out (no horizon speckle). Two slow noises make 10-25 km weather patches, thick or clear.
+- Shape: a wide opacity ramp (soft edges), the thin outer part eroded by the ridged detail; towards the horizon a 1 km fake thickness
+  (the tops' and bases' outlines offset by parallax) lights the upper edges and shades the lower ones.
+- Light: the cloud pass's key and ambient (`uCloudKey`, `uCloudAmbient`; the sun's light when the key is zero) through an ice-like forward
+  phase, faint rims on thin edges, slightly darker cores, a bright silver lining near the sun, and shaded parts tinted by the open
+  sky. Around sunset each point takes the
+  sunlight at its own height, reddened by the air the ray grazes. Far clouds fade into the sky over 150 km.
+- Night: no haze fade and the thin parts filled in, so the clouds hide the stars and planets; thin parts about the open sky's brightness,
+  thick cores 65 % of it, plus the planet's light, at 1.2x.
+- Cirrus: behind the main layer, a 26 km layer of soft wisps from `assets/high-cirrus.png` (two shapes in R and G; `uHighCirrus`): at the
+  default amount one wisp in 60 % of 21 x 7 km cells (stretched along an upper wind veered 0.32 rad), sized, tilted and
+  timed by the cell's hash, each forming and dissolving over minutes; opacity 0.19, faded over 250 km, drifting at half the main layer's
+  apparent speed, lit with the sunset light of ~23 km. The main layer takes its colour from the sky without the cirrus, so the cirrus
+  does not show through it. The switch turns both layers on; each has its own sliders.
+- Cost (by code count, not measured on a GPU): 45 simplex-noise calls and up to 9 texture reads per sky pixel above the horizon, twice
+  that during the 20-minute crossfade every 10 hours at 1x; none below the horizon or with the switch off.

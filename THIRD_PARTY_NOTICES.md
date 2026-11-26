@@ -287,6 +287,19 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
+## Cirrus Texture
+
+`assets/high-cirrus.png` (the high clouds' cirrus wisps: two cloud images in its red and green channels) is made from
+FX_CloudAlpha08 and FX_CloudAlpha09 of "Clouds with Transparency" by wickedinsignia
+(https://opengameart.org/content/clouds-with-transparency), licensed CC0 1.0.
+
+## 2D Cloud Shader
+
+The cloud pattern of the Meitou high clouds (`src/Meitou.Game/Rendering/Sky/HighClouds.cs`: the simplex noise, the octave
+sums and their combination into cover and shading) is adapted from "2D Clouds" by drift on Shadertoy
+(https://www.shadertoy.com/view/4tdSWr), used with the author's permission as mentioned on the page. Many modifications
+and additions have been made for MeitouClient.
+
 ## Kenshi logo
 
 `assets/branding/kenshi-logo.png` (shown on the Meitou title screen) is the Kenshi logo, artwork
