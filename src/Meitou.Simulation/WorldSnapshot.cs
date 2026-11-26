@@ -733,6 +733,10 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool ShacklesLocked { get; internal set; }
     /// <summary>
+    /// The level of its worn shackles' lock while <see cref="ShacklesLocked"/> (0 otherwise): the Unlock Shackles row shows its pick chance.
+    /// </summary>
+    public int ShackleLevel { get; internal set; }
+    /// <summary>
     /// A player character wearing open shackles (<see cref="Locks.LockSystem.OpenShackles"/>): the context menu offers Take off Shackles. Pointed
     /// only, as <see cref="ShacklesLocked"/>.
     /// </summary>

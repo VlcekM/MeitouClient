@@ -161,6 +161,13 @@ sealed class ContextMenuWindow(PlayerInterface player)
         ShownLockChance(at, level, building) is { } chance ? WithChance("Pick Lock", chance * 100) : "Pick Lock";
 
     /// <summary>
+    /// The Unlock Shackles row with its chance column (verb 201, <c>FUN_1407f65e0</c>, docs/game/ui-input.md "Context menu verbs"): the pick chance
+    /// of the worn shackles' lock for the selected character nearest the wearer, in per cent, as Pick Lock's without the building minimum.
+    /// </summary>
+    internal string UnlockShacklesCaption(CharacterSnapshot wearer) =>
+        LockChance(wearer.Position, wearer.ShackleLevel) is { } chance ? WithChance("Unlock Shackles", chance * 100) : "Unlock Shackles";
+
+    /// <summary>
     /// The pick chance (0..1) the Pick Lock row shows: <see cref="LockChance"/>, 0 for a <paramref name="building"/>'s lock below the minimum pick
     /// chance; null with nobody selected.
     /// </summary>
@@ -363,7 +370,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         // or a mate's (another faction's: a crime).
         if (target.ShacklesLocked && target.Body is not { Dead: true })
         {
-            verbs.Add(("Unlock Shackles", () => player.Say(new ShackleOrder(Workers(), id, ShackleWork.Pick) { Tick = player.Session.World.Tick })));
+            verbs.Add((UnlockShacklesCaption(target), () => player.Say(new ShackleOrder(Workers(), id, ShackleWork.Pick) { Tick = player.Session.World.Tick })));
             verbs.Add(("Use Tools", () => player.Say(new ShackleOrder(Workers(), id, ShackleWork.Cut) { Tick = player.Session.World.Tick })));
             verbs.Add(("Use Strength", () => player.Say(new ShackleOrder(Workers(), id, ShackleWork.Break) { Tick = player.Session.World.Tick })));
 
