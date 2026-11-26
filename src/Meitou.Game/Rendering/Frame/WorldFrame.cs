@@ -1216,7 +1216,7 @@ static partial class WorldFrame
     /// <summary>
     /// The Advanced materials' parts (<see cref="WorldOptions.Chars2Parts"/>), plain on / off rows; they act while it is on.
     /// </summary>
-    static void AddMaterialToggles(List<Toggle> toggles, WorldGpu g, WorldOptions materials)
+    internal static void AddMaterialToggles(List<Toggle> toggles, WorldGpu g, WorldOptions materials)
     {
         var parts = new[]
         {

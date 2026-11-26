@@ -47,6 +47,11 @@ sealed partial class GameHost
     IGpuContext? _trailContext;
 
     /// <summary>
+    /// The GPU the trail renderer is made on (either backend's setup, once the GPU is up).
+    /// </summary>
+    internal void SetUpTrails(IGpuContext context) => _trailContext = context;
+
+    /// <summary>
     /// How soft each ground layer is, made on the first mark that needs it.
     /// </summary>
     GroundSoftness? _groundSoftness;

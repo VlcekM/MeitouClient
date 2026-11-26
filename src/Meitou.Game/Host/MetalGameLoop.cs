@@ -700,6 +700,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Gpu = _worldGpu;
         // The combat aftermath's renderers and store exist before a loaded save's decals are read and before the first frame.
         host.BloodDecals.SetUpBlood(_ctx);
+        host.SetUpTrails(_ctx);
     }
 
     /// <summary>
@@ -1619,6 +1620,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 v => _foliage.LodTolerance = FoliageRenderer.DefaultLodTolerance / v, "0.00", Logarithmic: true));
             toggles.Add(new Toggle("Foliage ranges", () => _foliage.MeitouRange, v => _foliage.MeitouRange = v));
             toggles.Add(new Toggle(WorldFrame.NearTreeFadeSwitch, () => _foliage.NearFade.Enabled, v => _foliage.NearFade.Enabled = v));
+            toggles.Add(new Toggle(WorldFrame.GrassCoverSwitch, () => _foliage.GrassFarCover, v => _foliage.GrassFarCover = v));
             toggles.Add(new Toggle("Far impostors", () => _foliage.Impostors, v => _foliage.Impostors = v));
             sliders.Add(new Slider("Impostor distance (F7 Meitou)", 500, 40000, () => _foliage.ImpostorDistance,
                 v => _foliage.ImpostorDistance = MathF.Round(v / 50) * 50, "0", Logarithmic: true));
@@ -1725,7 +1727,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             toggles.Add(new Toggle("Skin scattering", () => _characters.SkinShading, v => _characters.SkinShading = v));
             toggles.Add(new Toggle("Enhanced item icons", () => _characters.EnhancedIcons, v => _characters.EnhancedIcons = v));
+            toggles.Add(SwitchToggle("chars2"));
+            WorldFrame.AddMaterialToggles(toggles, _worldGpu, host.WorldOptions);
         }
+        toggles.Add(SwitchToggle("trails"));
+        toggles.Add(new Toggle(WorldFrame.SimpleTerrainSwitch, () => TerrainSimpleShading.Enabled, v => TerrainSimpleShading.Enabled = v));
         // Ground relief (docs/render-terrain.md): the Tab panel's quality, depth, parallax distance and toggle.
         if (GroundRelief.Enabled)
         {
@@ -3256,7 +3262,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         host.Gpu.GameHours = host.Session.Clock.HoursSinceStart;
         host.BloodDecals.UpdateBlood();
-        host.UpdateTrails();   // no trail renderer here: only the footfalls for the blood prints
+        host.UpdateTrails();
         host.Modding.UpdateModHits();
         host.Modding.UpdateModFrames();
         host.Modding.UpdateModProjectiles();

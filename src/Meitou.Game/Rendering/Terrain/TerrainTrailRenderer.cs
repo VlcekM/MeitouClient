@@ -174,7 +174,9 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     const float WipeKind = 3;
 
     /// <summary>
-    /// The stamps' vertex program: one instanced quad per <see cref="Row"/>, placed in the image's clip space.
+    /// The stamps' vertex program: one instanced quad per <see cref="Row"/>, placed in the image's clip space. <c>CLIP_Y</c> is the clip y's sign:
+    /// the image's row 0 is at clip -1 on a backend whose targets are bottom-up (Vulkan's), at +1 on one whose are top-down (Metal's), so there the
+    /// quad is turned round and the terrain's lookup finds a mark where it was made (<see cref="VertexFor"/>).
     /// </summary>
     const string Vertex = """
         #version 450
@@ -192,11 +194,17 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             vUv = q;
             vStamp = aSide.zw;
             vTile = aTile;
-            gl_Position = vec4(aQuad.xy + q.y * aQuad.zw + q.x * aSide.xy, 0.0, 1.0);
-            vImg = (gl_Position.xy * 0.5 + 0.5) * 2048.0;
+            vec2 p = aQuad.xy + q.y * aQuad.zw + q.x * aSide.xy;
+            gl_Position = vec4(p.x, p.y * CLIP_Y, 0.0, 1.0);
+            vImg = (p * 0.5 + 0.5) * 2048.0;
             vHalf = vec2(length(aSide.xy), length(aQuad.zw)) * 1024.0;
         }
         """;
+
+    /// <summary>
+    /// <see cref="Vertex"/> for <paramref name="gpu"/>'s targets (<see cref="IGpuContext.RenderTargetsBottomUp"/>).
+    /// </summary>
+    static string VertexFor(IGpuContext gpu) => Vertex.Replace("CLIP_Y", gpu.RenderTargetsBottomUp ? "1.0" : "-1.0", StringComparison.Ordinal);
 
     /// <summary>
     /// A mark as a height (out: x), whether a mark was recorded here (y: the fine image blends over the coarse by it) and how much of it replaces
@@ -764,7 +772,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         /// <summary>
         /// The stamp program, its sizes scaled to this level's texel.
         /// </summary>
-        readonly GpuProgram _program = owner._frame.Program(Vertex, StampSource(texel), name);
+        readonly GpuProgram _program = owner._frame.Program(VertexFor(owner._gpu), StampSource(texel), name);
 
         /// <summary>
         /// The frame's body stamps' core passes, drawn after every rim.
