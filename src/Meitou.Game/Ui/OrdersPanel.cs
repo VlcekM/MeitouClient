@@ -56,6 +56,11 @@ sealed class OrdersPanel(PlayerInterface player)
     Vector2 _jobDragPress, _jobDragOffset;
 
     /// <summary>
+    /// The dragged row and its parts as last found in the list, kept while the list scrolls it out of view.
+    /// </summary>
+    readonly List<UiControl> _jobDragParts = [];
+
+    /// <summary>
     /// The code mods' buttons beside the jobs list (docs/modding.md "Character panel lines and job panel buttons").
     /// </summary>
     internal JobModButtons ModButtons { get; } = new(player);
@@ -372,6 +377,7 @@ sealed class OrdersPanel(PlayerInterface player)
         if (JobDrag is null) return false;
 
         var row = JobRowControlAt(controls, p)!;
+        _jobDragParts.Clear();
         _jobDragPress = p;
         _jobDragOffset = p - new Vector2(row.Bounds.X, row.Bounds.Y);
         return true;
@@ -387,18 +393,32 @@ sealed class OrdersPanel(PlayerInterface player)
     {
         if (JobDrag is not { } index || player.Mouse == _jobDragPress) return;
 
+        FindJobDragParts(controls, index);
+        if (_jobDragParts.Count == 0) return;
+
+        var row = _jobDragParts[0];
+        var corner = player.Mouse - _jobDragOffset;
+        var shift = corner - new Vector2(row.Bounds.X, row.Bounds.Y);
+        var moved = row.Bounds with { X = corner.X, Y = corner.Y };
+        controls.Add(DraggedJobPart(row, "JobDrag", shift, moved));
+        foreach (var part in _jobDragParts.Skip(1))
+            controls.Add(DraggedJobPart(part, "JobDrag-" + part.Name[(row.Name.Length + 1)..], shift, moved));
+    }
+
+    /// <summary>
+    /// Takes the dragged row (list index <paramref name="index"/>) and the parts that follow it from <paramref name="controls"/> into
+    /// <see cref="_jobDragParts"/>; while the row is not in the list's view the last ones found stay.
+    /// </summary>
+    void FindJobDragParts(List<UiControl> controls, int index)
+    {
         string argument = "job:" + index.ToString(CultureInfo.InvariantCulture);
         int at = controls.FindIndex(c => c.Properties.GetValueOrDefault("ListOwner") == "JobsPanel" && c.Argument == argument);
         if (at < 0) return;
 
-        var row = controls[at];
-        var corner = player.Mouse - _jobDragOffset;
-        var shift = corner - new Vector2(row.Bounds.X, row.Bounds.Y);
-        var moved = row.Bounds with { X = corner.X, Y = corner.Y };
-        string parts = row.Name + "-";
-        controls.Add(DraggedJobPart(row, "JobDrag", shift, moved));
-        for (int i = at + 1; i < controls.Count && controls[i].Name.StartsWith(parts, StringComparison.Ordinal); i++)
-            controls.Add(DraggedJobPart(controls[i], "JobDrag-" + controls[i].Name[parts.Length..], shift, moved));
+        _jobDragParts.Clear();
+        _jobDragParts.Add(controls[at]);
+        string parts = controls[at].Name + "-";
+        for (int i = at + 1; i < controls.Count && controls[i].Name.StartsWith(parts, StringComparison.Ordinal); i++) _jobDragParts.Add(controls[i]);
     }
 
     /// <summary>
