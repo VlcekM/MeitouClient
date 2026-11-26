@@ -23,8 +23,13 @@ Object range6000; resident finest mesh parts build bottom levels, max32/frame; u
 can retire. Foliage radius>=150, range4000, max14336 instances, cached candidates invalidate by
 movement/deletion/build progress. Probes see no grass, characters or water (rays mask `0x0F`; the grass and small foliage the traced sun and the lamp shadows add sit under masks of their own: [Traced sun](render-shadows.md#traced-sun)).
 Origin tracks eye in64-unit steps with1024-unit hysteresis; lazy scene epochs coordinate commits.
-Shared top level fits16384 instances, prefers fast trace, reuses identical instance data; with characters in it (lamp shadows) it is refitted each frame, built again every 30.
+Shared top level fits 32768 instances, prefers fast trace, reuses identical instance data; with characters in it (lamp shadows) it is refitted each frame, built again every 30.
 Terrain refits unchanged topology (periodic full rebuild); retire structures after GPU consumers.
+
+On Vulkan, builds and refits share one aligned scratch buffer ordered on the graphics queue. The buffer grows on demand and is released after five
+seconds without a build. Static meshes request compacted sizes in their build frame, then copy into smaller storage after that frame's slot fence.
+The next top level uses the new addresses and the old structures retire after their last consumers. Per-slot mapped uploads start at 8192 instances
+and 32768 geometry records and double as needed. Traced grass structures use up to 8% of the device budget (512 MB maximum), halved under pressure.
 
 Terrain rays cull back faces; objects/foliage are double-sided. **Verified** RayQueryTests winding.
 Structure geometry records and hit-fetch addresses must refresh when mesh buffers are replaced;
@@ -121,9 +126,11 @@ The per-fragment path (`--gi-resolve 0`) and the gi-reflection bench do not read
 **Cloud shadows** (`clouds`). The sun at a probe's hit takes `atmoCloudShadow`, the lit fragments' own function, so shaded land stops bouncing sunlight
 and probe light follows the clouds at the hysteresis' pace. The sky seen by a miss is not dimmed. Shafts: [render-shafts](render-shafts.md).
 
-**Radiance cache** (`cache`; `GiCache`, `GiCacheShaders`, needs the resolve). World-space cells in a hash table (`Capacity` 2^18 slots, a key in one of 8
-Hidden parts: a cell that is no interior's sends its rays through what the floor view hides (`GeometryRecord.Interior` bit 1) when a ray's first such hit is within 12 units, and through every hidden part after it (`rayLight`, up to 4 passes). **Observed** (save grass-through interior, `gfx "GI radiance cache" 0|1`): the ground where a hidden wall stands had every ray blocked, a black band round the viewed building's floor and a black hump inside it (54,000 pixels under level 5; 22,400 after, a dark strip left whose cause is **Unknown**).
-consecutive ones; 152 bytes a slot, about 40 MB), keyed by the cell (position / size, floored), its level and the axis nearest the surface's normal (six, interiors apart).
+**Radiance cache** (`cache`; `GiCache`, `GiCacheShaders`, needs the resolve). World-space cells in a hash table, with eight candidate slots per key
+and 152 bytes per slot. Both backends allocate 2^18 slots (38 MiB), or 2^17 under pressure or with a budget up to 8 GiB, and releases the cache when disabled.
+Keys contain the cell position, level and nearest normal axis (six, interiors apart). Exterior cells' rays can skip hidden parts for up to
+four passes when the first hidden hit is within 12 units (`GeometryRecord.Interior` bit 1). **Observed** (`grass-through interior`, cache toggled):
+the hidden wall's floor band shrank from 54,000 pixels to 22,400.
 Size `FinestCell` 4 units, doubled per level so a cell keeps about 1/`CellsPerHeight` (96) of the view's height at its eye distance (the whole view's angle, so screenshot
 tiles agree); the next coarser level blends in over the top 40 % of each level's distances, the second-nearest axis within 0.2 of the diagonal. Out to `Range` 4000.
 Per frame (`gi cache`): **evict** slots no texel touched for 600 frames (120 past half full, 30 past 5/8); **touch**: each low texel of the resolve (same pixel; the flat

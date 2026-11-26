@@ -84,6 +84,11 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     string togglesTitle = "",
     IReadOnlyList<PanelAction>? actions = null, IReadOnlyList<Slider>? sideSliders = null, IReadOnlyList<PanelChoice>? choices = null)
 {
+    /// <summary>
+    /// Applies the preset's reflection scale to the world shown in this panel.
+    /// </summary>
+    internal Action<float>? SetReflectionScale { get; init; }
+
     #region Contents
 
     /// <summary>

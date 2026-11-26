@@ -37,6 +37,11 @@ public sealed class ReflectionPass : IDisposable
     public const float Scale = 1f;
 
     /// <summary>
+    /// The fraction of the scene's render size used for reflections at the current quality tier.
+    /// </summary>
+    internal float RenderScale { get; set; } = Scale;
+
+    /// <summary>
     /// The reflection covers this much more than the picture in each direction (as a factor of the field of view tangent).
     /// </summary>
     public const float Margin = 1.12f;
@@ -560,7 +565,7 @@ public sealed class ReflectionPass : IDisposable
             return;
         }
 
-        Resize(Math.Max((int)(fullWidth * Scale), 64), Math.Max((int)(fullHeight * Scale), 64));
+        Resize(Math.Max((int)(fullWidth * RenderScale), 64), Math.Max((int)(fullHeight * RenderScale), 64));
         _timer.Begin();
         RenderMirrored(camera, eye, fullWidth, fullHeight, plane, rect, sky, colours, light, terrain, render, drawObjects);
         _timer.End();
@@ -725,8 +730,8 @@ public sealed class ReflectionPass : IDisposable
         if (_age >= MaxAge || _builtFor != Samples) return false;
 
         // An image at this size, or the no-water verdict at this size (heights stream in, so it is checked again after MaxAge frames like an image).
-        int width = Math.Max((int)(fullWidth * Scale), 64);
-        int height = Math.Max((int)(fullHeight * Scale), 64);
+        int width = Math.Max((int)(fullWidth * RenderScale), 64);
+        int height = Math.Max((int)(fullHeight * RenderScale), 64);
         bool stale = _hasImage
             ? _colour is null || _msColour is null && _samples != 0 || _width != width || _height != height
             : !_noWater || fullWidth != _noWaterWidth || fullHeight != _noWaterHeight;

@@ -641,7 +641,7 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// The memory types of <paramref name="typeBits"/> that suit the kind, best first: device-local prefers types not host visible; uploads prefer
     /// device-local coherent memory (resizable BAR for small requests); readbacks prefer cached, then coherent, then system memory.
     /// </summary>
-    List<uint> Candidates(uint typeBits, MemoryKind kind, ulong size)
+    List<uint> Candidates(uint typeBits, MemoryKind kind, ulong size, bool systemUpload = false)
     {
         var scored = new List<(int Score, uint Index)>();
 
@@ -676,7 +676,7 @@ public sealed unsafe class GpuAllocator : IDisposable
                     if (!visible || !coherent) continue;
 
                     score = local ? 1 : 10;
-                    if (local && size <= RebarMaxRequest && IsRebarType(i)) score = 20;
+                    if (!systemUpload && local && size <= RebarMaxRequest && IsRebarType(i)) score = 20;
                     break;
                 default:
                     if (!visible) continue;
@@ -717,7 +717,15 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// </summary>
     public Allocation Allocate(in MemoryRequirements req, MemoryKind kind, bool optimal, bool streamed = false, bool ownMemory = false)
     {
-        var candidates = Candidates(req.MemoryTypeBits, kind, req.Size);
+        return Allocate(in req, kind, optimal, streamed, ownMemory, false);
+    }
+
+    /// <summary>
+    /// Prefers coherent system memory for staging uploads when requested.
+    /// </summary>
+    Allocation Allocate(in MemoryRequirements req, MemoryKind kind, bool optimal, bool streamed, bool ownMemory, bool systemUpload)
+    {
+        var candidates = Candidates(req.MemoryTypeBits, kind, req.Size, systemUpload);
 
         if (candidates.Count == 0)
         {
@@ -1347,7 +1355,10 @@ public sealed unsafe class GpuAllocator : IDisposable
 
         try
         {
-            alloc = Allocate(in req, kind, false);
+            bool staging = kind == MemoryKind.Upload && usage == BufferUsageFlags.TransferSrcBit;
+            ulong budget = staging && !Lean ? _dev.VideoMemory().Budget : 0;
+            bool systemUpload = staging && (Lean || budget is > 0 and <= (8ul << 30));
+            alloc = Allocate(in req, kind, false, false, false, systemUpload);
         }
         catch
         {

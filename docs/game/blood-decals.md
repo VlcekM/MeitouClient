@@ -72,9 +72,10 @@ unseen.
 
 ## Meitou
 
-The `blood` switch (Meitou, default): every cell within `Decal Range` is drawn, up to 32 layers (at
-most 256 MB of them: 16 at 2048²), the array growing by 8 as more cells are near; Faithful keeps the
-game's 8. Expiry is unchanged (undrawn cells still age). Engine choices: the blood is mixed into the terrain colour shader's
+The `blood` switch (Meitou, default) draws the nearest cells within `Decal Range` in groups of eight layers, up to 32.
+The layer budget is 64 MiB through 6 GiB, 128 MiB through 8 GiB and 256 MiB above, with eight layers as the minimum.
+Faithful and pressure limit the array to eight layers. The array is freed after 30 seconds with no near cells, or immediately
+under pressure. Undrawn cells still age. Engine choices: the blood is mixed into the terrain colour shader's
 albedo before lighting (our terrain is forward-lit, no second pass); the cells are a texture array
 read by cell index. Marks more than 20 units above the ground are dropped (upper floors). A pool's
 decal is grown whenever its stored half size changes (as the game does), in place in each cell's list. A cell's layer is cleared and drawn again

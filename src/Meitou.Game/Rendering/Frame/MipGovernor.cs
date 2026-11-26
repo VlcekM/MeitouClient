@@ -31,7 +31,7 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
 
     /// <summary>
     /// Seconds a texture must have been finer than needed before it is replaced by a coarser image (no sooner: a camera that turns back would have it
-    /// reloaded at once); under the guard's pressure no wait.
+    /// reloaded at once); the guard shortens the wait under pressure.
     /// </summary>
     public double CoarsenAfterSeconds { get; set; } = 10;
 
@@ -102,6 +102,9 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
         long now = Environment.TickCount64;
         bool pressure = cache.Guard?.Pressure ?? false;
         cache.Mips.Extra = pressure ? 1 : 0;
+        cache.Mips.Compact = cache.CompactMips;
+        double waitMs = pressure ? 500 : CoarsenAfterSeconds * 1000;
+        int coarsens = pressure ? Math.Max(MaxCoarsens, 16) : MaxCoarsens;
         long unstreamed = 0;
 
         // replacements being loaded: finer ones are limited so they do not crowd out the other streaming work on the few worker threads
@@ -117,7 +120,8 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
             int target = Math.Max(float.IsFinite(t.Need) ? cache.Mips.Drop(t.FileWidth, t.FileHeight, t.Need) : 0, t.QualityDrop);
 
             // Another cache holds the file at the target levels: taken (a coarser one after the same wait as a load), nothing loaded.
-            if ((target < t.Dropped || target > t.Dropped && (pressure || t.TooFineSince != 0 && now - t.TooFineSince >= CoarsenAfterSeconds * 1000))
+            bool ready = t.TooFineSince != 0 && now - t.TooFineSince >= waitMs;
+            if ((target < t.Dropped && !pressure || target > t.Dropped && ready)
                 && cache.Shared(t, t.Need, exact: true) is { } shared)
             {
                 cache.Adopt(t, shared);
@@ -126,7 +130,9 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
 
             if (target < t.Dropped)
             {
-                if (replacing >= MaxRefines || !cache.MayStart(t)) continue;
+                t.TooFineSince = 0;
+                if (pressure || replacing >= MaxRefines || !cache.MayStart(t)) continue;
+
                 Refined++;
                 t.Refine = true;
                 Refining++;
@@ -136,8 +142,7 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
             else if (target > t.Dropped)
             {
                 if (t.TooFineSince == 0) t.TooFineSince = now;
-                if (!pressure && now - t.TooFineSince < CoarsenAfterSeconds * 1000) continue;
-                if (replacing >= MaxCoarsens) continue;
+                if (!ready || replacing >= coarsens) continue;
                 Coarsened++;
                 cache.Start(t, replacing: true);
                 replacing++;

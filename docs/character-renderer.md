@@ -5,6 +5,9 @@ Motion previous state; Portraits offscreen portraits; Stats diagnostic rings. In
 interpolated simulation snapshots and data appearances, not simulation-owned GPU resources.
 Game assembly rules: [characters](characters.md), [animation](animation.md).
 
+Unreferenced character meshes retire oldest first after 60 seconds idle, or five seconds under VRAM pressure. A live appearance or icon retains its
+mesh; submitted draws keep their buffers until the GPU finishes them.
+
 ## GPU layout and shading
 
 Instance bones/material offsets index shared storage buffers; group compatible mesh parts.

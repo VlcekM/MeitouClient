@@ -7,6 +7,8 @@ rules: [formats/shadows.md](formats/shadows.md). Engine API: [renderer-native](r
 
 Faithful reproduces researched cascade fits/splits/casters/receiver. Meitou fits useful camera
 ranges, stable grids and soft filtering, plus terrain-horizon shadow beyond local caster range.
+Landmark maps use 2048² at shadow quality 0 or 1 and 4096² at quality 2 on both backends.
+
 Shadow-quality default2 uses4096²; Tab supports1024/2048/4096. The Meitou cascade count is the "Shadow cascades" row, 3 to 6, five
 by default (`ShadowPass.MeitouCascades`; the game's CSM keeps four); consumers must use current layer count/splits, not assume four tiles
 everywhere. Past four, `MeitouShadowFit.Subdivided` puts the extra cascades into the second slice. The cap of six keeps cascades 0 to 5 off the

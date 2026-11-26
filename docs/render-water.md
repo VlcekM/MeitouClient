@@ -67,8 +67,8 @@ Vulkan; there is no Metal-only water fragment. The reflected scene remains mirro
 despite waves. Reflect level/range, frustum,
 clip plane, water coverage and reuse age determine work; use original rules in Faithful.
 The reflection is drawn with the engine's y-up clip space and looked up with `clip.xy / w * 0.5 + 0.5`: Vulkan's targets have row 0 at NDC -1, Metal's at NDC +1, so on Metal the lookup flips V (`uReflectFlip`, `WaterConstants.Clarity.w`, from `IGpuContext.RenderTargetsBottomUp`). **Observed** (owner, in play on Metal): without it the reflection was mirrored vertically, so it changed rapidly and showed nothing like what the water reflects as the camera turned; with it the reflection is right.
-Meitou reflection skips unnecessary casters/shadows and shortens object/foliage reaches. The full-size
-target (half size magnified the mirror image at grazing angles: silhouettes in blocks in the thin water of a beach, **Observed** before and after) uses 4x MSAA by default on both backends (`--reflection-samples 1` disables it; the "Reflection samples" row, off to 8x, remakes the targets live); level 2 reflects
+Meitou reflection skips unnecessary casters/shadows and shortens object/foliage reaches. The Low and Medium presets use half the scene's render
+dimensions, High uses three quarters, and Ultra and Extreme use full size. Both backends use 4x MSAA by default (`--reflection-samples 1` disables it; the "Reflection samples" row, off to 8x, remakes the targets live); level 2 reflects
 characters, level 3 placed objects and level 4 foliage. Fog in reflection must evaluate reflected world geometry
 against the appropriate air/water bounds; ordinary camera fog cannot be applied indiscriminately.
 

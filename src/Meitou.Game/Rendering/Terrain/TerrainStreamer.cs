@@ -291,6 +291,7 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     void Update(Vector3 eye, double budgetMs)
     {
+        _standbys.Trim();
         ApplyFinishedJob();
         RequestWindow(eye);
         if (_textures is not null) (_textures.GroundUnderEye, _textures.Guard, _textures.Areas) = (GroundUnderEye, Guard, Areas);

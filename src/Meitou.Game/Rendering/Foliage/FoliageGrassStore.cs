@@ -36,7 +36,7 @@ sealed class FoliageGrassStore
     /// <summary>
     /// The share of the device's memory budget a larger store may take (an 11 GB card fits the largest, an 8 GB one 6 times the default).
     /// </summary>
-    const ulong GrassStoreBudgetShare = 8;
+    const ulong GrassStoreBudgetPercent = 8;
 
     /// <summary>
     /// The context the store and the programs are made on.
@@ -124,25 +124,28 @@ sealed class FoliageGrassStore
     }
 
     /// <summary>
-    /// A grass distance raised past what the store holds (<see cref="StoreScale"/>) replaces it with a larger one: every page of
-    /// <paramref name="zones"/> is dropped and made again, nearest first. The store never shrinks while running (a lowered setting keeps it), so a
-    /// slider drag rebuilds it at most a few times. The old store is disposed once the frames in flight are done with it; its pages' ranges are not
-    /// given back to it (<see cref="FoliageGrassBuffer.Store"/>). The guard (<see cref="VramGuard.Allows"/>) is asked for the new store while the old
-    /// one is still held; refused, the store stays as it is. While the guard clamps the ranges (<see cref="VramGuard.Active"/>) it waits: a larger
-    /// store then takes the room the clamp freed and keeps the ranges from coming back (#1390: 320 to 480 MB at x0.53).
+    /// Resizes the grass store when the configured range or kept places change. Under pressure it sizes for the eye's effective range.
+    /// A resize invalidates the old pages, which are made again nearest first.
     /// </summary>
     public void Grow(float grassRange, int areas, VramGuard? guard, Dictionary<ZoneCoordinate, FoliageZoneState> zones)
     {
-        if (GpuContext.DiagNoGrow || guard is { Active: true }) return;
-        if (StoreScale(grassRange, areas, 0) is var wanted && (wanted <= _grassStoreScale || wanted <= _grassStoreRefused))
-            return;
-        int scale = StoreScale(grassRange, areas, guard is { BudgetBytes: > 0 } g ? (ulong)g.BudgetBytes : _gpu.VideoMemoryBudget);
-        // the budget caps it where it is
-        if (scale <= _grassStoreScale)
+        ulong budget = guard is { BudgetBytes: > 0 } g ? (ulong)g.BudgetBytes : _gpu.VideoMemoryBudget;
+        bool guarded = guard?.Active == true;
+        float range = guard is { Active: true } active ? grassRange * active.RangeScale : grassRange;
+        int scale = StoreScale(range, guarded ? 1 : areas, budget);
+        if (scale == _grassStoreScale) return;
+
+        if (scale < _grassStoreScale)
         {
-            _grassStoreRefused = wanted;
+            DropAllPages(zones);
+            Replace(scale);
+            _grassStoreRefused = 0;
             return;
         }
+
+        int wanted = scale;
+        if (GpuContext.DiagNoGrow || guard?.Active == true || wanted <= _grassStoreRefused) return;
+
         if (guard is { } vram && !vram.AllowsGrowth(GrassArenaBytes * (ulong)scale))
         {
             _grassStoreRefused = wanted;
@@ -157,12 +160,12 @@ sealed class FoliageGrassStore
 
     /// <summary>
     /// How many times the default store a grass distance needs: the pages in reach grow with the square of the distance, so x 2 needs 4 (256 MB);
-    /// at most <see cref="MaxGrassStoreScale"/> and 1 / <see cref="GrassStoreBudgetShare"/> of the memory budget, at least 1 (a shorter distance
+    /// at most <see cref="MaxGrassStoreScale"/> and <see cref="GrassStoreBudgetPercent"/> percent of the memory budget, at least 1 (a shorter distance
     /// keeps the default store). Pages past a smaller store wait for room (<see cref="TryQueuePage"/>).
     /// </summary>
     static int StoreScale(float grassRange, int areas, ulong budget)
     {
-        int fits = budget > 0 ? (int)Math.Clamp(budget / GrassStoreBudgetShare / GrassArenaBytes, 1, MaxGrassStoreScale) : MaxGrassStoreScale;
+        int fits = budget > 0 ? (int)Math.Clamp(budget * GrassStoreBudgetPercent / 100 / GrassArenaBytes, 1, MaxGrassStoreScale) : MaxGrassStoreScale;
 
         // Each place kept loaded besides the eye's (Areas) holds its own pages: the store is that many times larger, within the same caps.
         const float defaultRange = FoliageRenderer.DefaultGrassRange;

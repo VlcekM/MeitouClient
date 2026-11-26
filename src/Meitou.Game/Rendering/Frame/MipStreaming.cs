@@ -20,7 +20,7 @@ public sealed class MipStreaming
     /// Levels held back against the bound: the anisotropic tap rounding (up to 1), derivative estimates that differ from the exact footprint, the
     /// few triangles more stretched than the part's texel scale, and an approaching object has to be refined before it needs to be.
     /// </summary>
-    public const float Margin = 2f;
+    public const float Margin = 1.5f;
 
     /// <summary>
     /// Never drop to a top level whose larger side is smaller than this (also keeps the level the normal-map swizzle test reads, the first within
@@ -49,6 +49,11 @@ public sealed class MipStreaming
     public int Extra { get; set; }
 
     /// <summary>
+    /// Enables a smaller top mip and narrows the sampling margin on memory-constrained devices.
+    /// </summary>
+    internal bool Compact { get; set; }
+
+    /// <summary>
     /// Takes the view the textures are seen through: the pixels per unit of distance at the picture's corner for <paramref name="fieldOfView"/>, and
     /// the sampler bias in effect.
     /// </summary>
@@ -72,22 +77,29 @@ public sealed class MipStreaming
     /// <summary>
     /// How many top levels a texture of <paramref name="width"/> x <paramref name="height"/> texels (as in its file) can do without, at most.
     /// </summary>
-    public int Drop(int width, int height, float need) => Drop(width, height, need, Enabled, PixelsPerDistance, Bias, Extra);
+    public int Drop(int width, int height, float need) => Drop(width, height, need, Enabled, PixelsPerDistance, Bias, Extra, Compact);
 
     /// <summary>
     /// <see cref="Drop(int, int, float)"/> with the view's state passed in: 0 when off, when <paramref name="need"/> is not a positive number or the
     /// texture is at most <see cref="MinSize"/>; never more levels than leave <see cref="MinSize"/>.
     /// </summary>
     public static int Drop(int width, int height, float need, bool enabled, float pixelsPerDistance, float bias, int extra)
+        => Drop(width, height, need, enabled, pixelsPerDistance, bias, extra, compact: false);
+
+    /// <summary>
+    /// Computes the mip target with the memory tier captured when the load was queued.
+    /// </summary>
+    internal static int Drop(int width, int height, float need, bool enabled, float pixelsPerDistance, float bias, int extra, bool compact)
     {
         if (!enabled || !float.IsFinite(need) || need <= 0) return 0;
 
         int n = Math.Min(width, height);
-        if (n <= MinSize) return 0;
+        int minSize = compact ? WorldTextureCache.LeanSize : MinSize;
+        if (n <= minSize) return 0;
 
-        double level = Math.Log2((double)pixelsPerDistance * need * n) + Math.Min(bias, 0) - Margin;
+        double level = Math.Log2((double)pixelsPerDistance * need * n) + Math.Min(bias, 0) - (compact ? 1f : Margin);
         int drop = (int)Math.Floor(level) + extra;
-        int most = (int)Math.Log2(Math.Max(Math.Max(width, height), 1)) - (int)Math.Log2(MinSize);
+        int most = (int)Math.Log2(Math.Max(Math.Max(width, height), 1)) - (int)Math.Log2(minSize);
         return Math.Clamp(drop, 0, Math.Max(most, 0));
     }
 }

@@ -371,7 +371,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         if (Probes is not { } probes || _sceneColour is null) return null;
 
         var cacheView = Gi.MetalGiResolve.CacheView(view, _sceneColour.Desc.Width, _sceneColour.Desc.Height, GiResolve);
-        return probes.Cache.Run(_ctx.Depth, _ctx.Albedo, cacheView, Options.GiRelocating, Options.GiCloudShadowing);
+        return probes.Cache?.Run(_ctx.Depth, _ctx.Albedo, cacheView, Options.GiRelocating, Options.GiCloudShadowing);
     }
 
     #endregion

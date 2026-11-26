@@ -61,6 +61,11 @@ sealed unsafe class MetalTracedGrass(MetalContext ctx) : IDisposable
     long _bytes;
 
     /// <summary>
+    /// The memory allowance for this update's grass patches.
+    /// </summary>
+    long _budget = TracedGrass.MaxBytes;
+
+    /// <summary>
     /// This update's number, how far the pages are traced, the tallest blade traced and the eye.
     /// </summary>
     long _frame;
@@ -171,6 +176,8 @@ sealed unsafe class MetalTracedGrass(MetalContext ctx) : IDisposable
         _frame++;
         _range = Math.Clamp(reach, TracedGrass.MinRange, TracedGrass.MaxRange);
         _eye = eye;
+        _budget = TracedGrass.BudgetFor(ctx.VideoMemoryBudget, foliage.Guard?.Pressure == true);
+        MakeRoom(-1);
         foliage.RayGrass(eye, _range, _patches);
         _shown.Clear();
         _jobs.Clear();
@@ -228,7 +235,7 @@ sealed unsafe class MetalTracedGrass(MetalContext ctx) : IDisposable
 
         int cards = patch.Cross ? 2 : 1, newTriangles = blades * cards * 2;
         if (builds >= TracedGrass.MaxBuilds || triangles + newTriangles > TracedGrass.MaxBuildTriangles) return entry;
-        if (_bytes >= TracedGrass.MaxBytes && !MakeRoom(patch.Distance)) return entry;
+        if (_bytes >= _budget && !MakeRoom(patch.Distance)) return entry;
 
         builds++;
         triangles += newTriangles;
@@ -245,7 +252,7 @@ sealed unsafe class MetalTracedGrass(MetalContext ctx) : IDisposable
     /// </summary>
     bool MakeRoom(float distance)
     {
-        while (_bytes >= TracedGrass.MaxBytes)
+        while (_bytes >= _budget)
         {
             object? farthestKey = null;
             Entry? farthest = null;

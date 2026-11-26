@@ -377,11 +377,12 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     void UpdateLandmarks(ShadowView view, Vector3 toSun, LandmarkCasters? landmarks)
     {
-        if (_landmarks.Plan(toSun, landmarks, out long key) is not { } box) return;
+        int size = Settings.MapSize < 4096 ? 2048 : LandmarkMapSize;
+        if (_landmarks.Plan(toSun, landmarks, size, out long key) is not { } box) return;
 
-        var map = _landmarks.EnsureMap();
+        var map = _landmarks.EnsureMap(size);
         var host = BeginHost("landmark shadows", clear: true, map);
-        SetTile(0, 0, LandmarkMapSize);
+        SetTile(0, 0, size);
         SetCasterBias(new Vector4(box.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 1f));
         landmarks!.Value.Draw(box, box.WorldToClip(), box.CullPlanes(), view.Eye);
         EndHost(host);

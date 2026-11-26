@@ -56,7 +56,7 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
         for (int i = 0; i < n; i++)
         {
             _constants[i] = new LinearAllocator(_device, $"frame constants {i}");
-            _staging[i] = new LinearAllocator(_device, $"upload staging {i}");
+            _staging[i] = new LinearAllocator(_device, $"upload staging {i}", staging: true);
             _pools[i] = [];
         }
 

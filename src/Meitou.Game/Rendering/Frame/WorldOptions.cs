@@ -190,6 +190,11 @@ sealed class WorldOptions
     public int ReflectionSamples = ReflectionPass.DefaultSamples;
 
     /// <summary>
+    /// The reflection render scale applied by the quality preset.
+    /// </summary>
+    internal float ReflectionScale = ReflectionPass.Scale;
+
+    /// <summary>
     /// Sun shadows (docs/formats/shadows.md): the game's <c>shadow quality</c> index, <c>Shadow Range</c>, the debug view.
     /// </summary>
     public int ShadowQuality = 2, DebugShadows, ShadowFilter = 2;

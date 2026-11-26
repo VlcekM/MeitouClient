@@ -68,7 +68,7 @@ that point are laid out and kept as well. The load order puts the arrival first:
 biome pairs and foliage layouts rank by distance from the arrival, and what is only near the eye (the flight path) ranks after all of it
 (`ObjectStreamer.Rank`). Object textures the arrival view uses are touched first and decode ahead of the other streaming work
 (`WorldTextureCache.Urgent`, `BackgroundWork.RunUrgent`). The terrain height window and the grass pages still follow only the eye.
-The simulation focus moves to the landing character at once, so its towns populate during the flight.
+The simulation focus moves to the landing character at once, so its towns populate during the flight. On budgets up to 4, 6 and 8 GiB the world keeps at most zero, one and two other areas respectively.
 
 ## Shared texture images
 
@@ -78,13 +78,15 @@ and levels that land together keep one. An image goes with its last user; each c
 about 150 MB of the same files were resident twice before this.
 Debris (severed limbs, bolts) takes its textures from the character cache rather than loading its own copies (~30 MB of skins were held twice, VRAM dump 2026-11-01).
 
-The sharing caches also have one high-water mark together (`TextureShare.ResidentBytes` against `MarkMb`, 2 GB at full quality), not one each.
+The sharing caches compare their combined resident bytes against a high-water mark capped at 40% of the guard's budget.
 Above it, textures unused for 8 s are unloaded, least recently used first, until the total is under three quarters of the mark. Below it,
 a texture is unloaded after 20 s unused. The mark is three quarters while `VramGuard` is under pressure or clamps the ranges ([engine](engine.md)).
 Under pressure a texture unused for 2 s is unloaded too (`GuardIdleSeconds`). After a gap of over 1 s between two pumps (`HitchMs`: a hitch, a GC
 pause) the trim waits a second, so what is drawn is marked used again before anything is judged idle (#1439: frames of up to 2.4 s).
 
-Under `VramGuard` pressure no texture is refined, but one that something draws still loads *lean*: top side at most 256
+Mip streaming holds back 1.5 levels by default, with a 512-texel minimum top side. On budgets up to 8 GiB or with the guard active, the margin is
+one level and the minimum is 256 texels. Pressure permits up to 16 coarsenings in flight after 0.5 seconds and pauses refinements.
+Under `VramGuard` pressure a texture used in a draw may still load *lean*: top side at most 256
 (`WorldTextureCache.LeanSize`), while the use stays under 94.5% of the budget (`AllowsLean`). It is refined once the pressure ends. Before this, a
 6 GB laptop (3.5 GB budget, never back under 80%) drew characters with no texture at all (**Observed**, issue #135 log).
 Zones within 3000 of the camera (`VramGuard.NearReach`) are still laid out and their object meshes decoded under pressure, also while the held use (less

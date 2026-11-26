@@ -42,9 +42,16 @@ static class GiCacheShaders
             vec4 normal;    // xyz the surface normal (mean, unnormalised), w the ring's valid subsets as a bit mask
             ivec4 coord;    // xyz the cell, w level | axis << 8
         };
-        const uint CAPACITY = {{GiCache.Capacity}}u, WAYS = 8u, RING = {{GiCache.Ring}}u, NONE = 0xffffffffu;
+        const uint CAPACITY = MEITOU_CACHE_CAPACITY, WAYS = 8u, RING = {{GiCache.Ring}}u, NONE = 0xffffffffu;
 
         """;
+
+    /// <summary>
+    /// Sets the table size before compiling the cache's Vulkan or Metal shader.
+    /// </summary>
+    internal static string ForCapacity(string source, int capacity) =>
+        source.Replace("MEITOU_CACHE_CAPACITY", capacity.ToString(System.Globalization.CultureInfo.InvariantCulture) + "u",
+            StringComparison.Ordinal);
 
     /// <summary>
     /// The key hashes and the cell size. Needs <c>vCells</c>.

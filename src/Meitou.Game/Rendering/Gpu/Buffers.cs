@@ -279,6 +279,12 @@ public sealed unsafe class LinearAllocator : IDisposable
     /// The name the chunks are made with (diagnostics).
     /// </summary>
     readonly string _name;
+
+    /// <summary>
+    /// The usages shared by the chunks of this allocator.
+    /// </summary>
+    readonly BufferUsageFlags _usage;
+
     /// <summary>
     /// The regular chunks, kept across resets.
     /// </summary>
@@ -301,10 +307,18 @@ public sealed unsafe class LinearAllocator : IDisposable
     /// <summary>
     /// An empty allocator; chunks are made on demand.
     /// </summary>
-    public LinearAllocator(VulkanDevice device, string name)
+    public LinearAllocator(VulkanDevice device, string name) : this(device, name, staging: false)
+    {
+    }
+
+    /// <summary>
+    /// An empty allocator for frame data or for transfer sources only.
+    /// </summary>
+    internal LinearAllocator(VulkanDevice device, string name, bool staging)
     {
         this._device = device;
         this._name = name;
+        _usage = staging ? BufferUsageFlags.TransferSrcBit : Usage;
     }
 
     /// <summary>
@@ -368,7 +382,7 @@ public sealed unsafe class LinearAllocator : IDisposable
     BufferAllocation NewChunk(ulong size, List<BufferAllocation> into)
     {
         long profileStart = UploadProfile.Begin();
-        var chunk = _device.Allocator.CreateBuffer(size, Usage, MemoryKind.Upload, _name);
+        var chunk = _device.Allocator.CreateBuffer(size, _usage, MemoryKind.Upload, _name);
         UploadProfile.End(UploadProfile.Part.StagingChunk, profileStart);
         into.Add(chunk);
         return chunk;

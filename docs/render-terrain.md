@@ -24,10 +24,10 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   and the relief texture use the same index. A biome is drawn once all its pairs are in. The arrays have a slot for every pair of the world up to that
   cap whatever the distance (`FarSlots`, code reading), so the distance sets what is loaded and shaded, not the video memory. The quality tiers set it
   (15000 Low, 20000 Medium, 30000 High, 45000 Ultra and Extreme; [native-ui](native-ui.md) "Settings").
-- **Near arrays** have 32 slots at the full size (about 270 MB at 2048²), 32 per kept place (`Areas`, render-objects.md "Kept points") up to 128 when
-  the guard allows: growing reallocates both arrays (no image copy), so every pair drops to far and loads near again; they never shrink, do not grow while the guard clamps the ranges, and a refused size is not asked again. A slot goes to a pair within its near range of the eye, then of a kept point while slots are left
-  ([render-objects.md](render-objects.md#kept-points)), least recently needed first: the range is the pair's tile × pixels per radian ÷ layer size × 11.3, with an upscaler's negative bias widening it.
-  When no slot is left, a pair stays far.
+- **Near arrays** start with up to 32 full-size slots and grow in steps of eight as unique pair demand increases. The device budget caps them at
+  32 (up to 6 GiB), 48 (up to 8 GiB), or 96. Surplus slots shrink with demand, and pressure caps them at 16. A resize reloads near pairs
+  from the far fallback, prioritizing the eye, then kept points. Unused slots are replaced least recently needed first. The near range is the
+  tile size × pixels per radian ÷ layer size × 11.3, widened by an upscaler's negative bias.
 - Per sample the shader works out the near arrays' level (8x anisotropic: the long axis over up to 8 taps, never under the short axis). Below
   `FarShift` (2) less the sampler bias it reads the near slot; otherwise, or without a slot, it reads the far array. For a DDS layer taken as stored,
   both tiers read the file's own mips, so from that level down they are the same texels. A resized layer is filtered separately at each size, so
@@ -75,10 +75,11 @@ and 17-29 MB with the tiles dropped after each).
 **Standby windows** ("Keep textures at characters", [render-objects.md](render-objects.md#kept-points)): a kept point outside the middle of the
 drawn window gets a standby copy, uploaded but not drawn, which is swapped in when the eye arrives there (the shaders read whichever is current, so
 nothing is composed or uploaded on the jump); the replaced copy stays as the standby for where the eye was. Colour/overlay
-(`TerrainTextures.MapStandby`, one per kept place, 2 to 6, ~45 MB each): for a point more than a quarter window from the drawn origin. Fine heights
-(`TerrainRenderer.FineStandby`, `TerrainStreamer`, one per kept place, 3 to 8, ~5 MB each at step 1): for a point beyond 0.3 of the window's width from its
+(`TerrainTextures.MapStandby`, one per kept place, ~45 MB each): for a point more than a quarter window from the drawn origin. Fine heights
+(`TerrainRenderer.FineStandby`, `TerrainStreamer`, one per kept place, up to 8, ~5 MB each at step 1): for a point beyond 0.3 of the window's width from its
 centre; the bounds take a standby's patch at its first swap (they only widen). A standby goes when a new point needs its place and no kept point is
-in its middle. None is made under `VramGuard` pressure; once made they stay until exit. A standby's read or compose does not hold up the loading screen (its
+in its middle. Map standby counts are capped at 0, 1, 2 and 6 respectively for budgets up to 4, 6, 8 GiB and above. Both stores release surplus
+windows when kept areas decrease, and release all standbys under pressure once pending writes finish. A standby's read or compose does not hold up the loading screen (its
 upload slabs do, for a few frames); a jump while one is read or uploaded waits for it. The first swap-in of a new pair may hitch once (a fresh
 texture's first use stalled the driver ~50 ms, see the window comment in `TerrainTextures`). A standby compose shares the nine-tile overlay cache, so the eye's next move may
 decode its tiles again.
@@ -237,11 +238,11 @@ patches' second pass, for comparing). In the main view the patches' colour is no
 Meitou, not in the game (`MaterialCache`, A/B `terrain-material-cache`, B: every pixel shades the layers). The patches' layered
 material is baked into world-space levels round the eye, and a patch pixel within them reads the cache instead of shading up to five biomes of up
 to 14 layer samples each.
-- **Levels**: 4 of 2048² texels, level k's texel 0.25 × 2^k units (51, 102, 205, 410 m squares), RGBA8 albedo + gloss and RGBA8 tangent-space
-  normal x, y (z follows), rain absorbance, relief height: 128 MB, not made when `VramGuard` refuses it, nor while it clamps the ranges (then made once they are back). Each is addressed toroidally (repeat
+- **Levels**: 4 of 2048² texels (1024² on budgets up to 6 GiB), level k's texel 0.25 × 2^k units, RGBA8 albedo + gloss and RGBA8 tangent-space
+  normal x, y (z follows), rain absorbance, relief height: 128 MiB (32 MiB at 1024²). Pressure releases the cache and terrain shades the layers live. It can rebuild once the ranges recover. Each is addressed toroidally (repeat
   sampler, texel = world mod side), its origin snapped to 64 texels round the eye moved towards the camera's focus (`Camera.Target`) by at most a quarter of the level's side (`MaterialCache.Centre`: the
   game's camera orbits a point some way off, so most of the picture lies beyond it; centred on the eye, the focus sat at the finest square's edge and the pixels beyond fell to the next level in a hard step: **Observed**, Metal);
-  `bakeEdge` blends a level towards the next coarser over its last 512 texels (a quarter of the side), so the step at its edge is not a line; the layers are mixed in over the half level past one level
+  `bakeEdge` blends a level towards the next coarser over its last quarter of the side, so the step at its edge is not a line; the layers are mixed in over the half level past one level
   coarser than the footprint, over the last fifth of the reach and over the coarsest level's edge, so the cache never ends in a line (**Observed**, Metal: with these the ground's patches and the
   cache's edges were gone; MoltenVK (owner, same Mac): no difference seen with or without them, not on NVIDIA or AMD); as the eye moves a level bakes only the strips it gains, and is
   built again only after moving a whole side. A first bake takes 256 rows a frame (its pixels shade the layers until it is whole).

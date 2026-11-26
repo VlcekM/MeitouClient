@@ -195,7 +195,19 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// <summary>
     /// The hybrid GI's radiance cache over these probes (made on first use).
     /// </summary>
-    internal MetalGiCache Cache => _cache ??= new MetalGiCache(_ctx, this);
+    internal MetalGiCache? Cache => _cache;
+
+    /// <summary>
+    /// Retires the cache on disable or when its memory tier changes.
+    /// </summary>
+    public void ConfigureCache(bool enabled, bool pressure)
+    {
+        int capacity = GiCache.CapacityFor(_ctx.VideoMemoryBudget, pressure);
+        if (enabled && _cache?.SlotCount == capacity) return;
+
+        if (_cache is { } previous) _ctx.DeferDelete(previous.Dispose);
+        _cache = enabled ? new MetalGiCache(_ctx, this, capacity) : null;
+    }
 
     /// <summary>
     /// Binds what a ray hit is shaded with (the probes, the sky, the ground, the lamps and the clouds) for <paramref name="program"/>.

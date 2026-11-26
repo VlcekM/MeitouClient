@@ -28,6 +28,16 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     const long LayerBudget = 256L << 20;
 
     /// <summary>
+    /// When a near decal cell was last drawn.
+    /// </summary>
+    long _lastNear;
+
+    /// <summary>
+    /// Whether the world is reclaiming resident video memory.
+    /// </summary>
+    internal bool UnderPressure { get; set; }
+
+    /// <summary>
     /// The decal vertex stage: one instanced quad per decal, its corners from the vertex index, in a layer's clip space.
     /// </summary>
     const string Vertex = """
@@ -251,7 +261,15 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         RegisterSprites();
         int resolution = Math.Clamp(Resolution, 64, 4096);
         CollectNear(store, eye, resolution);
-        EnsureTarget(resolution);
+        if (_near.Count > 0)
+        {
+            _lastNear = Environment.TickCount64;
+            EnsureTarget(resolution);
+        }
+        else if (UnderPressure || Environment.TickCount64 - _lastNear > 30000)
+        {
+            ReleaseTarget();
+        }
 
         // A cell keeps its layer while it stays near; the others go to the layers left free.
         _drawn.Clear();
@@ -277,7 +295,14 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
             if (d <= range) _near.Add((d, key));
         }
         _near.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-        int limit = Meitou ? (int)Math.Clamp(LayerBudget / ((long)resolution * resolution * 4) / 8 * 8, FaithfulSlots, MaxSlots) : FaithfulSlots;
+        long budget = _gpu.VideoMemoryBudget switch
+        {
+            > 0 and <= (6ul << 30) => 64L << 20,
+            > (6ul << 30) and <= (8ul << 30) => 128L << 20,
+            _ => LayerBudget,
+        };
+        long layerBytes = (long)resolution * resolution * 4;
+        int limit = Meitou && !UnderPressure ? (int)Math.Clamp(budget / layerBytes / 8 * 8, FaithfulSlots, MaxSlots) : FaithfulSlots;
         if (_near.Count > limit) _near.RemoveRange(limit, _near.Count - limit);
     }
 
@@ -286,19 +311,28 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     /// </summary>
     void EnsureTarget(int resolution)
     {
-        // Meitou: the array grows by 8 layers when more cells are near than it holds (every layer drawn again); it does not shrink.
         int need = Math.Max(FaithfulSlots, (_near.Count + 7) / 8 * 8);
-        if (_near.Count > 0 && (_target is null || _target.Desc.Width != resolution || _layers < need))
-        {
-            if (_bindless is { } old) _gpu.Bindless.Free(BindlessKind.Texture2DArray, old.Index);
-            _bindless = null;
-            _target?.Dispose();
-            _layers = _target is null || _target.Desc.Width != resolution ? need : Math.Max(_layers, need);
-            var desc = new TextureDesc(InternalFormat.Rgba8, resolution, resolution, Layers: _layers, Kind: TextureKind.Texture2DArray,
-                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "terrain decals");
-            _target = _gpu.CreateTexture(desc);
-            Array.Clear(_slots);
-        }
+        bool matches = _target?.Desc.Width == resolution;
+        if (matches && _layers >= need && (!UnderPressure || _layers == need)) return;
+
+        var desc = new TextureDesc(InternalFormat.Rgba8, resolution, resolution, Layers: need, Kind: TextureKind.Texture2DArray,
+            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "terrain decals");
+        var replacement = _gpu.CreateTexture(desc);
+        ReleaseTarget();
+        (_target, _layers) = (replacement, need);
+        Array.Clear(_slots);
+    }
+
+    /// <summary>
+    /// Gives the layer array and its sampling entry back to the GPU.
+    /// </summary>
+    void ReleaseTarget()
+    {
+        if (_bindless is { } old) _gpu.Bindless.Free(BindlessKind.Texture2DArray, old.Index);
+        _bindless = null;
+        _target?.Dispose();
+        _target = null;
+        _layers = 0;
     }
 
     /// <summary>
@@ -466,8 +500,7 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     public void Dispose()
     {
         DisposeSurfaces();
-        if (_bindless is { } b) _gpu.Bindless.Free(BindlessKind.Texture2DArray, b.Index);
-        _target?.Dispose();
+        ReleaseTarget();
         foreach (var list in _spriteIndex)
             foreach (uint index in list)
                 if (index != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, index);

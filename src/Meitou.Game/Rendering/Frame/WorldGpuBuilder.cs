@@ -331,7 +331,10 @@ static class WorldGpuBuilder
         gpu.Water.Meitou = meitouWater;
 
         b.Step("reflections");
-        gpu.Reflection = new ReflectionPass(b.Context) { Level = o.WaterReflection, Range = ReflectionRange, Samples = o.ReflectionSamples };
+        gpu.Reflection = new ReflectionPass(b.Context)
+        {
+            Level = o.WaterReflection, Range = ReflectionRange, Samples = o.ReflectionSamples, RenderScale = o.ReflectionScale,
+        };
         foreach (var m in messages) Console.WriteLine($"warning   {m}");
         Console.WriteLine($"water     at height {WorldWater.Height} ({b.Watch.ElapsedMilliseconds} ms)");
     }
@@ -432,7 +435,6 @@ static class WorldGpuBuilder
         if (o.Gi)
         {
             gpu.Probes = new Gi.GiProbes(context) { Enabled = o.GiProbes, InteriorEnabled = o.InteriorGi };
-            gpu.GiCache = new Gi.GiCache(context, gpu.Gi, gpu.Probes);
             Console.WriteLine($"gi        {gpu.Probes.Describe()}");
         }
         else PublishReflectionSurfaces(gpu, context);

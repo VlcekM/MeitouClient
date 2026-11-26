@@ -1514,7 +1514,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 Console.WriteLine($"impostors deleted {files} cached atlases ({bytes / 1048576.0:0} MB) from {cache.Root}");
                 return $"Deleted {files} atlases ({bytes / 1048576.0:0} MB); they are baked again when next needed.";
             }));
-        return new SettingsPanel(_overlay!, "Settings   (Tab hides this)", sliders, toggles, "Metal switches", actions, null, null);
+        return new SettingsPanel(_overlay!, "Settings   (Tab hides this)", sliders, toggles, "Metal switches", actions, null, null)
+        {
+            SetReflectionScale = scale => WorldFrame.ApplyReflectionScale(_worldGpu, scale),
+        };
     }
 
     /// <summary>

@@ -48,6 +48,10 @@ internal interface IProbeGi : IDisposable
     /// True: the probes move out of geometry (the <c>gihybrid</c> switch's relocation; needs <see cref="Resolve"/>).
     /// </summary>
     bool Relocate { get; set; }
+    /// <summary>
+    /// Sizes the radiance cache for this frame, or releases it when disabled.
+    /// </summary>
+    void ConfigureCache(bool enabled, bool pressure);
 
     /// <summary>
     /// True while the main view's opaque scene draws with the traced sun: the lit fragments leave the sun out and write it apart (<c>uGiParams.z</c>

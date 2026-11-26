@@ -115,6 +115,11 @@ sealed unsafe class TracedGrass : IDisposable
     readonly GpuContext _ctx;
 
     /// <summary>
+    /// Shared scratch for this scene's builds.
+    /// </summary>
+    readonly AccelerationStructureScratch? _scratch;
+
+    /// <summary>
     /// The expansion kernel's program.
     /// </summary>
     readonly GpuProgram _program;
@@ -163,6 +168,11 @@ sealed unsafe class TracedGrass : IDisposable
     /// Bytes the entries' structures and vertices hold.
     /// </summary>
     long _bytes;
+
+    /// <summary>
+    /// The memory this scene can spend on grass structures this frame.
+    /// </summary>
+    long _budget = MaxBytes;
 
     /// <summary>
     /// The tallest blade of this frame's patches.
@@ -651,9 +661,17 @@ sealed unsafe class TracedGrass : IDisposable
         return false;
     }
 
-    public TracedGrass(GpuContext ctx)
+    public TracedGrass(GpuContext ctx) : this(ctx, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates the renderer with the scene's shared build scratch.
+    /// </summary>
+    internal TracedGrass(GpuContext ctx, AccelerationStructureScratch? scratch)
     {
         this._ctx = ctx;
+        _scratch = scratch;
         _program = ctx.Shaders.Compute(Expand, "traced grass",
             [(0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.UniformBuffer)]);
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "traced grass"));
@@ -689,6 +707,8 @@ sealed unsafe class TracedGrass : IDisposable
     {
         _range = Math.Clamp(reach, MinRange, MaxRange);
         _eye = eye;
+        _budget = BudgetFor(_ctx.VideoMemoryBudget, _ctx.Device.Allocator.Lean);
+        MakeRoom(frame, -1);
         foliage.RayGrass(eye, _range, _patches);
         _shown.Clear();
         _swayed.Clear();
@@ -708,6 +728,15 @@ sealed unsafe class TracedGrass : IDisposable
         UpdateMap(open);
         SwayedTriangles = swayTriangles;
         Evict(frame);
+    }
+
+    /// <summary>
+    /// The per-scene allowance for traced grass structures and vertices.
+    /// </summary>
+    internal static long BudgetFor(ulong budget, bool pressure)
+    {
+        long cap = budget == 0 ? MaxBytes : Math.Min(MaxBytes, (long)(budget * 8 / 100));
+        return pressure ? cap / 2 : cap;
     }
 
     /// <summary>
@@ -854,7 +883,7 @@ sealed unsafe class TracedGrass : IDisposable
         // At the memory's limit the nearest patches keep theirs: the patches come nearest first, so the farthest structure not yet asked for this
         // frame goes for this one. Refused instead, a field of dense grass filled the memory and a patch walked up to stayed without shadows, flat,
         // until the ones left behind aged out.
-        if (_bytes >= MaxBytes && !MakeRoom(frame, patch.Distance)) return entry;
+        if (_bytes >= _budget && !MakeRoom(frame, patch.Distance)) return entry;
 
         builds++;
         triangles += newTriangles;
@@ -869,7 +898,7 @@ sealed unsafe class TracedGrass : IDisposable
     /// </summary>
     bool MakeRoom(long frame, float distance)
     {
-        while (_bytes >= MaxBytes)
+        while (_bytes >= _budget)
         {
             object? farthestKey = null;
             Entry? farthest = null;
@@ -938,7 +967,7 @@ sealed unsafe class TracedGrass : IDisposable
         ulong vertexAddress = _ctx.Device.Address(vertices.Handle), indexAddress = _ctx.Device.Address(_indices.Handle);
         var geometry = new TriangleGeometry(vertexAddress, 12, (uint)(quads * VerticesPerQuad), indexAddress, (uint)(quads * 2), false);
         bool updatable = Sways(patch);
-        var blas = AccelerationStructure.BuildBottom(_ctx.Device, cmd, [geometry], "traced grass", updatable);
+        var blas = AccelerationStructure.BuildBottom(_ctx.Device, cmd, [geometry], "traced grass", _scratch, updatable);
         if (!updatable) blas.ReleaseScratch();
 
         _bytes += (long)(blas.Bytes + vertices.Size);

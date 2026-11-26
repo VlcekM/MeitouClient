@@ -318,6 +318,11 @@ sealed unsafe class TracedCharacters : IDisposable
     readonly GpuContext _ctx;
 
     /// <summary>
+    /// Shared scratch for this scene's builds.
+    /// </summary>
+    readonly AccelerationStructureScratch? _scratch;
+
+    /// <summary>
     /// The skinning kernel's program.
     /// </summary>
     readonly GpuProgram _program;
@@ -453,9 +458,17 @@ sealed unsafe class TracedCharacters : IDisposable
     /// <summary>
     /// The skinning kernel.
     /// </summary>
-    public TracedCharacters(GpuContext ctx)
+    public TracedCharacters(GpuContext ctx) : this(ctx, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates the renderer with the scene's shared build scratch.
+    /// </summary>
+    internal TracedCharacters(GpuContext ctx, AccelerationStructureScratch? scratch)
     {
         this._ctx = ctx;
+        _scratch = scratch;
         _program = ctx.Shaders.Compute(SkinIndexed, "traced characters",
             [(0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer)]);
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "traced characters"));
@@ -779,7 +792,8 @@ sealed unsafe class TracedCharacters : IDisposable
             old.Dispose();
         }
 
-        entry.Blas = AccelerationStructure.BuildBottom(_ctx.Device, cmd, entry.Geometries, "traced character", updatable: true, fastBuild: true);
+        entry.Blas = AccelerationStructure.BuildBottom(_ctx.Device, cmd, entry.Geometries, "traced character", _scratch,
+            updatable: true, fastBuild: true);
         (entry.Built, entry.Refits) = (frame, 0);
         _bytes += (long)entry.Blas.Bytes;
         _built++;

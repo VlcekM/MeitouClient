@@ -314,6 +314,16 @@ internal sealed unsafe class GiScene : IDisposable
     readonly VulkanDevice _device;
 
     /// <summary>
+    /// Shared scratch for every Vulkan build and refit in this scene.
+    /// </summary>
+    readonly AccelerationStructureScratch _scratch;
+
+    /// <summary>
+    /// Compacted sizes requested for static meshes, read as each frame slot comes round.
+    /// </summary>
+    readonly StaticBlasQueries _compaction;
+
+    /// <summary>
     /// The terrain grids: fine and coarse.
     /// </summary>
     readonly TerrainGrid[] _terrain;
@@ -426,12 +436,17 @@ internal sealed unsafe class GiScene : IDisposable
     /// <summary>
     /// A mesh's bottom-level structure and the geometry records of its parts.
     /// </summary>
-    sealed class MeshEntry
+    internal sealed class MeshEntry
     {
         /// <summary>
         /// The mesh's bottom-level structure.
         /// </summary>
         public required AccelerationStructure Blas;
+
+        /// <summary>
+        /// The original build address, retained as the caster identity after compaction.
+        /// </summary>
+        public required ulong CasterIdentity;
 
         /// <summary>
         /// The records of the mesh's geometries, copied per instance.
@@ -510,23 +525,46 @@ internal sealed unsafe class GiScene : IDisposable
 
         _ctx = ctx;
         _device = ctx.Device;
+        _scratch = new AccelerationStructureScratch(_device);
+        _compaction = new StaticBlasQueries(ctx);
 
         // The fine grid follows the drawn ground's smooth surface at half its samples' spacing: the heightmap's 18-unit facets (resampled at 16)
         // cast saw-toothed shadow edges along ridges.
-        _terrain = [new TerrainGrid(_ctx, "gi terrain fine", 512, 8), new TerrainGrid(_ctx, "gi terrain coarse", 256, 160)];
+        _terrain = [new TerrainGrid(_ctx, _scratch, "gi terrain fine", 512, 8), new TerrainGrid(_ctx, _scratch, "gi terrain coarse", 256, 160)];
         int count = _device.Frames.Count;
         _slots = new FrameSlot[count];
-        const BufferUsageFlags use = BufferUsageFlags.ShaderDeviceAddressBit
-            | BufferUsageFlags.AccelerationStructureBuildInputReadOnlyBitKhr | BufferUsageFlags.StorageBufferBit;
         for (int i = 0; i < count; i++)
         {
             _slots[i] = new FrameSlot
             {
-                Instances = _device.Allocator.CreateBuffer((ulong)(MaxInstances * InstanceRecord.Size), use, MemoryKind.Upload, "gi instances"),
-                Records = _device.Allocator.CreateBuffer((ulong)(MaxRecords * GeometryRecord.Size), use, MemoryKind.Upload, "gi geometry records"),
-                Top = i == 0 || !SharedTop ? AccelerationStructure.CreateTop(_device, MaxInstances, "gi top level") : null,
+                Instances = SceneUpload(8192 * InstanceRecord.Size, "gi instances"),
+                Records = SceneUpload(32768 * GeometryRecord.Size, "gi geometry records"),
+                Top = i == 0 || !SharedTop ? AccelerationStructure.CreateTop(_device, MaxInstances, "gi top level", _scratch) : null,
             };
         }
+    }
+
+    /// <summary>
+    /// Allocates mapped storage readable by both builds and tracing shaders.
+    /// </summary>
+    BufferAllocation SceneUpload(ulong bytes, string name)
+    {
+        const BufferUsageFlags use = BufferUsageFlags.ShaderDeviceAddressBit | BufferUsageFlags.StorageBufferBit
+            | BufferUsageFlags.AccelerationStructureBuildInputReadOnlyBitKhr;
+
+        return _device.Allocator.CreateBuffer(bytes, use, MemoryKind.Upload, name);
+    }
+
+    /// <summary>
+    /// Doubles the frame slot's buffer until it fits this frame's records.
+    /// </summary>
+    void GrowUpload(ref BufferAllocation buffer, ulong required, string name)
+    {
+        if (required <= buffer.Size) return;
+
+        var replacement = SceneUpload(System.Numerics.BitOperations.RoundUpToPowerOf2(required), name);
+        _device.DeferFree(buffer);
+        buffer = replacement;
     }
 
     /// <summary>
@@ -549,7 +587,7 @@ internal sealed unsafe class GiScene : IDisposable
 
         // The top level and what it was built over: the first slot's for all of them, or each slot's own.
         var topSlot = SharedTop ? _slots[0] : slot;
-        var top = topSlot.Top ??= AccelerationStructure.CreateTop(_device, MaxInstances, "gi top level");
+        var top = topSlot.Top ??= AccelerationStructure.CreateTop(_device, MaxInstances, "gi top level", _scratch);
         ClearFrame();
 
         // With the pass meter (MEITOU_PASS_STATS=1) the native list is cut after its barrier and before the top level, to time the barrier, the
@@ -557,6 +595,7 @@ internal sealed unsafe class GiScene : IDisposable
         _split = StageClock.OnClose is not null;
         if (_split) Open();
 
+        CompactMeshes();
         AddTerrain(eye, heights, lazy, commit);
         AddNearObjects(eye, objects, lamps, lazy);
         if (SkipWorld) foliage = null;
@@ -567,8 +606,10 @@ internal sealed unsafe class GiScene : IDisposable
         UpdateCharacters(eye, characters);
         Evict();
         BuildTop(slot, topSlot, top);
+        _scratch.TrimIdle();
 
-        CollectionsMarshal.AsSpan(_records).CopyTo(new Span<GeometryRecord>(slot.Records.Mapped, MaxRecords));
+        GrowUpload(ref slot.Records, (ulong)(_records.Count * GeometryRecord.Size), "gi geometry records");
+        CollectionsMarshal.AsSpan(_records).CopyTo(new Span<GeometryRecord>(slot.Records.Mapped, _records.Count));
         CloseScene();
         Top = top;
         Records = new GpuBufferBinding(slot.Records.Handle, 0, (ulong)(Math.Max(_records.Count, 1) * GeometryRecord.Size));
@@ -782,7 +823,7 @@ internal sealed unsafe class GiScene : IDisposable
     {
         // What keeps moving (a lift, a rotor, a falling thing) counts only once it has stood still a while: the lamps round it would be traced again
         // every frame. A door counts at once, its shadow must follow it.
-        ulong casterHash = CasterHash(entry.Blas.Address, in world);
+        ulong casterHash = CasterHash(entry.CasterIdentity, in world);
 
         // First seen it stands still; an object that has moved in the last second is for the lamps' per-pixel rays, and goes into their tiles once
         // it has stopped.
@@ -811,7 +852,7 @@ internal sealed unsafe class GiScene : IDisposable
             return;
         }
 
-        _grass ??= new TracedGrass(_ctx);
+        _grass ??= new TracedGrass(_ctx, _scratch);
         _grass.Update(Open, foliage, eye, _frame, InteriorCuts, GrassReach);
         _grass.Emit(_instances, _records, Origin, MaxInstances, MaxRecords);
     }
@@ -828,7 +869,7 @@ internal sealed unsafe class GiScene : IDisposable
             return;
         }
 
-        _people ??= new TracedCharacters(_ctx);
+        _people ??= new TracedCharacters(_ctx, _scratch);
         _people.Stamp(Open(), 0);
         _people.Update(Open, characters, eye, _frame, Range, CasterAngle);
         _people.Emit(_instances, _records, Origin, MaxInstances, MaxRecords);
@@ -863,7 +904,8 @@ internal sealed unsafe class GiScene : IDisposable
             cmd.BeginLabel("gi scene");
         }
 
-        CollectionsMarshal.AsSpan(_instances).CopyTo(new Span<InstanceRecord>(slot.Instances.Mapped, MaxInstances));
+        GrowUpload(ref slot.Instances, (ulong)bytes.Length, "gi instances");
+        bytes.CopyTo(new Span<byte>(slot.Instances.Mapped, bytes.Length));
         var info = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = slot.Instances.Buffer };
         ulong address = _device.Vk.GetBufferDeviceAddress(_device.Device, in info);
         top.RebuildTop(cmd, address, (uint)_instances.Count, TopFastTrace, updatable: moving, refit: refitTop);
@@ -1251,7 +1293,7 @@ internal sealed unsafe class GiScene : IDisposable
         entry.LastUsed = _frame;
         var world = transform;
         world.M14 = 0;
-        _foliageCasterList.Add((CasterHash(entry.Blas.Address, in world), world.Translation, 32));
+        _foliageCasterList.Add((CasterHash(entry.CasterIdentity, in world), world.Translation, 32));
         world.Translation -= _foliageOrigin;
         _foliageBlock.Add(InstanceRecord.Of(world, (uint)_foliageRecords.Count, mask, entry.Blas.Address));
         for (int k = 0; k < entry.Records.Length; k++)
@@ -1269,13 +1311,44 @@ internal sealed unsafe class GiScene : IDisposable
     {
         if (geometries.Count == 0) return null;
         var cmd = (CommandList)Open();
-        var blas = AccelerationStructure.BuildBottom(_device, cmd, CollectionsMarshal.AsSpan(geometries), name);
-        blas.ReleaseScratch();
+        var blas = AccelerationStructure.BuildBottom(_device, cmd, CollectionsMarshal.AsSpan(geometries), name, _scratch,
+            compactable: _compaction.HasRoom);
         BuiltThisFrame++;
         MeshBytes += (long)blas.Bytes;
-        var entry = new MeshEntry { Blas = blas, Records = [.. recs], Parts = [.. partOf], Sources = sources, LastUsed = _frame };
+        var entry = new MeshEntry
+        {
+            Blas = blas, CasterIdentity = blas.Address, Records = [.. recs], Parts = [.. partOf], Sources = sources, LastUsed = _frame,
+        };
+
+        _compaction.Record(cmd, key, entry, name);
         _meshes[key] = entry;
         return entry;
+    }
+
+    #endregion
+
+    #region Mesh compaction
+
+    /// <summary>
+    /// Replaces completed static builds before gathering this frame's instances.
+    /// </summary>
+    void CompactMeshes()
+    {
+        foreach (var (key, entry, name, size) in _compaction.Read())
+        {
+            if (size == 0 || size >= entry.Blas.Bytes) continue;
+            if (!_meshes.TryGetValue(key, out var held) || !ReferenceEquals(held, entry)) continue;
+
+            var cmd = (CommandList)Open();
+            var previous = entry.Blas;
+            cmd.Barrier(AccelerationStructure.BuildToTrace);
+            entry.Blas = previous.Compact(cmd, size, name);
+            MeshBytes -= (long)(previous.Bytes - entry.Blas.Bytes);
+            previous.Dispose();
+
+            // The cached foliage instances contain the old bottom-level addresses.
+            _foliageGeneration = -1;
+        }
     }
 
     #endregion
@@ -1329,6 +1402,8 @@ internal sealed unsafe class GiScene : IDisposable
     /// </summary>
     public void Dispose()
     {
+        _compaction.Dispose();
+        _scratch.Dispose();
         foreach (var t in _terrain) t.Dispose();
         _grass?.Dispose();
         _people?.Dispose();
@@ -1350,7 +1425,7 @@ internal sealed unsafe class GiScene : IDisposable
     /// A square height-field grid of <c>cells</c> × <c>cells</c> quads of <c>spacing</c> around a centre, sampled from the height snapshot on a
     /// worker and uploaded, then built into a bottom-level structure. Rebuilt when the eye has left the middle eighth.
     /// </summary>
-    sealed class TerrainGrid(GpuContext ctx, string name, int cells, float spacing) : IDisposable
+    sealed class TerrainGrid(GpuContext ctx, AccelerationStructureScratch scratch, string name, int cells, float spacing) : IDisposable
     {
         /// <summary>
         /// A refitted grid is rebuilt every this many refits.
@@ -1549,8 +1624,7 @@ internal sealed unsafe class GiScene : IDisposable
             _updatable = Refit;
             _refitsSinceBuild = 0;
             Blas = AccelerationStructure.BuildBottom(ctx.Device, cmd, [new TriangleGeometry(ctx.Device.Address(_vertices.Handle), 12,
-                (uint)positions.Length, ctx.Device.Address(_indices.Handle), (uint)(cells * cells * 2))], name, _updatable);
-            if (!_updatable) Blas.ReleaseScratch();
+                (uint)positions.Length, ctx.Device.Address(_indices.Handle), (uint)(cells * cells * 2))], name, scratch, _updatable);
             Centre = new Vector3(centre.X, 0, centre.Z);
             Record = new GeometryRecord
             {

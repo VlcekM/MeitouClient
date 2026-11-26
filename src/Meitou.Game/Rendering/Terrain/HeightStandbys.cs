@@ -53,10 +53,13 @@ sealed class HeightStandbys
     /// </summary>
     public void BeginUpload(HeightWindow window, TerrainHeightBounds.Patch bounds, UploadQueue uploads)
     {
+        if (MaxStandbys == 0) return;
+
         Uploading = true;
         _terrain.BeginFineStandby(window, bounds, uploads, s =>
         {
-            _windows.Add(s);
+            if (_windows.Count < MaxStandbys) _windows.Add(s);
+            else _terrain.DropFine(s);
             Uploading = false;
         });
     }
@@ -82,6 +85,7 @@ sealed class HeightStandbys
     public bool TryPickPoint(out Vector3 point)
     {
         point = default;
+        if (MaxStandbys == 0) return false;
         foreach (var candidate in _streamer.Kept)
         {
             if (TerrainStreamer.Within(_terrain.Fine, candidate, CoverFraction)) continue;
@@ -116,5 +120,18 @@ sealed class HeightStandbys
     /// At most this many standby windows (about 5 MB of video memory and 5 MB of memory each at step 1): one per kept place
     /// (<see cref="TerrainStreamer.Areas"/> less the eye's), at least 3, at most <see cref="Ceiling"/>.
     /// </summary>
-    int MaxStandbys => Math.Clamp(_streamer.Areas - 1, 3, Ceiling);
+    int MaxStandbys => _streamer.Guard?.Pressure == true ? 0 : Math.Clamp(_streamer.Areas - 1, 0, Ceiling);
+
+    /// <summary>
+    /// Releases windows beyond the current allowance.
+    /// </summary>
+    public void Trim()
+    {
+        int limit = MaxStandbys;
+        while (_windows.Count > limit)
+        {
+            _terrain.DropFine(_windows[^1]);
+            _windows.RemoveAt(_windows.Count - 1);
+        }
+    }
 }

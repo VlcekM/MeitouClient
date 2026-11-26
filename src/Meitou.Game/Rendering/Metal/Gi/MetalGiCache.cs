@@ -12,8 +12,13 @@ namespace Meitou.Game.Rendering.Metal.Gi;
 /// (<see cref="GiCacheShaders"/>) over the Metal traced scene, the trace shading its hits with the probe update's inputs. Runs after the scene, before
 /// the resolve. Metal's targets keep row 0 at the top, so the passes' position reconstruction turns its y round. Render thread only.
 /// </summary>
-sealed unsafe class MetalGiCache(MetalContext ctx, MetalProbeGi probes) : IDisposable
+sealed unsafe class MetalGiCache(MetalContext ctx, MetalProbeGi probes, int capacity) : IDisposable
 {
+    /// <summary>
+    /// The number of slots reserved for this cache.
+    /// </summary>
+    internal int SlotCount => capacity;
+
     #region State
 
     /// <summary>
@@ -207,7 +212,7 @@ sealed unsafe class MetalGiCache(MetalContext ctx, MetalProbeGi probes) : IDispo
         e.SetBuffer(_stamps, 0, 1);
         e.SetBuffer(_control, 0, 2);
         e.SetBuffer(view.Buffer, view.Offset, 8);
-        cmd.Dispatch(GiCache.Capacity / 64);
+        cmd.Dispatch((uint)(capacity / 64));
     }
 
     /// <summary>
@@ -316,12 +321,12 @@ sealed unsafe class MetalGiCache(MetalContext ctx, MetalProbeGi probes) : IDispo
         _touch = Pass(GiCacheShaders.Touch, "metal gi cache touch");
         _arguments = Pass(GiCacheShaders.Arguments, "metal gi cache arguments");
         _gather = Pass(GiCacheShaders.Gather, "metal gi cache gather");
-        _keys = Buffer(GiCache.Capacity * 4, "metal gi cache keys");
-        _stamps = Buffer(GiCache.Capacity * 4, "metal gi cache stamps");
-        _sums = Buffer(GiCache.Capacity * 32, "metal gi cache sums");
-        _cells = Buffer(GiCache.Capacity * 64, "metal gi cache cells");
-        _ring = Buffer((ulong)GiCache.Capacity * GiCache.Ring * 4, "metal gi cache ring");
-        _active = Buffer(GiCache.Capacity * 4, "metal gi cache list");
+        _keys = Buffer((ulong)capacity * 4, "metal gi cache keys");
+        _stamps = Buffer((ulong)capacity * 4, "metal gi cache stamps");
+        _sums = Buffer((ulong)capacity * 32, "metal gi cache sums");
+        _cells = Buffer((ulong)capacity * 64, "metal gi cache cells");
+        _ring = Buffer((ulong)capacity * GiCache.Ring * 4, "metal gi cache ring");
+        _active = Buffer((ulong)capacity * 4, "metal gi cache list");
         _control = Buffer(32, "metal gi cache control");
     }
 
@@ -334,7 +339,7 @@ sealed unsafe class MetalGiCache(MetalContext ctx, MetalProbeGi probes) : IDispo
             glsl = glsl.Replace(NdcLine, NdcLine + "\n    ndc.y = -ndc.y;", StringComparison.Ordinal);
 
         var shaders = (MetalShaders)ctx.Shaders;
-        var program = shaders.ComputeDiscrete(glsl, name);
+        var program = shaders.ComputeDiscrete(GiCacheShaders.ForCapacity(glsl, capacity), name);
         return (shaders.Backend(program), ctx.Pipelines.Get(new ComputePipelineDesc(program, name)));
     }
 
@@ -370,6 +375,18 @@ sealed unsafe class MetalGiCache(MetalContext ctx, MetalProbeGi probes) : IDispo
         if (!_made) return;
 
         foreach (var b in (ReadOnlySpan<MTLBuffer>)[_keys, _stamps, _sums, _cells, _ring, _control, _active]) b.Dispose();
+        foreach (var p in _traces.Values) ReleaseProgram(p.Pipeline);
+        foreach (var p in new[] { _evict, _touch, _arguments, _gather }) ReleaseProgram(p.Pipeline);
+    }
+
+    /// <summary>
+    /// Drops the compiled program and its cached pipeline.
+    /// </summary>
+    void ReleaseProgram(GpuComputePipeline pipeline)
+    {
+        var program = pipeline.Desc.Program;
+        ctx.Pipelines.Forget(program);
+        ctx.Shaders.Dispose(program);
     }
 
     #endregion

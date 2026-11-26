@@ -1179,6 +1179,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         StageClock.Part(StageClock.PartFill);
 
         GatherPortraitKeys();
+        _content.TrimMeshes();
         _content.Textures.Pump(wait: LoadBudget == 0, max: Covered ? 64 : 8, budgetMs: Covered ? CoveredBudgetMs : 1.0);
         StageClock.Part(StageClock.PartTextures);
 

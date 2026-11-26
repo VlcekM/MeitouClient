@@ -383,6 +383,15 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     }
 
     /// <summary>
+    /// When much of the arena has gone idle, re-place the surviving groups in a smaller buffer.
+    /// </summary>
+    internal void TrimArena()
+    {
+        ulong bytes = ArenaBytes;
+        if (bytes > (16ul << 20) && ArenaUsed < bytes / 4) ReplaceArena(bytes / 2);
+    }
+
+    /// <summary>
     /// The arena's next size: doubled until it holds twice <paramref name="atLeast"/>.
     /// </summary>
     ulong GrowSize(ulong atLeast)
@@ -397,11 +406,19 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     /// </summary>
     void Grow(ulong atLeast)
     {
-        ulong size = GrowSize(atLeast);
-        _arena.Dispose();   // deferred: this frame's earlier dispatches may read it
-        _arena = new BufferArena(_ctx, size, BufferUse.Storage | BufferUse.TransferDst, "foliage instances");
-        Generation++;
+        ReplaceArena(GrowSize(atLeast));
         Grows++;
+    }
+
+    /// <summary>
+    /// Changes arena generation after the replacement was allocated.
+    /// </summary>
+    void ReplaceArena(ulong size)
+    {
+        var replacement = new BufferArena(_ctx, size, BufferUse.Storage | BufferUse.TransferDst, "foliage instances");
+        _arena.Dispose();   // deferred: this frame's earlier dispatches may read it
+        _arena = replacement;
+        Generation++;
     }
 
     #endregion

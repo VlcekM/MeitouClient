@@ -797,6 +797,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         float nearReach = NearReach, farReach = FarReach, wholeReach = WholeReach;
         AcceptLayouts();
         DropFarZones(eye, settling, nearReach, farReach);
+        if (_updates % 120 == 0) _gpuCull?.TrimArena();
 
         var predicted = PredictEye(eye, settling, out var ahead);
         var arrival = settling ? null : Ahead;
@@ -810,7 +811,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         StartLayouts(layouts, eye);
         NearestMissingMesh = float.PositiveInfinity;
 
-        UpdateGrass(eye, keptPoints, settling);
+        UpdateGrass(eye, _guard?.Pressure == true ? [] : keptPoints, settling);
         PumpMeshes();
         PumpLods();
         Prune();

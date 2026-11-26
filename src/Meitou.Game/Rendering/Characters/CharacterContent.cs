@@ -589,18 +589,10 @@ internal sealed class CharacterContent : IDisposable
     public void Dispose()
     {
         foreach (var mesh in _meshes.Values)
-        {
-            if (mesh is not null)
-            {
-                foreach (var part in mesh.Gpu.Parts)
-                {
-                    part.Vertices.Dispose();
-                    part.Indices.Dispose();
-                }
-            }
-        }
+            if (mesh is not null) ReleaseMesh(mesh);
 
         _meshes.Clear();
+        _loadedByGpu.Clear();
         _prepared.Clear();
         MeshBytes = 0;
         Textures.Dispose();
@@ -647,6 +639,16 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     readonly Dictionary<(string Path, int Bones, bool Close, string? PartMap, GearSway.Bake? Sway), LoadedMesh?> _meshes = [];
     /// <summary>
+    /// The mesh cache entries used by built assets.
+    /// </summary>
+    readonly Dictionary<GpuObjectMesh, LoadedMesh> _loadedByGpu = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// When the mesh cache was last checked for unreferenced entries.
+    /// </summary>
+    long _lastMeshTrim;
+
+    /// <summary>
     /// The GPU bytes of the uploaded meshes' vertices and indices, for the statistics.
     /// </summary>
     public long MeshBytes { get; private set; }
@@ -679,7 +681,18 @@ internal sealed class CharacterContent : IDisposable
     sealed record LoadedMesh(GpuObjectMesh Gpu, string? FirstMaterialName, Vector3 Centre, float Radius, MeshMorphs? Morphs = null,
         float[]? ShadowDistances = null, int ShadowFirst = 0, PickBox[]? PickBoxes = null,
         float[]? FileDistances = null, int FileFirst = 0, float FileRadius = 0, PreparedMesh? NeckCap = null, PreparedMesh? HeadCap = null,
-        GearSway.Mass? Sway = null);
+        GearSway.Mass? Sway = null)
+    {
+        /// <summary>
+        /// The last time this mesh was looked up or seen in a live asset.
+        /// </summary>
+        public long LastUsed = Environment.TickCount64;
+
+        /// <summary>
+        /// Asset parts that may name the mesh in a future draw.
+        /// </summary>
+        public readonly List<WeakReference<AssetPart>> Owners = [];
+    }
 
     /// <summary>
     /// What a worker makes of a mesh file (<see cref="PrepareMesh"/>): everything but the GPU buffers.
@@ -702,7 +715,12 @@ internal sealed class CharacterContent : IDisposable
         bool icon = false, string? partMap = null, bool worn = false, GearSway.Bake? sway = null)
     {
         var key = (path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant(), sway);
-        if (_meshes.TryGetValue(key, out var cached)) return cached;
+        if (_meshes.TryGetValue(key, out var cached))
+        {
+            if (cached is not null) cached.LastUsed = Environment.TickCount64;
+
+            return cached;
+        }
         var (ready, messages) = Prepare(path, boneCount, lodScale, shadowLevels, LodPixelsPerRadian, limbs, close, icon, partMap, worn, sway).Value;
         _prepared[key] = new Lazy<Prepared>(Uploaded);
         Messages.AddRange(messages);
@@ -839,9 +857,65 @@ internal sealed class CharacterContent : IDisposable
             gpuMesh.Bytes += vertexBytes + indexBytes;
         }
         MeshBytes += gpuMesh.Bytes;
-        return new LoadedMesh(gpuMesh, ready.FirstMaterialName, ready.Centre, ready.Radius, ready.Morphs, ready.ShadowDistances, ready.ShadowFirst,
+        var loaded = new LoadedMesh(gpuMesh, ready.FirstMaterialName, ready.Centre, ready.Radius, ready.Morphs, ready.ShadowDistances, ready.ShadowFirst,
             ready.PickBoxes,
             ready.FileDistances, ready.FileFirst, ready.FileRadius, ready.NeckCap, ready.HeadCap, ready.Sway);
+
+        _loadedByGpu.Add(gpuMesh, loaded);
+        return loaded;
+    }
+
+    /// <summary>
+    /// Registers the parts of a finished look or icon as users of its meshes.
+    /// </summary>
+    void TrackMeshOwners(CharacterAsset asset)
+    {
+        foreach (var part in asset.Parts)
+            if (_loadedByGpu.TryGetValue(part.Mesh, out var loaded)) loaded.Owners.Add(new WeakReference<AssetPart>(part));
+    }
+
+    /// <summary>
+    /// Retires the oldest idle meshes once the assets that use them have been collected.
+    /// </summary>
+    internal void TrimMeshes()
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastMeshTrim < 1000) return;
+
+        _lastMeshTrim = now;
+        long idle = Textures.Guard?.Pressure == true ? 5000 : 60000;
+        foreach (var (key, mesh) in _meshes.OrderBy(pair => pair.Value?.LastUsed).ToArray())
+        {
+            if (mesh is null) continue;
+
+            mesh.Owners.RemoveAll(owner => !owner.TryGetTarget(out _));
+            if (mesh.Owners.Count > 0) mesh.LastUsed = now;
+            if (now - mesh.LastUsed < idle) continue;
+
+            _meshes.Remove(key);
+            _loadedByGpu.Remove(mesh.Gpu);
+            _prepared.TryRemove(key, out _);
+            if (key.Bones == IconBones)
+            {
+                _iconFetches.Remove(key.Path);
+                _iconReads.Clear();
+            }
+
+            ReleaseMesh(mesh);
+        }
+    }
+
+    /// <summary>
+    /// Defers releasing a mesh's device buffers until its previous draws finish.
+    /// </summary>
+    void ReleaseMesh(LoadedMesh mesh)
+    {
+        MeshBytes -= mesh.Gpu.Bytes;
+        foreach (var part in mesh.Gpu.Parts)
+        {
+            part.Vertices.Dispose();
+            part.Indices.Dispose();
+        }
     }
 
     /// <summary>
@@ -851,7 +925,12 @@ internal sealed class CharacterContent : IDisposable
     LoadedMesh? NeckCapMesh(string bodyPath, LoadedMesh body, int bones, bool head)
     {
         var key = (bodyPath.ToLowerInvariant() + (head ? "#head cap" : "#neck cap"), bones, false, (string?)null, (GearSway.Bake?)null);
-        if (_meshes.TryGetValue(key, out var cached)) return cached;
+        if (_meshes.TryGetValue(key, out var cached))
+        {
+            if (cached is not null) cached.LastUsed = Environment.TickCount64;
+
+            return cached;
+        }
         return _meshes[key] = (head ? body.HeadCap : body.NeckCap) is { } ready ? Upload(ready) : null;
     }
 
@@ -1734,6 +1813,7 @@ internal sealed class CharacterContent : IDisposable
             asset.Fixed.AddRange(setup.Fixed);
         }
 
+        TrackMeshOwners(asset);
         return asset;
     }
 
@@ -2495,6 +2575,7 @@ internal sealed class CharacterContent : IDisposable
             BoundsCentre = loaded.Centre,
             BoundsRadius = loaded.Radius,
         });
+        TrackMeshOwners(asset);
         return asset;
     }
 

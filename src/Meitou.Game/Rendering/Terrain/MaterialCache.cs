@@ -32,7 +32,7 @@ sealed class MaterialCache : IDisposable
     /// The levels, their side in texels, the snap step of a level's origin in texels, the rows a refresh bakes a frame and the rows a first bake
     /// bakes a frame.
     /// </summary>
-    const int CacheLevels = 4, CacheSide = 2048, CacheStep = 64, CacheRows = 64, CacheBuildRows = 256;
+    const int CacheLevels = 4, CacheStep = 64, CacheRows = 64, CacheBuildRows = 256;
 
     /// <summary>
     /// Level 0's texel (world units); level k's is this × 2^k.
@@ -126,15 +126,21 @@ sealed class MaterialCache : IDisposable
     {
         _terrain = terrain;
         _gpu = gpu;
+        CacheSide = gpu.VideoMemoryBudget is > 0 and <= (6ul << 30) ? 1024 : 2048;
         _nativeFrame = nativeFrame;
         _constantsLayout = constantsLayout;
         _uniformAlign = uniformAlign;
     }
 
     /// <summary>
+    /// The cache resolution selected for this device.
+    /// </summary>
+    int CacheSide { get; }
+
+    /// <summary>
     /// The levels' bytes: albedo and normal, RGBA8, <see cref="CacheLevels"/> × <see cref="CacheSide"/>² each (128 MB).
     /// </summary>
-    static long CacheBytes => 2L * CacheLevels * CacheSide * CacheSide * 4;
+    long CacheBytes => 2L * CacheLevels * CacheSide * CacheSide * 4;
 
     /// <summary>
     /// Bakes what the cache levels need this frame round <paramref name="eye"/>, each level's square moved towards <paramref name="focus"/> (what the camera
@@ -142,11 +148,12 @@ sealed class MaterialCache : IDisposable
     /// </summary>
     public void Record(Vector3 eye, Vector3 focus)
     {
-        if (!TerrainMaterialCache.Enabled || TerrainSimpleShading.Enabled)
+        if (!TerrainMaterialCache.Enabled || TerrainSimpleShading.Enabled || _terrain.TextureSet?.Guard?.Pressure == true)
         {
             ReleaseCache();
             return;
         }
+        if (_cacheRefused && _terrain.TextureSet?.Guard?.Active != true) _cacheRefused = false;
         if (_cacheRefused || _terrain.TextureSet is not { HasBiomes: true, MapState: 2 } t || _terrain.FrameOptions is not { Textures: true })
         {
             Array.Clear(_cacheOrigin);
@@ -194,7 +201,7 @@ sealed class MaterialCache : IDisposable
     /// A camera that orbits a point some way off (the game's) sees most of the picture beyond that point, not round its own feet; a square centred on the
     /// eye put the focus at the finest level's edge, where the pixels fell to the next coarser level in a hard step.
     /// </summary>
-    static Vector2 Centre(int k, Vector3 eye, Vector3 focus)
+    Vector2 Centre(int k, Vector3 eye, Vector3 focus)
     {
         var toFocus = new Vector2(focus.X - eye.X, focus.Z - eye.Z);
         float reach = CacheTexel * (1 << k) * CacheSide / 4, length = toFocus.Length();
@@ -339,7 +346,7 @@ sealed class MaterialCache : IDisposable
     /// <summary>
     /// The world rectangle [x0, x1) × [z0, z1) as texel rectangles of a level's wrapped image (up to four).
     /// </summary>
-    static int Wrapped(Span<(int X, int Y, int W, int H)> rects, int n, float x0, float x1, float z0, float z1, float texel)
+    int Wrapped(Span<(int X, int Y, int W, int H)> rects, int n, float x0, float x1, float z0, float z1, float texel)
     {
         int tx0 = (int)MathF.Round(x0 / texel), tx1 = (int)MathF.Round(x1 / texel), tz0 = (int)MathF.Round(z0 / texel),
             tz1 = (int)MathF.Round(z1 / texel);
@@ -350,7 +357,7 @@ sealed class MaterialCache : IDisposable
                 rects[n++] = (xs[i].A, zs[j].A, xs[i].L, zs[j].L);
         return n;
 
-        static int Split(Span<(int, int)> parts, int t0, int t1)
+        int Split(Span<(int, int)> parts, int t0, int t1)
         {
             int length = Math.Min(t1 - t0, CacheSide), start = ((t0 % CacheSide) + CacheSide) % CacheSide;
             if (start + length <= CacheSide)

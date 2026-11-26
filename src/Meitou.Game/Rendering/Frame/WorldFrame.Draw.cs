@@ -276,7 +276,7 @@ static partial class WorldFrame
         if (gpu.Post is { } giPost)
         {
             giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
-            giPost.GiCache = giResolve && post.Options.GiCaching ? gpu.GiCache : null;
+            giPost.GiCache = PrepareGiCache(gpu, post.Context, giResolve && post.Options.GiCaching);
         }
 
         // Metal's probes: the resolve, its relocation and the reflections' surfaces.
@@ -286,6 +286,7 @@ static partial class WorldFrame
             probeGi.Resolve = giResolve;
             probeGi.Reflections = reflections;
             probeGi.Relocate = giResolve && post.Options.GiRelocating;
+            probeGi.ConfigureCache(giResolve && post.Options.GiCaching, gpu.Guard?.Pressure == true);
         }
 
         if (gpu.Probes is { } giProbes)
@@ -298,6 +299,29 @@ static partial class WorldFrame
         }
 
         return giResolve;
+    }
+
+    /// <summary>
+    /// Keeps the hybrid radiance cache only while in use and sizes it to the device's memory tier.
+    /// </summary>
+    static Gi.GiCache? PrepareGiCache(WorldGpu gpu, IGpuContext gpuContext, bool enabled)
+    {
+        if (!enabled || gpu.Gi is null || gpu.Probes is null || gpuContext is not GpuContext context)
+        {
+            gpu.GiCache?.Dispose();
+            gpu.GiCache = null;
+
+            return null;
+        }
+
+        int capacity = Gi.GiCache.CapacityFor(context.VideoMemoryBudget, gpu.Guard?.Pressure == true);
+        if (gpu.GiCache?.SlotCount != capacity)
+        {
+            gpu.GiCache?.Dispose();
+            gpu.GiCache = new Gi.GiCache(context, gpu.Gi, gpu.Probes, capacity);
+        }
+
+        return gpu.GiCache;
     }
 
     /// <summary>
@@ -344,6 +368,15 @@ static partial class WorldFrame
         var camera = f.Camera;
 
         var kept = ObjectStreamer.MergeKept(gpu.Kept, eye);
+        int keepLimit = f.Post.Context.VideoMemoryBudget switch
+        {
+            > 0 and <= (4ul << 30) => 0,
+            > (4ul << 30) and <= (6ul << 30) => 1,
+            > (6ul << 30) and <= (8ul << 30) => 2,
+            _ => int.MaxValue,
+        };
+        if (kept.Count > keepLimit) kept = kept.OrderBy(point => Vector3.DistanceSquared(point, eye)).Take(keepLimit).ToArray();
+
         long areasNow = Environment.TickCount64;
         if (1 + kept.Count >= gpu.Areas || areasNow - gpu.AreasAt > AreasHoldMs)
             (gpu.Areas, gpu.AreasAt) = (1 + kept.Count, areasNow);
@@ -780,7 +813,12 @@ static partial class WorldFrame
     static void RecordBlood(ref FrameState f)
     {
         var gpu = f.Gpu;
-        if (gpu.Decals is { } decals && gpu.DecalStore is { } decalStore) decals.Record(decalStore, f.Eye);
+        if (gpu.Decals is { } decals && gpu.DecalStore is { } decalStore)
+        {
+            decals.UnderPressure = gpu.Guard?.Pressure == true;
+            decals.Record(decalStore, f.Eye);
+        }
+
         gpu.Terrain.RecordMaterialCache(f.Eye, f.Camera.Target);
         gpu.Terrain.Decals = gpu.DecalStore is null ? null : gpu.Decals;
         RecordTrails(gpu, f.Camera.Target);

@@ -838,15 +838,14 @@ static partial class TerrainShaders
             return o.w > 0.0 && all(greaterThan(r, vec2(4.0))) && all(lessThan(r, vec2(o.w - 4.0)));
         }
 
-        // How near xz is to the edge of level k's square: 0 further than BakeFade texels in from where bakeHolds stops holding it, rising smoothly to 1 there.
+        // How near xz is to the edge of level k's square: 0 further than a quarter of the side in from where bakeHolds stops holding it, rising smoothly to 1 there.
         // The cache blends towards the next coarser level over it, so the step to that level at the edge (which it reads alone beyond) is not a line.
-        const float BakeFade = 512.0;
         float bakeEdge(int k, vec2 xz)
         {
             vec4 o = uBakeOrigin[k];
             vec2 r = (xz - o.xy) / o.z;
             vec2 d = min(r, vec2(o.w) - r) - 4.0;
-            return 1.0 - smoothstep(0.0, BakeFade, min(d.x, d.y));
+            return 1.0 - smoothstep(0.0, 0.25 * o.w, min(d.x, d.y));
         }
 
         // The cache's relief height (0 to 1, as reliefHeight) at xz from level k; with kc another level, only what k holds finer than kc (+ 0.5),

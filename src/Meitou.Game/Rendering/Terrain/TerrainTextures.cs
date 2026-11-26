@@ -430,10 +430,9 @@ public sealed unsafe class TerrainTextures : IDisposable
     const byte Pending = 254, Unused = 255;
 
     /// <summary>
-    /// The most near slots <see cref="Areas"/> may grow the arrays to (the 128 a full-size slot per pair took before the two tiers, ~1.07 GB at
-    /// 2048²).
+    /// The near slot ceiling on devices with more than 8 GB available.
     /// </summary>
-    const int MaxNearSlots = 128;
+    const int MaxNearSlots = 96;
 
     /// <summary>
     /// The biomes, by parameter row.
@@ -678,7 +677,6 @@ public sealed unsafe class TerrainTextures : IDisposable
             if (GroundRelief.FieldCentre is { } fieldCentre && _tiles.Length == 0)
                 SetField(fieldCentre, GroundRelief.FieldCliffs ? GroundRelief.FieldTile / 2 : GroundRelief.FieldTile);
             while (_decoded.TryDequeue(out var d)) Install(d, uploads);
-            GrowNear();
             UpdateBiomes(eye, materialDistance, ahead, kept);
         }
         UpdateMaps(eye, uploads, kept);
@@ -701,7 +699,15 @@ public sealed unsafe class TerrainTextures : IDisposable
         _needed.Clear();
         var (nearest, keptNear) = GatherBiomes(eye, materialDistance, ahead, kept);
         _needed.AddRange(nearest.OrderBy(p => p.Value).Select(p => p.Key));
-        WantNearPairs(nearest, keptNear);
+        int limit = NearSlotLimit();
+        int demand = WantNearPairs(nearest, keptNear, limit);
+        ResizeNear(demand, limit);
+        if (Capacity < demand)
+        {
+            _stamp++;
+            WantNearPairs(nearest, keptNear, Capacity);
+        }
+
         StartPairs();
     }
 
@@ -749,7 +755,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>
     /// Marks the pairs wanted at full size this frame (<see cref="Pair.Needed"/>): the eye's near ones, then the kept points' while slots last.
     /// </summary>
-    void WantNearPairs(Dictionary<int, double> nearest, Dictionary<int, double> keptNear)
+    int WantNearPairs(Dictionary<int, double> nearest, Dictionary<int, double> keptNear, int limit)
     {
         // A pair within its near range of the eye (the arrival's, the field's) is wanted at full size; the pixels per radian at the sampler's level
         // (an upscaler's negative bias reads finer levels).
@@ -758,6 +764,8 @@ public sealed unsafe class TerrainTextures : IDisposable
         foreach (int b in _needed)
             foreach (var p in _state[b].Pairs)
             {
+                if (wantedNear == limit) return wantedNear;
+
                 if (p.Needed != _stamp && nearest[b] < pixels * p.Tile / _layerSize * NearReach)
                 {
                     (p.Needed, p.Used) = (_stamp, _frame);
@@ -771,12 +779,14 @@ public sealed unsafe class TerrainTextures : IDisposable
                 if (keptNear.TryGetValue(b, out double own))
                     foreach (var p in _state[b].Pairs)
                     {
-                        if (wantedNear < Capacity && p.Needed != _stamp && own < pixels * p.Tile / _layerSize * NearReach)
+                        if (wantedNear < limit && p.Needed != _stamp && own < pixels * p.Tile / _layerSize * NearReach)
                         {
                             (p.Needed, p.Used) = (_stamp, _frame);
                             wantedNear++;
                         }
                     }
+
+        return wantedNear;
     }
 
     /// <summary>
@@ -949,24 +959,40 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>
-    /// Grows the near arrays to <see cref="NearLayers"/> slots per kept place (<see cref="Areas"/>, at most <see cref="MaxNearSlots"/>) when no layer
-    /// is in flight and the guard allows it: there is no image copy, so every pair loses its slot (its biomes read the far arrays) and loads near
-    /// again, nearest first. The arrays never shrink while running, and do not grow while the guard clamps the ranges (<see cref="VramGuard.Active"/>:
-    /// the growth took the room the clamp freed, #1390).
+    /// Caps full-size terrain layers by the device budget and protects space for the eye while under pressure.
     /// </summary>
-    void GrowNear()
+    int NearSlotLimit()
     {
-        int want = Math.Min(Math.Min(_pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
-        if (GpuContext.DiagNoGrow || want <= Capacity || want >= _nearRefused || _inFlight > 0 || _nearLoading > 0 || _diffuseArray is null
-            || _normalArray is null || Guard is { Active: true })
-            return;
+        ulong budget = Gpu.VideoMemoryBudget;
+        int tier = budget switch
+        {
+            > 0 and <= (6ul << 30) => 32,
+            > (6ul << 30) and <= (8ul << 30) => 48,
+            _ => MaxNearSlots,
+        };
 
-        if (Guard is { } guard && !guard.AllowsGrowth((ulong)Bytes(_layerSize, _levelCount, want, 32)))
+        return Math.Min(_pairs.Count, Guard?.Pressure == true ? Math.Min(tier, 16) : tier);
+    }
+
+    /// <summary>
+    /// Changes the near arrays in steps of eight, only when their writes have been queued. Pairs use the far arrays while their near slots reload.
+    /// </summary>
+    void ResizeNear(int demand, int limit)
+    {
+        if (_inFlight > 0 || _nearLoading > 0 || _diffuseArray is null || _normalArray is null) return;
+
+        int want = Math.Min(limit, Math.Max(Math.Min(NearLayers, limit), (demand + 7) / 8 * 8));
+        bool grow = want > Capacity;
+        if (want == Capacity || !grow && want >= Capacity - 8 && Capacity <= limit) return;
+        if (grow && (GpuContext.DiagNoGrow || want >= _nearRefused || Guard is { Active: true })) return;
+
+        ulong bytes = (ulong)Bytes(_layerSize, _levelCount, want, 32);
+        if (grow && Guard is { } guard && !guard.AllowsGrowth(bytes))
         {
             _nearRefused = want;
-            Console.WriteLine($"terrain   near layer slots not grown to {want}: memory budget (VramGuard)");
             return;
         }
+
         var diffuse = AllocateArray(true, want, _layerSize, _levelCount, "terrain textures diffuse");
         var normal = AllocateArray(false, want, _layerSize, _levelCount, "terrain textures normal", near: true);
         if (diffuse is null || normal is null)
@@ -989,7 +1015,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         Capacity = want;
         for (int b = 0; b < _state.Length; b++) WriteNear(b);
         long megabytes = Bytes(_layerSize, _levelCount, want, 32) >> 20;
-        Console.WriteLine($"terrain   near layer slots grown to {want} for {Areas} kept places ({megabytes} MB)");
+        Console.WriteLine($"terrain   near layer slots resized to {want} for {Areas} kept places ({megabytes} MB)");
     }
 
     /// <summary>
@@ -1773,7 +1799,18 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// At most this many standby pairs (about 45 MB of video memory each: the 2048² RGBA8 overlay and the 4096² BC3 colour with their levels):
     /// one per kept place (<see cref="Areas"/> less the eye's), at least 2, at most 6.
     /// </summary>
-    int MaxMapStandbys => Math.Clamp(Areas - 1, 2, 6);
+    int MaxMapStandbys => Guard?.Pressure == true ? 0 : Math.Clamp(Areas - 1, 0, MapStandbyTier);
+
+    /// <summary>
+    /// The device's allowance for standby map pairs.
+    /// </summary>
+    int MapStandbyTier => Gpu.VideoMemoryBudget switch
+    {
+        > 0 and <= (4ul << 30) => 0,
+        > (4ul << 30) and <= (6ul << 30) => 1,
+        > (6ul << 30) and <= (8ul << 30) => 2,
+        _ => 6,
+    };
 
     /// <summary>
     /// Makes the drawn overlay and colour window textures (the colour BC3 when the colour tiles allow blocks).
@@ -1792,6 +1829,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     void UpdateMaps(Vector3 eye, UploadQueue uploads, IReadOnlyList<Vector3>? kept)
     {
         if (_mapWindows is null || MapState == 0) return;
+
+        TrimMapStandbys();
         if (_mapJob is { IsCompleted: true } job)
         {
             _mapJob = null;
@@ -1805,6 +1844,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                 Console.WriteLine($"warning   overlay maps: {e.InnerException?.Message ?? e.Message}");
             }
             if (result is null) { if (MapState == 1 && _mapTarget is null) MapState = 0; }
+            else if (_mapTarget is not null && MaxMapStandbys == 0) result.Release();
             else BeginMapUpload(result, uploads, _mapTarget);
         }
         if (_mapJob is not null || _mapUploading) return;
@@ -1831,6 +1871,23 @@ public sealed unsafe class TerrainTextures : IDisposable
         (int, int)? old = MapState == 2 ? (_validPx, _validPz) : null;
         _mapTarget = null;
         _mapJob = BackgroundWork.Run(() => _mapWindows.Compose(px, pz, old));
+    }
+
+    /// <summary>
+    /// Drops surplus maps while preserving the destination of any in-progress compose or upload.
+    /// </summary>
+    void TrimMapStandbys()
+    {
+        int limit = MaxMapStandbys;
+        for (int i = _mapStandbys.Count - 1; i >= 0 && _mapStandbys.Count > limit; i--)
+        {
+            var standby = _mapStandbys[i];
+            if ((_mapJob is not null || _mapUploading) && standby == _mapTarget) continue;
+
+            standby.Overlay.Dispose();
+            standby.Colour.Dispose();
+            _mapStandbys.RemoveAt(i);
+        }
     }
 
     /// <summary>

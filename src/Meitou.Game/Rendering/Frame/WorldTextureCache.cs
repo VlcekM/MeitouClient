@@ -458,7 +458,19 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// <summary>
     /// The mark in effect (MB).
     /// </summary>
-    public double MarkMb => EffectiveMark(HighWaterMb, HighWaterShare, Guard, Areas);
+    public double MarkMb
+    {
+        get
+        {
+            double mark = EffectiveMark(HighWaterMb, HighWaterShare, Guard, Areas);
+            return Share is not null && Guard is { BudgetBytes: > 0 } guard ? Math.Min(mark, guard.BudgetBytes / 1048576.0 * 0.40) : mark;
+        }
+    }
+
+    /// <summary>
+    /// Whether the device or guard calls for a smaller streamed mip footprint.
+    /// </summary>
+    internal bool CompactMips => Guard?.Active == true || _gpu?.VideoMemoryBudget is > 0 and <= (8ul << 30);
 
     /// <summary>
     /// Places kept loaded ("Keep textures at characters": the eye's and each merged kept point's, docs/render-objects.md "Kept points"): the mark is
@@ -740,7 +752,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             return;
         }
 
-        bool enabled = Mips.Enabled;
+        bool enabled = Mips.Enabled, compact = Mips.Compact;
         float perDistance = Mips.PixelsPerDistance, bias = Mips.Bias;
         int extra = Mips.Extra, leanSize = lean ? LeanSize : 0;
         float cut = t.Cut;
@@ -752,7 +764,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             TextureData data;
             try
             {
-                data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize, cut);
+                data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize, cut, compact);
             }
             catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
             {
@@ -1050,7 +1062,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     /// <param name="leanSize">0, or the largest top side to keep (a lean load under the guard's pressure).</param>
     static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra, int leanSize = 0,
-        float cut = 0)
+        float cut = 0, bool compact = false)
     {
         using var file = File.OpenHandle(Content.GameFiles.Resolve(path), FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.SequentialScan);
         Span<byte> magic = stackalloc byte[4];
@@ -1061,7 +1073,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             // (docs/renderer-native.md 8.14). The file's bytes are pooled (docs/engine.md, pooled buffers): an RGBA8 decode returns them here, a
             // stored upload after its last step.
             var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, Math.Max(Math.Max(dropMips, MipStreaming.Drop(w.Width, w.Height,
-                need, streaming, perDistance, bias, extra)),
+                need, streaming, perDistance, bias, extra, compact)),
                 LevelsAbove(w.Width, w.Height, leanSize))), out var whole, Data.BoundedBytePool.Streaming);
             bool handedOver = false;
             try

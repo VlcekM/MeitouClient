@@ -80,7 +80,7 @@ sealed class LandmarkShadowMap : IDisposable
     /// The box to draw the map into this frame (<see cref="MeitouShadowFit.FitLandmarks"/>), with the landmark set's <paramref name="key"/>; null when
     /// the map stays as it is (none: <see cref="Box"/> is cleared; else the same set and sun).
     /// </summary>
-    public ShadowCascade? Plan(Vector3 toSun, ShadowPass.LandmarkCasters? landmarks, out long key)
+    public ShadowCascade? Plan(Vector3 toSun, ShadowPass.LandmarkCasters? landmarks, int size, out long key)
     {
         key = 0;
         if (landmarks is not { } l)
@@ -97,21 +97,22 @@ sealed class LandmarkShadowMap : IDisposable
         }
 
         bool sameSun = Vector3.Dot(toSun, _landmarkSun) > MathF.Cos(TerrainShadowMap.RebuildAngle);
-        if (Box is not null && key == _landmarkKey && sameSun) return null;
+        if (Box is not null && key == _landmarkKey && sameSun && _landmarkMap?.Desc.Width == size) return null;
 
-        return MeitouShadowFit.FitLandmarks(toSun, _landmarkSpheres, ShadowPass.LandmarkMapSize)!;
+        return MeitouShadowFit.FitLandmarks(toSun, _landmarkSpheres, size)!;
     }
 
     /// <summary>
     /// Makes the landmark map and its sampler on first use: a map of its own (4096², larger than a cascade layer), read through its own sampler.
     /// </summary>
-    public GpuTexture EnsureMap()
+    public GpuTexture EnsureMap(int size)
     {
-        if (_landmarkMap is not null) return _landmarkMap;
+        if (_landmarkMap is { } map && map.Desc.Width == size) return map;
 
-        // A map of its own (4096², larger than a cascade layer), read through its own sampler (uShadowLandmark), not a layer of the cascade array.
-        _landmarkMap = _gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, ShadowPass.LandmarkMapSize, ShadowPass.LandmarkMapSize,
+        var replacement = _gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, size, size,
             Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "landmark shadow map"));
+        _landmarkMap?.Dispose();
+        _landmarkMap = replacement;
         _landmarkSampled = ShadowPass.Sampled(_gpu, _landmarkMap, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
             compare: true);
         return _landmarkMap;

@@ -13,7 +13,7 @@ namespace Meitou.Game.Rendering.Gi;
 /// back per texel; the resolve takes the result in place of the probes' light (<see cref="GiResolveShaders.ResolveFor"/>). Runs after the scene,
 /// before the resolve. Render thread only.
 /// </summary>
-sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : IDisposable
+sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes, int capacity) : IDisposable
 {
     #region Constants
 
@@ -21,6 +21,16 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
     /// The table's slots (a power of two); a key takes one of 8 consecutive ones.
     /// </summary>
     public const int Capacity = 1 << 18;
+
+    /// <summary>
+    /// The number of slots allocated to this cache.
+    /// </summary>
+    public int SlotCount => capacity;
+
+    /// <summary>
+    /// Chooses the table size for a device's budget and the current memory pressure.
+    /// </summary>
+    internal static int CapacityFor(ulong budget, bool pressure) => pressure || budget is > 0 and <= (8ul << 30) ? Capacity / 2 : Capacity;
 
     /// <summary>
     /// The direction subsets a cell keeps, one traced a frame: a still scene's cells hold <see cref="Ring"/> × <see cref="RaysPerCell"/> rays; a
@@ -233,6 +243,7 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
 
         var cmd = (CommandList)ctx.BeginNative("gi cache");
         cmd.BeginLabel("gi cache");
+        if (_frame == 1) ClearTable(cmd);
         cmd.Barrier(BarrierBatch.Full);
         RunEvict(cmd, viewBinding);
         cmd.Order();
@@ -255,10 +266,19 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
     {
         _output?.Dispose();
         foreach (var b in new[] { _keys, _stamps, _sums, _cells, _ring, _control, _active }) b?.Dispose();
-        foreach (var t in _traces.Values) ctx.Shaders.Dispose(t.Program);
+        foreach (var t in _traces.Values) ReleaseProgram(t.Program);
         if (!_made) return;
 
-        foreach (var p in new[] { _evict, _touch, _arguments, _gather }) ctx.Shaders.Dispose(p);
+        foreach (var p in new[] { _evict, _touch, _arguments, _gather }) ReleaseProgram(p);
+    }
+
+    /// <summary>
+    /// Releases a cache program and retires its pipelines after the last recorded frame.
+    /// </summary>
+    void ReleaseProgram(GpuProgram program)
+    {
+        ctx.Pipelines.Forget(program);
+        ctx.Shaders.Dispose(program);
     }
 
     /// <summary>
@@ -279,7 +299,7 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
             (18, DescriptorType.CombinedImageSampler),
             .. clouds ? new (uint, DescriptorType)[] { (15, DescriptorType.CombinedImageSampler), (16, DescriptorType.CombinedImageSampler) } : [],
         ];
-        var program = ctx.Shaders.Compute(GiCacheShaders.Trace(relocate, clouds), "gi cache trace", set0, GpuSetLayout.Bindless);
+        var program = ctx.Shaders.Compute(GiCacheShaders.ForCapacity(GiCacheShaders.Trace(relocate, clouds), capacity), "gi cache trace", set0, GpuSetLayout.Bindless);
         return _traces[(relocate, clouds)] = (program, ctx.Pipelines.Get(new ComputePipelineDesc(program, "gi cache trace")));
     }
 
@@ -291,23 +311,26 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
         if (_made) return;
 
         _made = true;
-        (_evict, _evictPipeline) = Pass(GiCacheShaders.Evict, "gi cache evict");
-        (_touch, _touchPipeline) = Pass(GiCacheShaders.Touch, "gi cache touch");
+        (_evict, _evictPipeline) = Pass(GiCacheShaders.ForCapacity(GiCacheShaders.Evict, capacity), "gi cache evict");
+        (_touch, _touchPipeline) = Pass(GiCacheShaders.ForCapacity(GiCacheShaders.Touch, capacity), "gi cache touch");
         (_arguments, _argumentsPipeline) = Pass(GiCacheShaders.Arguments, "gi cache arguments");
-        (_gather, _gatherPipeline) = Pass(GiCacheShaders.Gather, "gi cache gather");
-        _keys = Buffer(Capacity * 4, "gi cache keys");
-        _stamps = Buffer(Capacity * 4, "gi cache stamps");
-        _sums = Buffer(Capacity * 32, "gi cache sums");
-        _cells = Buffer(Capacity * 64, "gi cache cells");
-        _ring = Buffer((ulong)Capacity * Ring * 4, "gi cache ring");
-        _active = Buffer(Capacity * 4, "gi cache list");
+        (_gather, _gatherPipeline) = Pass(GiCacheShaders.ForCapacity(GiCacheShaders.Gather, capacity), "gi cache gather");
+        _keys = Buffer((ulong)capacity * 4, "gi cache keys");
+        _stamps = Buffer((ulong)capacity * 4, "gi cache stamps");
+        _sums = Buffer((ulong)capacity * 32, "gi cache sums");
+        _cells = Buffer((ulong)capacity * 64, "gi cache cells");
+        _ring = Buffer((ulong)capacity * Ring * 4, "gi cache ring");
+        _active = Buffer((ulong)capacity * 4, "gi cache list");
         _control = DeviceBuffer.Create(ctx, 32, BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferDst, "gi cache control");
+    }
 
-        // Empty: no keys, no sums, never touched (the frames count from 1).
-        var cmd = ctx.Device.BeginImmediate();
-        foreach (var b in new[] { _keys, _stamps, _sums, _control })
-            ctx.Device.Vk.CmdFillBuffer(cmd, ctx.Device.BufferAt(b.Handle.Index), 0, b.Size, 0);
-        ctx.Device.EndImmediate(cmd);
+    /// <summary>
+    /// Starts the table empty in its first command list, before eviction and insertion.
+    /// </summary>
+    void ClearTable(CommandList cmd)
+    {
+        foreach (var buffer in new[] { _keys, _stamps, _sums, _control })
+            cmd.FillBuffer(buffer!.Handle, 0, buffer.Size, 0);
     }
 
     /// <summary>
@@ -365,7 +388,7 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
         bindings[3] = view;
         cmd.BindPipeline(_evictPipeline);
         cmd.BindProgramResources(_evict, 0, new ReadOnlySpan<GpuBinding>(bindings, 4));
-        cmd.Dispatch(Capacity / 64);
+        cmd.Dispatch((uint)(capacity / 64));
     }
 
     /// <summary>

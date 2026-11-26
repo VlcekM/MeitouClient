@@ -624,7 +624,19 @@ static partial class WorldFrame
         if (g.Weather is { } weather)
             choices.Add(new PanelChoice(weather.ChoiceLabel, weather.Choices, weather.Current, weather.Choose));
         return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders, toggles, "Meitou improvements (unticked: as the game)", actions, side,
-            choices);
+            choices)
+        {
+            SetReflectionScale = scale => ApplyReflectionScale(g, scale),
+        };
+    }
+
+    /// <summary>
+    /// Applies the quality tier's reflection resolution to either world backend.
+    /// </summary>
+    internal static void ApplyReflectionScale(WorldGpu gpu, float scale)
+    {
+        if (gpu.Options is { } options) options.ReflectionScale = scale;
+        if (gpu.Reflection is { } reflection) reflection.RenderScale = scale;
     }
 
     /// <summary>

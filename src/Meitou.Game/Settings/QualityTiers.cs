@@ -346,6 +346,7 @@ sealed class QualityTiers(SettingsMenu menu)
         }
 
         LastTier = CurrentPreset();
+        ApplyReflectionScale(LastTier);
     }
 
     /// <summary>
@@ -439,6 +440,7 @@ sealed class QualityTiers(SettingsMenu menu)
 
         bool leftLow = LastTier == LowPreset;
         LastTier = now;
+        ApplyReflectionScale(now);
         if (leftLow && !menu.LookPresets.FaithfulLook) menu.LookPresets.ApplyLowCut();
     }
 
@@ -532,8 +534,19 @@ sealed class QualityTiers(SettingsMenu menu)
         }
 
         if (preset == HighPreset) SetHighRenderScale();
+        ApplyReflectionScale(preset);
         foreach (var (p, slider) in PresetPairs()) slider.Set(PresetTarget(p, slider, preset));
     }
+
+    /// <summary>
+    /// Sets the size of the planar reflection targets for the selected quality tier.
+    /// </summary>
+    void ApplyReflectionScale(int preset) => menu.Values.SetReflectionScale?.Invoke(preset switch
+        {
+            LowPreset or MediumPreset => 0.5f,
+            HighPreset => 0.75f,
+            _ => ReflectionPass.Scale,
+        });
 
     /// <summary>
     /// High's render scale: Quality with an upscaler (TAA, FSR, DLSS), native without one (no plain scaling).
