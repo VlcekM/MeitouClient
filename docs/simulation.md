@@ -1538,12 +1538,13 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
 (the finder, 254's plan), [ai-tasks](game/ai-tasks.md) (the desires), [campaigns](game/factions-squads-towns.md#campaigns) (which packages).
 - **Goal 254** "Find and kidnap (with cages) urgent" is an [engine goal](#engine-goals) (`KidnapGoals`), registered with its plan rows 132 and 68. A member weighs it when its
   role, slave or race list holds it in the hour (`AiSystem.WeighsGoal`: an AI squad's running package, a campaign platoon's phase package: the cannibal raid's assault and
-  retreat; no race or faction list holds it); a squadless character never kidnaps.
+  retreat; no race or faction list holds it); a squadless character never kidnaps. Mods can hand it to town law: Dialogue.mod's package `patrol town 24hr + capture`, run by
+  QuestsForQuesters' Samurai Investigator squad, has police kidnap neutral player characters from bar beds (**Observed**, #1471's save).
 - **Desire** (**Verified**): 254 and 132 are 0 while the member carries or two squad mates do; 254 in its squad's home town is 0 while its running package's mission town is set elsewhere
   (`SquadTown.MissionTown`), else 1 with a free cage it may use (`HasCage`, the town candidates below) and 0 without; elsewhere 1. 68 is the lift desire
   (slot 59).
 - **Victim** (132's finder, the serial look every 15 ticks on the slot's turn; `IsVictim`): the nearest within sight (`RangeOf`, the rescue range) that is alive, down, of a carriable
-  race that is not a robot (`is robot`: a skeleton is never kidnapped, #1366), not carried, caged or in a bed, not an animal, nobody's pick-up, and not of the kidnapper's faction or an ally. Player characters included; so is anyone lying in a
+  race that is not a robot (`is robot`: a skeleton is never kidnapped, #1366), not carried, not held in anything but a bed (a cage, a seat), not an animal, nobody's pick-up, and not of the kidnapper's faction or an ally. Player characters included; so is anyone lying in a
   bed, awake or not (the finder's bed branch, **Verified**): the lift is then a kidnap that rolls on arrival (`CarrySystem.Kidnap`: a hit knocks the sleeper out, a miss wakes it
   and raises the alarm).
 - **Act-out**: plan `[1, 68, 132, 254]`; the start lifts the plan's victim (`CarrySystem.BeginPickUp`, row 68, back to standing) unless another member works it; the goal is done
