@@ -25,10 +25,11 @@ sealed class QualityTiers(SettingsMenu menu)
     /// the start default. <see cref="Mode"/> names the switch whose side picks the base instead (the slider's Meitou or Faithful mark), so High reads
     /// High in both looks. <see cref="LowFixed"/>: Low's value is fixed even where the others are multiples. Low is <c>--low-end</c>
     /// (WorldOptions.ApplyLowEnd): a slider it leaves alone stays at High. <see cref="Extreme"/>: its value at Extreme, Ultra's when null (the
-    /// distances: Extreme adds effects, not range).
+    /// distances: Extreme adds effects, not range). <see cref="MetalUltra"/>: its value at Ultra on the Metal renderer (<see cref="MetalTiers"/>),
+    /// Ultra's when null; Extreme still falls back to <see cref="Ultra"/>.
     /// </summary>
     internal sealed record PresetSlider(string Label, float Low, float Medium, float Ultra, bool Scale = false, string? Mode = null, float? High = null,
-        bool LowFixed = false, float? Extreme = null);
+        bool LowFixed = false, float? Extreme = null, float? MetalUltra = null);
 
     /// <summary>
     /// --low-end's large foliage range, as a multiple of the default; the medium and small ranges follow it.
@@ -74,8 +75,9 @@ sealed class QualityTiers(SettingsMenu menu)
         new(WorldFrame.ShadowCascadesSlider, 4, 4, 5, High: 5, Extreme: 6),
         new(WorldFrame.ShaftQualitySlider, 0, 1, 2, High: 2, Extreme: 3),
 
-        // Medium keeps the SSAO's twelve taps (its GTAO is off); High the GTAO's medium quality.
-        new(WorldFrame.GtaoQualitySlider, 0, 1, 2, High: 1),
+        // Medium keeps the SSAO's twelve taps (its GTAO is off); High the GTAO's medium quality. Metal's Ultra too: the high quality's full size
+        // cost an M6 2.4 ms (bench save, 1280x960) for a picture that differed from Medium's as two frames of High do.
+        new(WorldFrame.GtaoQualitySlider, 0, 1, 2, High: 1, MetalUltra: 1),
         new(WorldFrame.ParticleSliders[1], WorldOptions.LowEndParticleDensity, 0.5f, float.NaN),
         new(WorldFrame.FilteringSlider, 0, 2, 4, High: 4),
 
@@ -227,7 +229,7 @@ sealed class QualityTiers(SettingsMenu menu)
         {
             LowPreset => p.Low,
             MediumPreset => p.Medium,
-            UltraPreset => p.Ultra,
+            UltraPreset => UltraOf(p),
             ExtremePreset => p.Extreme ?? p.Ultra,
             _ => float.NaN,
         };
@@ -243,6 +245,11 @@ sealed class QualityTiers(SettingsMenu menu)
 
         return Math.Clamp(value, slider.Min, slider.Max);
     }
+
+    /// <summary>
+    /// <paramref name="p"/>'s value at Ultra on this renderer (<see cref="PresetSlider.MetalUltra"/> on Metal).
+    /// </summary>
+    static float UltraOf(PresetSlider p) => MetalTiers && p.MetalUltra is { } metal ? metal : p.Ultra;
 
     /// <summary>
     /// The preset sliders with the menu's sliders of their labels.
@@ -395,7 +402,7 @@ sealed class QualityTiers(SettingsMenu menu)
         {
             LowPreset => p.Low,
             MediumPreset => p.Medium,
-            UltraPreset => p.Ultra,
+            UltraPreset => UltraOf(p),
             ExtremePreset => p.Extreme ?? p.Ultra,
             _ => float.NaN,
         };

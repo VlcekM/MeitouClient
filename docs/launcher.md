@@ -237,12 +237,12 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   and cores alone; off macOS the summary names the failure (`no Vulkan device: <problem>`).
   Apple silicon goes by its GPU (`AppleGpuTiers`, an engine choice): the chip's Geekbench 7 Metal score (Geekbench Browser, M1 to M6: the
   base chips 28,496 / 43,540 / 48,180 / 54,230 / 72,805 / 89,357; Pro, Max and Ultra in the class) predicts its frame rate in proportion,
-  against an M6 that ran the launcher benchmark's bases scenario at 204 fps Low, 131 Medium, 96 High and 36 Ultra (**Observed** 2026-11-26,
-  two runs each, 1920x1080 without an upscaler; GPU time about the whole frame, so GPU-bound). Extreme ran as Ultra (35 fps): the bases have
-  no grassland for its traced grass shadows, and its other additions (a sixth cascade, Ultra shafts) cost nothing under the traced sun, so it
-  is never recommended. The tier is the highest predicted at 60 fps or more, Ultra only on an M3 or later (hardware ray tracing): from a
-  score of 40.9k Medium, from 56.1k High, from 150.8k Ultra: M1 Low; M2, M3 and M4 Medium; M5, M6 and the M1 to M5 Pro High (M1 and M2
-  Max and Ultra too, without ray tracing); the M3 to M5 Max, M3 to M5 Ultra and the M6 Pro (estimated) Ultra. A chip not in the table: a later generation counts as the
+  against an M6 that ran the launcher benchmark's bases scenario at 204 fps Low, 131 Medium, 96 High and 49 Ultra (**Observed** 2026-11-26,
+  two runs each, 1920x1080 without an upscaler; GPU time about the whole frame, so GPU-bound). Extreme (35 fps: on Metal it adds the GI
+  radiance cache, 64 probe rays and full-size GTAO, `QualityTiers`) is never recommended. The tier is the highest predicted at 60 fps or
+  more, Ultra only on an M3 or later (hardware ray tracing): from a score of 40.9k Medium, from 56.1k High, from 109.6k Ultra: M1 Low; M2,
+  M3 and M4 Medium; M5, M6 and the M1 to M3 Pro High (M1 and M2 Max and Ultra too, without ray tracing); the M4 to M6 Pro (M6 estimated),
+  the M3 to M5 Max and the M3 to M5 Ultra Ultra. A chip not in the table: a later generation counts as the
   newest, a missing variant is that variant's newest score scaled by the base chips (M6 Pro: M5 Pro x M6 / M5). Under 12 GB of memory Medium at
   most, under 8 GB Low; a GPU name that is not an Apple chip's goes by memory (Medium from 16 GB, else Low). A GeForce goes by its model against the classes the tiers are meant for (`GeForceTier`: RTX 3060
   Medium, 3070 to 4070 High, 4070 Ti to 4080 Ultra, 4080 Super and 4090 Extreme, other series by their place among these, a laptop

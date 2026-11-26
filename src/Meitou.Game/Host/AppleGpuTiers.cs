@@ -74,8 +74,8 @@ static partial class AppleGpuTiers
 
     /// <summary>
     /// The anchor: the M6's Metal score and its average frames per second in the bases scenario by tier (two runs each, the launcher benchmark
-    /// at 1920x1080 without an upscaler; GPU-bound). Extreme is not listed, so never recommended: it ran as Ultra there, as the bases have
-    /// no grassland for its traced grass shadows. Docs/launcher.md "Graphics".
+    /// at 1920x1080 without an upscaler; GPU-bound). Extreme is not listed, so never recommended: on Metal it adds the GI radiance cache, 64 probe
+    /// rays and full-size GTAO, costing about 28% of the frame rate (35 fps) for a picture close to Ultra's. Docs/launcher.md "Graphics".
     /// </summary>
     const int AnchorScore = 89357;
 
@@ -87,7 +87,7 @@ static partial class AppleGpuTiers
             (QualityTiers.LowPreset, 203.5),
             (QualityTiers.MediumPreset, 131.2),
             (QualityTiers.HighPreset, 95.6),
-            (QualityTiers.UltraPreset, 35.6),
+            (QualityTiers.UltraPreset, 48.9),
         ];
 
     /// <summary>

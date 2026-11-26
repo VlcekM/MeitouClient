@@ -1492,8 +1492,9 @@ static partial class WorldFrame
         StageClock.Lap(StageClock.Fog, "fog volumes");
 
         // The SSAO onto the scene before the particles: they are not occluded by the surfaces behind them (the post chain leaves it out of its
-        // composite).
+        // composite). Its own lap (the post stage's): unlapped, the occlusion's time went to the particles'.
         post.ApplySsao();
+        StageClock.Lap(10, "occlusion");
     }
 
     /// <summary>
