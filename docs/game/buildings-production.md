@@ -561,7 +561,8 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
 - **Controls**: click the start, move, click the end (no hold-drag). The first click starts a line for a normal wall, or
   for a single only when snapped (unsnapped singles and selected subsections place as one ordinary ghost). The second
   click queues every piece and, unless the end snapped or the wall is a single, a new line starts at the far end (clicks
-  chain a polyline). Right click drops the line; with no line, Meitou's right click on empty ground drops the chosen item (ghost and list highlight, queue stays; [level-editor](level-editor.md)). The first click posts "Blue arrows point outwards, towards enemy.";
+  chain a polyline), snapped there with the old line's direction from its start (before bend pieces) to its end, negated when backwards
+  (**Verified**, `FUN_140428fe0`). Right click drops the line; with no line, Meitou's right click on empty ground drops the chosen item (ghost and list highlight, queue stays; [level-editor](level-editor.md)). The first click posts "Blue arrows point outwards, towards enemy.";
   arrows (`arrow.mesh`, "bluebuilding", at rot x (0, 30, len/2), turned 180 deg, scale 2) mark each piece. A global flag `DAT_1421337b8` can block the first click.
 - **Pieces** (`FUN_14042b660`): the wall and its `wall subsections`; connector and lower wedge kept apart, the rest with a
   length sorted longest first. A single is used once per line.
@@ -592,9 +593,17 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
   (none for a single) each turned an equal share; connectors at the joint and after each piece only when the line leaves
   on one side (`dot(perp, b) > -0.01` xor backwards, perp = (D.z, 0, -D.x)). Straight runs get no connectors.
 - **Validity**: every piece runs the ordinary checks (footprint, slope as its own pitch: `rot x Y` within `max slope` of
-  up, `FUN_140429510`); one failure refuses the line, pieces are drawn by their own result. Near a snapped joint (pieces
-  within the first/last 120 of the run) walls with a link point within 20 of it do not block; connectors and wedges
-  never block (`FUN_140427b00`, **Observed**). Meitou: level town walls, sites and queued ghosts alike (`BuildMode.WallIgnore`, `PlacementCheck.Blocks`).
+  up, `FUN_140429510`); one failure refuses the line, pieces are drawn by their own result.
+- **What a wall ghost passes** (**Verified**, `FUN_140428290` for buildings, `FUN_1404283e0` for ghosts, `FUN_140427b00`; constants read from
+  the exe): only walls ever pass. A ghost outside a line passes every wall when snapped, none when not. A piece of a line passes its line's other
+  pieces, connectors and wedges, and a wall with a link point nearer (3D) to the line's snapped start or snapped end than 20, or than the
+  shortest piece's length + 20 when that piece is a short (`link type` 4). At the start the pass holds for a piece whose run index is below the
+  number of list entries, from the front, whose lengths (`link length` x `scale`) first sum to 120 or more; at the end for an index above the
+  piece count - 1 minus the entries so taken from the back, or of 0. The list holds the start's bend pieces, the end's, then the run's; bend
+  pieces and their connectors have index 0, every other piece the previous entry's + 1 (the first 0). Meitou: `WallJointPass`, for level town
+  walls, sites and queued ghosts alike (`BuildMode.WallIgnore`, `PlacementCheck.Blocks`). #1447: a Defensive Wall III-V line turning 90
+  degrees or more towards the walls' thick side (-X) overlaps, with its first short, the previous line's second-to-last short (end 40 from the
+  joint), which only the short's reach passes.
 - **Commit**: each piece is queued and becomes its own building and construction site from its own record (`is wall
   gate` -> gate building, else `WallBuilding`). On Confirm and zone load a short/connector/wedge without a parent
   attaches to a nearby wall (`FUN_14029ac50`, links not saved, **Observed**); a child forwards build work and deliveries

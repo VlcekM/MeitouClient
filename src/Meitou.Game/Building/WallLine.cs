@@ -4,9 +4,10 @@ using Meitou.Data.Gameplay.Construction;
 namespace Meitou.Game.Building;
 
 /// <summary>
-/// One piece of a wall line: a BUILDING (the wall, a short piece, a connector or a wedge) standing at its start point, facing along its own +Z.
+/// One piece of a wall line: a BUILDING (the wall, a short piece, a connector or a wedge) standing at its start point, facing along its own +Z;
+/// <paramref name="Joint"/> for a bend piece at a snapped joint.
 /// </summary>
-public readonly record struct WallPiece(BuildingBuildData Data, Vector3 Position, Quaternion Rotation);
+public readonly record struct WallPiece(BuildingBuildData Data, Vector3 Position, Quaternion Rotation, bool Joint = false);
 
 /// <summary>
 /// A link point a line can snap to: where it is, the wall's direction there (horizontal) and the original's code (1 free end, 2 free start, 3 joined
@@ -198,6 +199,12 @@ public static class WallLine
     }
 
     /// <summary>
+    /// The shortest piece a line of <paramref name="master"/> uses (the last of its pieces sorted longest first); null when it has none.
+    /// </summary>
+    public static BuildingBuildData? Shortest(BuildingBuildData master, Func<string, BuildingBuildData?> data) =>
+        PieceSet.Of(master, data) is { Pieces.Count: > 0 } set ? set.Shortest : null;
+
+    /// <summary>
     /// The pieces a line may use (<b>Verified</b>): the wall and its subsections with a length, longest first; the connector and the wedge apart.
     /// </summary>
     sealed class PieceSet
@@ -272,14 +279,15 @@ public static class WallLine
         float length = set.Shortest.LinkLength;
         var c = point;
         var w = a * 100;
-        if (conn && set.Connector is { } first) pieces.Add(Facing(first, c, reversed ? c - w : c + w));
+        if (conn && set.Connector is { } first) pieces.Add(Facing(first, c, reversed ? c - w : c + w) with { Joint = true });
         for (int i = 0; i < n; i++)
         {
             w = Vector3.Transform(w, turn);
             var next = c + Vector3.Normalize(w) * length;
-            pieces.Add(reversed ? Facing(set.Shortest, next, c) : Facing(set.Shortest, c, next));
+            var piece = reversed ? Facing(set.Shortest, next, c) : Facing(set.Shortest, c, next);
+            pieces.Add(piece with { Joint = true });
             c = next;
-            if (conn && set.Connector is { } connector) pieces.Add(Facing(connector, c, reversed ? c - w : c + w));
+            if (conn && set.Connector is { } connector) pieces.Add(Facing(connector, c, reversed ? c - w : c + w) with { Joint = true });
         }
         return c;
     }
@@ -464,12 +472,6 @@ public static class WallLine
     #region Geometry
 
     /// <summary>
-    /// Near a snapped joint (pieces within <see cref="JointRun"/> of it) walls with a link point within <see cref="JointReach"/> of it do not block
-    /// (<b>Observed</b>).
-    /// </summary>
-    public const float JointReach = 20, JointRun = 120;
-
-    /// <summary>
     /// A piece at <paramref name="from"/> facing <paramref name="to"/> (<b>Verified</b>, <c>FUN_1404278b0</c>): +Z towards the target (pitching with
     /// the slope), +X level.
     /// </summary>
@@ -488,18 +490,6 @@ public static class WallLine
         var y = Vector3.Cross(z, x);
         var m = new Matrix4x4(x.X, x.Y, x.Z, 0, y.X, y.Y, y.Z, 0, z.X, z.Y, z.Z, 0, 0, 0, 0, 1);
         return Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(m));
-    }
-
-    /// <summary>
-    /// Whether a placed piece is within <see cref="JointRun"/> of a joint, and so may overlap walls whose link point is at that joint.
-    /// </summary>
-    public static bool NearJoint(WallPiece piece, Vector3 joint)
-    {
-        var (a, b) = Ends(piece.Data, piece.Position, piece.Rotation);
-        var ab = new Vector2(b.X - a.X, b.Z - a.Z);
-        var ap = new Vector2(joint.X - a.X, joint.Z - a.Z);
-        float t = ab.LengthSquared() < 1e-9f ? 0 : Math.Clamp(Vector2.Dot(ap, ab) / ab.LengthSquared(), 0, 1);
-        return Vector2.Distance(ap, ab * t) <= JointRun;
     }
 
     /// <summary>

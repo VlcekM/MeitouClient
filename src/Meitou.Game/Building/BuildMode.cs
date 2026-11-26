@@ -120,6 +120,10 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     WallSnap? _wallEndSnap, _ghostSnap;
     /// <summary>
+    /// The wall line's end this frame: the snapped point, else the cursor's.
+    /// </summary>
+    Vector3 _wallEnd;
+    /// <summary>
     /// The host building of the <c>is node</c> snap point the current ghost snapped onto; null when not snapped to a building's node.
     /// </summary>
     SnapHost? _ghostSnappedOn;
@@ -554,8 +558,8 @@ sealed class BuildMode(PlayerInterface player)
         _ghostSnap = snap;
         var rotation = Building.WallLine.LookRotation(snap.Direction);
         var position = snap.Code == 2 ? snap.Point - Vector3.Transform(new Vector3(0, 0, building.LinkLength), rotation) : snap.Point;
-        var ignore = WallIgnore(new WallPiece(building, position, rotation), [snap.Point]);
-        return q with { Position = position, Rotation = rotation, Yaw = PlacementCheck.YawOf(rotation), Ignore = ignore };
+        // A snapped wall ghost outside a line passes every wall (Verified, FUN_140428290, FUN_1404283e0).
+        return q with { Position = position, Rotation = rotation, Yaw = PlacementCheck.YawOf(rotation), Ignore = (record, _, _) => IsWall(record) };
     }
 
     /// <summary>
@@ -813,24 +817,16 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// What never blocks a wall piece (<b>Observed</b>, <c>FUN_140427b00</c>): connectors and wedges, and near a snapped joint the walls with a link
-    /// point at that joint.
+    /// What a line's piece <paramref name="piece"/> passes (<b>Verified</b>, <c>FUN_140428290</c>, <c>FUN_1404283e0</c>): connectors and wedges, and
+    /// the walls <paramref name="pass"/> lets through at the line's snapped joints.
     /// </summary>
-    Func<string, Vector3, Quaternion, bool> WallIgnore(WallPiece piece, IReadOnlyList<Vector3> joints) => (record, position, rotation) =>
+    Func<string, Vector3, Quaternion, bool> WallIgnore(int piece, WallJointPass pass) => (record, position, rotation) =>
     {
         if (BuildData(record) is not { LinksTogether: true } other) return false;
         if (other.LinkType is 1 or 2) return true;
 
         var (start, end) = Building.WallLine.Ends(other, position, rotation);
-        foreach (var joint in joints)
-        {
-            if (!Building.WallLine.NearJoint(piece, joint)) continue;
-
-            bool reached = FlatDistance(start, joint) <= Building.WallLine.JointReach || FlatDistance(end, joint) <= Building.WallLine.JointReach;
-            if (reached) return true;
-        }
-
-        return false;
+        return pass.Passes(piece, start, end);
     };
 
     /// <summary>
@@ -848,27 +844,33 @@ sealed class BuildMode(PlayerInterface player)
         var endSnap = Building.WallLine.Find(WallLinks(end), end, line.Reversed ? 1 : 2);
         if (endSnap is { } es && FlatDistance(es.Point, line.Start) < 1) endSnap = null;
         _wallEndSnap = endSnap;
-        var pieces = Building.WallLine.Layout(line.Master, BuildData, host.Placement.Ground, line.Start, line.StartSnap, endSnap?.Point ?? end,
-            endSnap, line.Reversed);
-        var joints = new List<Vector3>();
-        if (line.StartSnap is { } s) joints.Add(s.Point);
-        if (endSnap is { } e) joints.Add(e.Point);
-        var snapshot = player.Session.CurrentSnapshot;
-        var towns = host.Towns();
-        string faction = host.PlayerFactionId();
+        _wallEnd = endSnap?.Point ?? end;
+        var pieces = Building.WallLine.Layout(line.Master, BuildData, host.Placement.Ground, line.Start, line.StartSnap, _wallEnd, endSnap,
+            line.Reversed);
+
+        var shortest = Building.WallLine.Shortest(line.Master, BuildData);
+        var pass = new WallJointPass(pieces, shortest, line.StartSnap is null ? null : line.Start, endSnap?.Point);
         bool available = Unlocked().Contains(line.Master.Id);
-        foreach (var piece in pieces)
-        {
-            float yaw = PlacementCheck.YawOf(piece.Rotation);
-            string? refusal = null;
-            var failure = player.LevelEditorPanel.LevelBuild ? PlacementFailure.None
-                : !available ? PlacementFailure.NotAvailable
-                : PlacementCheck.Evaluate(new PlacementQuery(piece.Data, piece.Position, piece.Rotation, yaw, 0, host.Parts(piece.Data.Id),
-                    BuildQueue, snapshot.Characters, snapshot.Buildings, towns, faction, host.Placement)
-                { WallPiece = true, Ignore = WallIgnore(piece, joints) }, out refusal);
-            var hull = host.Placement.Footprint(piece.Data.Id)?.Place(piece.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw));
-            WallPieces.Add((piece, failure, hull, refusal));
-        }
+        for (int i = 0; i < pieces.Count; i++)
+            WallPieces.Add(CheckWallPiece(host, pieces[i], available, WallIgnore(i, pass)));
+    }
+
+    /// <summary>
+    /// One piece of the line run through the ordinary checks (none in the level editor), with its footprint.
+    /// </summary>
+    (WallPiece Piece, PlacementFailure Failure, Vector2[]? Hull, string? Refusal) CheckWallPiece(BuildServices host, WallPiece piece, bool available,
+        Func<string, Vector3, Quaternion, bool> ignore)
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        float yaw = PlacementCheck.YawOf(piece.Rotation);
+        string? refusal = null;
+        var failure = player.LevelEditorPanel.LevelBuild ? PlacementFailure.None
+            : !available ? PlacementFailure.NotAvailable
+            : PlacementCheck.Evaluate(new PlacementQuery(piece.Data, piece.Position, piece.Rotation, yaw, 0, host.Parts(piece.Data.Id),
+                BuildQueue, snapshot.Characters, snapshot.Buildings, host.Towns(), host.PlayerFactionId(), host.Placement)
+            { WallPiece = true, Ignore = ignore }, out refusal);
+        var hull = host.Placement.Footprint(piece.Data.Id)?.Place(piece.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw));
+        return (piece, failure, hull, refusal);
     }
 
     /// <summary>
@@ -890,13 +892,12 @@ sealed class BuildMode(PlayerInterface player)
             WallLine = null;
             if (_wallEndSnap is null && line.Master.LinkType != 3)
             {
-                // The chain goes on from the far end of the last piece, snapped to it.
+                // The chain goes on from the far end of the last piece, snapped there along the old line's start to end (Verified, FUN_140428fe0).
                 var last = WallPieces[^1].Piece;
                 var (start, end) = Building.WallLine.Ends(last.Data, last.Position, last.Rotation);
-                var forward = Vector3.Transform(Vector3.UnitZ, last.Rotation);
-                var dir = Vector3.Normalize(new Vector3(forward.X, 0, forward.Z));
+                var dir = ChainDirection(line.Start, _wallEnd);
                 WallLine = line.Reversed
-                    ? (line.Master, start, new WallSnap(start, dir, 2), true)
+                    ? (line.Master, start, new WallSnap(start, -dir, 2), true)
                     : (line.Master, end, new WallSnap(end, dir, 1), false);
             }
             WallPieces.Clear();
@@ -910,6 +911,15 @@ sealed class BuildMode(PlayerInterface player)
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// The horizontal direction from a line's start to its end; zero when they stand on one spot.
+    /// </summary>
+    static Vector3 ChainDirection(Vector3 start, Vector3 end)
+    {
+        var flat = new Vector3(end.X - start.X, 0, end.Z - start.Z);
+        return flat.LengthSquared() < 1e-9f ? Vector3.Zero : Vector3.Normalize(flat);
     }
 
     /// <summary>
