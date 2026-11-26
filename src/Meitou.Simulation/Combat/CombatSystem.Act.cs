@@ -606,9 +606,8 @@ public sealed partial class CombatSystem
             }
         }
 
-        // A player's pick is kept, unless no path leads to it (the focused target is dropped while its path is impossible).
-        else if (fighting && (!s.Picked || PursuitSystem.PathImpossible(cold, new CharacterId(s.TargetSlot, s.TargetGeneration), now))
-            && now >= s.PickTick && s.AttackTech < 0 && s.ReactTech < 0)
+        // The periodic pick runs in the deciding state, outside a path chase (FUN_14060d6a0). A failed path still asks for a new target.
+        else if (fighting && CanRepick(in s, cold, now))
         {
             int pick = ChooseTarget(world, i, s, cold);
             s.PickTick = now + PickTicks(world, cold);
@@ -642,6 +641,17 @@ public sealed partial class CombatSystem
         }
 
         return fighting;
+    }
+
+    /// <summary>
+    /// Whether the fighter can choose another target. A focused order or a melee path chase keeps its target until the path fails.
+    /// </summary>
+    static bool CanRepick(in CombatSlot s, CharacterCold cold, int now)
+    {
+        if (now < s.PickTick || s.AttackTech >= 0 || s.ReactTech >= 0) return false;
+        if (!s.Picked && (s.Ranged || !PathChasing(cold, s.TargetSlot))) return true;
+
+        return PursuitSystem.PathImpossible(cold, new CharacterId(s.TargetSlot, s.TargetGeneration), now);
     }
 
     /// <summary>

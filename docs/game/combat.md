@@ -374,7 +374,9 @@ as the fighters whose target it is stand for it), stamped with the owner's `List
   ([perception](perception.md)) and not friendly (character vfunc 0x3f0), and returns the best by `FUN_14059e300`. So the current target is kept only as a list
   member (an attacker, a threat) or, through the finder, while it is seen or heard and tagged an enemy: one that runs out of sight on open ground is lost at the next pick (a path
   chase does not pick, below). Meitou (`CombatSystem.ChooseTarget` over `CharacterFacts.Senses`, [perception](perception.md#senses)): the lists and the finder as above (the area test left
-  out; the leave-alone test is the target score's, below), the aggro mode taken as 0; a pick after the timer runs out is made while the fighter runs on a path too (engine choice).
+  out; the leave-alone test is the target score's, below), the aggro mode taken as 0. A melee fighter keeps a valid target during a path chase
+  unless its path fails. **Observed** (headless probe on the #1507 save): periodic picks dropped the Shop Guard's target behind the bar's upstairs
+  divider, leaving the guard in the attack stance after it reached the bed.
   Engine choice (#1122): a fight that 34 Attacking trouble makers started also scores its start target while the AI holds 34 (`CombatSystem.TroubleMaker`); else a neutral
   shooting a third party is on none of the lists and the guard stood targetless until the victim fell.
 - **Target score** (`AI::chooseBestAttackTarget` `FUN_14059e300`). Skips ragdolls (`Character::isRagdoll`), candidates the leave-alone test
