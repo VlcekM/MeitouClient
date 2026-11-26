@@ -920,19 +920,23 @@ public sealed class CharacterSounds
     }
 
     /// <summary>
-    /// A character went down. An animal calls <c>VO_Creature_Die</c> (<c>FUN_1405cbd60</c>); the attacker animal <c>VO_Creature_Victory</c>
-    /// (<c>CharacterAnimal::vfunc_62</c>).
+    /// A character went down. An animal calls <c>VO_Creature_Die</c> (<c>FUN_1405cbd60</c>).
     /// </summary>
-    public void Down(ulong key, ulong attacker)
+    public void Down(ulong key)
     {
-        if (_entries.TryGetValue(key, out var e))
-        {
-            e.Down = true;
-            if (e.Profile?.Animal == true && Post(key, "VO_Creature_Die")) Voices++;
-        }
+        if (!_entries.TryGetValue(key, out var e)) return;
 
-        if (attacker == 0 || !_entries.TryGetValue(attacker, out var a) || a.Profile?.Animal != true) return;
-        if (Post(attacker, "VO_Creature_Victory")) Voices++;
+        e.Down = true;
+        if (e.Profile?.Animal == true && Post(key, "VO_Creature_Die")) Voices++;
+    }
+
+    /// <summary>
+    /// An animal's melee blow beat its victim's whole squad: <c>VO_Creature_Victory</c> on the striker (<c>FUN_1404394f0</c>, its only caller).
+    /// </summary>
+    public void Victory(ulong striker)
+    {
+        if (!_entries.TryGetValue(striker, out var e) || e.Profile?.Animal != true) return;
+        if (Post(striker, "VO_Creature_Victory")) Voices++;
     }
 
     /// <summary>

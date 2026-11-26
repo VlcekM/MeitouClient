@@ -519,10 +519,13 @@ sealed class CharacterAudio(GameHost host)
                 sounds.WallBreak(e.Position, host.Config.FixDoorBreak);
                 break;
             case SoundKind.Down:
-                sounds.Down(subject, other);
+                sounds.Down(subject);
                 break;
             case SoundKind.Alert:
                 sounds.Alert(subject);
+                break;
+            case SoundKind.Victory:
+                sounds.Victory(subject);
                 break;
             case SoundKind.Eat:
                 sounds.Job(subject, "Character_Consume", CharacterSounds.FootstepLimit, "Consume", "Eat");

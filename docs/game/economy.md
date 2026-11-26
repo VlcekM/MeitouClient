@@ -631,7 +631,10 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
 - **Triggers**: law dialogue packages ("police", "Npc MILITARY Law 3", "... Holy Nation Law 3", "Npc TOUGH Vigilante Law 3", gate and city
   guards) answer events 8 `THIEF_CAUGHT_STEALING_FROM_ME`, 41 `WITNESS_GENERIC_ASSAULT`, 43 `WITNESS_THIEF_OR_LOCKPICK`, 44 `BOUNTY_SPOTTED`,
   45 `ESCAPED_PRISONER_SPOTTED`, 40 `ESCAPED_EX_SLAVE_SPOTTED`, 15 `I_DEFEATED_SQUAD` ("Law enforcement defeats squad (arrest them)",
-  gated by `DC_CARRYING_BOUNTY_ALIVE` false) and 1 `PLAYER_TALK_TO_ME` with lines carrying `DA_ARREST_TARGET` (29). Bounty dialogues
+  gated by `DC_CARRYING_BOUNTY_ALIVE` false, and by the speaker being in a non-player town (31) and its squad's leader (19), a target squad not
+  only animals (38), chance permanent and temporary 50, **Verified** by `probe talk` / `record` on the base load order; fired by the melee
+  striker that downs a squad's last standing member,
+  [squad defeat](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)) and 1 `PLAYER_TALK_TO_ME` with lines carrying `DA_ARREST_TARGET` (29). Bounty dialogues
   branch on `DC_BOUNTY_AMOUNT_ACTUAL`: "Small bounty" (0 < b < 1050) offers a fine; refusing or lacking money runs `DA_ARREST_TARGET`;
   "small fry" (1050 < b < 25000) and "super high" (> 25000) arrest at once. "Surrender" exists only as these dialogue choices; there is no
   surrender state.

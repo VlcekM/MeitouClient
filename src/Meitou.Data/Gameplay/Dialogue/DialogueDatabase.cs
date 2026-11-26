@@ -60,6 +60,11 @@ public static class DialogueEvents
     public static readonly int[] Sight = [3, 4, 17, 27, 34, 36, 40, 66, 67];
 
     /// <summary>
+    /// 15 I_DEFEATED_SQUAD: what a melee striker says at a victim whose blow beat the victim's whole squad (<c>FUN_1404394f0</c>).
+    /// </summary>
+    public const int DefeatedSquad = 15;
+
+    /// <summary>
     /// 70 LOST_LEG: what a character cries when a leg is cut off.
     /// </summary>
     public const int LostLeg = 70;

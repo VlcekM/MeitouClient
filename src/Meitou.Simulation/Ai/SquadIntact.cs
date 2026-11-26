@@ -76,6 +76,18 @@ static class SquadIntact
     }
 
     /// <summary>
+    /// <c>FUN_140793160</c> with no spare (the melee hit's squad defeat, the slave's escape): no member is able, i.e. none is both not down and
+    /// upright (posture 0, <see cref="CharacterFacts.PostureZero"/>). Every member counts, whatever its member type.
+    /// </summary>
+    public static bool AllBeaten(CharacterTable table, Squad squad)
+    {
+        foreach (var m in squad.Members)
+            if (table.TryResolveNext(m, out int ms) && table.Cold(ms) is { } mc && !CharacterFacts.Down(mc) && CharacterFacts.PostureZero(mc)) return false;
+
+        return true;
+    }
+
+    /// <summary>
     /// The leader's down test (<c>FUN_1405c9e10</c>, docs/game/ui-input.md): gone, or <see cref="CharacterFacts.Down"/> (out cold, dead, playing
     /// dead, carried, whole-body ragdolled); a crawling leader is up.
     /// </summary>

@@ -123,6 +123,9 @@ static class SaveProbe
                 Vector2? point = a.Count > 4 ? new(float.Parse(a[3]), float.Parse(a[4])) : null;
                 ObeyProbe.Run(probe, a[0], a[1], point, a.Count > 2 ? int.Parse(a[2]) : 15);
                 return true;
+            case ("defeat", >= 1):
+                DefeatProbe.Run(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 0, a.Count > 2 ? int.Parse(a[2]) : 30);
+                return true;
             case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
             case ("cages", >= 1): Cages(probe, a[0], a.Count > 1 ? a[1] : null); return true;
             case ("home", _): Home(probe); return true;
@@ -2269,6 +2272,7 @@ static class SaveProbe
               assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
+              defeat <guard> [bounty] [rounds]  a lone player character attacks the smallest-squad awake leader named so, weakened at round 8: lines said, the striker's orders, both squads' long-term tags (event 15)
               ko <slot> [rounds]       the sneaking leader's stealth KO order on a slot: the chance, the target's spot meter and the task every 20 ticks
               slaves <radius> [rounds] [interval]  slave state, owner faction, master squad and squad town near the leader; with rounds, each
                                          slave's task, goal, workplace and gap to its marker every interval (200) ticks, and how many work

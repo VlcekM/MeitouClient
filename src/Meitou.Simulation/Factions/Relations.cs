@@ -214,7 +214,7 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     /// </summary>
     public void Blow(World world, int striker, int victim, bool down, bool dead, bool bolt = false, bool aimed = true)
     {
-        if (down || dead) Remember(world, striker, victim, dead);
+        if (dead) Remember(world, striker, victim);
         float x = Weight(world, victim);
         if (x == 0 || world.Characters.Cold(striker) is not { } doer) return;
 
@@ -246,11 +246,10 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     public Dialogue.SquadMemory? Memory { get; set; }
 
     /// <summary>
-    /// The long-term tags of a downing or killing blow (<c>FUN_140673a20</c>, docs/game/factions-squads-towns.md 3.5, <b>Observed</b>): a death makes
-    /// the victim's squad tag the striker 9 KILLED_MY_FRIEND; when the victim's whole squad is now down (<c>FUN_140793160</c>), its squad tags the
-    /// striker 7 DEFEATED_MY_SQUAD and the striker's squad tags the victim 8.
+    /// The long-term tag of a killing blow (docs/game/factions-squads-towns.md 3.5, <b>Observed</b>): the victim's squad tags the striker
+    /// 9 KILLED_MY_FRIEND. The melee hit's squad-defeat tags 7 and 8 are <see cref="Combat.SquadDefeat"/>'s.
     /// </summary>
-    void Remember(World world, int striker, int victim, bool dead)
+    void Remember(World world, int striker, int victim)
     {
         var table = world.Characters;
         if (Memory is not { } memory || table.Cold(striker) is not { } s || table.Cold(victim) is not { } v || v.SquadId < 0
@@ -258,13 +257,8 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
         {
             return;
         }
-        var strikerId = table.IdOf(striker);
-        if (dead) memory.Remember(world, v.SquadId, strikerId, Dialogue.MemoryTag.KilledMyFriend);
-        if (world.Squads.Find(v.SquadId) is not { } squad) return;
-        foreach (var m in squad.Members)
-            if (table.TryResolveNext(m, out int ms) && table.Next[ms].Alive && table.Cold(ms) is { Medical.Incapacitated: false }) return;
-        memory.Remember(world, v.SquadId, strikerId, Dialogue.MemoryTag.DefeatedMySquad);
-        if (s.SquadId >= 0) memory.Remember(world, s.SquadId, table.IdOf(victim), Dialogue.MemoryTag.SquadLostToMe);
+
+        memory.Remember(world, v.SquadId, table.IdOf(striker), Dialogue.MemoryTag.KilledMyFriend);
     }
 
     /// <summary>

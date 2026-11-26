@@ -42,7 +42,7 @@ static class SlaveEscape
 
     /// <summary>
     /// The master squad out of the world starts the stamp (<see cref="MasterGone"/>). Otherwise the stamp stops; every member of the squad beaten
-    /// (<see cref="AllBeaten"/>) frees the slave with its savior; else the owner (Meitou's stand-in: the squad's leader,
+    /// (<see cref="SquadIntact.AllBeaten"/>) frees the slave with its savior; else the owner (Meitou's stand-in: the squad's leader,
     /// <see cref="ObedientSlave.OwnerOf"/>) down or gone with no member standing to take its place (<see cref="Stands"/>) frees it alone. A leader
     /// gone from a squad still here is read as down: the original's owner was handed to a standing member when it went down.
     /// </summary>
@@ -57,7 +57,7 @@ static class SlaveEscape
 
         c.MasterLostTick = -1;
         bool owner = table.TryResolveNext(master.Leader, out int o);
-        if (AllBeaten(table, master))
+        if (SquadIntact.AllBeaten(table, master))
         {
             Escape(world, s, c, owner ? Savior(world, s, o) : CharacterId.None);
             return;
@@ -81,18 +81,6 @@ static class SlaveEscape
         }
 
         if ((world.Tick - c.MasterLostTick) * world.TickSeconds > MasterLostSeconds) Escape(world, s, c, CharacterId.None);
-    }
-
-    /// <summary>
-    /// <c>FUN_140793160</c> with no spare: no member is able, i.e. none is both not down and upright (posture 0, <see cref="CharacterFacts.PostureZero"/>).
-    /// Every member counts, whatever its member type.
-    /// </summary>
-    static bool AllBeaten(CharacterTable table, Squad squad)
-    {
-        foreach (var m in squad.Members)
-            if (table.TryResolveNext(m, out int ms) && table.Cold(ms) is { } mc && !CharacterFacts.Down(mc) && CharacterFacts.PostureZero(mc)) return false;
-
-        return true;
     }
 
     /// <summary>

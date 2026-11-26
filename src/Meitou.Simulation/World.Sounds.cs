@@ -110,6 +110,11 @@ public enum SoundKind : byte
     /// <see cref="SoundEvent.Item"/> (the exe's drag out of the slot into the inventory grid).
     /// </summary>
     ShacklesOff,
+    /// <summary>
+    /// A melee blow beat the victim's whole squad (<c>FUN_1404394f0</c>): an animal striker's <c>VO_Creature_Victory</c>;
+    /// <see cref="SoundEvent.Subject"/> is the striker, <see cref="SoundEvent.Other"/> the victim.
+    /// </summary>
+    Victory,
 }
 
 /// <summary>

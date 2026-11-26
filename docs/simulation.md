@@ -1365,6 +1365,11 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   short-term TEMP_ENEMY, criminal and aggressor tags on the target, and the target's squad drops its TEMP_ENEMY tags on them, so a tag left by
   an arrest attempt (short-term tags fade 6 game hours after their last write; a bounty 0.04 h per cat after its last raise) cannot outlive the
   bounty and trigger an Assault cascade via `CrimeSystem.Hit`.
+- **Squad defeat** (`Combat.SquadDefeat`, [factions 3.5](game/factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)): a melee blow
+  that downs the last standing member of a squad fires event 15 from the striker at the victim (deferred a tick, while event lines are on);
+  the law roots answering it (DA 29, [economy 11.7](game/economy.md#117-arrest)) need the striker to lead its squad and pass their 50 / 50
+  chances. **Observed** by `meitou-tools probe <save> defeat <guard>` (Stack, Heng): fired at each such KO; no line was said in those runs
+  (strikers not leading, a permanent roll failed, or the striker's own bubble still showing), the arrest came from the assault booking.
 - **Arrest orders** (DA 29, `ArrestSystem.OrderArrest`): in his own town (the town his resident squad belongs to, `Ai.AiSystem.TownAt` by its radius; engine stand-in without
   town data: within 2 x the squad's home radius of its centre) a non-animal target gets the guard 240 (his queue cleared), then 112 queued behind it; otherwise 4 Attacking
   (cleared; refused with "My arm is broken!" when no arm works), his squad tagging the target TEMP_ENEMY first, so his mates join through their own attack-on-sight

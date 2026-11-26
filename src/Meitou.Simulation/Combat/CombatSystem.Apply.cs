@@ -402,6 +402,7 @@ public sealed partial class CombatSystem
         }
 
         Deeds?.Blow(world, a, d, medical.Incapacitated, death);
+        if (medical.Incapacitated) SquadDefeat.After(world, Memory, a, d);
 
         // A blow that leaves the victim out cold or dead names the striker its defeater (FUN_1404394f0, Character +0x2c0)
         if (medical.Incapacitated) dc.DefeatedBy = table.IdOf(a);

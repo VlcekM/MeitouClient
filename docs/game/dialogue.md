@@ -564,8 +564,11 @@ me, 5 captor, 6 friendly, 7 defeated my squad, 8 I beat his squad, 9 killed my f
   "met"; other events do not remember), DA 29 (5), the witness and relation deeds ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)),
   event 13 (3 freed me, with short TEMP ALLY, unless the speaker squad holds captor: `FUN_140684990`, run before a line is chosen, only for a speaker that is awake), a cage put-in (`Task_PutInSomething`
   `FUN_140358670`: the prisoner's squad tags the putter 5 captor), and the slave windows (selling: the sold one's squad tags the customer 5; buying: the freed one's squad tags the buyer 3,
-  [economy 12](economy.md#12-slaves-prisoners-animals)). Meitou writes these (`DialogueSystem.Freed` / `Captured`, `FactionDeeds.CagedHook`, `CharacterTrade`); the blow tags 7, 8, 9 too (`FactionDeeds.Remember`); the witness tags of
+  [economy 12](economy.md#12-slaves-prisoners-animals)). Meitou writes these (`DialogueSystem.Freed` / `Captured`, `FactionDeeds.CagedHook`, `CharacterTrade`); the blow tags 9 (`FactionDeeds.Remember`) and 7 / 8 ([squad defeat](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile), `Combat.SquadDefeat`) too; the witness tags of
   [factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile) are not written yet.
+- **Event 15 I_DEFEATED_SQUAD** (**Verified**, decompile): fired only by the melee hit `FUN_1404394f0`, from the striker at the victim, after
+  tags 7 / 8, when the blow downs or kills the last standing member of the victim's squad ([squad defeat](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile));
+  no squad comparison, the [firing](#firing-an-event) refusals only. Meitou: `Combat.SquadDefeat`, a `DialogueEvent` deferred a tick.
 - **Short-term write** (`FUN_140674300`): never TEMP ENEMY on the squad's own faction; a TEMP ALLY on a player character sets the bool;
   for a player character the squad's player entry takes the time. The character-level wrapper `FUN_1406744a0` also skips TEMP ENEMY on
   an allied faction or one the character regards as friendly. Cleared by `FUN_1406788d0` (contract code clears 4, 7, 2).

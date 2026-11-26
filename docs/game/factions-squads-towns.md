@@ -358,9 +358,17 @@ included), else 0.025 (outside every town too).
   (15, 143, 288), Self preservation (32) or Attack Target (5) costs no kind 1 and kind 2 per downing. Meitou: `FactionDeeds.Rating` (the mind's goal in a fight its AI started, else the fight's row; a defence, row 13, rates 0 as the
   32 or protect goal the original plans it under).
 - `FUN_140673a20(self, other, tag)` (not a witness function) sets a long-term tag (`CharacterPerceptionTags_LongTerm`, read by DC 23) in
-  `self`'s squad memory (`platoon+0x98`, `FUN_140673930`, time-stamped): 1 MY_INTRUDER (trespass), 5 MY_CAPTOR (cage), 7 / 8 (the victim's
-  squad tags the striker DEFEATED_MY_SQUAD_ONCE and the striker's tags the victim SQUAD_LOST_TO_ME_ONCE, on a downing blow when
-  `FUN_140793160` finds the victim's squad all down), 9 KILLED_MY_FRIEND (death). Meitou keeps the memory ([dialogue](dialogue.md#squad-memory)) and writes 5 for cagings and arrests, 7, 8 and 9 for blows (`FactionDeeds.Remember`); trespass (1) is not written.
+  `self`'s squad memory (`platoon+0x98`, `FUN_140673930`, time-stamped): 1 MY_INTRUDER (trespass), 5 MY_CAPTOR (cage), 7 / 8 (see the squad
+  defeat below), 9 KILLED_MY_FRIEND (death). Meitou keeps the memory ([dialogue](dialogue.md#squad-memory)) and writes 5 for cagings and
+  arrests, 9 for killing blows (`FactionDeeds.Remember`) and 7 / 8 at a squad defeat; trespass (1) is not written.
+- **Squad defeat** (**Verified**, 1.0.68 decompile of the melee hit `FUN_1404394f0`): after a landed blow (with a striker) that leaves the
+  victim KO'd (`+0x5b9`) or dead (`+0x5bc`), when `FUN_140793160(victim's platoon, 0)` finds no member both not down and upright
+  ([carry-loot](carry-loot.md), slave escape), in order: tag 7 DEFEATED_MY_SQUAD_ONCE in the victim's squad on the striker, tag 8
+  SQUAD_LOST_TO_ME_ONCE in the striker's squad on the victim, event 15 I_DEFEATED_SQUAD from the striker at the victim (`FUN_140685070` ->
+  `FUN_140684990`, its only sender), and an animal striker (vfunc `0x248`) posts `VO_Creature_Victory` (the string's only use). No test
+  compares the two squads (nor does the tag write `FUN_140671840`, nor `FUN_140684990`), so a squadmate's blow counts; no latch, so a blow
+  on one already down fires again. The bolt hit `FUN_140439c90` has none of it. Meitou: `Combat.SquadDefeat` (the event deferred a tick like
+  the other combat events, `SoundKind.Victory`); executions do not run it (their path to `FUN_1404394f0` is not traced).
 
 Meitou: `FactionDeeds` (blows, cagings, first aid), `CrimeSystem` (the ally witness), `PlayerRelations.DeclareWar` / `EndWar` / `Add`
 (the messages); [simulation](../simulation.md#hostility-and-relations).
