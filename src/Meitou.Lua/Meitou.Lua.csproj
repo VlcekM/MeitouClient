@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Clean-room KenshiLua compatibility host on MoonSharp (Lua 5.2 + Lua 5.1 shims).
+       Runs enabled <Mod>/scripts/init/*.lua mods inside isolated instruction-budgeted sandboxes;
+       stays completely idle when no enabled mod contains Lua scripts. -->
+
+  <PropertyGroup>
+    <RootNamespace>Meitou.Lua</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MoonSharp" Version="3.0.0-beta.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Meitou.Core\Meitou.Core.csproj" />
+    <ProjectReference Include="..\Meitou.Data\Meitou.Data.csproj" />
+    <ProjectReference Include="..\Meitou.Simulation\Meitou.Simulation.csproj" />
+  </ItemGroup>
+
+</Project>

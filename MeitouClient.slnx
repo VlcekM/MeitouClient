@@ -12,6 +12,7 @@
     <Project Path="src/Meitou.Core/Meitou.Core.csproj" />
     <Project Path="src/Meitou.Data/Meitou.Data.csproj" />
     <Project Path="src/Meitou.Game/Meitou.Game.csproj" />
+    <Project Path="src/Meitou.Lua/Meitou.Lua.csproj" />
     <Project Path="src/Meitou.Simulation/Meitou.Simulation.csproj" />
   </Folder>
   <Folder Name="/tests/">

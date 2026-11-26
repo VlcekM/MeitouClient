@@ -22,6 +22,10 @@ sealed class GameMods(GameHost host)
     /// </summary>
     internal ModHost? Mods;
     /// <summary>
+    /// Built-in KenshiLua compatibility host; null when no enabled mod contains <c>scripts/init/*.lua</c>.
+    /// </summary>
+    internal LuaMods? Lua;
+    /// <summary>
     /// The notices of the mods whose settings Meitou took into its own features at this start (<see cref="BuiltInMods.Adopt"/>).
     /// </summary>
     List<string> _builtInNotices = [];
@@ -118,6 +122,9 @@ sealed class GameMods(GameHost host)
 
         // Every skill is added now: a weapon naming one that is not uses its category's, which the log says once (docs/modding.md "Weapon types").
         Simulation.Bodies.ModSkills.WarnUnknown(db);
+
+        // Built-in KenshiLua compat host: stays null (zero cost) when no enabled mod has scripts/init/*.lua.
+        Lua = LuaMods.TryStart(host.Install, db, data.Relations);
     }
 
     /// <summary>
@@ -189,6 +196,7 @@ sealed class GameMods(GameHost host)
     internal void ConnectModUi(PlayerInterface ui)
     {
         foreach (var notice in _builtInNotices) ui.Notice(notice);
+        Lua?.AttachUi(ui);
         if (Mods is null) return;
         Mods.RegisterUi((extension, folder, texts) => ui.RegisterUiExtension(extension, folder, texts));
         Mods.AttachInterface(new Game.Ui.PlayerModInterface(ui));
@@ -396,11 +404,15 @@ sealed class GameMods(GameHost host)
 
     /// <summary>
     /// Once a frame, after the hits: the mods' per-frame callbacks get what the host shows (docs/modding.md "Frame"). Nothing without one, or over
-    /// the title (no world shown).
+    /// the title (no world shown). The built-in KenshiLua mods (<see cref="Lua"/>) step first, whether or not code mods want frames.
     /// </summary>
     internal void UpdateModFrames()
     {
-        if (Mods is not { WantsFrames: true } mods || host.Player is null || host.Player.TitleOpen) return;
+        if (host.Player is null || host.Player.TitleOpen) return;
+
+        Lua?.UpdateFrame(host);
+
+        if (Mods is not { WantsFrames: true } mods) return;
 
         mods.DeliverFrame(_frame ??= new ModFrame(host));
     }

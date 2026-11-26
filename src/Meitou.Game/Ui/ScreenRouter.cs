@@ -37,6 +37,7 @@ sealed class ScreenRouter(PlayerInterface player)
         else if (e.Screen == FeedbackPanel.FeedbackScreen) player.FeedbackPanel.FeedbackFormAction(e);
         else if (e.Screen == DebugCharactersLayout.Screen) player.CharactersWindow.Action(e);
         else if (e.Screen == DebugItemsLayout.Screen) player.ItemsWindow.Action(e);
+        else if (e.Screen == Modding.LuaHudOverlay.ScreenId) player.LuaHudEvent?.Invoke(e);
         else if (player.Frontend.HandleFrontendAction(e)) player.UpdateMenuPause();
         else if (e.Screen == "stats" && e.Action == "select") player.StatsWindow.SelectedStat = e.Text;
         else if (e.Screen == "stats" && e.Action.StartsWith("stat:", StringComparison.Ordinal)) player.StatsWindow.SelectedStat = e.Action[5..];
@@ -112,6 +113,12 @@ sealed class ScreenRouter(PlayerInterface player)
         if (id == DebugItemsLayout.Screen)
         {
             player.ItemsWindow.Bind(b);
+            return b;
+        }
+
+        if (id == Modding.LuaHudOverlay.ScreenId && player.LuaHudBind is { } bindLua)
+        {
+            bindLua(b);
             return b;
         }
 

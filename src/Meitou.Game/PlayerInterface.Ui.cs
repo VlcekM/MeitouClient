@@ -76,6 +76,18 @@ sealed partial class PlayerInterface
     /// An action of the screens for the host (save, load, new game, the options and exit buttons).
     /// </summary>
     public event Action<MyGuiEvent>? ScreenAction;
+    /// <summary>
+    /// Built-in Lua HUD overlay binder, attached when KenshiLua mods are active.
+    /// </summary>
+    internal Action<UiBindings>? LuaHudBind;
+    /// <summary>
+    /// Built-in Lua HUD overlay event handler, attached when KenshiLua mods are active.
+    /// </summary>
+    internal Action<MyGuiEvent>? LuaHudEvent;
+    /// <summary>
+    /// Built-in Lua key-down listener, attached when KenshiLua mods are active.
+    /// </summary>
+    internal Action<Key>? LuaKeyDown;
 
     /// <summary>
     /// The interface style, Faithful (the original's layouts) or Meitou.
@@ -1545,6 +1557,7 @@ sealed partial class PlayerInterface
         if (key == Key.Escape && LevelEditorPanel.LevelEscape()) return true;
         if (key == Key.Escape) return EscapeKey();
         if (FaithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
+        if (!FaithfulScreens.HasKeyboardFocus) LuaKeyDown?.Invoke(key);
         if (WorldMap.ModMapKey(key, ctrl, shift)) return true;
         if (GameHotkeys.Bound(InputAction.RotateItem, key) && InventoryWindows.RotateAt(Mouse)) return true;
         if (ScreenKey(key, shift) is { } screenTook) return screenTook;
