@@ -82,7 +82,10 @@ static class SquadIntact
     public static bool AllBeaten(CharacterTable table, Squad squad)
     {
         foreach (var m in squad.Members)
-            if (table.TryResolveNext(m, out int ms) && table.Cold(ms) is { } mc && !CharacterFacts.Down(mc) && CharacterFacts.PostureZero(mc)) return false;
+        {
+            if (table.TryResolveNext(m, out int ms) && table.Cold(ms) is { } mc && !CharacterFacts.Down(mc) && CharacterFacts.PostureZero(mc))
+                return false;
+        }
 
         return true;
     }

@@ -1,47 +1,68 @@
 using System.Numerics;
 using Meitou.Simulation;
-using Meitou.Simulation.Combat;
 using Meitou.Simulation.Crime;
 using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 
 /// <summary>
-/// The <c>defeat</c> mode of <c>meitou-tools probe</c>: a lone player character, weakened to a sliver of health and optionally given a bounty with
-/// the guard's faction, attacks the nearest squad leader named like the guard; then every 20 ticks the lines said, both characters' state, the
-/// guard's orders and both squads' long-term memory bits (event 15 I_DEFEATED_SQUAD and its law lines, DA 29).
+/// The <c>defeat</c> mode of <c>meitou-tools probe</c>, the back half of a squad defeat: a lone player character, optionally given a bounty with the
+/// guards' faction, is knocked out, then each awake squad leader named like the guard that has lines for event 15 I_DEFEATED_SQUAD is fired that
+/// event at it in turn (as <see cref="Meitou.Simulation.Combat.SquadDefeat"/> does from a striker) until one says a line; per leader whether a
+/// line was said, then the lines said and its orders over the next rounds (the law lines' DA 29).
 /// </summary>
 static class DefeatProbe
 {
     /// <summary>
-    /// The share of each body part's health the victim keeps, so one blow downs it.
+    /// How long the victim stays out cold, in seconds.
     /// </summary>
-    const float Sliver = 0.05f;
+    const float KoSeconds = 600;
 
     /// <summary>
-    /// The round the victim is weakened at, once the fight's opening shouts have faded.
+    /// How often each leader is fired at: <c>chance temporary</c> rolls again at every check.
     /// </summary>
-    const int WeakenRound = 8;
+    const int Tries = 6;
 
     /// <summary>
-    /// Runs the case on the guard named like <paramref name="guardName"/> and prints <paramref name="rounds"/> rounds.
+    /// Runs the case on the leaders named like <paramref name="guardName"/>, printing <paramref name="rounds"/> rounds of 20 ticks after a line.
     /// </summary>
     public static void Run(ProbeWorld probe, string guardName, int bounty, int rounds)
     {
-        if (Guard(probe, guardName) is not { } guard)
+        var guards = Guards(probe, guardName);
+        if (guards.Count == 0)
         {
-            Console.WriteLine("no guard leader with event 15 lines");
+            Console.WriteLine("no awake leader with event 15 lines");
             return;
         }
 
-        int victim = Isolate(probe, guard);
-        Start(probe, victim, guard, bounty);
-        for (int round = 0; round < rounds; round++)
+        int victim = Isolate(probe, guards[0]);
+        KnockOut(probe, victim, guards[0], bounty);
+        foreach (int guard in guards)
         {
-            if (round == WeakenRound) Weaken(probe, victim);
-            probe.Tick(20);
-            Print(probe, victim, guard);
+            if (!Fire(probe, guard, victim)) continue;
+
+            for (int round = 0; round < rounds; round++)
+            {
+                probe.Tick(20);
+                Print(probe, victim, guard);
+            }
+
+            return;
         }
+    }
+
+    /// <summary>
+    /// The awake squad leaders named like <paramref name="name"/> that have lines for event 15, nearest the player leader first.
+    /// </summary>
+    static List<int> Guards(ProbeWorld probe, string name)
+    {
+        var t = probe.Characters;
+        var dialogue = probe.World.SystemOf<DialogueSystem>()!;
+        return probe.Named(name)
+            .Where(i => t.Cold(i) is { Medical.Incapacitated: false } c && probe.World.Squads.Find(c.SquadId)?.Leader == t.IdOf(i))
+            .Where(i => (CharacterTask)t.Next[i].Task != CharacterTask.Sleep && dialogue.SetOf(probe.World, i).For(15).Any())
+            .OrderBy(i => Vector3.Distance(t.Next[i].Position, probe.LeaderPosition))
+            .ToList();
     }
 
     /// <summary>
@@ -66,81 +87,53 @@ static class DefeatProbe
     }
 
     /// <summary>
-    /// The awake squad leader named like <paramref name="name"/> that has lines for event 15: of the smallest squad, then nearest the player leader.
+    /// Books the bounty with the guard's faction and knocks the victim out.
     /// </summary>
-    static int? Guard(ProbeWorld probe, string name)
-    {
-        var t = probe.Characters;
-        var dialogue = probe.World.SystemOf<DialogueSystem>()!;
-        var leaders = probe.Named(name)
-            .Where(i => t.Cold(i) is { Medical.Incapacitated: false } c && probe.World.Squads.Find(c.SquadId)?.Leader == t.IdOf(i))
-            .Where(i => (CharacterTask)t.Next[i].Task != CharacterTask.Sleep && dialogue.SetOf(probe.World, i).For(15).Any())
-            .ToList();
-        if (leaders.Count == 0) return null;
-
-        return leaders
-            .OrderBy(i => probe.World.Squads.Find(t.Cold(i)!.SquadId)!.Members.Count)
-            .ThenBy(i => Vector3.Distance(t.Next[i].Position, probe.LeaderPosition))
-            .First();
-    }
-
-    /// <summary>
-    /// Weakens the victim, books the bounty, puts it beside the guard and orders the attack.
-    /// </summary>
-    static void Start(ProbeWorld probe, int victim, int guard, int bounty)
+    static void KnockOut(ProbeWorld probe, int victim, int guard, int bounty)
     {
         var world = probe.World;
         var t = probe.Characters;
         var vc = t.Cold(victim)!;
         if (bounty > 0) world.SystemOf<CrimeSystem>()!.AssignBounty(world, t.IdOf(victim), t.Cold(guard)!.Faction, bounty);
 
-        var beside = t.Next[guard].Position + new Vector3(60, 0, 0);
-        world.Commands.Enqueue(new DebugTeleport([t.IdOf(victim)], beside) { Tick = world.Tick });
+        vc.Medical!.KnockOut(KoSeconds);
         probe.Tick(1);
-
-        var arrests = world.SystemOf<ArrestSystem>();
-        Console.WriteLine($"victim {probe.Who(victim)} bounty={vc.Bounties?.Total}");
-        Console.WriteLine($"guard {probe.Who(guard)} inOwnTown={arrests?.InOwnTown(world, guard)}");
-        world.Commands.Enqueue(new AttackOrder([t.IdOf(victim)], t.IdOf(guard)) { Picked = true, Unprovoked = true, Tick = world.Tick });
+        Console.WriteLine($"victim {probe.Who(victim)} down={vc.Medical.Incapacitated} bounty={vc.Bounties?.Total ?? 0}");
     }
 
     /// <summary>
-    /// Leaves the victim a sliver of each body part's health.
+    /// Fires event 15 from the guard at the victim up to <see cref="Tries"/> times, a tick apart, and prints the guard and whether it said a line.
     /// </summary>
-    static void Weaken(ProbeWorld probe, int victim)
+    static bool Fire(ProbeWorld probe, int guard, int victim)
     {
-        foreach (var part in probe.Characters.Cold(victim)!.Medical!.Parts) part.Flesh = part.MaxHp * Sliver;
+        var world = probe.World;
+        var t = probe.Characters;
+        var dialogue = world.SystemOf<DialogueSystem>()!;
+        bool said = false;
+        for (int i = 0; i < Tries && !said; i++)
+        {
+            said = dialogue.FireEvent(world, t.IdOf(guard), t.IdOf(victim), 15);
+            if (!said) probe.Tick(1);
+        }
+
+        bool home = world.SystemOf<ArrestSystem>()?.InOwnTown(world, guard) == true;
+        Console.WriteLine($"guard {probe.Who(guard)} inOwnTown={home} said={said}");
+        return said;
     }
 
     /// <summary>
-    /// One round: the lines said, the victim, the one that downed it (its orders, row and whether it leads its squad) and the squads' long-term bits.
+    /// One round: the lines said, the victim and the guard's task, row and orders.
     /// </summary>
     static void Print(ProbeWorld probe, int victim, int guard)
     {
         var t = probe.Characters;
-        var memory = probe.World.SystemOf<DialogueSystem>()!.Memory;
         foreach (var line in probe.World.TakeSaid()) Console.WriteLine($"  SAID {line.Owner}: {line.Text}");
 
         var vc = t.Cold(victim)!;
-        int striker = t.TryResolveNext(vc.DefeatedBy, out int ds) ? ds : guard;
-        var sc = t.Cold(striker)!;
-        bool leads = probe.World.Squads.Find(sc.SquadId)?.Leader == t.IdOf(striker);
-        string orders = string.Join(", ", sc.OrderQueue.Select(o => o.Row));
+        var gc = t.Cold(guard)!;
+        string orders = string.Join(", ", gc.OrderQueue.Select(o => o.Row));
         Console.WriteLine($"tick {probe.World.Tick} victim down={vc.Medical!.Incapacitated} carriedBy={vc.CarriedBy} in={vc.InSomething} "
-            + $"striker {striker} '{sc.Name}' leads={leads} task={(CharacterTask)t.Next[striker].Task} row={sc.Running?.Row} orders=[{orders}]");
-        Console.WriteLine($"  victim squad: {Bits(memory.Snapshot(vc.SquadId))}  striker squad: {Bits(memory.Snapshot(sc.SquadId))}");
+            + $"guard task={(CharacterTask)t.Next[guard].Task} row={gc.Running?.Row} orders=[{orders}]");
         probe.PrintMessages();
-    }
-
-    /// <summary>
-    /// A squad's long-term memory bits per remembered character, and its player entry's.
-    /// </summary>
-    static string Bits(SquadMemoryData? data)
-    {
-        if (data is null) return "-";
-
-        var entries = data.Entries.Select(e => $"{e.Who.Slot}:{e.Long:X}");
-        string player = data.Player is { } p ? $" player:{p.Long:X}" : "";
-        return string.Join(" ", entries) + player;
     }
 }

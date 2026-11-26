@@ -21,7 +21,8 @@ static class SquadDefeat
     public static void After(World world, SquadMemory? memory, int striker, int victim)
     {
         var table = world.Characters;
-        if (table.Cold(striker) is not { } s || table.Cold(victim) is not { } v || world.Squads.Find(v.SquadId) is not { } squad) return;
+        if (table.Cold(striker) is not { } s || table.Cold(victim) is not { } v || world.Squads.Find(v.SquadId) is not { } squad)
+            return;
         if (!SquadIntact.AllBeaten(table, squad)) return;
 
         var strikerId = table.IdOf(striker);

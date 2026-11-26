@@ -365,10 +365,10 @@ included), else 0.025 (outside every town too).
   victim KO'd (`+0x5b9`) or dead (`+0x5bc`), when `FUN_140793160(victim's platoon, 0)` finds no member both not down and upright
   ([carry-loot](carry-loot.md), slave escape), in order: tag 7 DEFEATED_MY_SQUAD_ONCE in the victim's squad on the striker, tag 8
   SQUAD_LOST_TO_ME_ONCE in the striker's squad on the victim, event 15 I_DEFEATED_SQUAD from the striker at the victim (`FUN_140685070` ->
-  `FUN_140684990`, its only sender), and an animal striker (vfunc `0x248`) posts `VO_Creature_Victory` (the string's only use). No test
+  `FUN_140684990`, the only call with a literal 15), and an animal striker (vfunc `0x248`) posts `VO_Creature_Victory` (the string's only use). No test
   compares the two squads (nor does the tag write `FUN_140671840`, nor `FUN_140684990`), so a squadmate's blow counts; no latch, so a blow
   on one already down fires again. The bolt hit `FUN_140439c90` has none of it. Meitou: `Combat.SquadDefeat` (the event deferred a tick like
-  the other combat events, `SoundKind.Victory`); executions do not run it (their path to `FUN_1404394f0` is not traced).
+  the other combat events, `SoundKind.Victory`).
 
 Meitou: `FactionDeeds` (blows, cagings, first aid), `CrimeSystem` (the ally witness), `PlayerRelations.DeclareWar` / `EndWar` / `Add`
 (the messages); [simulation](../simulation.md#hostility-and-relations).

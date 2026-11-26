@@ -2272,7 +2272,7 @@ static class SaveProbe
               assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
-              defeat <guard> [bounty] [rounds]  a lone player character attacks the smallest-squad awake leader named so, weakened at round 8: lines said, the striker's orders, both squads' long-term tags (event 15)
+              defeat <guard> [bounty] [rounds]  a lone player character knocked out, then event 15 fired at it from each awake leader named so until one speaks: its lines and orders
               ko <slot> [rounds]       the sneaking leader's stealth KO order on a slot: the chance, the target's spot meter and the task every 20 ticks
               slaves <radius> [rounds] [interval]  slave state, owner faction, master squad and squad town near the leader; with rounds, each
                                          slave's task, goal, workplace and gap to its marker every interval (200) ticks, and how many work
