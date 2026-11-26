@@ -5811,3 +5811,11 @@ msgstr "건물에 직접 이름을 붙입니다. 패널, 인벤토리, 그 건�
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "비워 두면 건물의 원래 이름을 씁니다."
+
+#. machine-translated
+msgid "Mod: {1}"
+msgstr "모드: {1}"
+
+#. machine-translated
+msgid "Mods: {1}"
+msgstr "모드: {1}"
