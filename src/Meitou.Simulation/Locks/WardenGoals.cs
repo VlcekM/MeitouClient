@@ -423,13 +423,12 @@ internal sealed class WardenGoals(LockSystem locks)
     #region States
 
     /// <summary>
-    /// The states of the goals' rows for the asker (parallel: <c>Previous</c> places, fixtures and cold state only serial steps write): a finder's
-    /// target first (<see cref="PlanTarget.Found"/>), else 87 for the goal's own row; null for the rest.
+    /// The states of a goal's finder target (parallel: <c>Previous</c> places, fixtures and cold state only serial steps write).
     /// </summary>
     bool? State(World world, in DutyAsk ask, StateType state)
     {
         var target = ask.Target;
-        if (target.Kind != PlanTarget.Found) return state == StateType.AllDoorsLocked ? AllDoorsLocked(world, ask) : null;
+        if (target.Kind != PlanTarget.Found) return null;
         if (target.Character is { } prisoner) return PrisonerState(world, ask.Slot, prisoner, state);
         if (target.Fixture is not { } id || world.Fixtures.Find(id) is not { } f) return null;
 
@@ -437,15 +436,16 @@ internal sealed class WardenGoals(LockSystem locks)
     }
 
     /// <summary>
-    /// 87 allDoorsLocked (<c>FUN_140596bd0</c>, <b>Verified</b>, docs/game/locks.md "Residents"): in a bed, or the squad's house flag set, or the home
-    /// has no door the lock-up finder takes (open, broken or not effectively locked).
+    /// 87 allDoorsLocked (<c>FUN_140596bd0</c>, <b>Verified</b>, docs/game/locks.md "Residents"): true in bed. Inside the home it reads the house
+    /// flag. Elsewhere it checks whether the lock-up finder can find a door.
     /// </summary>
-    bool AllDoorsLocked(World world, in DutyAsk ask)
+    internal static bool AllDoorsLocked(World world, int slot, CharacterCold cold, Blackboard board)
     {
-        if (world.Characters.Cold(ask.Slot) is { InSomething: HeldState.Bed }) return true;
-        if (ask.Squad.Ai?.OwnHome is not { } home) return false;
+        if (cold.InSomething == HeldState.Bed) return true;
+        if (board.OwnHome is { } home && world.Sight.BuildingOf(slot) == home.Key)
+            return world.SystemOf<LockSystem>()?.HouseLocked(home.Key) == true;
 
-        return _locks.HouseLocked(home.Key) || FirstDoor(world, home.Key, NeedsLock) is null;
+        return DoorsOf(world, slot, cold, board) is not { } building || FirstDoor(world, building, NeedsLock) is null;
     }
 
     /// <summary>
@@ -602,7 +602,7 @@ internal sealed class WardenGoals(LockSystem locks)
         public float Find(World world, in DutyAsk ask, out PlanTarget target) => goals.Find(world, goals._toLock, ask, out target);
 
         /// <summary>
-        /// The door rows' states and 87 (<see cref="WardenGoals.State"/>).
+        /// The states of the target door (<see cref="WardenGoals.State"/>).
         /// </summary>
         public bool? State(World world, in DutyAsk ask, StateType state) => goals.State(world, ask, state);
 
@@ -634,7 +634,7 @@ internal sealed class WardenGoals(LockSystem locks)
         public float Find(World world, in DutyAsk ask, out PlanTarget target) => goals.Find(world, goals._toOpen, ask, out target);
 
         /// <summary>
-        /// The door rows' states and 87 (<see cref="WardenGoals.State"/>).
+        /// The states of the target door (<see cref="WardenGoals.State"/>).
         /// </summary>
         public bool? State(World world, in DutyAsk ask, StateType state) => goals.State(world, ask, state);
 

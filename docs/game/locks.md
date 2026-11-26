@@ -314,10 +314,15 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   only from open), sets the lock's locked byte at once (`wants lock` is not touched), plays `Character_Lock` and sets the squad's house flag. The context menu's own-door verbs are these two orders: Lock 77 on an unlocked own door, Unlock 140 (0x8c) on a locked own door (`FUN_1407a6bc0` door branch, **Verified**); an own cage gets Lock 77 / Unlock 78 (cage branch, **Verified**; the update has no door to close there; Meitou runs the cage's unlock as row 140, same conditions); the panel's buttons are the instant toggle below.
   Row 77 (lock) lists `!DOOR_IS_BROKEN` in list B, so it is never planned on a smashed door (rows 79/162/198 have none; a lock on a broken door is not shown). The close acts only on an open, whole door (a closing, opening or smashed door is left as it is).
   Meitou: `DoorLockOrder` (nearest selected character walks to the door's work spot, `LockSystem.DoorLockJobs`); the job (`CharacterCold.DoorJob`) is hashed while set and not saved. The lock-up act-out ([wardens' goals](#wardens-goals)) does the same: `FixtureRegistry.CloseDoor` then the lock at once; rows 162 / 198 have no `!DOOR_IS_BROKEN`, so a smashed door is worked too: Meitou leaves it open and unlocked (engine choice) and still runs the house-flag test.
-- **Residents** (`allDoorsLocked` 87, `FUN_140596bd0`): true when the character is in bed, or its squad's "house locked" flag
-  is set (squad AI object +0xe8, saved `homelok`; also read by dialogue condition 11 `BUILDING_IS_CLOSED_AND_SECURED`, **Verified** `FUN_140676950` case 0xb; set by Task_LockDoor at each door it locks whose lock is the worker's faction's, and Task_CloseDoor (a door with a working lock), when no door of the home is open or opening (`FUN_1407933a0`, **Verified**: one locked door is enough); cleared by unlocking or picking a door of the worker's own home (the unlocker's or picker's squad's flag only: Task_UnlockDoor `FUN_14033d420` at the unlock's end, the pick's success in `FUN_140359160`, **Verified**; Meitou `LockSystem.UnlockAndOpen`, an owner's unlock on its way), or by a
-  non-player opening a door (`Task_OpenDoor` update `FUN_1403370f0`, **Verified**: every update with the door unlocked, unless the opener's faction is the player's; Meitou `LockSystem.NoteDoorOpened`, from the walk-through opening, an owner's unlock on its way and 86's)), else when the home building has no door that is open, broken or effectively unlocked
-  (`FUN_1408cb1c0`, which also returns that door as the next target). Base AI_PACKAGE hours (**Verified** data):
+- **Residents** (`allDoorsLocked` 87, **Verified**, `FUN_140596bd0`): true in bed. A character inside its own home reads its squad's
+  "house locked" flag (+0xe8, saved `homelok`). Everywhere else it checks whether the lock-up finder `FUN_1408cb1c0` finds no door.
+  Meitou applies the same state to lock-up, opening up and secure bedtime (239).
+  Dialogue condition 11 `BUILDING_IS_CLOSED_AND_SECURED` reads the flag directly (**Verified**, `FUN_140676950` case 0xb).
+  Task_LockDoor sets it after locking a door of the worker's faction, and Task_CloseDoor after closing a door with a working lock, when no door
+  of the home is open or opening (**Verified**, `FUN_1407933a0`; one locked door is enough). Unlocking or picking a door of the worker's own home
+  clears the worker's squad's flag (**Verified**, `FUN_14033d420` and `FUN_140359160`; Meitou `LockSystem.UnlockAndOpen`). A non-player opening
+  an unlocked door clears it on each update (**Verified**, `FUN_1403370f0`; Meitou `LockSystem.NoteDoorOpened`).
+  Base AI_PACKAGE hours (**Verified** data):
 
 | Package | Task | Hours |
 | --- | --- | --- |
