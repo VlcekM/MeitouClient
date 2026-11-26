@@ -67,6 +67,7 @@ public static class ContainerAccess
             if (d < bestDistance) (best, bestDistance) = (s, d);
         }
         if (best < 0) return;
+        InventoryPause.Told(world, best);
         var walker = table.Cold(best)!;
         if (locked)
         {
@@ -137,7 +138,7 @@ public static class ContainerAccess
                 var at = Flat(fixture.Position);
                 if (Vector2.Distance(Flat(table.Next[s].Position), at) <= ContainerReach && SameFloor(table.Next[s].Position, fixture.Position))
                 {
-                    if (table.Next[s].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, s);
+                    if (table.Next[s].Task == (byte)CharacterTask.GoTo) Arrive(table, s, wanted);
                     Open(world, s, wanted);
                 }
                 else if (table.Next[s].Task != (byte)CharacterTask.GoTo || Vector2.Distance(table.Next[s].Goal, at) > ContainerReach)
@@ -148,10 +149,38 @@ public static class ContainerAccess
         {
             // The original has no walk-away test: the windows stay until the player closes them (docs/game/locks.md "Containers"); only an opener
             // who is down or gone closes it here.
-            bool keep = world.Fixtures.Find(open) is { Contents: not null } && table.TryResolveNext(player.ContainerOpener, out int o)
+            int o = -1;
+            bool keep = world.Fixtures.Find(open) is { Contents: not null } && table.TryResolveNext(player.ContainerOpener, out o)
                     && table.Cold(o) is { Medical.Incapacitated: false };
             if (!keep) player.OpenContainer = null;
+
+            // Its opener's pause ends when combat breaks it; the window stays open, as the original's.
+            else if (Holds(world, o, open) && InventoryPause.CombatEnds(world, o, table.Cold(o)!)) TaskStart.End(world, o, TaskEnd.Done);
         }
+    }
+
+    /// <summary>
+    /// Whether the character in <paramref name="slot"/> still stands at the open container <paramref name="id"/> on the order that opened it (row 26
+    /// in place): its pause (<see cref="InventoryPause"/>), which the order holds until the window closes.
+    /// </summary>
+    internal static bool Holds(World world, int slot, string id) =>
+        world.Player.OpenContainer == id && world.Player.ContainerOpener == world.Characters.IdOf(slot)
+        && world.Characters.Next[slot].Task == (byte)CharacterTask.Idle
+        && world.Characters.Cold(slot)!.Running is { Row: Meitou.Data.Gameplay.Ai.TaskType.LootTarget, Source: TaskSource.Order } run
+        && run.Site == id;
+
+    /// <summary>
+    /// The walker in <paramref name="slot"/> stops at container <paramref name="id"/>: its order's walk becomes the work in place
+    /// (<see cref="CharacterTask.Idle"/>), as an opening in reach starts it (<see cref="StartContainer"/>), so the order runs on while the window
+    /// is open (<see cref="Holds"/>).
+    /// </summary>
+    static void Arrive(CharacterTable table, int slot, string id)
+    {
+        var cold = table.Cold(slot)!;
+        if (cold.Running is { Row: Meitou.Data.Gameplay.Ai.TaskType.LootTarget, Source: TaskSource.Order, Task: CharacterTask.GoTo } run
+                && run.Site == id)
+            cold.Running = run with { Task = CharacterTask.Idle };
+        TaskStart.Stand(table, slot);
     }
 
     /// <summary>
@@ -162,6 +191,7 @@ public static class ContainerAccess
         var player = world.Player;
         (player.OpenContainer, player.ContainerOpener, player.OpeningContainer) = (id, player.ContainerWalker, null);
         world.EmitSound(SoundKind.Inspected, slot, world.Characters.Next[slot].Position);
+        InventoryPause.Focus(world, slot);
     }
 
     /// <summary>
