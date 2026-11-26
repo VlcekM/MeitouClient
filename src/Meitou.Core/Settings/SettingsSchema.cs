@@ -366,11 +366,37 @@ public sealed record SettingMode
     /// The slider value the mode writes.
     /// </summary>
     public float Value { get; set; }
+    /// <summary>
+    /// Other names the mode takes while a condition holds (render scale's 100 % is DLAA under DLSS, Native AA under FSR), the first that holds;
+    /// null: always <see cref="Name"/> (an older launcher shows that either way).
+    /// </summary>
+    public List<SettingModeName>? NamesWhen { get; set; }
 
     /// <summary>
     /// Whether <paramref name="value"/> is this mode's, within half a slider <paramref name="step"/>.
     /// </summary>
     public bool Matches(float value, float step) => MathF.Abs(value - Value) <= step / 2;
+
+    /// <summary>
+    /// The mode's name now: the first of <see cref="NamesWhen"/> whose condition holds, else <see cref="Name"/>; <paramref name="valueOf"/> gives a
+    /// setting's value by key.
+    /// </summary>
+    public string NameFor(Func<string, float?> valueOf) => NamesWhen?.FirstOrDefault(n => n.When.Holds(valueOf))?.Name ?? Name;
+}
+
+/// <summary>
+/// A <see cref="SettingMode"/>'s name while <see cref="When"/> holds.
+/// </summary>
+public sealed record SettingModeName
+{
+    /// <summary>
+    /// The condition.
+    /// </summary>
+    public SettingCondition When { get; set; } = new();
+    /// <summary>
+    /// The name while it holds.
+    /// </summary>
+    public string Name { get; set; } = "";
 }
 
 /// <summary>

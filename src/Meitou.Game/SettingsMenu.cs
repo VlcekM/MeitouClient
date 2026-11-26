@@ -1158,7 +1158,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         result.RemoveAll(e => !ShownNow(e));
         result = [.. result.OrderBy(e => RowOrder(e.Raw ?? ""))];
 
-        return [.. result.SelectMany(Modes.ModeEntries).Select(Restarting)];
+        return [.. result.SelectMany(row => Modes.ModeEntries(row, SliderValue)).Select(Restarting)];
     }
 
     /// <summary>

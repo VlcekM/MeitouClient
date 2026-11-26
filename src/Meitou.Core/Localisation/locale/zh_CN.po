@@ -6718,3 +6718,11 @@ msgstr "SMAA 质量"
 #. machine-translated
 msgid "Higher finds fainter and longer edges and costs more; Ultra also softens texture detail."
 msgstr "越高能找到越弱、越长的边缘，开销也越大；Ultra 还会柔化纹理细节。"
+
+#. machine-translated
+msgid "Native"
+msgstr "原生"
+
+#. machine-translated
+msgid "Native AA"
+msgstr "原生抗锯齿"

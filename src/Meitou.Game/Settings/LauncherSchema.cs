@@ -173,10 +173,19 @@ static class LauncherSchema
     [
         new() { Name = "Ultra performance", Value = Percent(1 / 3f) },
         new() { Name = "Performance", Value = Percent(0.5f) },
-        new() { Name = "Normal", Value = Percent(1 / 1.7f) },
+        new() { Name = "Balanced", Value = Percent(1 / 1.7f) },
         new() { Name = "Quality", Value = Percent(1 / 1.5f) },
         new() { Name = "Ultra quality", Value = Percent(UpscaleOptions.UltraQualityScale) },
-        new() { Name = "DLAA", Value = 1 },
+        new()
+        {
+            Name = "Native",
+            Value = 1,
+            NamesWhen =
+            [
+                new() { When = new() { Key = WorldFrame.UpscalerSliders[0], Value = 5 }, Name = "DLAA" },
+                new() { When = new() { Key = WorldFrame.UpscalerSliders[0], Value = 4 }, Name = "Native AA" },
+            ],
+        },
     ];
 
     /// <summary>

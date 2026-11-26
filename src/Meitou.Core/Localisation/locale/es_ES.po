@@ -5888,3 +5888,11 @@ msgstr "Calidad del SMAA"
 #. machine-translated
 msgid "Higher finds fainter and longer edges and costs more; Ultra also softens texture detail."
 msgstr "Más alto detecta bordes más tenues y más largos y cuesta más; Ultra también suaviza el detalle de las texturas."
+
+#. machine-translated
+msgid "Native"
+msgstr "Nativa"
+
+#. machine-translated
+msgid "Native AA"
+msgstr "AA nativo"

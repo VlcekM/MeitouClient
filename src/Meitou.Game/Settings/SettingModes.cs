@@ -17,7 +17,7 @@ sealed class SettingModes
     /// <summary>
     /// The rows replacing a slider row with modes: the mode choice, then the slider (locked but under Custom); any other row as it is.
     /// </summary>
-    internal IEnumerable<SettingsMenu.Entry> ModeEntries(SettingsMenu.Entry row)
+    internal IEnumerable<SettingsMenu.Entry> ModeEntries(SettingsMenu.Entry row, Func<string, float?> valueOf)
     {
         if (row is not { Slider: { } slider, Raw: { } key } || LauncherSchema.Find(key) is not { Modes: { Count: > 0 } modes } d)
         {
@@ -25,11 +25,11 @@ sealed class SettingModes
             yield break;
         }
 
-        string[] names = [.. modes.Select(m => m.Name), "Custom"];
+        IReadOnlyList<string> Names() => [.. modes.Select(m => m.NameFor(valueOf)), "Custom"];
         yield return row with
         {
             Slider = null,
-            Choice = new(() => names, () => ModeIndex(key, slider, modes, d.Step), i => ChooseMode(key, slider, modes, i)),
+            Choice = new(Names, () => ModeIndex(key, slider, modes, d.Step), i => ChooseMode(key, slider, modes, i)),
         };
 
         yield return row with { Label = "Custom value", Depth = 1, Locked = ModeIndex(key, slider, modes, d.Step) < modes.Count };

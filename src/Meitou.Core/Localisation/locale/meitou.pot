@@ -3570,6 +3570,14 @@ msgstr ""
 msgid "Name A-Z"
 msgstr ""
 
+#: src/Meitou.Game/Settings/LauncherSchema.cs
+msgid "Native"
+msgstr ""
+
+#: src/Meitou.Game/Settings/LauncherSchema.cs
+msgid "Native AA"
+msgstr ""
+
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPlatform.cs
 msgid "Native Linux build"
 msgstr ""
