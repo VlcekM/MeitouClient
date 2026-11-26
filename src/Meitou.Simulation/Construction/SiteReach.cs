@@ -5,8 +5,9 @@ namespace Meitou.Simulation.Construction;
 
 /// <summary>
 /// How near a worker must stand to a building to build, operate or mine it (docs/game/buildings-production.md "Work distance"): within the building's
-/// reach of it, twice that once the worker has stopped (the original's <c>isMoving</c> doubling). Engine choice: the gap is to the building's
-/// footprint hull (the original measures to its position marker and also counts a worker touching its collision), else to its position.
+/// reach of it, twice that once the worker has stopped (the original's <c>isMoving</c> doubling). The gap is to the building's position or its
+/// footprint hull, whichever is nearer (the original measures to its position marker and also counts a worker touching its collision; the hull
+/// stands in for touching).
 /// </summary>
 public static class SiteReach
 {
@@ -23,10 +24,16 @@ public static class SiteReach
     public const float Wall = 60;
 
     /// <summary>
-    /// The X/Z gap from <paramref name="from"/> to the site: its footprint hull by <paramref name="edge"/> (0 inside), else its position.
+    /// The X/Z gap from <paramref name="from"/> to the site: the nearer of its position and its footprint hull by <paramref name="edge"/> (0 inside),
+    /// as the original arrives by its position marker or by touching its collision. A ramp's hull lies 159..188 off its origin on the wall, so a
+    /// builder standing on the origin was 164 off the hull and never arrived (#1432).
     /// </summary>
-    public static float Gap(Func<BuildSite, Vector2, float?>? edge, BuildSite site, Vector3 from) =>
-        edge?.Invoke(site, new Vector2(from.X, from.Z)) ?? Vector2.Distance(new Vector2(from.X, from.Z), new Vector2(site.Position.X, site.Position.Z));
+    public static float Gap(Func<BuildSite, Vector2, float?>? edge, BuildSite site, Vector3 from)
+    {
+        var point = new Vector2(from.X, from.Z);
+        float marker = Vector2.Distance(point, new Vector2(site.Position.X, site.Position.Z));
+        return edge?.Invoke(site, point) is { } hull ? MathF.Min(hull, marker) : marker;
+    }
 
     /// <summary>
     /// Within <paramref name="reach"/>, or twice it when the character has no path (it has stopped).

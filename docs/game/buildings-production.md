@@ -186,8 +186,10 @@ was held by that body (Meitou's contact, [bodies in the way](pathfinding.md#bodi
 none stepping on the spot, the workplaces' operators 20 at tick 9 000 (8 at tick 5 000 before); a Well's worker stands on its node.
 
 Meitou (`SiteReach`): builders 40 (walls 60), operators and storage fetches the `use range`, doubled once stopped, measured
-to the building's footprint hull (engine choice standing in for touching; a building without collision uses its parts' bounds
-hull) or, unknown, its position. A player machine with two or more use nodes is measured instead from its position marker
+to the building's position or its footprint hull, whichever is nearer (the hull stands in for touching; a building without collision uses
+its parts' bounds hull; unknown, the position alone). **Observed** (#1432 save, live game): a `Defensive Wall Ramp IV`'s hull lies 159..188
+off its origin on the wall, so builders standing on the origin, 164 off the hull, never arrived and left every 20 s; four ramps kept 0 of 3
+materials for four game hours. A player machine with two or more use nodes is measured instead from its position marker
 (`ProductionSystem.UseNodeMarker`: the node nearest the worker that stands on the machine's floor within the height limit above, others
 passed over), and its operator or hauler walks to that node; for a machine inside a building the worker must also stand on that building's
 floor, as the node does (`IWalkability.InteriorNear`, engine choice). **Observed** (original 1.0.68, #1180: a Copper Alloy Bench against a
