@@ -467,7 +467,8 @@ public class DialogueTests
         {
             v.World.RunTicks(target - (int)v.World.Tick);
             if (target == 1) v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
-            if (target is 300 or 320) said += v.Talk?.Text + "|";
+            if (target == 300) said += v.Talk?.Text + "|";
+            if (target == 320) said += v.Bubble(v.Villager) + "|";   // "Hello." is childless: said as a bubble (FUN_1406839a0)
             if (target == 300) v.Say(new DialogueChoice(0) { Tick = 0 });
             if (target == 310) v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
             hashes.Add(v.World.StateHash());
