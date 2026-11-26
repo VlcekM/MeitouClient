@@ -407,10 +407,12 @@ static class MergedShaders
             {
                 st.counter = 0u;
                 vec2 last = imageLoad(uLast, ivec2(0)).rg;
-                // What is no room's sets the adapted luminance, by the game's rule (next to none of it in view: held); the whole picture, as its fragments
-                // were lit, the smoothed mean (the night grading reads it).
+                // What is no room's sets the adapted luminance, by the game's rule (next to none of it in view: held, or the band's minimum while there
+                // is no adaptation to hold, as when the targets were made again); the whole picture, as its fragments were lit, the smoothed mean (the
+                // night grading reads it).
                 bool seen = pooled.y > 0.02;
-                float outside = seen ? pooled.x / pooled.y : last.r;
+                float held = last.r > 0.0 ? last.r : pc.bandMin;
+                float outside = seen ? pooled.x / pooled.y : held;
                 float adapted = clamp(mix(last.r, outside, pc.blend), pc.bandMin, pc.bandMax);
 
                 // Adaptive exposure (PostProcess.ShadeExposure): the target is the band's own above its minimum, the mean scaled under it; smoothed
@@ -418,7 +420,7 @@ static class MergedShaders
                 if (pc.shadeScale > 0.0)
                 {
                     float target = outside >= pc.bandMin ? min(outside, pc.bandMax) : clamp(outside * pc.shadeScale, pc.shadeFloor, pc.bandMin);
-                    adapted = seen ? mix(last.r, target, pc.blend) : last.r;
+                    adapted = seen ? mix(last.r, target, pc.blend) : held;
                 }
                 float smoothMean = mix(last.g, (pooled.x + pooled.z) / max(pooled.y + pooled.w, 1e-6), pc.blend);
                 // The rooms in view: their own adapted luminance goes down with their mean, under the game's minimum (PostProcess.IndoorExposure), and

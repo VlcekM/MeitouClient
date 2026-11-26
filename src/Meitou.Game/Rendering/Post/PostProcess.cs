@@ -1276,6 +1276,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
         if (ao && !_aoApplied) Stamp("ssao");
 
+        // The rooms in view at their own exposure (MergedKernels.Exposure's gain, from last frame's picture), before anything reads the colour:
+        // with or without an upscaler (the rooms are measured as drawn with the gain).
+        if (RoomMaskNow is { } roomPixels && _sceneColour is not null) _merged.InteriorGain(roomPixels, _sceneColour);
+
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
         _postColour = _sceneColour!;
         if (Temporal)
@@ -1795,8 +1799,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var external = ExternalFor(Options.Upscale.Kind);
         bool merged = MergeVelocity && MergeSupported;
         PrepareSunMotion();
-        // The rooms in view at their own exposure (MergedKernels.Exposure's gain, from last frame's picture), before anything reads the colour.
-        if (RoomMaskNow is { } roomPixels && _sceneColour is not null) _merged.InteriorGain(roomPixels, _sceneColour);
         RunVelocity(external, merged);
         if (ObjectMotion is { } objectMotion) RunObjectMotion(objectMotion);
         if (CloudMotion is { } clouds && !reset) RunCloudMotion(clouds);
