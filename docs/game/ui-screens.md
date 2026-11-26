@@ -1343,6 +1343,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     dragged onto the ground go back to his loot window while the looter's own pants drop (**Observed**, original 1.0.65 via KenshiHarness). Meitou, with Drop from loot (Advanced settings, `World.DropFromLoot`, on): an
     open character loot window drops too, after the pickpocket roll as a take, marking the theft and butchering a downed body whose death item is
     dropped (`HeldItems.DropHeldItem`); off, as the game.
+  - Closing its window (**Verified**, decompile: the window removal `FUN_1406e53d0` returns the held item through `FUN_14070dbd0` when the removed window is `MouseInventory+0x68`, its source): the item goes back to its origin; other open windows do not keep it. **Observed** (#1482, the reporter's original 1.0.68 video): an item lifted from the inventory goes back when the inventory closes, one lifted from a copper node's window stays on the mouse. Meitou: `InventoryWindows.ValidateInventoryDrag`, the source being any open window showing its owner.
   - Back to origin (`FUN_14070d860`): its old cell if still free, else auto-added to that inventory, else that inventory is arranged and it is tried again, else it is dropped on the ground.
     For a live animal the auto-add leaves its shut grid out: Raw Meat swapped out of a pack beast's Garru Backpack and sent back with Esc, its cell now taken, goes into a free
     cell of the bag, though the hidden grid has room (**Observed**, original 1.0.68). Meitou: `HeldItems.ReturnHeldItem` adds with

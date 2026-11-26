@@ -1035,7 +1035,8 @@ sealed class InventoryWindows(PlayerInterface player)
 
     /// <summary>
     /// Once a frame: the held item is the world's again once its last command was applied (or after <see cref="HeldWaitSeconds"/>), and goes back
-    /// when no item window is open.
+    /// when the window it came from is closed, whatever other item windows stay open (<c>FUN_1406e53d0</c>: removing the held item's source window
+    /// returns it).
     /// </summary>
     internal void ValidateInventoryDrag()
     {
@@ -1050,7 +1051,13 @@ sealed class InventoryWindows(PlayerInterface player)
         Held = snapshot.Held;
         if (Held is { } h && (was is null || was.Width != h.Width || was.Height != h.Height))
             _heldGrab = ClampGrab(_heldGrab, h);
-        if (Held is not null && !player.FaithfulScreens.HasModal && !ItemScreens.Any(player.FaithfulScreens.IsOpen) && PinnedInventories.Count == 0)
-            ReturnHeldItem();
+        if (Held is { } held && !player.FaithfulScreens.HasModal && !SourceWindowOpen(held.From)) ReturnHeldItem();
     }
+
+    /// <summary>
+    /// Whether an open item window or pinned inventory shows <paramref name="from"/>, the window the held item came from.
+    /// </summary>
+    bool SourceWindowOpen(ItemOwner from) => ItemScreens.Concat(PinnedInventories.Keys)
+        .Where(player.FaithfulScreens.IsOpen)
+        .Any(screen => WindowOf(screen) == from);
 }
