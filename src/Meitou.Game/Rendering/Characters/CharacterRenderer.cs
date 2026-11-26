@@ -1768,8 +1768,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     void WriteMaterials(Vector3 eye)
     {
         CollectSlotParts(eye);
-        if (_budget.Due) OfferTextureNeeds();
-        _budget.Update(_content.Textures);
+        if (_budget.Due)
+        {
+            OfferTextureNeeds();
+            _budget.Commit(_content.Textures);
+        }
 
         var inputs = (_content.Textures.Version, textureBias: _textureBias, textureStandIn: _textureStandIn, Gpu.Samplers.Generation,
             VisibilityBuffer);
