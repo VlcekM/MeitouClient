@@ -458,7 +458,7 @@ faces it only drew thin cuts, so the floor under the walls stayed meshed and wal
 the floor; polygons whose centre is outside it are dropped from the interior (so neither the border closure nor a join keeps them).
 **Ruin joins** (engine choice after the original's stitch, which joins open edges within 2 apart and 10 in height, Generator): every ruin's open edges
 link to the exterior's along its hull within `NavInteriors.RuinHullJoinDistance` (5; both are cut on the hull, ours each up to a cell and the 1.3-cell
-contour error off it). **Observed** (`--compare-interiors`, 24 ruins whose tiles were built intact, before: none reached): reached now 6 (Old Storm
+contour error off it). The exterior's polygons there count whether or not the zone's own seeds kept them: a ruin has no door seed, and where the street round it is kept only by the closure from the next zone (Venge, zone 37.34) a kept-only search found nothing and the ruin stayed sealed (#1474; **Observed**, `--compare-interiors towns`: 7 fewer interiors the original's tiles connect left unreached, among them both Venge ruins of 37.34). **Observed** (`--compare-interiors`, 24 ruins whose tiles were built intact, before: none reached): reached now 6 (Old Storm
 House `9.56:12-`, Outpost s-I `14.5:6-`, Ancient Lab `18.15:130-`, Longhouse `18.35:23-`, Old Storm House `29.28:52-`, Outpost s-III `50.24:66-`:
 their floor meets the exterior on the hull, our edges 2.6..4.3 apart, height 0.1..1); the other 18 stay unjoined: within 10 in height their nearest
 exterior edge is 9.0..135 away or none (Outposts s-II/s-IV and Watchtowers: the boundary ring stands 9..11 inside the hull and the exterior ends ~4

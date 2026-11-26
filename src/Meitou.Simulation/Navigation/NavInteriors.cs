@@ -172,9 +172,9 @@ internal static class NavInteriors
 
     /// <summary>
     /// An interior is joined whatever its own pruning kept (it may have no seed: an Ancient Lab or Ash Dome without doors or nodes), to exterior
-    /// polygons the exterior's pruning kept, and the regions joined to a kept polygon are kept too (engine choice; the original connects these
-    /// interiors, docs/game/pathfinding.md "Door joins"). Between exterior polygons it stops at edges the seed flood does not pass
-    /// (<see cref="SeedPruner.MinPortalWidth"/>).
+    /// polygons the exterior's pruning kept (a doorless one to any walkable exterior polygon on its hull), and the regions joined to a kept
+    /// polygon are kept too (engine choice; the original connects these interiors, docs/game/pathfinding.md "Door joins"). Between exterior
+    /// polygons it stops at edges the seed flood does not pass (<see cref="SeedPruner.MinPortalWidth"/>).
     /// </summary>
     static void CarryKeep(KeptSet m)
     {
@@ -375,7 +375,12 @@ internal static class NavInteriors
             var (lo, hi) = Bounds(inside);
             lo -= new Vector2(JoinDistance);
             hi += new Vector2(JoinDistance);
-            var near = Near(lo, hi);
+
+            // Every walkable exterior polygon, kept or not: a doorless interior has no exterior seed of its own, so where the zone's own seeds keep
+            // none of the ground round it (the street kept only by the closure from the next zone, a ruin in Venge, #1474) a kept-only search
+            // finds nothing and the interior stays sealed. The original stitches a ruin to the tile's exterior whatever its pruning
+            // (docs/game/pathfinding.md "Ruin joins"); CarryKeep then keeps the ground the join reaches.
+            var near = Near(lo, hi, keptOnly: false);
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
             Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", distance: hullDistance);
         }
@@ -420,12 +425,13 @@ internal static class NavInteriors
         }
 
         /// <summary>
-        /// The kept exterior polygons with a vertex in the plan box [<paramref name="lo"/>, <paramref name="hi"/>].
+        /// The walkable exterior polygons with a vertex in the plan box [<paramref name="lo"/>, <paramref name="hi"/>]: only those the exterior's
+        /// pruning kept, unless <paramref name="keptOnly"/> is false.
         /// </summary>
-        List<int> Near(Vector2 lo, Vector2 hi)
+        List<int> Near(Vector2 lo, Vector2 hi, bool keptOnly = true)
         {
             return Enumerable.Range(0, exteriorCount)
-                .Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => InPlan(v[i], lo, hi)))
+                .Where(q => (kept[q] || !keptOnly) && areas[q] != NavArea.Null && polygons[q].Any(i => InPlan(v[i], lo, hi)))
                 .ToList();
         }
 
