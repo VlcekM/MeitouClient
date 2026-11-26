@@ -267,7 +267,7 @@ memory, makes an enemy; B tagged TEMP_ALLY (bit 3) in A's squad's memory makes n
 tests run. So a squad that remembers the player as a temporary enemy is the enemy of every member of the
 player's faction whatever the faction relation, and a sweep takes all of its members in the attack zone. Meitou:
 `CharacterFacts.RegardsEnemy(World, SquadMemory, ...)` (the squad memory part `SquadMemoryEnemy`, then the faction relations), used by the attack
-zone, the line of fire, the steering's repulsion and goal 204's finder and perceived bounty (`ArrestSystem.Enemy`). Checked on the save of #1239 (a maxed fighter against a squad of Hungry Bandits, 30 s windows):
+zone, the line of fire, the steering's repulsion and, through `SquadMemoryEnemy` and the same faction test, goal 204's finder and perceived bounty (`ArrestSystem.Enemy`). Checked on the save of #1239 (a maxed fighter against a squad of Hungry Bandits, 30 s windows):
 before, 23 blows thrown and 18 landed, never two victims to a blow; after, 11 thrown and 18 landed.
 
 **Verified** (disassembly of `FUN_1406087a0`): "attack start" is `CombatClass` +0x15c, written at each attack's start by `FUN_1402b4570` (the fight start's write is only the initial
