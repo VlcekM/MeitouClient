@@ -645,7 +645,9 @@ public sealed partial class World
         s.Shackled = cold?.Inventory is { } worn && WearsLocked(worn);
         s.PortraitSerial = cold?.PortraitSerial ?? 0;
         s.LastingId = cold?.LastingId ?? LastingId.None;
-        s.ShacklesLocked = shown && Locks.LockSystem.WornShackles(cold) is not null;
+        var shackles = shown ? Locks.LockSystem.WornShackles(cold) : null;
+        s.ShacklesLocked = shackles is not null;
+        s.ShackleLevel = shackles?.Lock?.Level ?? 0;
         s.ShacklesOpen = shown && cold is { IsPlayer: true } && Locks.LockSystem.OpenShackles(cold) is not null;
         s.CanBeShackled = shown && cold is { IsPlayer: false } && Locks.LockSystem.CanBeShackled(cold, true);
         s.CarriesShackles = selected && Locks.LockSystem.CarriedShackles(cold) is not null;

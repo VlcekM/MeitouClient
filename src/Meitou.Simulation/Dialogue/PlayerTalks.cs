@@ -104,7 +104,11 @@ sealed class PlayerTalks(DialogueSystem dialogue)
         PlayerOrders.ClearSecond(cold);
         Finish(world, talk, p);
 
-        if (talk.Trade) world.SystemOf<Trading.TradeSystem>()?.OpenAt(world, talk.Talker, talk.Target);
+        // A trader whose dialogue would not trade with the talker says its line instead (#1506).
+        bool trades = talk.Trade
+            && (!world.Characters.TryResolveNext(talk.Target, out int targetSlot) || dialogue.OpensTrade(world, targetSlot, talk.Talker));
+
+        if (trades) world.SystemOf<Trading.TradeSystem>()?.OpenAt(world, talk.Talker, talk.Target);
         else
             dialogue.Start(world, talk.Target, talk.Talker, DialogueEvents.PlayerTalkToMe, playerStarted: true);
     }

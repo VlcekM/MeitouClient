@@ -676,6 +676,35 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
+    /// Whether Meitou's Trade order may open the trade with the trader in <paramref name="slot"/> for <paramref name="talker"/> at once. The
+    /// original trades only through a dialogue line with the Trade effect (docs/game/economy.md "Who trades"), so a trader whose dialogue has such
+    /// lines opens the trade only when the line a talk would open with (a dry run of <see cref="Start"/>'s pick) leads to one: the shopkeepers'
+    /// "I ain't trading with no thief!" (DC 23 STOLE_FROM_ME on the talker) has none, so a thief gets that conversation instead (#1506). A trader
+    /// without Trade lines (<c>is trader</c>, a code mod's shop) or with nothing to say opens it.
+    /// </summary>
+    internal bool OpensTrade(World world, int slot, CharacterId talker)
+    {
+        var set = SetOf(world, slot);
+        if (!set.Trades) return true;
+
+        var npc = world.Characters.IdOf(slot);
+        var roots = set.For(DialogueEvents.PlayerTalkToMe);
+        var (savedRolls, known) = (_rolls, _permanent.Keys.ToList());
+        var picked = Pick(world, new Conversation { Npc = npc, Player = talker, Event = DialogueEvents.PlayerTalkToMe, DryRun = true }, roots);
+        _rolls = savedRolls;
+        foreach (var key in _permanent.Keys.Except(known).ToList()) _permanent.Remove(key);
+
+        return picked is not { } p || LeadsToTrade(p.Line, []);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="node"/> or a line under it has the Trade effect (conditions of the lines below not checked, as
+    /// <see cref="DialogueSet.Trades"/>).
+    /// </summary>
+    static bool LeadsToTrade(DialogueNode node, HashSet<DialogueNode> seen) =>
+        seen.Add(node) && (node.Effects.Any(e => e.Action == DialogueActions.Trade) || node.Children.Any(n => LeadsToTrade(n, seen)));
+
+    /// <summary>
     /// Whether <paramref name="t"/> is a speaker on the NPC's side (itself, an interjector or its whole squad).
     /// </summary>
     static bool IsNpcSide(Talker t) => t is Talker.Me or Talker.Interjector1 or Talker.Interjector2 or Talker.Interjector3 or Talker.WholeSquad;
