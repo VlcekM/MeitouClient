@@ -282,7 +282,49 @@ public class TradeTests
         Assert.Single(b.SquadOf(boss).Shop!.Stock.Items);   // never filled
     }
 
-    static FcsRecord BackpackRecord() => Rec("bag-t", FcsRecordType.Container, r =>
+    /// <summary>
+    /// A shopkeeper whose dialogue refuses a thief, as the base game's <c>trader1</c> ("I ain't trading with no thief!" under DC 23 STOLE_FROM_ME
+    /// on the talker): the Trade order opens the trade for an honest customer, and for one its squad remembers stealing from it the conversation
+    /// says that line (a line without replies is a bubble) and no trade opens (#1506).
+    /// </summary>
+    [Fact]
+    public void A_trader_who_remembers_a_thief_says_so_instead_of_trading()
+    {
+        using var b = new Bazaar(
+            Rec("seller-t", FcsRecordType.Character, r => { r.Bools["is trader"] = true; r.References["dialogue"] = [Ref("shop-d")]; }),
+            Rec("thief-c", FcsRecordType.DialogAction, r => { r.Ints["condition name"] = 23; r.Ints["tag"] = MemoryTag.StoleFromMe; r.Ints["who"] = 1; }),
+            Rec("trade-a", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.Trade),
+            Rec("shop-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("thief-l"), Ref("hello-l")]),
+            Rec("thief-l", FcsRecordType.DialogueLine,
+                    r => { r.Strings["text0"] = "I ain't trading with no thief!"; r.References["conditions"] = [Ref("thief-c", 1)]; }),
+            Rec("hello-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "Welcome."; r.References["lines"] = [Ref("trade-l")]; }),
+            Rec("trade-l", FcsRecordType.DialogueLine,
+                    r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Let's trade."; r.References["effects"] = [Ref("trade-a")]; }));
+        var hero = b.Spawn("hero", new Vector2(0, 0), b.Data.PlayerFaction, true);
+        var shopkeeper = b.Spawn("shopkeeper", new Vector2(10, 0), b.Data.FactionIndex("f-t"), false, "shop-t");
+        b.World.Characters.Cold(shopkeeper.Slot)!.RecordId = "seller-t";
+        b.World.RunTicks(1);
+
+        b.Say(new OpenTrade(hero, shopkeeper) { Tick = 0 });
+        b.World.RunTicks(2);
+        Assert.NotNull(b.World.Snapshot.Trade);
+        b.Say(new CloseTrade { Tick = 0 });
+        b.World.RunTicks(1);
+
+        b.Dialogue.Memory.Remember(b.World, b.SquadOf(shopkeeper).Id, hero, MemoryTag.StoleFromMe);
+        b.Say(new OpenTrade(hero, shopkeeper) { Tick = 0 });
+        var said = new List<SpeechBubble>();
+        for (int i = 0; i < 4; i++)
+        {
+            b.World.RunTicks(1);
+            said.AddRange(b.World.Snapshot.Speech);
+        }
+
+        Assert.Null(b.World.Snapshot.Trade);
+        Assert.Contains(said, s => s.Speaker == shopkeeper && s.Text == "I ain't trading with no thief!");
+    }
+
+    static FcsRecord BackpackRecord() =>Rec("bag-t", FcsRecordType.Container, r =>
     {
         r.Ints["value"] = 100;
         r.Ints["inventory footprint width"] = 4;
