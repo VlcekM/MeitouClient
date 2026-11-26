@@ -1441,7 +1441,7 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   `LockedOn` (effectively locked, worn) refuses moving, unequipping and selling. `ShackleOrder` (verbs Unlock Shackles / Use Tools /
   Use Strength) sends the first eligible worker (the wearer or a mate within 25): pick (`Lockpicking.Step` rules), cut (needs a tool,
   `item function` 9; the best is consumed when hardness reaches 0) or break (strength > 3 x hardness). Another character's shackles: a pending
-  code 7 against the wearer's slave owner faction (none for a wearer without an owner). The lock is saved on the item (`lock lvl`, `locked`, `broken`, `hardness`). Shackled characters show the portrait Slave overlay.
+  code 7 against the wearer's slave owner faction (none for a wearer without an owner). The lock is saved on the item (`lock lvl`, `locked`, `broken`, `hardness`). Shackles worn in the boots or armour section, locked or open, show the portrait Slave overlay (`LockSystem.CuffSection`, as the original's flag 0x10, [ui-screens](game/ui-screens.md)): opening the lock leaves them on and the overlay with them.
 - **Spawn prisoners** (`PopulationSystem.MakePrisoners`; facts: [squad factory](game/factions-squads-towns.md#squad-factory)): a housed squad's `prisoners` templates are made
   at the owner squad's spot as squads of the template's faction (else the owner's), and each member in turn is imprisoned in a random free cage of the home building
   with the factory's FOREVER sentence (`SpawnSentence`, 9999999 h: never served, so no release round frees it; getting out is Escaping Prison); the first member left
@@ -1452,6 +1452,8 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
 - **Putting shackles on** (`PutShacklesOrder`, verb "Put on Shackles"; engine stand-in for dragging them onto the target's armour slot, which the held item does not do yet): a
   selected character carrying unworn, unbroken shackles walks to a live NPC that is down or caged and wears none, and within `ShackleReach` puts them on, locked again
   (re-locking is an engine choice); what the target wears in that slot goes into its inventory. No crime is booked. Prisoner Shackles take the boots slot.
+- **Taking shackles off** (`TakeOffShacklesOrder`, verb "Take off Shackles"; engine stand-in for dragging them out of the slot in the inventory window): offered on a live
+  player character wearing open shackles (`LockSystem.OpenShackles`: picked, cut or broken); they go into its inventory at once, else onto the ground, with the interface's `Item_Drop`.
 - **Slave state** (`CharacterCold.SlaveState` 0/1/2, `SlaveOwner`; facts: [carry-loot](game/carry-loot.md#unknowns) item 3): `DA_ENSLAVE_TARGETS_CARRIED_PERSON` (40) is the
   hand-over of DA 30 with no town test (`ArrestSystem.TakeOver`: orders 213 and 112, nothing else, **Verified** `FUN_140680560`); the caged captive is enslaved by the
   town's slavers' processing (183), not by the caging. Only a code mod's `TakeOver(enslave: true)` enslaves at the caging. A slave's

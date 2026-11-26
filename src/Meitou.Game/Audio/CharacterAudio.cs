@@ -536,7 +536,7 @@ sealed class CharacterAudio(GameHost host)
             case SoundKind.PickedUp:
                 sounds.Job(subject, "Character_Pick_Up_Ground");
                 break;
-            case SoundKind.ShacklesOn:
+            case SoundKind.ShacklesOn or SoundKind.ShacklesOff:
                 if (e.Item is not null) host.Sound.Ui.Sounds?.Play(new UiSoundEvent("Item_Drop", Item: e.Item));
                 break;
             case SoundKind.BountyPaid:

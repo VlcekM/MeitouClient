@@ -86,6 +86,9 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                 case PutShacklesOrder putOn:
                     PutShacklesInput(world, putOn);
                     break;
+                case TakeOffShacklesOrder takeOff:
+                    TakeOffShacklesInput(world, takeOff);
+                    break;
                 case ToggleDoorsOrder or ToggleDoorLocksOrder or Construction.SetBuildingPublic:
                     DoorInputs(world, command);
                     break;

@@ -5814,3 +5814,6 @@ msgstr "Gib dem Gebäude einen eigenen Namen, der in seinem Fenster, seinem Inve
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "Leer lassen für den eigenen Namen des Gebäudes."
+
+msgid "Take off Shackles"
+msgstr "Fesseln abnehmen"

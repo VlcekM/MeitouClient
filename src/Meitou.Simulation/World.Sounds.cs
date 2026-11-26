@@ -105,6 +105,11 @@ public enum SoundKind : byte
     /// same wherever the camera is.
     /// </summary>
     PostedInterface,
+    /// <summary>
+    /// The player took open shackles off one of its characters: the interface's <c>Item_Drop</c> with <c>Inventory_Items</c> of
+    /// <see cref="SoundEvent.Item"/> (the exe's drag out of the slot into the inventory grid).
+    /// </summary>
+    ShacklesOff,
 }
 
 /// <summary>

@@ -6644,3 +6644,6 @@ msgstr "给建筑起一个自己的名字，显示在它的面板、库存以及
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "留空则使用建筑原本的名字。"
+
+msgid "Take off Shackles"
+msgstr "取下镣铐"
