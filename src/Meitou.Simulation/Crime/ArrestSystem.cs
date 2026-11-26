@@ -559,13 +559,14 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     bool Suspect(World world, int slot) => Spottable(world, slot) && world.Characters.Cold(slot)!.Medical is not { Incapacitated: true };
 
     /// <summary>
-    /// A target of the bounty spotting and the disguise pass: a living player character, not carried or in a cage, not already being arrested or
-    /// left to a spotting's dialogue. Down counts: <c>FUN_140856f00</c>, called for every sensed character (<c>FUN_1408580d0</c>), skips only a
-    /// carried (<c>+0x3d4</c>) or caged (<c>+0x2f8</c> 2) target (<b>Verified</b>, decompile), so a guard spots the bounty on a knocked-out body.
+    /// A target of the bounty spotting and the disguise pass: a player character in the world, not carried or in a cage, not already being arrested
+    /// or left to a spotting's dialogue. Down or dead counts: <c>FUN_140856f00</c>, called for every sensed character (<c>FUN_1408580d0</c>, before
+    /// it tags a dead one and returns; the sense gather holds the dead), skips only a carried (<c>+0x3d4</c>) or caged (<c>+0x2f8</c> 2) target, and
+    /// the event fire refuses only a dead speaker (<c>FUN_140685660</c>, <c>FUN_140684990</c>; <b>Verified</b>, decompile).
     /// </summary>
     bool Spottable(World world, int slot) =>
         world.Characters.Next[slot].Alive
-            && world.Characters.Cold(slot) is { IsPlayer: true, IsImprisoned: false, CarriedBy.IsNone: true, Medical.Dead: false }
+            && world.Characters.Cold(slot) is { IsPlayer: true, IsImprisoned: false, CarriedBy.IsNone: true }
             && !Busy(world.Characters.IdOf(slot))
             && !_spottings.Exists(p => p.Target == world.Characters.IdOf(slot));
 

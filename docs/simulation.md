@@ -1339,7 +1339,7 @@ one starts with the order's provenance. The phases stay because Meitou's order s
 `IOrderSteps.Between`), and the duty goals' body act-outs (112 / 108 in `TownGoals`, 204's in `ArrestGoals`) start only from a mind's chosen goal (`DutyGoals.Ask`),
 which an order's hold refuses. The chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goal 204 is an [engine goal](#engine-goals) (below); goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
 - **Triggers**: a police-like witness that books a crime acts at once (`CrimeSystem.BookingsOf`, the witnessed-crime
-  events); every 15 ticks an awake NPC within 400 that sees (`Visibility`/`SneakVisibility`) a player character, awake or down but neither carried nor
+  events); every 15 ticks an awake NPC within 400 that sees (`Visibility`/`SneakVisibility`) a player character, awake, down or dead but neither carried nor
   caged (`ArrestSystem.Spottable`: `FUN_140856f00`, called for every sensed character, tests no more, **Verified**; slave catching and the escapee's
   arrest take awake ones only), whose
   bounty with its faction reaches its class threshold spots it while it wears no uniform piece (disguise level 0, `FUN_140856f00`) (not a looker in combat mode,

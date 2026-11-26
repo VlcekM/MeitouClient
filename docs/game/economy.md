@@ -694,8 +694,9 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   literals 5, 40, 4, 0.6, 0.75 `data_values.txt`, **Verified**; the meter's own step, `FUN_140855e80`, **Observed** as for a sneaker,
   [perception](perception.md)). So a stealth-0 target in full view of an awake guard in his town takes 45 x 2.5 = 112.5 s. Meitou
   (`ArrestSettings.RecognitionSeconds` 45): one meter per suspect filling in 45 s while any looker sees it (engine); not while the target is
-  carried or imprisoned, while a down one counts (`ArrestSystem.Spottable`; the function tests nothing else of the target, nor does its caller
-  `FUN_1408580d0`, which runs it for every sensed character, **Verified**, decompile). Recognition fires `EV_BOUNTY_SPOTTED` (44) at every call, with no
+  carried or imprisoned, while a down or dead one counts (`ArrestSystem.Spottable`; the function tests nothing else of the target, nor does its
+  caller `FUN_1408580d0`, which runs it for every sensed character and only then tags a dead one; the sense gather holds the dead, and the event
+  fire `FUN_140685660` / `FUN_140684990` refuses a dead speaker only, **Verified**, decompile). Recognition fires `EV_BOUNTY_SPOTTED` (44) at every call, with no
   timer, while the looker is not in combat mode (`FUN_140436610`), its squad does not love the target (`FUN_140599590`: long tags & 0xc) and it does not regard it as
   friendly (vfunc `0x3f0` = `FUN_1407923d0` with 0: real factions, its own test includes the love); a bounty below 1 sets the target's `+0x110` to 250 instead, under the same gates (**Verified**, decompile). The
   bounty branch itself (no uniform piece, `+0x100` <= 0) is taken only while the looker does not regard the target as friendly with the disguise read
