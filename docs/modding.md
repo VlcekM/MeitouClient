@@ -679,6 +679,10 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
 - **Sleep clock:** `CharacterCold.BedUsedHours` is the game hours of the last update of a bed the character lay in (status `+0xc0`, stamped by
   `Task_UseBed`'s update, which row 98's desire reads; **Observed** as the original's last-slept time): hours since it slept are
   `world.GameHours - BedUsedHours`. Derived, not saved (0 after a load until it sleeps).
+- **Bed occupants:** `world.Fixtures.Find(bedId)` (a character's bed is `CharacterCold.InWhat` while `InSomething` is `HeldState.Bed`) gives the
+  bed `Fixture`: `Occupants` (read-only, entry order; an entry may be stale) and `Capacity` (its `max operators`, at least 1);
+  `FixtureRegistry.Holds(table, bed, id)` tells whether one is still in it, `HeldCount` how many are, `IsFree` / `IsFreeFor` whether there is room.
+  So a mod finds who else shares a double bed. Read only: entering and leaving go through `EnterBed` / `LeaveBed`. Engine API.
 - **Items created:** a registered system implementing `IItemCreatedObserver` (`Meitou.Simulation.Items`) receives `Created(World, in
   ItemCreated)` for each item the world makes of an `ItemCreatedKind`: `Loot` (a camp's ground items, a town's artifacts for its buildings'
   containers), `Crafted` (a bench's finished item, `Character` the crafter), `ShopStock` (each unit and special item of a shop's fill, before

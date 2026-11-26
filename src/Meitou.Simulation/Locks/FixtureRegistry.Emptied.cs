@@ -79,12 +79,12 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Lets the fixture's occupant out of its bed or cage.
+    /// Lets the fixture's occupants out of its bed or its cage.
     /// </summary>
     void LetOut(World world, Fixture f)
     {
         if (f.Occupant.IsNone) return;
-        if (f.Kind == FixtureKind.Bed) LeaveBed(world, f.Occupant);
+        if (f.Kind == FixtureKind.Bed) LeaveAll(world, f);
         else Release(world, f.Occupant);
         f.Occupant = CharacterId.None;
     }

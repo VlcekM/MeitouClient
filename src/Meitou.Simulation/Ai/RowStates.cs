@@ -148,7 +148,8 @@ public static class RowStates
 
     /// <summary>
     /// 73 machineHasFreeOperatorSlot (<c>FUN_140598de0</c> → <c>UseableStuff</c> slot 158 <c>FUN_1400f7bf0</c>, <b>Verified</b>) of a bed target:
-    /// true for a character among its users, else while its users are fewer than its places (one; Meitou reads the users as the bed's occupant).
+    /// true for a character among its users, else while its users are fewer than its places (<c>max operators</c>; Meitou reads the users as the bed's
+    /// <see cref="Fixture.Occupants"/>).
     /// The hand asked is read as the character's own (AI <c>+0x300</c> through <c>FUN_1405c6ae0</c>, <b>Observed</b>). False for a site that
     /// resolves to nothing (<see cref="SiteGone"/>: <c>FUN_140598de0</c> finds no object); null for another target that is no bed (a machine's or a
     /// cage's slots are their systems' own tests).
@@ -158,7 +159,7 @@ public static class RowStates
         if (SiteGone(world, site)) return false;
         if (site is null || world.Fixtures.Find(site) is not { Kind: FixtureKind.Bed } bed) return null;
 
-        return FixtureRegistry.IsFree(world.Characters, bed) || bed.Occupant == world.Characters.IdOf(slot);
+        return FixtureRegistry.IsFree(world.Characters, bed) || bed.Occupants.Contains(world.Characters.IdOf(slot));
     }
 
     /// <summary>

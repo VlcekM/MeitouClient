@@ -451,6 +451,12 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
 - **Enter / leave** (`FUN_14032e2f0(character, enter, bed)`): entering sets `+0x2f8 = 1` and the handle, and adds the character to the bed's occupant
   set (UseableStuff slot 159 `FUN_1400f8030`, refused once the set holds `max operators`); leaving (`FUN_140345620`) removes it and clears both.
   "Free for X" (slot 158 `FUN_1400f7bf0`): X is in the set or the set is below `max operators`.
+  Meitou (shared beds): `Fixture.Occupants` is the set in entry order (`Occupant` its first; hashed; not saved: `Bind` rebuilds it from each
+  sleeper's `in what`, in slot order), `Fixture.Capacity` the bed's `BedData.Operators`: the BUILDING's `max operators` unless below 0, else the bed
+  functionality's (the machines' `+0x3ac` rule, `FUN_1402a3750`; every base bed has 1), below 1 read as 1 (engine choice).
+  `FixtureRegistry.IsFree` is room for a newcomer, `IsFreeFor` slot 158 with X; every bed path (orders, put-in, the bed searches, the trips'
+  reservations `BedSystem.Reserved`) tests them. Each sleeper lies at the node nearest to itself ("Lie spot"), with no test of the other's node,
+  so two may share one.
 - **Task_UseBed** (98 USE_BED, 100 GET_PUT_IN_BED, 258 USE_BED_ORDER; slots 1 `FUN_140357d00`, 2 `FUN_140351770`, 5 `FUN_140347950`, 6 `FUN_140347ba0`):
   the character is put at the bed's position marker and plays its clip (below, "Lie spot"); with the task's flag +0xa0 the start first
   checks rent (`FUN_140357ad0`: a negative cost is passed on to the payment only when the bed has a parent building, slot 59) and power; with the flag clear
@@ -552,7 +558,8 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   list count gates them), so a home with BF_BED beds that are all taken or targeted gives no bed at all; the lister matches the function exactly, so
   skeleton beds (25) are not in step 1's list (**Verified** by decompile, `FUN_1408cfe00`, `FUN_14054d4f0`). Meitou: `HomeBedClaims` (serial, on the
   package cadence, member order) gives each member lying in bed, going to bed or with going to bed open at this hour a BF_BED bed of its home: the
-  one it lies in, else the one it claimed while still free, else the first free one no one claimed (Meitou's thinks run in parallel, so the claims
+  one it lies in, else the one it claimed while still free, else the first free one no one claimed (a shared bed with room included; the sub-target
+  test above keeps mates out of one a mate claimed or lies in) (Meitou's thinks run in parallel, so the claims
   are made serially; which members get the beds is an engine choice). A think takes its claim, else the free unclaimed bed the next
   pass would give it, and with none the goal's desire is 0. Without such beds (homeless, or a home with none) `AiSystem.SpareBed` runs the search
   (a squad without a town: own or allied beds within the bed search range, engine choice); with no bed found the goal's desire is 0.
