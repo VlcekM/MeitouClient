@@ -322,8 +322,9 @@ sealed class LookPresets(SettingsMenu menu)
             or WorldFrame.DepthOfFieldSwitch => "Medium impact",
         "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog" or "Bloom strength (0 = game)" or "Lit dust"
             or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or WorldFrame.BloodDrawsSlider or "Item icons" or "Fog" or "Bolt tracers"
-            or "Water contact foam, wakes and ripples" or "Light shafts air (0 = none)" or WorldFrame.ShaftQualitySlider or WorldFrame.SmaaQualitySlider or WorldFrame.GiRaysSwitch
-            or WorldFrame.ShadowCascadesSlider or "Reflection range x (game 0.6)" or WorldFrame.ReflectionSamplesSlider or "Hair highlights" or "Cloth sheen"
+            or "Water contact foam, wakes and ripples" or "Light shafts air (0 = none)" or WorldFrame.ShaftQualitySlider
+            or WorldFrame.SmaaQualitySlider or WorldFrame.GiRaysSwitch or WorldFrame.ShadowCascadesSlider or "Reflection range x (game 0.6)"
+            or WorldFrame.ReflectionSamplesSlider or "Hair highlights" or "Cloth sheen"
             or "Lamp warmth" or "Soft grazing sun" or "Contact shadows" or "Glass bottles" or "Haze" or "Advanced materials" or "Mesh welding"
             or WorldFrame.FilteringSlider or WorldFrame.ObjectDistanceSlider or "Foliage draw distance x" or "Grass draw distance x"
             or "Large foliage range (F6 Meitou)" or "Medium foliage range" or "Small foliage range" or "Landmark distance (Meitou)"

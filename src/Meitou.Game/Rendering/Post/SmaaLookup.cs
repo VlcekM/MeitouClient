@@ -103,6 +103,7 @@ sealed class SmaaLookup(IGpuContext ctx) : IDisposable
             rgba[4 * i] = rg[2 * i];
             rgba[4 * i + 1] = rg[2 * i + 1];
         }
+
         return rgba;
     }
 }
