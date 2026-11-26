@@ -242,6 +242,12 @@ public sealed unsafe class DebugOverlay : IDisposable
     }
 
     /// <summary>
+    /// <see cref="TryCreate(IGpuContext, Func{string, string?}?, float)"/> at 16 pixels (the released signature, kept for built mods:
+    /// docs/modding.md "API compatibility").
+    /// </summary>
+    public static DebugOverlay? TryCreate(IGpuContext gpu, Func<string, string?>? resolve) => TryCreate(gpu, resolve, 16);
+
+    /// <summary>
     /// The overlay, or null when no font is found: a monospace system font (the columns are padded with spaces), else, if <paramref name="resolve"/>
     /// finds game files, the game's standard face (proportional, so columns drift). Its glyphs are baked at <paramref name="pixelHeight"/>.
     /// </summary>

@@ -50,10 +50,16 @@ public static class ModList
         Discover(install).ToDictionary(m => m.Name, m => m.Path, StringComparer.Ordinal);
 
     /// <summary>
+    /// <see cref="FindMods"/> with each mod's source and whether it is an RE_Kenshi plugin mod, in name order (the released signature, kept for
+    /// built mods: docs/modding.md "API compatibility").
+    /// </summary>
+    public static List<ModInfo> Discover(GameInstall install) => Discover(install, null);
+
+    /// <summary>
     /// <see cref="FindMods"/> with each mod's source and whether it is an RE_Kenshi plugin mod, in name order; without the workshop items in
     /// <paramref name="unsubscribed"/> (the launcher's, docs/launcher.md "Workshop sync": still on disk, no longer subscribed).
     /// </summary>
-    public static List<ModInfo> Discover(GameInstall install, IReadOnlySet<ulong>? unsubscribed = null)
+    public static List<ModInfo> Discover(GameInstall install, IReadOnlySet<ulong>? unsubscribed)
     {
         var mods = new Dictionary<string, ModInfo>(StringComparer.Ordinal);
         if (install.WorkshopDirectory is { } workshop)
