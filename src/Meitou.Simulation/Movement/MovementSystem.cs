@@ -1924,9 +1924,20 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         }
 
         StepBody(world, i, p, ref n, cold, ref s);
+        if (s.Steering && cold.Steer is { LeadSeconds: > 0 }) FacePursuitStep(in p, ref n);
+
         n.Velocity = new Vector3(s.Dir.X * s.Speed, 0, s.Dir.Y * s.Speed);
         n.Animation = (ushort)(s.Speed < 1 ? 0 : s.Speed <= n.WalkSpeed + 1 ? 1 : 2);
         n.AnimationTime = n.Animation == p.Animation ? p.AnimationTime + dt : 0;
+    }
+
+    /// <summary>
+    /// A chaser leading a runner faces the step it took after body contact and navmesh sliding. If held in place, it keeps its prior heading.
+    /// </summary>
+    static void FacePursuitStep(in CharacterHot previous, ref CharacterHot next)
+    {
+        var step = new Vector2(next.Position.X - previous.Position.X, next.Position.Z - previous.Position.Z);
+        next.Yaw = step.LengthSquared() > 1e-6f ? MathF.Atan2(step.X, step.Y) : previous.Yaw;
     }
 
     /// <summary>

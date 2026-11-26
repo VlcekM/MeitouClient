@@ -429,16 +429,12 @@ public static class CombatSteering
         // The dead zone: under STOP while moving, under START while standing, it stands.
         if (!s.PowerThrough && vel.Length() < (moving ? stop : start)) vel = Vector2.Zero;
 
-        // While leading, cap the requested velocity as forward movement, without the side-step snap.
+        // Leading, it faces the way it moves, so the side-step snap leaves the velocity as it is.
         if (leading && vel.LengthSquared() > 1e-8f) face = Vector2.Normalize(vel);
         else vel = Snap(vel, face, strafing);
 
         vel = Cap(vel, face, s, cold, maxSpeed, world.TickSeconds);
         vel = new Vector2(Filter(s.HistX, vel.X, world.TickSeconds), Filter(s.HistZ, vel.Y, world.TickSeconds));
-
-        // Follow the filtered movement so a change in the lead point cannot turn the fighter against its travel.
-        if (leading) face = vel.LengthSquared() > 1e-8f ? Vector2.Normalize(vel) : Vector2.Zero;
-
         return vel * mult;
     }
 

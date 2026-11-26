@@ -925,9 +925,10 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             var dir = delta / distance;
             ref var n = ref next[i];
 
-            // On a path to the target (the pursuit's) the movement system steers it: facing the target here would undo each tick's turn towards a
-            // waypoint that lies well off the straight line, and a walker more than 90 degrees off its waypoint does not step (MovementSystem.Turn).
-            if (!Settings.SelfApproach && (n.Flags & (ushort)MoveFlags.HasPath) != 0) continue;
+            // Facing the target would undo a turn toward a waypoint. A walker more than 90 degrees off the waypoint cannot step
+            // (MovementSystem.Turn). Leading a runner also leaves the heading to movement, which faces the resolved step.
+            if (!Settings.SelfApproach && ((n.Flags & (ushort)MoveFlags.HasPath) != 0 || cold.Steer is { Active: true, LeadSeconds: > 0 }))
+                continue;
 
             n.Yaw = MathF.Atan2(dir.X, dir.Y);
             if (!Settings.SelfApproach) continue;
