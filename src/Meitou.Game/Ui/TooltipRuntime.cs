@@ -27,6 +27,11 @@ sealed class TooltipRuntime(PlayerInterface player)
     public Func<string, GameRecord?>? ItemRecordOf { get; set; }
 
     /// <summary>
+    /// The mods a record comes from, in load order (<see cref="GameDatabase.ModsOf"/>), for the item tooltip's last line; the host sets it.
+    /// </summary>
+    public Func<GameRecord, IReadOnlyList<string>>? RecordMods { get; set; }
+
+    /// <summary>
     /// The "-Only for:" text of a special food record (<see cref="Meitou.Data.Gameplay.Bodies.SpecialFood.EatenBy"/>); the host sets it.
     /// </summary>
     public Func<string, string>? SpecialFoodRaces { get; set; }
@@ -1134,8 +1139,20 @@ sealed class TooltipRuntime(PlayerInterface player)
         if (armour is null && record?.GetShownString("description") is { Length: > 0 } text)
             lines.Add(new(text, "", TooltipTone.Ink, Paragraph: true));
         if (type == Data.Fcs.FcsRecordType.Weapon) lines.AddRange(WeaponTail(t, model));
+        AddRecordModsRow(lines, record);
 
         return lines;
+    }
+
+    /// <summary>
+    /// Meitou's last row: a blank row, then the mods the item's record comes from (<see cref="RecordModsText"/>); none for a base-game record.
+    /// </summary>
+    void AddRecordModsRow(List<TooltipLine> lines, GameRecord? record)
+    {
+        if (record is null || RecordMods?.Invoke(record) is not { Count: > 0 } mods) return;
+
+        lines.Add(new(" "));
+        lines.Add(new(RecordModsText.Of(mods), "", TooltipTone.GreyBright, Paragraph: true));
     }
 
     /// <summary>
