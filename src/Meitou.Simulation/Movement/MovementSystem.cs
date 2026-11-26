@@ -1468,7 +1468,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// </summary>
     static CharacterId Followed(World world, Squad? squad, CharacterCold cold) =>
         !cold.FollowOrder.IsNone ? cold.FollowOrder : cold.Ai is { FollowTarget.IsNone: false } follows ? follows.FollowTarget
-        : Kidnap.ObedientSlave.OwnerOf(world, cold) is { } owner ? owner : squad?.Leader ?? CharacterId.None;
+        : Kidnap.ObedientSlave.OwnerOf(world, cold) is { } owner ? owner
+        : squad is not null ? Population.PopulationSystem.ActingLeaderOf(world, squad)
+        : CharacterId.None;
 
     /// <summary>
     /// The squad whose formation a follower takes its slot in (<c>Task_Follow</c>'s formation test <c>FUN_14033b160</c> and its spot

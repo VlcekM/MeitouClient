@@ -837,6 +837,30 @@ public sealed partial class PopulationSystem
     /// </summary>
     internal CharacterId EffectiveLeader(World world, Squad squad)
     {
+        var lead = FindEffectiveLeader(world, squad, out bool scanned);
+        if (scanned) squad.Backup = lead;
+
+        return lead;
+    }
+
+    /// <summary>
+    /// <see cref="EffectiveLeader"/> without caching a backup: a pure read, safe in any phase (the AI's think reads it from its partitions).
+    /// </summary>
+    internal CharacterId ActingLeader(World world, Squad squad) => FindEffectiveLeader(world, squad, out _);
+
+    /// <summary>
+    /// The squad's effective leader (<see cref="ActingLeader"/>) from any phase: its leader while standing (checked first, without looking up this
+    /// system), else as <see cref="ActingLeader"/> finds it; the stored leader without a population system.
+    /// </summary>
+    internal static CharacterId ActingLeaderOf(World world, Squad squad) =>
+        Standing(world.Characters, squad.Leader) ? squad.Leader : world.SystemOf<PopulationSystem>()?.ActingLeader(world, squad) ?? squad.Leader;
+
+    /// <summary>
+    /// <see cref="EffectiveLeader"/>'s search; <paramref name="scanned"/> when the answer came from the member scan, the one the original caches.
+    /// </summary>
+    CharacterId FindEffectiveLeader(World world, Squad squad, out bool scanned)
+    {
+        scanned = false;
         var table = world.Characters;
         if (Standing(table, squad.Leader)) return squad.Leader;
         if (Standing(table, squad.Backup)) return squad.Backup;
@@ -846,7 +870,7 @@ public sealed partial class PopulationSystem
             if (Ai.SquadIntact.Down(table, m) || !table.TryResolveNext(m, out int s)) continue;
             var at = table.Previous[s].Position;
             if (!_active.Contains(WorldLayout.ZoneOf(at.X, at.Z))) continue;
-            squad.Backup = m;
+            scanned = true;
             return m;
         }
 

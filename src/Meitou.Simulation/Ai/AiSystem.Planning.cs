@@ -467,7 +467,7 @@ public sealed partial class AiSystem
         public int Followed()
         {
             var cold = _world.Characters.Cold(_slot)!;
-            var target = Kidnap.ObedientSlave.OwnerOf(_world, cold) ?? _mind.Squad.Leader;
+            var target = Kidnap.ObedientSlave.OwnerOf(_world, cold) ?? Population.PopulationSystem.ActingLeaderOf(_world, _mind.Squad);
             return _world.Characters.TryResolveNext(target, out int at) && at != _slot ? at : -1;
         }
 

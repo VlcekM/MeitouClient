@@ -92,10 +92,12 @@ sealed class EngineOrders(AiSystem ai, PopulationData data) : IOrderOwner
     static bool FollowLeader(World world, int slot)
     {
         var table = world.Characters;
-        if (world.Squads.Find(table.Cold(slot)!.SquadId) is not { } squad || squad.Leader.IsNone || squad.Leader == table.IdOf(slot)) return false;
-        if (!table.TryResolveNext(squad.Leader, out _)) return false;
+        if (world.Squads.Find(table.Cold(slot)!.SquadId) is not { } squad) return false;
 
-        var follow = new TaskRequest(CharacterTask.Follow, TaskType.Patrol, TaskSource.Order) { Target = squad.Leader };
+        var lead = PopulationSystem.ActingLeaderOf(world, squad);
+        if (lead.IsNone || lead == table.IdOf(slot) || !table.TryResolveNext(lead, out _)) return false;
+
+        var follow = new TaskRequest(CharacterTask.Follow, TaskType.Patrol, TaskSource.Order) { Target = lead };
         TaskStart.Start(world, slot, follow);
         return true;
     }

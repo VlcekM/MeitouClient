@@ -392,8 +392,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The role list a player-faction mind's tiers score: its autonomous squad's package list for its role (<see cref="PlayerSideBoard"/>; none for
     /// any other player squad). An obeying slave's master's Slave list is the job passes' (<see cref="ObeyedRoles"/>).
     /// </summary>
-    internal static IReadOnlyList<AiGoal> PlayerSideRoles(Squad squad, CharacterId id, CharacterCold cold) =>
-        PlayerSideBoard(squad).Roles[(int)RoleOf(squad, id, cold)];
+    internal static IReadOnlyList<AiGoal> PlayerSideRoles(World world, Squad squad, CharacterId id, CharacterCold cold) =>
+        PlayerSideBoard(squad).Roles[(int)RoleOf(world, squad, id, cold)];
 
     /// <summary>
     /// One character's chooser (<see cref="Ladder"/>), one ladder per think: first the order step for everyone, whose pick (an order that runs or can
@@ -418,7 +418,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        var roles = board.Roles[(int)RoleOf(squad, id, cold)];
+        var roles = board.Roles[(int)RoleOf(world, squad, id, cold)];
         ThinkNpc(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
     }
 
@@ -435,7 +435,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         if (DecisionSystem.Down(cold) || row is null) return;
 
-        var roles = PlayerSideRoles(squad, id, cold);
+        var roles = PlayerSideRoles(world, squad, id, cold);
         var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, replan);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         row.Pick = pick;
@@ -838,8 +838,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     static bool HoldsObedience(CharacterCold cold) => cold.IsPlayer ? Kidnap.ObedientSlave.HasJob(cold) : !cold.ObedienceLost;
 
     /// <summary>
-    /// The role list a member takes (docs/game/ai.md "Goal loading"): the squad leader the leader's, else by its squad role. Public for code mods; a
-    /// pure read of the squad's leader and the character's role, safe in any phase.
+    /// The role list a member takes (docs/game/ai.md "Goal loading", docs/game/ai-tasks.md "Precedence" step 4): the squad's effective leader
+    /// (<see cref="PopulationSystem.ActingLeaderOf"/>, <c>FUN_140792b90</c>: a member standing in for a leader who is down) and the leader take the
+    /// leader's, the others theirs by squad role. Public for code mods; a pure read, safe in any phase.
+    /// </summary>
+    public static AiRole RoleOf(World world, Squad squad, CharacterId id, CharacterCold cold) =>
+        PopulationSystem.ActingLeaderOf(world, squad) == id ? AiRole.Leader : RoleOf(squad, id, cold);
+
+    /// <summary>
+    /// The role list a member takes by its place in the squad alone: the stored leader the leader's, else by its squad role, whoever stands in for a
+    /// leader who is down (<see cref="RoleOf(World, Squad, CharacterId, CharacterCold)"/>, which the chooser uses). Kept for code mods.
     /// </summary>
     public static AiRole RoleOf(Squad squad, CharacterId id, CharacterCold cold) =>
         squad.Leader == id || cold.Role == (int)SquadRole.Leader ? AiRole.Leader
@@ -865,7 +873,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         int hour = world.Hour;
 
-        var roles = ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(squad, world.Characters.IdOf(slot), cold)];
+        var roles = ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(world, squad, world.Characters.IdOf(slot), cold)];
         return Lists(roles, type, hour) || Lists(mind.RaceGoals, type, hour);
     }
 
@@ -877,7 +885,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         int hour = world.Hour;
         if (Lists(ObeyedRoles(world, mind.Squad, cold), type, hour)) return true;
-        if (Lists(PlayerSideRoles(mind.Squad, world.Characters.IdOf(slot), cold), type, hour)) return true;
+        if (Lists(PlayerSideRoles(world, mind.Squad, world.Characters.IdOf(slot), cold), type, hour)) return true;
 
         return world.SystemOf<AiSystem>()?.OnRungs(type) == true && Lists(mind.RaceGoals, type, hour);
     }
@@ -1248,7 +1256,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var cold = world.Characters.Cold(self.Slot)!;
         var target = targeting == TaskTargetType.SquadMission
             ? board.MissionTarget
-            : Kidnap.ObedientSlave.OwnerOf(world, cold) ?? squad.Leader;
+            : Kidnap.ObedientSlave.OwnerOf(world, cold) ?? PopulationSystem.ActingLeaderOf(world, squad);
         if (target.IsNone || target == self || !world.Characters.IsAlive(target)) return 0;
 
         return type == TaskType.FollowUrgentEscape ? EscapeDesire(world, self.Slot, target.Slot) : FollowDesire(type, target);
@@ -2824,7 +2832,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     static void ActPatrol(World world, int slot, AiMind mind, Blackboard board)
     {
         var table = world.Characters;
-        bool leader = mind.Squad.Leader == table.IdOf(slot);
+        bool leader = PopulationSystem.ActingLeaderOf(world, mind.Squad) == table.IdOf(slot);
         if (!leader)
         {
             Become(world, slot, CharacterTask.Follow);

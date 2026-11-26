@@ -76,7 +76,7 @@ public readonly ref struct ModGoalAsk
     /// <summary>
     /// The role list the asker takes in its squad (<see cref="AiSystem.RoleOf"/>).
     /// </summary>
-    public AiRole Role => AiSystem.RoleOf(_squad, Id, _cold);
+    public AiRole Role => AiSystem.RoleOf(_world, _squad, Id, _cold);
 
     /// <summary>
     /// Whether the asker is of the player's faction (a player-faction mind, <see cref="AiMind.PlayerSide"/>).

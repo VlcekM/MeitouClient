@@ -38,7 +38,7 @@ sealed class TownPlaceClaims(PopulationData data)
     /// its role's. So an enslaved member claims no place its plan never uses.
     /// </summary>
     static IReadOnlyList<AiGoal> RolesOf(World world, Blackboard board, Squad squad, CharacterId id, CharacterCold cold) =>
-        AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, id, cold)];
+        AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(world, squad, id, cold)];
 
     #endregion
 
