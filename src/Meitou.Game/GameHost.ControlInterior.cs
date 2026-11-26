@@ -98,6 +98,10 @@ sealed partial class GameHost
             + "switch) or in the order met (off)", ControlObjectSort);
         add("gpu-times", "gpu-times [frames]", "debug: the GPU's mean ms per frame stage over the newest frames (default 60, at most 300), largest "
             + "first", ControlGpuTimes);
+        add("cpu-times", "cpu-times [frames]", "debug: the render thread's mean ms per frame stage over the newest frames (default 60, at most 300), "
+            + "largest first", ControlCpuTimes);
+        add("profiler", "profiler <off|gpu|cpu>", "debug: what F12's chart shows (on Metal the GPU stages are timed only while it shows gpu)",
+            ControlProfiler);
         add("lamps", "lamps list [radius] | lamps off <index...> | lamps on", "debug: the lamps reaching the camera's target (index, position "
             + "relative to it, colour, power, radius, type, cone, falloff, rule, owner); off leaves those indices out, on brings them all back",
             ControlLamps);
@@ -174,7 +178,17 @@ sealed partial class GameHost
     /// <summary>
     /// The <c>gpu-times</c> command (usage and help at its registration in <see cref="RegisterControlInteriorCommands"/>).
     /// </summary>
-    void ControlGpuTimes(IReadOnlyList<string> args, DevConsole con)
+    void ControlGpuTimes(IReadOnlyList<string> args, DevConsole con) => ControlStageTimes(args, con, gpu: true);
+
+    /// <summary>
+    /// The <c>cpu-times</c> command (usage and help at its registration in <see cref="RegisterControlInteriorCommands"/>).
+    /// </summary>
+    void ControlCpuTimes(IReadOnlyList<string> args, DevConsole con) => ControlStageTimes(args, con, gpu: false);
+
+    /// <summary>
+    /// The profiler's mean ms per stage on the GPU or the render thread, over the frames <paramref name="args"/> names (default 60).
+    /// </summary>
+    void ControlStageTimes(IReadOnlyList<string> args, DevConsole con, bool gpu)
     {
         if (DebugMenu.Profiler is null)
         {
@@ -182,7 +196,28 @@ sealed partial class GameHost
             return;
         }
 
-        con.Print(DebugMenu.Profiler.GpuMeans(args.Count > 0 ? int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture) : 60));
+        int frames = args.Count > 0 ? int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture) : 60;
+        con.Print(gpu ? DebugMenu.Profiler.GpuMeans(frames) : DebugMenu.Profiler.CpuMeans(frames));
+    }
+
+    /// <summary>
+    /// The <c>profiler</c> command (usage and help at its registration in <see cref="RegisterControlInteriorCommands"/>).
+    /// </summary>
+    void ControlProfiler(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (DebugMenu.Profiler is null)
+        {
+            con.Error("no DebugMenu.Profiler in this run");
+            return;
+        }
+        if (args.Count == 0 || !Enum.TryParse<Rendering.Profiling.FrameProfiler.Mode>(args[0], true, out var mode))
+        {
+            con.Error("profiler <off|gpu|cpu>");
+            return;
+        }
+
+        DebugMenu.Profiler.Showing = mode;
+        con.Print($"profiler {mode.ToString().ToLowerInvariant()}");
     }
 
     /// <summary>

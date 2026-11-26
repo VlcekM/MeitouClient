@@ -40,7 +40,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     /// <summary>
     /// The pipelines by program and target format.
     /// </summary>
-    readonly Dictionary<(GpuProgram, InternalFormat, BlendState?), GraphicsPipelineDesc> _pipelines = [];
+    readonly Dictionary<(GpuProgram, InternalFormat, InternalFormat, BlendState?), GraphicsPipelineDesc> _pipelines = [];
 
     /// <summary>
     /// The nearest clamped sampler every input is read with.
@@ -85,10 +85,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
 
         var cmd = (MetalCommandList)ctx.BeginNative("gi resolve");
         r.P.ApplyGlobals();
-        r.P.Set(r.Part, 0f);
-        Fullscreen(cmd, r.P, _low!, blend: false);
-        r.P.Set(r.Part, 1f);
-        Fullscreen(cmd, r.P, _lowSky!, blend: false);
+        FullscreenBoth(cmd, r.P, _low!, _lowSky!);
 
         a.P.Bind(a.Low, new SampledTexture(_point, _low!.View()));
         a.P.Bind(a.LowSky, new SampledTexture(_point, _lowSky!.View()));
@@ -162,11 +159,25 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/>'s red, green and blue with <paramref name="blend"/> (none:
     /// written as it is).
     /// </summary>
-    internal void Fullscreen(MetalCommandList cmd, LegacyProgram program, GpuTexture target, BlendState? blend, bool load)
+    internal void Fullscreen(MetalCommandList cmd, LegacyProgram program, GpuTexture target, BlendState? blend, bool load) =>
+        Draw(cmd, program, target, null, blend, load);
+
+    /// <summary>
+    /// One fullscreen triangle of <paramref name="program"/> into <paramref name="first"/> (location 0) and <paramref name="second"/> (location 1,
+    /// of the same size) at once: a shader with two outputs, written as they are.
+    /// </summary>
+    internal void FullscreenBoth(MetalCommandList cmd, LegacyProgram program, GpuTexture first, GpuTexture second) =>
+        Draw(cmd, program, first, second, null, false);
+
+    /// <summary>
+    /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/> and, when given, <paramref name="second"/> at location 1,
+    /// with <paramref name="blend"/> on their red, green and blue (none: written as they are).
+    /// </summary>
+    void Draw(MetalCommandList cmd, LegacyProgram program, GpuTexture target, GpuTexture? second, BlendState? blend, bool load)
     {
         int w = target.Desc.Width, h = target.Desc.Height;
-        var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);
-        var key = (program.Program, formats.Colour, blend);
+        var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None, Extra: second?.Desc.Format ?? InternalFormat.None);
+        var key = (program.Program, formats.Colour, formats.Extra, blend);
         if (!_pipelines.TryGetValue(key, out var desc))
         {
             var state = DrawState.For(formats, false);
@@ -175,7 +186,8 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
         }
 
         var loadOp = blend is not null || load ? LoadOp.Load : LoadOp.DontCare;
-        cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), loadOp, default), default, w, h));
+        var extra = second is null ? default : new RenderTarget(second.Attachment(), loadOp, default);
+        cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), loadOp, default), default, w, h, Extra: extra));
         cmd.SetViewport(new PixelViewport(0, 0, w, h, 0, 1));
         cmd.SetScissor(new PixelRect(0, 0, (uint)w, (uint)h));
         cmd.SetRaster(CullMode.None, FrontFaceDirection.Ccw);
@@ -234,9 +246,9 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
         public readonly SamplerSlot NearDepth, Albedo, Low, LowSky, Cache;
 
         /// <summary>
-        /// The uniforms of the reconstruction, the resolve's part and the apply's low size.
+        /// The uniforms of the reconstruction and the apply's low size.
         /// </summary>
-        public readonly UniformHandle NearPlanes, Tan, Right, Up, Back, Eye, FullSize, Div, Part, LowSize;
+        public readonly UniformHandle NearPlanes, Tan, Right, Up, Back, Eye, FullSize, Div, LowSize;
 
         /// <summary>
         /// Compiles <paramref name="fragment"/> with the post chain's fullscreen vertex shader and looks its handles up.
@@ -247,8 +259,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
             (NearDepth, Albedo, Low, LowSky) = (P.Sampler("uNearDepth"), P.Sampler("uAlbedo"), P.Sampler("uLow"), P.Sampler("uLowSky"));
             Cache = P.Sampler("uGiCache");
             (NearPlanes, Tan, Right, Up, Back) = (P.Uniform("uNearPlanes"), P.Uniform("uTan"), P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"));
-            (Eye, FullSize, Div, Part, LowSize) = (P.Uniform("uGiEye"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uPart"),
-                P.Uniform("uLowSize"));
+            (Eye, FullSize, Div, LowSize) = (P.Uniform("uGiEye"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLowSize"));
         }
     }
 }

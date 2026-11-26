@@ -51,7 +51,7 @@ sealed partial class GameHost
     /// </summary>
     void ControlGfx(IReadOnlyList<string> args, DevConsole con)
     {
-        if (GameLoop.Panel is not { } panel)
+        if (AgentChannel.SettingsPanel is not { } panel)
         {
             con.Error("gfx: no settings window in this mode");
             return;

@@ -65,6 +65,7 @@ rows above its tabs:
   | Simple terrain shading ([render-terrain](render-terrain.md#simple-material)) | on | off | off | off | off |
   | Hybrid GI, traced sun shadows, lamp shadows, GI traced on characters (off without the indirect light's traced scene, `TracedSwitches`) | off | off | off | on | on |
   | Traced grass shadows | off | off | off | off | on |
+  | GI radiance cache, GI 64 probe rays (Metal only, `PresetToggle.MetalOnly`: Vulkan's tiers leave them as they are) | off | off | start default | off | on |
 
   The sliders that are not multiples of the start default (`PresetSliders`, fixed values; High is pinned):
 

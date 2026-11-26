@@ -215,22 +215,27 @@ public sealed class FrameProfiler : IDisposable
     /// <summary>
     /// The GPU's mean ms per stage over the newest <paramref name="frames"/> frames read, largest first, on one line.
     /// </summary>
-    public string GpuMeans(int frames)
+    public string GpuMeans(int frames) => Means(_gpu, _gpuHead, _gpuCount, frames);
+
+    /// <summary>
+    /// <see cref="GpuMeans"/> for the render thread's stages.
+    /// </summary>
+    public string CpuMeans(int frames) => Means(_cpu, _cpuHead, _cpuCount, frames);
+
+    /// <summary>
+    /// The mean ms per series of <paramref name="history"/> over its newest <paramref name="frames"/>, largest first.
+    /// </summary>
+    static string Means(float[][] history, int head, int count, int frames)
     {
-        int n = Math.Min(frames, _gpuCount);
+        int n = Math.Min(frames, count);
         if (n == 0) return "no frames read";
 
         var means = new List<(string Name, double Ms)>();
         for (int k = 0; k < Series; k++)
         {
             double sum = 0;
-            for (int i = 1; i <= n; i++) sum += _gpu[k][(_gpuHead - i + History) % History];
-            string name = k == Other
-                ? "other"
-                : k == Total
-                    ? "total"
-                    : StageClock.Names[k];
-            means.Add((name, sum / n));
+            for (int i = 1; i <= n; i++) sum += history[k][(head - i + History) % History];
+            means.Add((Label(k), sum / n));
         }
 
         var listed = means

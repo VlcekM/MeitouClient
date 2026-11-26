@@ -1367,6 +1367,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void CreateSettingsMenu(PlayerInterface hud)
     {
+        QualityTiers.MetalTiers = true;   // the presets' Metal rows (QualityTiers.AllPresetToggles)
         _settingsValues = CreateMetalSettings();
         _settings = new SettingsMenu(hud, _settingsValues, host.Session.Bindings, SaveSettings,
             new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v), "0",

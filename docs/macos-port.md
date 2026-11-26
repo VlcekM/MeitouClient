@@ -33,6 +33,10 @@ A native Metal path next to Vulkan: [metal-backend](metal-backend.md).
   (`bin/Release/MeitouClient.app`, `bin/Debug/meitou-launcher.app`, the build hard-linked in), so the game gets Game Mode and the launcher its
   name and icon ([App bundle](#app-bundle)). The launcher otherwise runs installed releases only ([launcher](launcher.md)); its `DebugGame`
   hook looks for the Windows `.exe`. Options and variables: `--help`.
+- Build a checkout from its real path, not through a symlink such as `/tmp` (macOS: a link to `/private/tmp`): there NuGet's restore of
+  `Meitou.Game` drops every project reference (its `obj/project.assets.json` names no Meitou project), so `Meitou.Data`'s NVorbis package is
+  missing and `Audio/Voice.cs` fails with CS0246 (the compile still finds the projects). `dotnet restore --force` and
+  `dotnet build-server shutdown` do not help; the same commit under `/private/tmp/...` builds (**Observed** 2026-11-26, worktrees of one commit).
 - Screenshots and other `C:\Temp` defaults land in a folder literally named `C:\Temp` under the CWD.
 
 ## App bundle

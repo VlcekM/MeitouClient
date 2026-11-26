@@ -86,7 +86,9 @@ c help                                # one usage line per command; `c help <nam
 | `firstaid` | `firstaid <id>` |
 | `follow` | `follow <id> [--guard]` |
 | `debug-menu` | `debug-menu open\|close\|key <Up\|Down\|Left\|Right\|Enter\|Space\|Escape\|Backspace> [count]` (drives the F10 menu as its keys do; replies with the category, the highlighted row and its value) |
-| `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders: list, or set one as a click would; `gfx "Time of day" 14`) |
+| `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders, Vulkan and Metal: list, or set one as a click would; `gfx "Time of day" 14`) |
+| `profiler` | `profiler <off\|gpu\|cpu>` (what F12's chart shows; Metal times the GPU stages only while it shows gpu) |
+| `gpu-times`, `cpu-times` | `gpu-times [frames]` (the GPU's mean ms per frame stage over the newest frames, default 60, largest first); `cpu-times` the render thread's |
 | `give` | `give "<item record>" [qty] [quality] [--equip] [--maker <id or name>] [--model <id or name>] [--level <n>]` (a weapon of an exact manufacturer, MATERIAL_SPECS_WEAPON model and level: its look and stats) |
 | `ground-items` | `ground-items <x> <z> <radius>` |
 | `editor` | `editor [yawDegrees]` opens the character editor (the recruit form, appearance only) on the player squad's leader, or with it open turns its camera (0 in front, 180 behind): pictures of the editor's stage |

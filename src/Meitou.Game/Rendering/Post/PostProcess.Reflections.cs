@@ -41,16 +41,15 @@ public sealed unsafe partial class PostProcess
         public readonly SamplerSlot Hit, GiResolved, GiResolvedSky;
 
         /// <summary>
-        /// 1 while the GI resolve runs, else 0; and which part is drawn: 0 the light found, 1 the sky's kept share.
+        /// 1 while the GI resolve runs, else 0.
         /// </summary>
-        public readonly UniformHandle HasGi, Part;
+        public readonly UniformHandle HasGi;
 
         /// <summary>
         /// Compiles the shade and looks up its slots.
         /// </summary>
         public SsrShadePass(GpuContext gpu) : base(gpu, SsrShaders.Shade, "post ssr shade") =>
-            (Hit, GiResolved, GiResolvedSky, HasGi, Part) =
-                (P.Sampler("uHit"), P.Sampler("uGiLow"), P.Sampler("uGiLowSky"), P.Uniform("uHasGi"), P.Uniform("uPart"));
+            (Hit, GiResolved, GiResolvedSky, HasGi) = (P.Sampler("uHit"), P.Sampler("uGiLow"), P.Sampler("uGiLowSky"), P.Uniform("uHasGi"));
     }
 
     /// <summary>
@@ -184,10 +183,7 @@ public sealed unsafe partial class PostProcess
         Bind(s.P, s.GiResolvedSky, GiResolve > 0 ? _giLowSky : null);
         s.P.Set(s.HasGi, GiResolve > 0 ? 1f : 0f);
         s.P.ApplyGlobals();   // the atmosphere's uniforms, through the frame globals
-        s.P.Set(s.Part, 0f);
-        Draw(s.P, _ssrLow!);
-        s.P.Set(s.Part, 1f);
-        Draw(s.P, _ssrLowSky!);
+        DrawBoth(s.P, _ssrLow!, _ssrLowSky!);
     }
 
     /// <summary>

@@ -608,16 +608,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         public readonly SamplerSlot Cache;
 
         /// <summary>
-        /// Which part is drawn (<c>uPart</c>): 0 the probes' light, 1 the share of the sky's ambient taken back.
-        /// </summary>
-        public readonly UniformHandle Part;
-
-        /// <summary>
         /// Compiles the variant and resolves its handles.
         /// </summary>
         public GiResolvePass(GpuContext gpu, bool relocate, bool cache)
             : base(gpu, Gi.GiResolveShaders.ResolveFor(relocate, cache), "post gi resolve") =>
-            (Cache, Part) = (cache ? P.Sampler("uGiCache") : default, P.Uniform("uPart"));
+            Cache = cache ? P.Sampler("uGiCache") : default;
     }
 
     /// <summary>
@@ -2071,7 +2066,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// The pass pipelines made so far, by program, colour and depth format and state.
     /// </summary>
-    readonly Dictionary<(LegacyProgram, InternalFormat, InternalFormat, DrawState), GpuPipeline> _pipelines = [];
+    readonly Dictionary<(LegacyProgram, InternalFormat, InternalFormat, InternalFormat, DrawState), GpuPipeline> _pipelines = [];
 
     /// <summary>
     /// The open native segment of the chain (one is begun when none is open: VkGl's pass ends, a full barrier is placed).
@@ -2094,6 +2089,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     internal void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width,
         target.Height);
+
+    /// <summary>
+    /// As <see cref="Draw(LegacyProgram, Target2D)"/> into <paramref name="first"/> (location 0) and <paramref name="second"/> (location 1, of the
+    /// same size) at once: a shader with two outputs.
+    /// </summary>
+    internal void DrawBoth(LegacyProgram p, Target2D first, Target2D second) => DrawPass(p, first.Attachment, first.Format, default,
+        InternalFormat.None, first.Width, first.Height, first.Width, first.Height, null, second.Attachment, second.Format);
 
     /// <summary>
     /// As <see cref="Draw(LegacyProgram, Target2D)"/> into <paramref name="colour"/>, with a viewport and an optional state.
@@ -2129,21 +2131,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// pipeline is cached per program and attachment formats: one state each).
     /// </summary>
     void DrawPass(LegacyProgram p, RenderTarget colour, InternalFormat format, RenderTarget depth, InternalFormat depthFormat, int targetWidth,
-        int targetHeight, int viewportWidth, int viewportHeight, DrawState? state)
+        int targetHeight, int viewportWidth, int viewportHeight, DrawState? state, RenderTarget extra = default,
+        InternalFormat extraFormat = InternalFormat.None)
     {
         var cmd = Segment();
         cmd.BeginLabel(p.Name);   // each pass its own range in a GPU trace (the segment is "post")
-        cmd.BeginRendering(new RenderingDesc(colour, depth, targetWidth, targetHeight));
+        cmd.BeginRendering(new RenderingDesc(colour, depth, targetWidth, targetHeight, Extra: extra));
         var s = state ?? PassState;
         cmd.SetViewport(new PixelViewport(0, 0, viewportWidth, viewportHeight, 0, 1));
         cmd.SetScissor(new PixelRect(0, 0, (uint)targetWidth, (uint)targetHeight));
         cmd.SetRaster(s.Cull, s.Front);
         cmd.SetDepth(s.DepthTest, s.DepthWrite, s.Compare);
         cmd.SetDepthBias(s.BiasEnable, s.BiasConstant, s.BiasSlope);
-        if (!_pipelines.TryGetValue((p, format, depthFormat, s), out var pipeline))
+        if (!_pipelines.TryGetValue((p, format, depthFormat, extraFormat, s), out var pipeline))
         {
-            _pipelines[(p, format, depthFormat, s)] = pipeline = Gpu.Pipelines.Get(s.Pipeline(p.Program, p.VertexLayout([]), PrimitiveType.Triangles,
-                new AttachmentFormats(format, depthFormat), p.Name));
+            _pipelines[(p, format, depthFormat, extraFormat, s)] = pipeline = Gpu.Pipelines.Get(s.Pipeline(p.Program, p.VertexLayout([]),
+                PrimitiveType.Triangles, new AttachmentFormats(format, depthFormat, Extra: extraFormat), p.Name));
         }
         cmd.BindPipeline(pipeline);
         p.Flush(cmd);
@@ -2556,10 +2559,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var g in (ReadOnlySpan<GiPass>)[r, a]) SetGiView(g);
         r.P.ApplyGlobals();   // the atmosphere's and the probes' uniforms, through the frame globals
         if (cache is not null) r.P.Bind(r.Cache, new SampledTexture(Point(), cache.View()));
-        r.P.Set(r.Part, 0f);
-        Draw(r.P, _giLow);
-        r.P.Set(r.Part, 1f);
-        Draw(r.P, _giLowSky);
+        DrawBoth(r.P, _giLow, _giLowSky);
         Bind(a.P, a.Low, _giLow);
         Bind(a.P, a.LowSky, _giLowSky);
         a.P.Set(a.LowSize, (float)_giLow.Width, (float)_giLow.Height);

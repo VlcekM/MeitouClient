@@ -230,7 +230,9 @@ a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`Prob
   surface target is RGBA32UI, stored only while the resolve runs (`MetalContext.StoreSurface`); Metal's targets keep row 0 at the top, so the
   reconstruction's NDC y is turned round. Relocation runs with the resolve and the Hybrid GI's relocation row, as on Vulkan.
 - **Hybrid GI's cache** (`MetalGiCache`): `GiCache`'s passes and shaders, its trace taking the probe update's constants and hit inputs, run by
-  `MetalPostChain.RunGiResolve` before the resolve; its positions turn y round as the resolve's.
+  `MetalPostChain.RunGiResolve` before the resolve; its positions turn y round as the resolve's. The presets turn it and the 64 probe rays on
+  at Extreme only on Metal (**Observed**, M6 at Ultra on the bench save, 1280x960: the cache 7 ms of a 23.5 ms GPU frame, nearly all its trace,
+  as each cell traces every frame below about 40 fps; the 64 rays 1.2 ms).
 - **Traced sun** (`MetalTracedSun`, `MetalPostChain.RunTracedSun`): the mask kernel, the penumbra planes and filter, the sun map
   (`TracedSunVolume.Source`) and the add pass; the scene target gets the RGBA32F term as its third attachment (Metal's `RenderingDesc.Extra2`). The
   kernels compute NDC with row 0 at the bottom, so the inverse they take has y turned round first. While traced the scene holds the casters

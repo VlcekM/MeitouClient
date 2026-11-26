@@ -90,9 +90,11 @@ sealed class QualityTiers(SettingsMenu menu)
 
     /// <summary>
     /// A quality switch: on or off at Low, Medium and Ultra; at High its start default unless <see cref="High"/> says, at Extreme as Ultra unless
-    /// <see cref="Extreme"/> says. Meitou features only: Faithful keeps them off whatever the tier.
+    /// <see cref="Extreme"/> says. Meitou features only: Faithful keeps them off whatever the tier. <see cref="MetalOnly"/>: the presets set it on
+    /// the Metal renderer only (<see cref="MetalTiers"/>); on Vulkan they leave it as it is.
     /// </summary>
-    internal sealed record PresetToggle(string Label, bool Low, bool Medium, bool Ultra, bool? High = null, bool? Extreme = null);
+    internal sealed record PresetToggle(string Label, bool Low, bool Medium, bool Ultra, bool? High = null, bool? Extreme = null, bool MetalOnly = false);
+
 
     /// <summary>
     /// The quality switches the presets set: the relief's (docs/render-terrain.md "Ground relief", RTX 4090: refinement +0.38 ms; parallax and
@@ -102,7 +104,7 @@ sealed class QualityTiers(SettingsMenu menu)
     /// shadows +2.6 to +4.8 in grassland). The techniques (traced sun, GTAO, hybrid GI) are the switches their choices stand for (<see
     /// cref="WorldFrame.ChoiceDrivenSwitches"/>).
     /// </summary>
-    internal static readonly PresetToggle[] PresetToggles =
+    internal static readonly PresetToggle[] AllPresetToggles =
     [
         new(WorldFrame.RockSmoothingSwitch, false, false, true),
         new(WorldFrame.OutlineRefineSwitch, false, false, true),
@@ -125,7 +127,27 @@ sealed class QualityTiers(SettingsMenu menu)
         // (sharp to soft) as the camera moved the band over them.
         new(WorldFrame.TracedFarCascadesSwitch, false, false, false, High: false),
         new(WorldFrame.TracedGrassSwitch, false, false, false, High: false, Extreme: true),
+
+        // Metal: the hybrid GI's radiance cache and the probes' 64 rays at Extreme only (docs/metal-performance-memory.md "Metal profiler": an M6 at
+        // Ultra on the bench save, 1280x960, the cache 7 ms of a 23.5 ms GPU frame, the 64 rays 1.2 ms). Vulkan's tiers leave both as they are.
+        new(WorldFrame.GiCacheSwitch, false, false, false, Extreme: true, MetalOnly: true),
+        new(WorldFrame.GiRaysSwitch, false, false, false, Extreme: true, MetalOnly: true),
     ];
+
+    /// <summary>
+    /// The renderer is Metal (set by the Metal loop before its settings exist): the <see cref="PresetToggle.MetalOnly"/> rows apply.
+    /// </summary>
+    internal static bool MetalTiers;
+
+    /// <summary>
+    /// The quality switches the presets set on this renderer (<see cref="AllPresetToggles"/>, the Metal rows only on Metal).
+    /// </summary>
+    internal static IReadOnlyList<PresetToggle> PresetToggles => MetalTiers ? AllPresetToggles : VulkanPresetToggles;
+
+    /// <summary>
+    /// <see cref="AllPresetToggles"/> without the Metal rows.
+    /// </summary>
+    static readonly PresetToggle[] VulkanPresetToggles = [.. AllPresetToggles.Where(p => !p.MetalOnly)];
 
     /// <summary>
     /// The tier switches that need the indirect light's traced scene: off, whatever the tier, while it is off (no ray tracing on the device).
@@ -285,7 +307,7 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal static IEnumerable<string> PresetKeys()
     {
-        var switches = LowOffSwitches.Concat(LowOffToggles).Concat(PresetToggles.Select(p => p.Label));
+        var switches = LowOffSwitches.Concat(LowOffToggles).Concat(AllPresetToggles.Select(p => p.Label));
         return PresetSliders.Select(p => p.Label)
             .Append(WorldFrame.ParticleSliders[0])
             .Concat(WorldFrame.UpscalerSliders.Take(2))

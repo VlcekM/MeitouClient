@@ -86,7 +86,7 @@ sealed class MetalReflections(MetalContext ctx) : IDisposable
     }
 
     /// <summary>
-    /// The hits shaded into the two low targets (the resolve's results give the specular occlusion; stand-ins without it).
+    /// The hits shaded into the two low targets at once (the resolve's results give the specular occlusion; stand-ins without it).
     /// </summary>
     void Shade(MetalGiResolve resolve, in Frame f, int width, int height)
     {
@@ -99,10 +99,7 @@ sealed class MetalReflections(MetalContext ctx) : IDisposable
         s.P.ApplyGlobals();   // the atmosphere's uniforms, through the frame globals
 
         var cmd = (MetalCommandList)ctx.BeginNative("ssr shade");
-        s.P.Set(s.Part, 0f);
-        resolve.Fullscreen(cmd, s.P, _low!, blend: false);
-        s.P.Set(s.Part, 1f);
-        resolve.Fullscreen(cmd, s.P, _lowSky!, blend: false);
+        resolve.FullscreenBoth(cmd, s.P, _low!, _lowSky!);
         ctx.EndNative(cmd);
     }
 
