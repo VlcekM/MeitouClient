@@ -31,30 +31,40 @@ public sealed class CameraRig
     readonly Func<float, float, float> _ground;
 
     /// <summary>
-    /// The height the strategy camera's pivot and eye keep above: the ground or the sea, whichever is higher, raised by <see cref="Floors"/> (the
-    /// game's pivot ray also hits buildings' floors; engine choice: the eye keeps above them too, so it never sinks into a building's base,
-    /// docs/formats/camera.md "Height").
+    /// The height the strategy camera's pivot keeps above: when viewing a basement floor (<see cref="BasementFloors"/>), that floor even below the
+    /// terrain; otherwise the ground or the sea, whichever is higher, raised by <see cref="Floors"/> (the game's pivot ray also hits buildings'
+    /// floors; docs/formats/camera.md "Height").
     /// </summary>
-    public float GroundAt(float x, float z) => Floors?.Invoke(x, z) is { } floor ? MathF.Max(_ground(x, z), floor) : _ground(x, z);
+    public float GroundAt(float x, float z) =>
+        BasementFloors?.Invoke(x, z) is { } basement ? basement
+        : Floors?.Invoke(x, z) is { } floor ? MathF.Max(_ground(x, z), floor) : _ground(x, z);
 
     /// <summary>
     /// <see cref="GroundAt(float, float)"/> raised by the map feature surfaces at or under <paramref name="top"/> (<see cref="Features"/>; the game's
-    /// group-14 ray, docs/formats/camera.md "Height").
+    /// group-14 ray, docs/formats/camera.md "Height"). When viewing a basement floor (<see cref="BasementFloors"/>), buried map features inside the
+    /// cut room do not push the pivot above the basement floor.
     /// </summary>
     public float GroundAt(float x, float z, float top) =>
-        Features?.Invoke(x, z, top) is { } feature ? MathF.Max(GroundAt(x, z), feature) : GroundAt(x, z);
+        BasementFloors?.Invoke(x, z) is { } basement ? basement
+        : Features?.Invoke(x, z, top) is { } feature ? MathF.Max(GroundAt(x, z), feature) : GroundAt(x, z);
 
     /// <summary>
-    /// The height the strategy camera's eye at (<paramref name="x"/>, <paramref name="eyeY"/>, <paramref name="z"/>) keeps above: building floors
-    /// and the map features under it included.
+    /// The height the strategy camera's eye at (<paramref name="x"/>, <paramref name="eyeY"/>, <paramref name="z"/>) keeps above: never below the
+    /// terrain or sea, plus building floors and map features under it.
     /// </summary>
-    public float EyeGroundAt(float x, float z, float eyeY) => GroundAt(x, z, eyeY + KenshiCamera.FeatureRayLift);
+    public float EyeGroundAt(float x, float z, float eyeY) => MathF.Max(_ground(x, z), GroundAt(x, z, eyeY + KenshiCamera.FeatureRayLift));
 
     /// <summary>
     /// The highest building floor at a point that the strategy camera's pivot rides on, or null (set by the host; the free camera keeps to the
     /// ground).
     /// </summary>
     public Func<float, float, float?>? Floors { get; set; }
+
+    /// <summary>
+    /// When a building at a point is viewed on a basement floor (below 0), that floor's height so the strategy camera's pivot can descend into it,
+    /// or null.
+    /// </summary>
+    public Func<float, float, float?>? BasementFloors { get; set; }
 
     /// <summary>
     /// The highest map feature surface at (x, z) at or under a height (x, z, top), or null (set by the host; the free camera keeps to the ground).
@@ -69,7 +79,10 @@ public sealed class CameraRig
     {
         this._ground = ground;
         Settings = settings ?? new CameraSettings();
-        Strategy = new StrategyCamera((x, z, top) => GroundAt(x, z, top), Settings);
+        Strategy = new StrategyCamera((x, z, top) => GroundAt(x, z, top), Settings)
+        {
+            InBasement = (x, z) => BasementFloors?.Invoke(x, z) is not null,
+        };
         Free = new FreeCamera(ground, Settings);
         _states = new Interpolated<CameraState>(Strategy.State, CameraState.Lerp);
     }

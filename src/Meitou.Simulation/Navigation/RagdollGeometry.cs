@@ -149,6 +149,14 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     public float GroundHeight(float x, float z, float nearY) => _ground.HeightAt(x, z);
 
+    /// <summary>
+    /// Whether a point lies inside an intact building whose interior mask cuts the terrain (wired from <c>SightMap.InsideCutRoom</c>).
+    /// </summary>
+    public Func<Vector3, bool>? InsideCutInterior { get; set; }
+
+    /// <inheritdoc/>
+    public bool IsInsideCutInterior(Vector3 point) => InsideCutInterior?.Invoke(point) == true;
+
     /// <inheritdoc/>
     public bool BuildingTriangles(string id, Vector3 near, List<Vector3> triangles)
     {

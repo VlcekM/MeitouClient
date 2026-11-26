@@ -895,8 +895,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                     var root = r.Definition.RootAt(r.Pose);
                     float ground = env.GroundHeight(root.X, root.Z, root.Y);
 
-                    // A root far under the ground is lifted back onto it (FUN_1407d4470: more than 200 below), and frozen.
-                    if (root.Y < ground - 200) { Shift(r, new Vector3(0, ground + 2 - root.Y, 0)); Freeze(r); }
+                    // A root far under the ground is lifted back onto it (FUN_1407d4470: more than 200 below), and frozen, unless inside a cut room.
+                    if (root.Y < ground - 200 && !env.IsInsideCutInterior(root)) { Shift(r, new Vector3(0, ground + 2 - root.Y, 0)); Freeze(r); }
                     // At once when the terrain tile under it is not loaded (FUN_1405b8180 -> FUN_1407d1f70): a zone outside the active set, or off
                     // the grid; marked so it thaws and finishes settling once that zone loads again.
                     else if (!ZoneLoaded(world, root))
@@ -1504,7 +1504,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             var body = _physics.Simulation.Bodies.GetBodyReference(handle);
             var now = body.Pose.Position;
             float ground = env.GroundHeight(now.X, now.Z, now.Y);
-            if (now.Y >= ground - SinkDepth) continue;
+            if (now.Y >= ground - SinkDepth || env.IsInsideCutInterior(now)) continue;
             var before = r.Pose[b].Position;
             if (before.Y < env.GroundHeight(before.X, before.Z, before.Y) - SinkDepth) continue;
             body.Pose.Position = new Vector3(now.X, ground + SinkDepth, now.Z);

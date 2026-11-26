@@ -58,15 +58,16 @@ sealed class TownBuildingContents
         var c = new TownBuildingContents();
         var record = resolved.Record;
         var b = resolved.Placement;
+        var (bottom, top) = WorldObjectLayout.FloorBounds(db, record, resolved.Destroyed);
         if (layouts.Find(record, b.LayoutName(state, exterior: true)) is { } exterior)
         {
             c.Shop = exterior.GetInt("is shop") != 0;
             c.Bar = exterior.GetInt("is bar") != 0;
-            c.AddExteriorBuildings(layouts, resolved, exterior);
+            c.AddExteriorBuildings(layouts, resolved, exterior, bottom, top);
         }
 
         if (resolved.Destroyed || layouts.Find(record, b.LayoutName(state, exterior: false), exterior: false) is not { } interior) return c;
-        c.LayInterior(db, layouts, resolved, interior, beds, functions);
+        c.LayInterior(db, layouts, resolved, interior, beds, functions, bottom, top);
         return c;
     }
 
@@ -78,7 +79,10 @@ sealed class TownBuildingContents
         var c = new TownBuildingContents();
         string layout = resolved.Placement.LayoutName(null, exterior: false);
         if (!resolved.Destroyed && layouts.Find(resolved.Record, layout, exterior: false) is { } interior)
-            c.LayInterior(db, layouts, resolved, interior, new(), new());
+        {
+            var (bottom, top) = WorldObjectLayout.FloorBounds(db, resolved.Record, resolved.Destroyed);
+            c.LayInterior(db, layouts, resolved, interior, new(), new(), bottom, top);
+        }
 
         return c.Spots;
     }
@@ -87,7 +91,7 @@ sealed class TownBuildingContents
     /// Adds each object of the exterior layout <paramref name="layout"/> to <see cref="LayoutBuildings"/>, outdoors, as
     /// <c>&lt;key&gt;/exterior/&lt;index&gt;</c>.
     /// </summary>
-    void AddExteriorBuildings(BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord layout)
+    void AddExteriorBuildings(BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord layout, int bottom, int top)
     {
         var b = resolved.Placement;
         int index = 0;
@@ -95,7 +99,7 @@ sealed class TownBuildingContents
         {
             var (at, rotation) = BuildingLayouts.Place(resolved.Position, b.Rotation, item);
             LayoutBuildings.Add(new TownLayoutBuilding($"{b.Key}/exterior/{index}", item.Building.StringId, Outdoors: true, at, rotation)
-                { Floor = item.Floor });
+                { Floor = Math.Clamp(item.Floor, bottom, top) });
             index++;
         }
     }
@@ -114,10 +118,10 @@ sealed class TownBuildingContents
     /// The interior layout's objects, then its item slots, then the seats turned towards the tables.
     /// </summary>
     void LayInterior(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior, Dictionary<string, bool> beds,
-        Dictionary<string, GameRecord?> functions)
+        Dictionary<string, GameRecord?> functions, int bottom, int top)
     {
-        var seats = LayItems(db, layouts, resolved, interior, beds, functions);
-        LayItemSlots(layouts, resolved, interior);
+        var seats = LayItems(db, layouts, resolved, interior, beds, functions, bottom, top);
+        LayItemSlots(layouts, resolved, interior, bottom, top);
         FaceSeats(seats);
     }
 
@@ -126,7 +130,7 @@ sealed class TownBuildingContents
     /// whatever no bed, node, seat, cage or container pick takes; returns the chairs' spot indices and functionality flags (null: none).
     /// </summary>
     List<(int Spot, int Flags)>? LayItems(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior,
-        Dictionary<string, bool> beds, Dictionary<string, GameRecord?> functions)
+        Dictionary<string, bool> beds, Dictionary<string, GameRecord?> functions, int bottom, int top)
     {
         var b = resolved.Placement;
         int index = 0;
@@ -138,15 +142,16 @@ sealed class TownBuildingContents
             string id = $"{b.Key}/{index}";
             bool picked = LaySpot(db, item, id, at, rotation, beds, function, ref seats);
 
+            int floor = Math.Clamp(item.Floor, bottom, top);
             LayoutBuildings.Add(new TownLayoutBuilding(id, item.Building.StringId, Outdoors: false, at, rotation)
-                { Floor = item.Floor, InteriorOnly = !item.Outside });
+                { Floor = floor, InteriorOnly = !item.Outside });
             int kind = function?.GetInt("function") ?? -1;
             if (kind == CorpseDisposalFunction) Disposals.Add(new TownDisposal(id, item.Building.StringId, at));
 
             if (kind is TableFunction or CorpseDisposalFunction or RefineryFunction) Tables.Add(at);
             else picked |= AddFixture(db, functions, item, id, at, rotation);
 
-            if (!picked) Pieces.Add(new TownPiece(id, item.Building.StringId, at, rotation, item.Floor, item.Outside));
+            if (!picked) Pieces.Add(new TownPiece(id, item.Building.StringId, at, rotation, floor, item.Outside));
             index++;
         }
         Furnished = index > 0;
@@ -197,14 +202,14 @@ sealed class TownBuildingContents
     /// <summary>
     /// The interior layout's item placement groups, each a loose-item slot.
     /// </summary>
-    void LayItemSlots(BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior)
+    void LayItemSlots(BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior, int bottom, int top)
     {
         var b = resolved.Placement;
         int slot = 0;
         foreach (var group in layouts.ItemGroups(interior))
         {
             var (at, rotation) = BuildingLayouts.Place(resolved.Position, b.Rotation, group);
-            ItemSlots.Add(new TownItemSlot($"{b.Key}/item{slot++}", group.Building.StringId, at, rotation, group.Floor));
+            ItemSlots.Add(new TownItemSlot($"{b.Key}/item{slot++}", group.Building.StringId, at, rotation, Math.Clamp(group.Floor, bottom, top)));
         }
     }
 

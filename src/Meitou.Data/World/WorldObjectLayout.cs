@@ -46,10 +46,15 @@ public sealed record PlacedMesh(
     public GameRecord? Material { get; init; }
 
     /// <summary>
-    /// For building parts: the part's <c>building floor</c>, clamped to 0..3 as the game clamps it; in the interior view a part above the
-    /// viewed floor is hidden (docs/formats/zones.md, "Interior view").
+    /// For building parts: the part's <c>building floor</c>, clamped to the building's floor range (at least 0..3; wider when standable collision
+    /// reaches below 0 or above 3); in the interior view a part above the viewed floor is hidden (docs/formats/zones.md, "Interior view").
     /// </summary>
     public int Floor { get; init; }
+
+    /// <summary>
+    /// Whether this part sits on the building's bottom floor (floor 0 for buildings without a basement): never hidden by the interior floor view.
+    /// </summary>
+    public bool IsBottomFloor { get; init; }
 
     /// <summary>
     /// A part of the building's <c>interior</c> list (inner walls, floors, inner stairs): drawn only in the interior view.
@@ -326,14 +331,147 @@ public static class WorldObjectLayout
         state ??= new BuildingState();
         var result = new List<PlacedMesh>();
         AddBuilding(db, building, placementId, worldPosition, rotation, state, result, lights, effects);
+        var (bottom, top) = StampBuildingFloors(building, result, state.Destroyed);
 
         // Doors: one building per "doors" entry at the parent's position, rotation and scale (the door's own scale is not used: Defensive
         // Gate III/IV are 0.85, their doors 1), not for destroyed buildings (game: Building::createPhysical).
+        int doorStart = result.Count;
         if (!state.Destroyed && !building.GetBool("is node"))
             AddDoors(db, building, placementId, worldPosition, rotation, state, result, lights, effects);
+        StampDoorFloors(result, doorStart, bottom, top);
 
         return result;
     }
+
+    /// <summary>
+    /// Stamps the doors in <paramref name="parts"/> from <paramref name="first"/> on with their floor clamped to the building's
+    /// <c>[bottom, top]</c>.
+    /// </summary>
+    static void StampDoorFloors(List<PlacedMesh> parts, int first, int bottom, int top)
+    {
+        for (int i = first; i < parts.Count; i++)
+        {
+            var p = parts[i];
+            int clamped = Math.Clamp(p.Source.GetInt("building floor"), bottom, top);
+            parts[i] = p with { Floor = clamped, IsBottomFloor = clamped == bottom };
+        }
+    }
+
+    /// <summary>
+    /// Whether a building can supply standable floor collision (same exclusions as <see cref="FloorSurfaces"/>: not path-mode IGNORE and not
+    /// furniture).
+    /// </summary>
+    internal static bool HasStandableFloors(GameRecord building) =>
+        building.GetInt("path mode", 2) != 0 && !building.GetBool("is exterior furniture") && !building.GetBool("is interior furniture");
+
+    /// <summary>
+    /// Stamps each of <paramref name="building"/>'s own parts in <paramref name="parts"/> with its floor clamped to the building's standable
+    /// floor range (<c>[bottom, top]</c>, at least <c>0..3</c>) and marks parts on <c>bottom</c> with <see cref="PlacedMesh.IsBottomFloor"/>.
+    /// </summary>
+    static (int Bottom, int Top) StampBuildingFloors(GameRecord building, List<PlacedMesh> parts, bool destroyed)
+    {
+        var (bottom, top) = StandableRange(building, parts, destroyed);
+
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var p = parts[i];
+
+            // An unwalkable roof over a building taller than 3 floors stays one above its top storey, so viewing that storey hides it.
+            int maxPartFloor = p.Source.GetBool("is unwalkable roof") && top > 3 ? top + 1 : top;
+            int clamped = Math.Clamp(p.Source.GetInt("building floor"), bottom, maxPartFloor);
+            bool isBottom = clamped == bottom;
+            if (p.Floor != clamped || p.IsBottomFloor != isBottom) parts[i] = p with { Floor = clamped, IsBottomFloor = isBottom };
+        }
+
+        return (bottom, top);
+    }
+
+    /// <summary>
+    /// The floor range (at least <c>0..3</c>) of <paramref name="building"/>'s own parts in <paramref name="parts"/> that have standable
+    /// collision.
+    /// </summary>
+    static (int Bottom, int Top) StandableRange(GameRecord building, List<PlacedMesh> parts, bool destroyed)
+    {
+        int bottom = 0;
+        int top = 3;
+        if (!HasStandableFloors(building)) return (bottom, top);
+
+        foreach (var p in parts)
+        {
+            if (p.Owner != building || !IsStandablePart(p.Source) || p.CollisionPath(destroyed).Length == 0) continue;
+
+            int raw = p.Source.GetInt("building floor");
+            bottom = Math.Min(bottom, raw);
+            top = Math.Max(top, raw);
+        }
+
+        return (bottom, top);
+    }
+
+    /// <summary>
+    /// Whether a building part can be stood on: neither <c>passable</c> nor an <c>is unwalkable roof</c>.
+    /// </summary>
+    static bool IsStandablePart(GameRecord part) => !part.GetBool("passable") && !part.GetBool("is unwalkable roof");
+
+    /// <summary>
+    /// The floor range (<c>Bottom &lt;= 0</c>, <c>Top &gt;= 3</c>) already stamped onto <paramref name="parts"/> of <paramref name="building"/>.
+    /// </summary>
+    public static (int Bottom, int Top) FloorRange(GameRecord building, IReadOnlyList<PlacedMesh> parts)
+    {
+        int bottom = 0;
+        int top = 3;
+        foreach (var p in parts)
+        {
+            if (p.Owner != building || p.Source.GetBool("is unwalkable roof")) continue;
+
+            bottom = Math.Min(bottom, p.Floor);
+            top = Math.Max(top, p.Floor);
+        }
+
+        return (bottom, top);
+    }
+
+    /// <summary>
+    /// The floor range (<c>Bottom &lt;= 0</c>, <c>Top &gt;= 3</c>) of <paramref name="building"/>'s standable parts (including child parts).
+    /// </summary>
+    public static (int Bottom, int Top) FloorBounds(GameDatabase db, GameRecord building, bool destroyed = false)
+    {
+        var range = (Bottom: 0, Top: 3);
+        if (!HasStandableFloors(building)) return range;
+
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        WidenByParts(db, building, "parts", destroyed, visited, ref range);
+        if (!destroyed) WidenByParts(db, building, "interior", destroyed, visited, ref range);
+
+        return range;
+    }
+
+    /// <summary>
+    /// Widens <paramref name="range"/> by the standable parts with collision in <paramref name="holder"/>'s <paramref name="list"/>, and by
+    /// their own <c>parts</c> in turn, each part once.
+    /// </summary>
+    static void WidenByParts(GameDatabase db, GameRecord holder, string list, bool destroyed, HashSet<string> visited,
+        ref (int Bottom, int Top) range)
+    {
+        foreach (var r in holder.GetReferences(list))
+        {
+            if (!visited.Add(r.TargetStringId) || db.Find(r.TargetStringId) is not { Type: FcsRecordType.BuildingPart } part) continue;
+
+            if (IsStandablePart(part) && PartCollision(part, destroyed).Length > 0)
+            {
+                int raw = part.GetInt("building floor");
+                range = (Math.Min(range.Bottom, raw), Math.Max(range.Top, raw));
+            }
+
+            WidenByParts(db, part, "parts", destroyed, visited, ref range);
+        }
+    }
+
+    /// <summary>
+    /// A part's collision path: its <c>destroyed collision</c> when <paramref name="destroyed"/> and it has one, else its <c>xml collision</c>.
+    /// </summary>
+    static string PartCollision(GameRecord part, bool destroyed) =>
+        destroyed && part.GetPath("destroyed collision") is { Length: > 0 } ruined ? ruined : part.GetPath("xml collision");
 
     /// <summary>
     /// Adds the building's doors (its <c>doors</c> list) as buildings of their own at the parent's position, rotation and scale.

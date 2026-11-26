@@ -35,14 +35,24 @@ public sealed partial class FloorSurfaces
     /// The height of the highest ordinary part's triangle (no stairs) at (<paramref name="x"/>, <paramref name="z"/>) on floors up to
     /// <paramref name="floor"/>, or null: the building's ground for the strategy camera (docs/formats/camera.md "Height").
     /// </summary>
-    public float? HighestUpTo(float x, float z, int floor)
+    public float? HighestUpTo(float x, float z, int floor) => HighestUpTo(x, z, floor, includeStairs: false);
+
+    /// <summary>
+    /// The height of the highest ordinary part's triangle (no stairs unless <paramref name="includeStairs"/>) at (<paramref name="x"/>,
+    /// <paramref name="z"/>) on floors up to <paramref name="floor"/>, or null: the building's ground for the strategy camera
+    /// (docs/formats/camera.md "Height").
+    /// </summary>
+    public float? HighestUpTo(float x, float z, int floor, bool includeStairs)
     {
+        floor = Math.Max(floor, BottomFloor);
+
         float best = float.NegativeInfinity;
         var q = new Vector2(x, z);
 
         foreach (var s in _surfaces)
         {
-            if (s.Floor > floor || s.Stairs || q.X < s.Min.X || q.Y < s.Min.Y || q.X > s.Max.X || q.Y > s.Max.Y || s.YMax <= best)
+            if (s.Floor > floor || (!includeStairs && s.Stairs) || q.X < s.Min.X || q.Y < s.Min.Y
+                    || q.X > s.Max.X || q.Y > s.Max.Y || s.YMax <= best)
                 continue;
             foreach (int i in s.Grid.At(q))
                 if (HeightAt(s.Corners[i], s.Corners[i + 1], s.Corners[i + 2], q) is { } y && y > best) best = y;

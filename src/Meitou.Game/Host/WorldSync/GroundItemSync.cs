@@ -296,7 +296,7 @@ sealed class GroundItemSync(GameHost host)
         {
             if (host.Interiors.ViewedUnder(pose.At) is not { } inView) continue;
             int shown = host.Interiors.InteriorFloors[inView.PlacementId];
-            if (shown >= 3) continue;
+            if (shown >= inView.TopFloor) continue;
             if (!_groundFloors.TryGetValue(id, out var known) || !ReferenceEquals(known.Building, inView) || known.At != pose.At)
                 _groundFloors[id] = known = (inView, pose.At, inView.FloorAt(pose.At));
             if (known.Floor > shown && HiddenGround.Add(id)) HiddenGroundKeys.Add(pose.Key);

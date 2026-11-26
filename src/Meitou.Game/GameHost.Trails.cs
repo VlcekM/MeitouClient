@@ -232,7 +232,7 @@ sealed partial class GameHost
         if (trails is null) return;
 
         float height = Gpu.Terrain.HeightAt(stamp.Centre.X, stamp.Centre.Y);
-        if (at.Y - height > MarkAboveGround || height < WorldWater.Height) return;
+        if (at.Y - height > MarkAboveGround || height < WorldWater.Height || Session.World.Sight.InsideCutRoom(at)) return;
 
         var (type, texture) = ground.LayerAt(stamp.Centre.X, stamp.Centre.Y);
         float soft = type < 0 ? 0 : (_groundSoftness ??= new GroundSoftness(Install, Scene.Database!)).Of(type, texture);

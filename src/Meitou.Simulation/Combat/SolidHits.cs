@@ -32,7 +32,7 @@ static class SolidHits
     public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep,
         out bool building, out bool ready, bool roofs = false)
     {
-        float ground = Terrain(walk, from, seg, terrainStep);
+        float ground = Terrain(walk, buildings, from, seg, terrainStep);
         ready = true;
         float wall = buildings is null ? -1 : Buildings(buildings, from, seg, ground < 0 ? 1 : ground, roofs, ref ready);
         building = wall >= 0;
@@ -51,22 +51,35 @@ static class SolidHits
     }
 
     /// <summary>
-    /// The fraction of the segment where it goes under the terrain, -1 when it stays above (sampled every <paramref name="step"/> units).
+    /// The fraction of the segment where it goes under the terrain outside any cut-away building interior, -1 when it stays above or inside cut
+    /// rooms (sampled every <paramref name="step"/> units).
     /// </summary>
-    static float Terrain(IWalkability walk, Vector3 from, Vector3 seg, float step)
+    static float Terrain(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float step)
     {
         float length = seg.Length();
         int n = Math.Max(1, (int)MathF.Ceiling(length / step));
         float before = from.Y - walk.TerrainHeight(from.X, from.Z);
-        if (before < 0) return 0;
+        bool wasCut = before < 0 && buildings?.IsInsideCutInterior(from) == true;
+        if (before < 0 && !wasCut) return 0;
 
         for (int k = 1; k <= n; k++)
         {
             var p = from + seg * (k / (float)n);
             float above = p.Y - walk.TerrainHeight(p.X, p.Z);
-            if (above < 0) return (k - 1 + before / (before - above)) / n;
+            if (above < 0)
+            {
+                if (buildings?.IsInsideCutInterior(p) == true)
+                {
+                    before = above;
+                    wasCut = true;
+                    continue;
+                }
+
+                return wasCut || before <= 0 ? (k - 1) / (float)n : (k - 1 + before / (before - above)) / n;
+            }
 
             before = above;
+            wasCut = false;
         }
 
         return -1;

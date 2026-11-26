@@ -253,10 +253,27 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public float? CeilingAbove(Vector3 p) => _floors?.Value.CeilingAbove(p.X, p.Z, p.Y + CoverClearance);
 
     /// <summary>
-    /// The floor (0..3) a character standing at <paramref name="feet"/> in this building is on, from the building's floor collision under it (made on
+    /// The floor a character standing at <paramref name="feet"/> in this building is on, from the building's floor collision under it (made on
     /// first use; 0 when nothing is hit). See <see cref="FloorSurfaces.FloorAt"/>.
     /// </summary>
     public int FloorAt(Vector3 feet) => _floors?.Value.FloorAt(feet) ?? 0;
+
+    /// <summary>
+    /// The building's lowest standable floor (0 without a basement, negative with one).
+    /// </summary>
+    public int BottomFloor => _floors?.Value.BottomFloor ?? 0;
+
+    /// <summary>
+    /// The building's highest standable floor (at least 3).
+    /// </summary>
+    public int TopFloor => _floors?.Value.TopFloor ?? 3;
+
+    /// <summary>
+    /// The highest ordinary floor triangle (no stairs unless <paramref name="includeStairs"/>) of this building at (<paramref name="x"/>,
+    /// <paramref name="z"/>) on floors up to <paramref name="floor"/>, or null.
+    /// </summary>
+    public float? HighestFloorUpTo(float x, float z, int floor, bool includeStairs = false) =>
+        _floors?.Value.HighestUpTo(x, z, floor, includeStairs);
 
     /// <summary>
     /// What <see cref="FloorAt"/>'s ray meets of the building's floor collision: the floor and the hit's height; null when it meets none.
@@ -624,6 +641,21 @@ public sealed partial class FloorSurfaces
     public const float StairsTop = 0.3f;
 
     /// <summary>
+    /// Stand-in floor value meaning "every floor is shown" (held-open buildings, editor bar).
+    /// </summary>
+    public const int AllFloors = int.MaxValue;
+
+    /// <summary>
+    /// The building's lowest standable floor (0 without a basement, negative with one).
+    /// </summary>
+    public int BottomFloor { get; private set; }
+
+    /// <summary>
+    /// The building's highest standable floor (at least 3).
+    /// </summary>
+    public int TopFloor { get; private set; } = 3;
+
+    /// <summary>
     /// The surfaces of a building placed with <paramref name="node"/> (position, rotation, scale; part collision is in building space): its parts
     /// with their <c>interior</c> list, leaving out doors, <c>passable</c> parts, <c>is unwalkable roof</c> parts, a <c>path mode</c> IGNORE
     /// building's parts and furniture (the groups the ray does not test). Parts without a mesh are not laid out, so their collision is missing
@@ -634,8 +666,8 @@ public sealed partial class FloorSurfaces
         InteriorCollisions collision, bool destroyed = false)
     {
         var result = new FloorSurfaces();
-        foreach (var (part, mesh) in FloorParts(db, building, placementId, position, rotation, collision, destroyed))
-            result.AddPart(part, mesh, node);
+        foreach (var (placed, mesh) in FloorParts(db, building, placementId, position, rotation, collision, destroyed))
+            result.AddPart(placed, mesh, node);
         return result;
     }
 
@@ -665,11 +697,11 @@ public sealed partial class FloorSurfaces
     /// <summary>
     /// The building's own parts that have floor collision, each once, with its collision in building space (the parts <see cref="For"/> describes).
     /// </summary>
-    static IEnumerable<(GameRecord Part, CollisionMesh Mesh)> FloorParts(GameDatabase db, GameRecord building, string placementId,
+    static IEnumerable<(PlacedMesh Placed, CollisionMesh Mesh)> FloorParts(GameDatabase db, GameRecord building, string placementId,
         Vector3 position, Quaternion rotation, InteriorCollisions collision, bool destroyed)
     {
         // IGNORE: no floor groups
-        if (building.GetInt("path mode", 2) == 0 || building.GetBool("is exterior furniture") || building.GetBool("is interior furniture"))
+        if (!WorldObjectLayout.HasStandableFloors(building))
             yield break;
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -678,15 +710,27 @@ public sealed partial class FloorSurfaces
         {
             var part = p.Source;
             if (p.Owner != building || part.GetBool("passable") || !seen.Add(part.StringId)) continue;
-            if (collision.Mesh(p.CollisionPath(destroyed)) is { } mesh) yield return (part, mesh);
+            if (collision.Mesh(p.CollisionPath(destroyed)) is { } mesh) yield return (p, mesh);
         }
     }
 
     /// <summary>
     /// Adds a part's collision, placed with <paramref name="node"/>: its floor (or unwalkable roof) triangles and its flat undersides.
     /// </summary>
-    void AddPart(GameRecord part, CollisionMesh mesh, Matrix4x4 node) =>
-        AddMesh(mesh, node, Math.Clamp(part.GetInt("building floor"), 0, 3), part.GetBool("is stairs"), part.GetBool("is unwalkable roof"));
+    void AddPart(PlacedMesh placed, CollisionMesh mesh, Matrix4x4 node)
+    {
+        var part = placed.Source;
+        bool roof = part.GetBool("is unwalkable roof");
+
+        // An unwalkable roof is no standable floor: it does not widen the building's floor range.
+        if (!roof)
+        {
+            BottomFloor = Math.Min(BottomFloor, placed.Floor);
+            TopFloor = Math.Max(TopFloor, placed.Floor);
+        }
+
+        AddMesh(mesh, node, placed.Floor, part.GetBool("is stairs"), roof);
+    }
 
     /// <summary>
     /// Adds a collision mesh placed with <paramref name="node"/> as one part on <paramref name="floor"/>: its floor (or unwalkable roof) triangles
@@ -749,12 +793,21 @@ public sealed partial class FloorSurfaces
             {
                 if (HeightAt(s.Corners[i], s.Corners[i + 1], s.Corners[i + 2], q) is not { } y || y > top || y <= best) continue;
                 best = y;
-                floor = !s.Stairs ? s.Floor
-                    : Math.Min(3, s.Floor + (s.YMax - s.YMin > 1e-3f && (s.YMax - y) <= StairsTop * (s.YMax - s.YMin) ? 1 : 0));
+                floor = !s.Stairs ? s.Floor : StairsFloor(s, y);
             }
         }
 
         return best > float.NegativeInfinity ? (floor, best) : null;
+    }
+
+    /// <summary>
+    /// The floor a hit at height <paramref name="y"/> on the stairs <paramref name="s"/> gives: the floor above in the top
+    /// <see cref="StairsTop"/> of their rise, else their own, within the building's floors.
+    /// </summary>
+    int StairsFloor(Surface s, float y)
+    {
+        bool top = s.YMax - s.YMin > 1e-3f && (s.YMax - y) <= StairsTop * (s.YMax - s.YMin);
+        return Math.Clamp(s.Floor + (top ? 1 : 0), BottomFloor, TopFloor);
     }
 
     /// <summary>

@@ -316,6 +316,13 @@ public sealed class StrategyCamera
     }
 
     /// <summary>
+    /// Whether the pivot at (<c>x</c>, <c>z</c>) is viewing a basement floor below the surrounding terrain; when true, <see cref="HeightGoal"/> lets
+    /// the pivot descend all the way to the basement floor even when the eye hangs over higher outside terrain, while keeping the eye clear of that
+    /// terrain.
+    /// </summary>
+    internal Func<float, float, bool>? InBasement { get; set; }
+
+    /// <summary>
     /// The height the pivot is heading for, given its height now (the game's per-frame ground step; the view direction is not touched).
     /// </summary>
     float HeightGoal(float y)
@@ -323,7 +330,8 @@ public sealed class StrategyCamera
         var eye = CameraState.EyeFor(new Vector3(PivotXz.X, y, PivotXz.Y), Yaw, Pitch, Distance);
         float groundAtPivot = _ground(PivotXz.X, PivotXz.Y, MathF.Max(y, _placedHeight) + KenshiCamera.FeatureRayLift);
         float groundAtEye = EyeGround(eye);
-        float drop = MathF.Min(0, groundAtEye - y);   // a pivot above the ground under the eye comes down to it ...
+        float dropFloor = InBasement?.Invoke(PivotXz.X, PivotXz.Y) == true ? MathF.Min(groundAtEye, groundAtPivot) : groundAtEye;
+        float drop = MathF.Min(0, dropFloor - y);   // a pivot above the ground under the eye comes down to it (or into a viewed basement) ...
         float required = groundAtEye + KenshiCamera.EyeClearance(Distance);
         float goal = y + drop;
         if (eye.Y + drop <= required) goal = y + (required - eye.Y);   // ... unless the eye would then be too low: up by the shortfall

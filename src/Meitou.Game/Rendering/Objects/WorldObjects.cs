@@ -576,9 +576,10 @@ sealed class WorldObjects : IDisposable
         if (b.OwnFloor is { } own)
             for (int k = 0; k < parts.Count; k++) parts[k] = parts[k] with { OwnFloor = own };
 
+        var (bottomFloor, topFloor) = WorldObjectLayout.FloorRange(record, parts);
         result.Items.AddRange(parts);
         Interlocked.Increment(ref _buildings);
-        LayLayouts(result, b, record, layAt, state, townMaterial, isDestroyed);
+        LayLayouts(result, b, record, layAt, state, townMaterial, isDestroyed, bottomFloor, topFloor);
         if (b.Standalone)
         {
             MoveLaidItems(result, firstItem, Matrix4x4.CreateTranslation(position - layAt));
@@ -622,7 +623,7 @@ sealed class WorldObjects : IDisposable
     /// relative to the building.
     /// </summary>
     void LayLayouts(ZoneObjects result, BuildingPlacement b, GameRecord record, Vector3 position, GameRecord? state, GameRecord? townMaterial,
-        bool isDestroyed)
+        bool isDestroyed, int bottomFloor, int topFloor)
     {
         // The state's exterior layout (signs and banners) and interior layout (furniture), placed relative to the building, each object on
         // its layout floor. An interior layout's object shows only in the interior view unless its state is flagged outside (game: the closed
@@ -646,8 +647,15 @@ sealed class WorldObjects : IDisposable
                 var placed = WorldObjectLayout.Building(Database, item.Building, $"{b.InstanceId}/{item.InstanceId}", at, rotation,
                     new BuildingState(false, townMaterial) { Identity = $"{b.Key}/{item.InstanceId}" });
                 bool insideOnly = !exterior && !item.Outside;
+                int itemFloor = Math.Clamp(item.Floor, bottomFloor, topFloor);
                 foreach (var p in placed)
-                    result.Items.Add(p with { Floor = item.Floor, Interior = insideOnly, ParentPlacementId = b.Key });
+                    result.Items.Add(p with
+                    {
+                        Floor = itemFloor,
+                        IsBottomFloor = itemFloor == bottomFloor,
+                        Interior = insideOnly,
+                        ParentPlacementId = b.Key,
+                    });
                 if (placed.Count > 0) Interlocked.Increment(ref _layoutObjects);
             }
         }
