@@ -1829,13 +1829,13 @@ public sealed class AnimationSystem(
     readonly AnimalPlans _animalPlans = new(library, lengths);
 
     /// <summary>
-    /// One tick of an animal's animation (docs/simulation.md "Animation", animals): its own clips only. Moving, the movement clips of its list by speed
-    /// (unsynched: F x <c>play speed</c> x v clip seconds per second, F = 1 / its size: the humanoid F = (2 - H) / g with H = 1 and g the size, an
-    /// <b>engine reading</b>); standing (in a fight too), one of its idles; a creature technique the combat system plays, over everything; down or
-    /// asleep on the ground, its <c>gotosleep</c> once, then <c>sleep</c> (or the fall's last frame held); no hit reactions (no animal record has
-    /// <c>stumbles</c>) and no getting up (none exists: it fades back to standing). Standing in a job's clip (a spider eating a body), its own clip of
-    /// that name. Root motion of an attack is scaled by the size. F and the movement clips' speeds follow the live size, so an animal that ages (or is
-    /// set by <c>animalage</c>) plays slower and takes its run at a higher speed as it grows.
+    /// One tick of an animal's animation (docs/simulation.md "Animation", animals): its own clips only. Moving, the movement clips of its list by
+    /// speed (unsynched: F x <c>play speed</c> x v clip seconds per second, F = 1 / its size: the humanoid F = (2 - H) / g with H = 1 and g the
+    /// size, an <b>engine reading</b>); standing (in a fight too), one of its idles; a creature technique the combat system plays, over everything;
+    /// down or asleep on the ground, its <c>gotosleep</c> once, then <c>sleep</c> (or the fall's last frame held); no hit reactions (no animal
+    /// record has <c>stumbles</c>) and no getting up (none exists: it fades back to standing). Standing in a job's clip (a spider eating a body),
+    /// its own clip of that name. Root motion of an attack is scaled by the size. F and the movement clips' speeds follow the live size, so an
+    /// animal that ages (or is set by <c>animalage</c>) plays slower and takes its run at a higher speed as it grows.
     /// </summary>
     Vector2 UpdateAnimal(CharacterAnimation a, CharacterCold cold, AnimalPlan plan, float speed, float dt, ulong seed, ulong key, long tick,
         List<(int Index, float Weight)> wanted, in CombatView fight, RagdollView ragdoll, CharacterTask task)
@@ -1870,7 +1870,7 @@ public sealed class AnimationSystem(
         wanted.Clear();
         float v = MathF.Abs(speed);
         if (a.Action >= 0) wanted.Add((a.Action, 1));
-        else if (lies && plan.Lying >= 0)
+        else if (lies && plan.Lying >= 0 && (down || technique < 0))
         {
             wanted.Add((plan.Lying, 1));
             a.Idle = -1;
