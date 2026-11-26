@@ -35,16 +35,26 @@ sealed class InventoryLayout(PlayerInterface player)
         }
 
         if (InventoryWindows.ScreenKind(id) is "inventory" or "loot"
-            && player.InventoryWindows.WindowCharacter(id)?.ItemGrid is { } grid)
+            && player.InventoryWindows.WindowCharacter(id) is { ItemGrid: { } grid } character)
         {
-            var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
-                player.InterfaceScale, player.UiScale);
-            if (!TradeWindows.IsAnimal(player.InventoryWindows.WindowCharacter(id)!))
-                geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCellHeight));
-            geometry.Bind(b);
+            BindCharacterGeometry(id, b, grid, TradeWindows.IsAnimal(character));
         }
 
         if (id == "trader") player.TradeWindows.BindTraderGeometry(b);
+    }
+
+    /// <summary>
+    /// Keeps room for the height-scaled equipment cells when a narrow viewport compresses the layout's horizontal fractions.
+    /// </summary>
+    void BindCharacterGeometry(string id, UiBindings bindings, InventoryView grid, bool animal)
+    {
+        // The stock human and animal layouts expect different widths for their equipment columns at the same cell size.
+        int referenceWidth = animal ? 1920 : 2048;
+        int layoutWidth = Math.Max(player.Width, (int)MathF.Ceiling(referenceWidth * player.Height / 1080f));
+        var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), layoutWidth, player.Height, player.InterfaceScale, player.UiScale);
+        if (!animal) geometry.FitCharacter(new(grid.Width * player.InventoryCell, grid.Height * player.InventoryCellHeight));
+
+        geometry.Bind(bindings);
     }
 
     /// <summary>

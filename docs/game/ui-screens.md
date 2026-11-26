@@ -258,6 +258,7 @@ the saves share a handle.
 **States** (**Verified**, `FUN_140414dc0` sets the flags, `FUN_140415150` applies them to the `Kenshi_PortraitCharacter` cell). The cell has
 `BackgroundImage`, `BackImage`, `PortraitImage`, `FrontImage`, `NameText` and the `BorderPanel` button. The image set is
 `Kenshi_PortraitImage` in `kenshi_images.xml`.
+Meitou draws squad-bar names in front of the frame, inset from its edges, and ellipsizes names wider than the caption.
 
 | Flag | Set when | Shown as |
 | --- | --- | --- |
@@ -939,6 +940,8 @@ larger than the viewport; visible pixels remain clipped to the screen.
 Character main-grid alignment (**Verified**, `FUN_14014eee0`): after setting section dimensions, keep `main`'s original bottom edge by shifting its
 top and `InventoryMainTitle` together. The character frame keeps its layout size. Meitou applies this before drawing the cells, including pinned
 and looted character windows; resizing the grid downwards alone can otherwise overlap ARRANGE.
+Meitou resolves the horizontal layout fractions on a canvas at least 2048 px wide per 1080 lines for humanoids and 1920 px for animals, keeping
+the equipment columns wide enough for their height-scaled cells at narrow aspect ratios.
 
 `Kenshi_InventoryResearchWindow` (**Verified**, layout read): `ResearchButton` "SHOW RESEARCH" over `backpack_content`, `ArrangeButton` "ARRANGE" under it
 (HCenter Bottom). Meitou: ARRANGE arranges the bench's grid as an inventory's (`ArrangeMachine`, `InventoryCommands.Arrange`; #639).

@@ -290,7 +290,7 @@ sealed class PortraitBar(PlayerInterface player)
 
             UiRect At(float x, float y, float w, float h) => new(left + x * k, top + y * k, w * k, h * k);
 
-            // The layout's depths, back to front: background, back overlay, portrait, front overlay, name, frame.
+            // The layout's depths, back to front: background, back overlay, portrait, front overlay, frame.
             var state = PortraitStateOf(m, camera.Eye, camera.Target);
             string background = (state & PortraitState.Hurt) != 0 ? "Hurt" : "Normal";
             float flash = PortraitFlash(m.Id, state);
@@ -312,14 +312,28 @@ sealed class PortraitBar(PlayerInterface player)
             if (FrontOverlayName(state) is { Length: > 0 } front)
                 controls.Add(PortraitImage($"portrait-front-overlay-{i}", At(6, 6, 124, 123), "FrontOverlay", front) with { Clip = page });
 
-            var nameProperties = new Dictionary<string, string> { ["TextAlign"] = "HCenter Bottom", ["TextColour"] = "1 1 1", ["TextShadow"] = "true" };
-            string name = player.ShownName(m, ShownPlace.Squad);
-            controls.Add(new($"portrait-name-{i}", "TextBox", At(4, 4, 128, 126), name, "", "Kenshi_TextboxStandardText", true,
-                nameProperties, Vector4.Zero, Pickable: false, Clip: page));
             var frameProperties = new Dictionary<string, string> { ["Checked"] = m.Selected ? "true" : "false" };
             controls.Add(new($"member-{i}", "Button", At(0, 0, 136, 136), "", "meitou:member", "Kenshi_PortraitFrameSkin", true,
                 frameProperties, Vector4.Zero, Argument: i.ToString(CultureInfo.InvariantCulture), Clip: page));
+            AddPortraitName(controls, i, m, At(10, 4, 116, 116), page);
         }
+    }
+
+    /// <summary>
+    /// Draws the name inside the frame and above its artwork, keeping the full cell as the selection target.
+    /// </summary>
+    void AddPortraitName(List<UiControl> controls, int index, CharacterSnapshot member, UiRect bounds, UiRect page)
+    {
+        var properties = new Dictionary<string, string>
+        {
+            ["TextAlign"] = "HCenter Bottom",
+            ["TextColour"] = "1 1 1",
+            ["TextShadow"] = "true",
+            ["Ellipsize"] = "true",
+        };
+        string name = player.ShownName(member, ShownPlace.Squad);
+        controls.Add(new($"portrait-name-{index}", "TextBox", bounds, name, "", "Kenshi_TextboxStandardText", true,
+            properties, Vector4.Zero, Pickable: false, Clip: page));
     }
 
     #endregion
