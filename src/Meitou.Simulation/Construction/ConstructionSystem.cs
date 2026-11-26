@@ -1273,7 +1273,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     {
         var at = site.Position;
         if (Data(site.Record) is not { CeilingPlacement: true }) return at.Y;
-        return world.Walkability.GroundHeight(at.X, at.Z, at.Y);
+        return world.Sight.FloorHeightOf(site) ?? world.Walkability.GroundHeight(at.X, at.Z, at.Y);
     }
 
     /// <summary>
