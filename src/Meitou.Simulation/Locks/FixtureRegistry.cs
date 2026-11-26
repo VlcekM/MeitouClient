@@ -1523,15 +1523,14 @@ public sealed partial class FixtureRegistry
         {
             if (d.Kind != FixtureKind.Door) continue;
             any = true;
-            if (d.DoorBroken || d.OpenAmount >= DoorLeaf.NavOpen || d.Lock is not { EffectivelyLocked: true })
-                blocked = false;
+            if (!BlocksPaths(d)) blocked = false;
         }
 
         if (any) _doors.SetDoorsBlocked(building, blocked);
     }
 
     /// <summary>
-    /// The building is shut for paths: it has doors, every one effectively locked and none broken (the test <see cref="Doors"/> is told).
+    /// The building has at least one door and every door blocks paths (the same test <see cref="Doors"/> is told).
     /// </summary>
     public bool IsShut(string building)
     {
@@ -1541,11 +1540,17 @@ public sealed partial class FixtureRegistry
         {
             if (d.Kind != FixtureKind.Door) continue;
             any = true;
-            if (d.DoorBroken || d.Lock is not { EffectivelyLocked: true }) return false;
+            if (!BlocksPaths(d)) return false;
         }
 
         return any;
     }
+
+    /// <summary>
+    /// A door blocks paths while it is whole, effectively locked and below the navigation opening threshold.
+    /// </summary>
+    static bool BlocksPaths(Fixture door) =>
+        !door.DoorBroken && door.OpenAmount < DoorLeaf.NavOpen && door.Lock is { EffectivelyLocked: true };
 
     /// <summary>
     /// The building has doors and all of them are locked (effectively or not; a broken one counts as open). Night rounds test this, not
