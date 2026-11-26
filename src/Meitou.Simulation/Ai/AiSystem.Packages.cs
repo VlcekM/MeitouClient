@@ -854,7 +854,7 @@ public sealed partial class AiSystem
     /// The bed an occupier with no home sleeps in (153 Go home go to bed): the original's NPC bed search falls back to the nearest beds of allies,
     /// and its allies test passes the occupied town's buildings (<c>canIUseThisBuilding</c>, docs/game/locks.md "Beds", <b>Verified</b> by
     /// decompile). Meitou takes the <see cref="AiMind.MemberIndex"/>-th (round robin) complete BF_BED of the occupied town that is reachable for it
-    /// and not held by someone outside its squad, so the members spread over the beds and keep theirs as the others lie down (<b>engine choice</b>);
+    /// and has room or holds one of its squad, so the members spread over the beds and keep theirs as the others lie down (<b>engine choice</b>);
     /// null without one.
     /// </summary>
     static Locks.Fixture? OccupiedBed(World world, Blackboard board, AiMind mind, int slot)
@@ -867,7 +867,7 @@ public sealed partial class AiSystem
             f.Kind == Locks.FixtureKind.Bed && f.Bed.Function == Meitou.Data.World.TownBuildings.BedFunction
             && world.Buildings.Find(f.Building) is { Complete: true } site && site.Town == board.Destination.PlayerTown
             && world.Fixtures.Reachable(world, f, self.Faction)
-            && (Locks.FixtureRegistry.IsFree(table, f) || table.TryResolveNext(f.Occupant, out int o) && table.Cold(o)?.SquadId == mind.Squad.Id);
+            && (Locks.FixtureRegistry.IsFree(table, f) || HeldByMate(table, f, mind.Squad.Id));
         int count = 0;
         foreach (var f in world.Fixtures.All) if (Takes(f)) count++;
         if (count == 0) return null;
@@ -875,6 +875,17 @@ public sealed partial class AiSystem
         foreach (var f in world.Fixtures.All)
             if (Takes(f) && want-- == 0) return f;
         return null;
+    }
+
+    /// <summary>
+    /// Whether one of the bed's occupants is of squad <paramref name="squad"/>.
+    /// </summary>
+    static bool HeldByMate(CharacterTable table, Locks.Fixture bed, int squad)
+    {
+        foreach (var o in bed.Occupants)
+            if (table.TryResolveNext(o, out int s) && table.Cold(s)?.SquadId == squad) return true;
+
+        return false;
     }
 
     /// <summary>

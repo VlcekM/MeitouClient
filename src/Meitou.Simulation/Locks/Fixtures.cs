@@ -100,7 +100,14 @@ public readonly record struct CageClips(string? Idle, string? Ko, string? Dazed,
 /// (the functionality's <c>animation</c>: <c>sleepinbed</c>, <c>sleeponfloor</c>), the sum of its construction materials (the bed search weighs a bed
 /// that needs more than 1 three times) and its use nodes (null with none: it is then lain in at its position marker, facing its own way).
 /// </summary>
-public readonly record struct BedData(int Function, string? Clip, float Materials, UseNode[]? Nodes = null);
+public readonly record struct BedData(int Function, string? Clip, float Materials, UseNode[]? Nodes = null)
+{
+    /// <summary>
+    /// How many may lie in it at once: the raw <c>max operators</c> (the BUILDING's unless below 0, then the functionality's; 1 in every base bed).
+    /// Below 1 counts as 1 (<see cref="Fixture.Capacity"/>).
+    /// </summary>
+    public int Operators { get; init; } = 1;
+}
 
 /// <summary>
 /// A <c>node type</c> 4 (NODE_USE) instance of a BUILDING, in the building's own space, and the way it faces (the node's yaw - 90°; a node looks
@@ -434,10 +441,49 @@ public sealed class Fixture
     /// from (<see cref="Items.ContainerAccess"/>). Derived from the data, not hashed or saved.
     /// </summary>
     public int Function { get; init; } = -1;
+    readonly List<CharacterId> _occupants = [];
+
     /// <summary>
-    /// Cages and beds: who is in it (none: free).
+    /// Cages and beds: who is in it, the first of <see cref="Occupants"/> (none: free). Setting it replaces the whole set.
     /// </summary>
-    public CharacterId Occupant { get; set; } = CharacterId.None;
+    public CharacterId Occupant
+    {
+        get => _occupants.Count > 0 ? _occupants[0] : CharacterId.None;
+        set
+        {
+            _occupants.Clear();
+            if (!value.IsNone) _occupants.Add(value);
+        }
+    }
+
+    /// <summary>
+    /// Cages and beds: everyone in it, in the order they entered (the original's occupant set, UseableStuff slot 159 <c>FUN_1400f8030</c>); a bed
+    /// holds up to <see cref="Capacity"/>. An entry may be stale (gone, or no longer held here): <see cref="FixtureRegistry.Holds"/> tells.
+    /// </summary>
+    public IReadOnlyList<CharacterId> Occupants => _occupants;
+
+    /// <summary>
+    /// How many it holds at once: a bed's <c>max operators</c> (<see cref="BedData.Operators"/>, at least 1), 1 for anything else.
+    /// </summary>
+    public int Capacity => Kind == FixtureKind.Bed ? Math.Max(1, Bed.Operators) : 1;
+
+    /// <summary>
+    /// Adds <paramref name="id"/> after the others (none, or one in already: nothing).
+    /// </summary>
+    internal void AddOccupant(CharacterId id)
+    {
+        if (!id.IsNone && !_occupants.Contains(id)) _occupants.Add(id);
+    }
+
+    /// <summary>
+    /// Takes <paramref name="id"/> out; the others keep their order.
+    /// </summary>
+    internal void RemoveOccupant(CharacterId id) => _occupants.Remove(id);
+
+    /// <summary>
+    /// Drops the entries <paramref name="stale"/> names (gone, or no longer held here).
+    /// </summary>
+    internal void PruneOccupants(Predicate<CharacterId> stale) => _occupants.RemoveAll(stale);
     /// <summary>
     /// Cages: a torture rack (<see cref="Meitou.Data.World.TownBuildings.IsRack"/>); derived from the data.
     /// </summary>
@@ -485,6 +531,8 @@ public sealed class Fixture
         }
 
         h.Add(Occupant);
+        for (int i = 1; i < _occupants.Count; i++) h.Add(_occupants[i]);
+
         if (Rack)
         {
             h.Add(RackTimer);

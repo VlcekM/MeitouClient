@@ -202,7 +202,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// </summary>
     Fixture? BedFor(World world, int slot, OrderEntry order) =>
         order.Site is { } given ? world.Fixtures.Find(given)
-                : world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(f, world.Characters.IdOf(slot)));
+                : world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(world.Characters, f, world.Characters.IdOf(slot)));
 
     /// <summary>
     /// Sleeping 98 needs the bed and a character that can walk and carries no one (one lying in it already needs nothing more); putting someone in
@@ -306,17 +306,31 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     public Fixture? FindFor(World world, int slot)
     {
         var id = world.Characters.IdOf(slot);
-        return world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(f, id));
+        return world.Fixtures.FindBed(world, slot, data.Relations, f => Reserved(world.Characters, f, id));
     }
 
     /// <summary>
     /// Whether another character than <paramref name="except"/> is on its way to <paramref name="bed"/>.
     /// </summary>
-    public bool Reserved(Fixture bed, CharacterId except)
+    public bool Reserved(Fixture bed, CharacterId except) => Heading(bed, except) > 0;
+
+    /// <summary>
+    /// Whether the places of <paramref name="bed"/> (<see cref="Fixture.Capacity"/>) are all taken by those lying in it and the others than
+    /// <paramref name="except"/> on their way to it. For a free bed of <c>max operators</c> 1: another is on its way.
+    /// </summary>
+    public bool Reserved(CharacterTable table, Fixture bed, CharacterId except) =>
+        FixtureRegistry.HeldCount(table, bed) + Heading(bed, except) >= bed.Capacity;
+
+    /// <summary>
+    /// How many others than <paramref name="except"/> are on their way to <paramref name="bed"/>.
+    /// </summary>
+    int Heading(Fixture bed, CharacterId except)
     {
+        int n = 0;
         foreach (var t in _trips)
-            if (t.Bed == bed.Id && t.Character != except) return true;
-        return false;
+            if (t.Bed == bed.Id && t.Character != except) n++;
+
+        return n;
     }
 
     /// <summary>
@@ -422,7 +436,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         var bed = world.Fixtures.Find(t.Bed);
         if (bed is null || !carrying && !FixtureRegistry.IsFree(table, bed))
         {
-            if (t.Fixed || carrying || world.Fixtures.FindBed(world, s, data.Relations, f => Reserved(f, t.Character)) is not { } other)
+            if (t.Fixed || carrying || world.Fixtures.FindBed(world, s, data.Relations, f => Reserved(world.Characters, f, t.Character)) is not { } other)
             {
                 if (c.IsPlayer)
                 {
@@ -818,7 +832,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     public Fixture? FindForCarrier(World world, int slot)
     {
         var id = world.Characters.IdOf(slot);
-        return world.Fixtures.FindBedInReach(world, slot, data.Relations, f => Reserved(f, id));
+        return world.Fixtures.FindBedInReach(world, slot, data.Relations, f => Reserved(world.Characters, f, id));
     }
 
     /// <summary>

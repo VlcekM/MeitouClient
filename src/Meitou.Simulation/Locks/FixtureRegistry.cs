@@ -542,7 +542,7 @@ public sealed partial class FixtureRegistry
         foreach (var f in OfBuilding(building).ToArray())
         {
             if (f.Occupant.IsNone) continue;
-            if (f.Kind == FixtureKind.Bed) LeaveBed(world, f.Occupant);
+            if (f.Kind == FixtureKind.Bed) LeaveAll(world, f);
             else if (f.Kind == FixtureKind.Cage)
             {
                 if (f.Lock is { } cageLock) cageLock.Locked = false;
@@ -940,12 +940,26 @@ public sealed partial class FixtureRegistry
                 {
                     return new BedData(f.GetInt("function"),
                             f.GetReferences("animation").Select(a => db.Find(a.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
-                        Data.Gameplay.Construction.BuildingBuildData.From(building).Target, UseNodes(db, building));
+                        Data.Gameplay.Construction.BuildingBuildData.From(building).Target, UseNodes(db, building))
+                    {
+                        Operators = BedOperators(building, f),
+                    };
                 }
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A bed's raw <c>max operators</c> (the exe's <c>+0x3ac</c>, as for machines, <c>FUN_1402a3750</c>): the BUILDING's unless below 0, then its bed
+    /// functionality's (1 when neither says).
+    /// </summary>
+    static int BedOperators(GameRecord building, GameRecord function)
+    {
+        int own = building.GetInt("max operators", -1);
+
+        return own >= 0 ? own : function.GetInt("max operators", 1);
     }
 
     /// <summary>
@@ -1210,8 +1224,9 @@ public sealed partial class FixtureRegistry
             if (!next[s].Alive || table.Cold(s) is not { InSomething: not HeldState.None, InWhat: { } what } c)
                 continue;
 
-            if (HeldFixture(c, what) is not { } f || !Claims(world, f, new CharacterId(s, next[s].Generation), c)) continue;
-            f.Occupant = new CharacterId(s, next[s].Generation);
+            var id = new CharacterId(s, next[s].Generation);
+            if (HeldFixture(c, what) is not { } f || Holds(table, f, id) || !Claims(world, f, id, c)) continue;
+            Admit(table, f, id);
             c.InWhat = f.Id;
 
             // A loaded prisoner plays its cage's poses as one put in does (Imprison): stand, out-cold foetal, a pole's own clip.
@@ -1698,11 +1713,35 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Whether nobody is in it: no occupant, or one that is gone or no longer held there.
+    /// Whether it has room for one more (the original's "free" for a newcomer, UseableStuff slot 158 <c>FUN_1400f7bf0</c>): fewer than its
+    /// <see cref="Fixture.Capacity"/> are held there (<see cref="Holds"/>). A cage, or a bed of <c>max operators</c> 1: nobody is in it.
     /// </summary>
-    public static bool IsFree(CharacterTable table, Fixture f) =>
-        f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { } held || held.InWhat != f.Id
-                || held.InSomething == HeldState.None;
+    public static bool IsFree(CharacterTable table, Fixture f) => HeldCount(table, f) < f.Capacity;
+
+    /// <summary>
+    /// Whether <paramref name="id"/> may be in it (slot 158 <c>FUN_1400f7bf0</c>): it is held there already, or there is room
+    /// (<see cref="IsFree"/>).
+    /// </summary>
+    public static bool IsFreeFor(CharacterTable table, Fixture f, CharacterId id) => Holds(table, f, id) || IsFree(table, f);
+
+    /// <summary>
+    /// How many of <see cref="Fixture.Occupants"/> are held there still (<see cref="Holds"/>).
+    /// </summary>
+    public static int HeldCount(CharacterTable table, Fixture f)
+    {
+        int n = 0;
+        foreach (var id in f.Occupants)
+            if (Holds(table, f, id)) n++;
+
+        return n;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="id"/> is one of the fixture's occupants and still held there (alive in the table, its held state set and naming it).
+    /// </summary>
+    public static bool Holds(CharacterTable table, Fixture f, CharacterId id) =>
+        !id.IsNone && f.Occupants.Contains(id) && table.TryResolveNext(id, out int s) && table.Cold(s) is { } held && held.InWhat == f.Id
+                && held.InSomething != HeldState.None;
 
     /// <summary>
     /// The cage <paramref name="carrier"/> at <paramref name="at"/> puts a captive in (the original's finder <c>FUN_1408d0770</c>, economy.md 11.7,
@@ -2087,18 +2126,27 @@ public sealed partial class FixtureRegistry
         var table = world.Characters;
         foreach (var f in _bedList ??= [.. _all.Where(x => x.Kind == FixtureKind.Bed)])
         {
-            if (f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c
-                    || c.InWhat != f.Id)
-                continue;
-
-            c.BedUsedHours = world.GameHours;   // Task_UseBed's update stamps the status clock (+0xc0)
-            ref var n = ref table.Next[s];
-            var (at, yaw) = LieSpot(f, n.Position, world.GameHours);
-            if (n.Position == at && n.Yaw == yaw) continue;
-            (byte task, var time) = (n.Task, n.TaskTime);
-            table.Place(s, at, yaw);
-            (n.Task, n.TaskTime) = (task, time);   // Place stands it; a sleeper stays asleep
+            foreach (var sleeper in f.Occupants)
+                HoldSleeper(world, f, sleeper);
         }
+    }
+
+    /// <summary>
+    /// Re-places one sleeper of <paramref name="f"/> (see <see cref="HoldSleepers"/>); a stale entry is passed over.
+    /// </summary>
+    static void HoldSleeper(World world, Fixture f, CharacterId sleeper)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(sleeper, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c || c.InWhat != f.Id)
+            return;
+
+        c.BedUsedHours = world.GameHours;   // Task_UseBed's update stamps the status clock (+0xc0)
+        ref var n = ref table.Next[s];
+        var (at, yaw) = LieSpot(f, n.Position, world.GameHours);
+        if (n.Position == at && n.Yaw == yaw) return;
+        (byte task, var time) = (n.Task, n.TaskTime);
+        table.Place(s, at, yaw);
+        (n.Task, n.TaskTime) = (task, time);   // Place stands it; a sleeper stays asleep
     }
 
     /// <summary>
@@ -2270,9 +2318,9 @@ public sealed partial class FixtureRegistry
         if (!IsFree(table, bed) || c.InSomething != HeldState.None || !c.CarriedBy.IsNone || !c.Carrying.IsNone)
             return false;
 
+        Admit(table, bed, sleeper);
         c.InSomething = HeldState.Bed;
         c.InWhat = bed.Id;
-        bed.Occupant = sleeper;
         TaskStart.Stand(table, s);
         var (at, yaw) = LieSpot(bed, table.Next[s].Position, world.GameHours);
         Hold(table, s, c, at, yaw);
@@ -2280,6 +2328,16 @@ public sealed partial class FixtureRegistry
         table.Next[s].Velocity = Vector3.Zero;
         c.OperateClip = bed.Bed.Clip;
         return true;
+    }
+
+    /// <summary>
+    /// Adds <paramref name="id"/> to the fixture's occupants after dropping the stale ones (<see cref="Holds"/>), so a bed of
+    /// <c>max operators</c> 1 holds only the newcomer, as the one-occupant fixture it replaces did.
+    /// </summary>
+    static void Admit(CharacterTable table, Fixture f, CharacterId id)
+    {
+        f.PruneOccupants(o => !Holds(table, f, o));
+        f.AddOccupant(id);
     }
 
     /// <summary>
@@ -2291,8 +2349,7 @@ public sealed partial class FixtureRegistry
         if (!world.Characters.TryResolveNext(held, out int s) || world.Characters.Cold(s) is not { InSomething: not HeldState.None } c)
             return;
 
-        if (c.InWhat is { } id && Find(id) is { } fixture && fixture.Occupant == held)
-            fixture.Occupant = CharacterId.None;
+        if (c.InWhat is { } id && Find(id) is { } fixture) fixture.RemoveOccupant(held);
 
         Clear(c);
     }
@@ -2326,11 +2383,19 @@ public sealed partial class FixtureRegistry
         if (!table.TryResolveNext(sleeper, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c)
             return false;
 
-        if (c.InWhat is { } id && Find(id) is { } bed && bed.Occupant == sleeper) bed.Occupant = CharacterId.None;
+        if (c.InWhat is { } id && Find(id) is { } bed) bed.RemoveOccupant(sleeper);
         Clear(c);
         StandBeside(world, s);
         DropBedPose(c);
         return true;
+    }
+
+    /// <summary>
+    /// Gets everyone out of <paramref name="bed"/> (<see cref="LeaveBed"/>), in the order they entered.
+    /// </summary>
+    void LeaveAll(World world, Fixture bed)
+    {
+        foreach (var sleeper in bed.Occupants.ToArray()) LeaveBed(world, sleeper);
     }
 
     /// <summary>
