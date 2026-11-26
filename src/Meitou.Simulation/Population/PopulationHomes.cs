@@ -41,7 +41,8 @@ public sealed partial class PopulationSystem
             {
                 if (_data.Db.Find(mate.Id) is not { } mr || !SquadFactory.IsTemplate(mr)) continue;
 
-                var mt = SquadTemplate.From(mr);
+                // A housemate joins the home template's faction (else the town's), whatever its own names (FUN_14057f820).
+                var mt = SquadTemplate.From(mr) with { Faction = t.Faction };
                 int count = mate.V1 > 0 && mate.V1 > mate.V0
                     ? mate.V0 + Rng.Int(
                         Rng.Hash(seed, (ulong)site.Index << 20 ^ (ulong)h, RngPurpose.Spawn, SeedSalts.Housemates + (ulong)n), mate.V1 - mate.V0 + 1)

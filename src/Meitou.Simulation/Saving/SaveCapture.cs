@@ -672,6 +672,7 @@ public static partial class SaveCapture
 
     /// <summary>
     /// The relations of a faction the world changed since loading: a value it changed is written, one it did not touch stays as the save had it.
+    /// A faction the saved table lacks (all of them after an import without relations) gets an entry once the world changes its relation.
     /// </summary>
     static void UpdateRelations(SaveFaction f, PopulationData data, LoadedSave loaded, Dictionary<string, int> index, int a)
     {
@@ -685,18 +686,51 @@ public static partial class SaveCapture
             bool war = r.War;
             if (index.TryGetValue(r.FactionId, out int b))
             {
-                if (data.Relations.Get(a, b) != loaded.RelationBaseline[a * index.Count + b]) value = data.Relations.Get(a, b);
-                if (loaded.WarBaseline.Length == loaded.RelationBaseline.Length
-                    && data.Relations.AtWar(a, b) != loaded.WarBaseline[a * index.Count + b])
-                    war = data.Relations.AtWar(a, b);
+                if (RelationChanged(data, loaded, index.Count, a, b)) value = data.Relations.Get(a, b);
+                if (WarChanged(data, loaded, index.Count, a, b)) war = data.Relations.AtWar(a, b);
             }
 
             changed |= value != r.Relation || war != r.War;
             updated.Add(r with { Relation = value, War = war });
         }
 
+        changed |= AddChangedMissing(updated, data, loaded, index.Count, a);
         if (changed) f.SetRelations(updated);
     }
+
+    /// <summary>
+    /// Appends to <paramref name="table"/> an entry for every faction it lacks whose relation or war state with faction <paramref name="a"/> the
+    /// world changed since loading. Returns whether it added one.
+    /// </summary>
+    static bool AddChangedMissing(List<SaveRelation> table, PopulationData data, LoadedSave loaded, int count, int a)
+    {
+        var present = table.Select(r => r.FactionId).ToHashSet(StringComparer.Ordinal);
+        bool added = false;
+        for (int b = 0; b < count; b++)
+        {
+            string id = data.Factions[b].Id;
+            if (present.Contains(id) || !RelationChanged(data, loaded, count, a, b) && !WarChanged(data, loaded, count, a, b)) continue;
+
+            table.Add(new SaveRelation(id, data.Relations.Get(a, b), 0, 0, data.Relations.AtWar(a, b)));
+            present.Add(id);
+            added = true;
+        }
+
+        return added;
+    }
+
+    /// <summary>
+    /// Whether the world changed faction <paramref name="a"/>'s relation to <paramref name="b"/> since loading.
+    /// </summary>
+    static bool RelationChanged(PopulationData data, LoadedSave loaded, int count, int a, int b) =>
+        data.Relations.Get(a, b) != loaded.RelationBaseline[a * count + b];
+
+    /// <summary>
+    /// Whether the world changed the war state of faction <paramref name="a"/> with <paramref name="b"/> since loading (false for a save loaded
+    /// without war baselines).
+    /// </summary>
+    static bool WarChanged(PopulationData data, LoadedSave loaded, int count, int a, int b) =>
+        loaded.WarBaseline.Length == loaded.RelationBaseline.Length && data.Relations.AtWar(a, b) != loaded.WarBaseline[a * count + b];
 
     /// <summary>
     /// The player faction's <c>known</c> list (on the record a load reads it from, <see cref="SaveGame.PlayerFaction"/>): the factions met, in

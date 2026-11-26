@@ -548,7 +548,10 @@ Meitou: [ground items](../simulation.md#items-and-eating).
     `PopulationSystem.Regenerate`, a save's never-made one `MakeUnmade`). A save writes it under both keys and names the platoon of that template as
     `residents` (`WriteResidents`, `SaveCapture.NameResidents`). A new game's squads are all made at once, housemates first, so every home starts
     with its own template.
-- **Squads** (`FUN_14057f820`): `housemates` (v0, or Rand(v0, v1) when v1 > 0) first, then the squad. Platoon point: a
+- **Squads** (`FUN_14057f820`): `housemates` (v0, or Rand(v0, v1) when v1 > 0) first, then the squad. All of them are made in one faction: the
+  home template's `faction`, else the building's owner (the town's), so a housemate's own `faction` is never read (**Observed**, decompile: the
+  faction is resolved once and every platoon is made by that faction's `FUN_1407f42f0`). UWE's faction-less `Theives Guild Plastic Surgeon` and
+  `Theives Guild recruit` housemates of the `Thieves Guild` are therefore Shinobi Thieves (#1433; Meitou `PopulationSystem.HouseResidents`). Platoon point: a
   random free node of NodeType 0 (SHOPKEEPER), else 2 (GUARD_POST), else 1 (GENERAL), else the building. Characters
   (`FUN_140583a10`): a GENERAL node, else SHOPKEEPER, at node + (0, 10, 0), else the platoon point. The squad's home is the building.
 - **Bar squads** (`FUN_1409fcd20`, **Verified** by decompile and constants): n = v0 > 2 ? (int)(v1 x 0.5 x 0.0099999998 x v0): 0 (the second factor is the double nearest the

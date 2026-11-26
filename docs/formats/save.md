@@ -1090,6 +1090,9 @@ yet, is left out. Round trip checked with a throwaway probe (write, read, clear)
 
 - **Global trust**: the original writes no `+0x18` (the float DC_REPUTATION reads and DA_AFFECT_REPUTATION raises). the relation table writes `relation`, `trust`, `trustNeg` and `relationSID` per entry and
   `rank` (`FUN_1406b37b0`, `FUN_1406b3300`, **Observed**). Meitou saves `+0x18` of every faction as `meitou global trust` (float on the GAMESTATE_FACTION, only while not 0).
+- **Player faction**: the GAMESTATE_FACTION with a `known` list, else `204-gamedata.base` (`SaveGame.PlayerFaction`, `SaveFaction.IsPlayer`); a missing
+  relation table does not mark it, since a Meitou import without relations writes every faction without one. Meitou writes `rank` and the relations
+  the world changed for every other faction, adding an entry the saved table lacks (`SaveCapture.UpdateRelations`).
 - **War flag**: the entry's byte `+2` has no key in the original (**Observed**: the relation writer reads none), so a war declared by a dialogue is forgotten on load. Meitou
   writes bool `meitou war<k>` beside `relation<k>` of the faction's table, only while set.
 - **Bed rent**: the global map of last payments (`FUN_1403576c0`, [locks](../game/locks.md#beds)) is referenced by no other function (**Verified**: references to its

@@ -77,9 +77,10 @@ public sealed class SaveFaction(FcsRecord record, FcsRecord? war)
     public float PlayerGlobalTrust => Record.Floats.GetValueOrDefault("global trust");
 
     /// <summary>
-    /// The player's faction has a <c>known</c> list and no relation table.
+    /// Whether this is the player's faction: it has a <c>known</c> list (and no relation table), or it is <c>204-gamedata.base</c>, as for
+    /// <see cref="SaveGame.PlayerFaction"/>. A missing relation table alone does not tell: an import without relations writes every faction without one.
     /// </summary>
-    public bool IsPlayer => Record.References.ContainsKey("known") || !Record.Strings.ContainsKey("relationSID0");
+    public bool IsPlayer => Record.References.ContainsKey("known") || Id == Gameplay.FactionData.PlayerId;
 
     /// <summary>
     /// The player faction's <c>known</c> list: the FACTION ids of the factions the player has met (docs/game/factions-squads-towns.md "Factions
