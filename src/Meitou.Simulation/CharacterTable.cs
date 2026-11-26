@@ -960,6 +960,18 @@ public sealed class CharacterCold
     public Carrying.LootStart LootFlags { get; set; }
 
     /// <summary>
+    /// The character, told to open an inventory window (loot or container), was in combat or had an ally near it in combat when told
+    /// (<see cref="Player.InventoryPause"/>): its pause while the window is open ignores combat. Serial phases; not saved; hashed while set.
+    /// </summary>
+    public bool PauseIgnoresCombat { get; set; }
+
+    /// <summary>
+    /// The tick until which the character's jobs wait after the inventory window it held closed (<see cref="Player.InventoryPause"/>); 0: none.
+    /// Serial phases; not saved; hashed while set.
+    /// </summary>
+    public long JobsWaitUntil { get; set; }
+
+    /// <summary>
     /// The rescue job (148 <c>FIND_AND_RESCUE_IF_THERES_BEDS</c>, NUM8) is in <see cref="Jobs"/>: an idle character picks up a downed member of its
     /// faction by itself.
     /// </summary>
@@ -2163,6 +2175,8 @@ public sealed class CharacterTable
         if (k.FollowResume) hasher.Add(0x46526573);
         if (k.Replan) hasher.Add(0x52706C6E);
         if (k.OrderWins) hasher.Add(0x4F57696E);
+        if (k.PauseIgnoresCombat) hasher.Add(0x50496743);
+        if (k.JobsWaitUntil != 0) hasher.Add(k.JobsWaitUntil);
         if (k.OrderRoutine != CharacterTask.Idle) hasher.Add(0x4F527400 | (int)k.OrderRoutine);
         if (k.SecondList.Count > 0) HashSecondList(ref hasher, k.SecondList);
         if (k.SavedOrders is { } waiting) hasher.Add(0x53764F72 + waiting.Count);   // "SvOr": only while a load's orders wait
