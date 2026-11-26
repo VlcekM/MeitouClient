@@ -1072,7 +1072,10 @@ The figures below were measured without the cap. **Observed** (`meitou-tools nav
 (Hub 20.32 10,183 to about 6,200; the original's tile has 5,857 faces); a zone builds in about twice the time. Over 2,352 random pairs in 20.32
 (radius 4) polygons expanded per search fell 965 to 560 and search time 20..30 %, paths 1 % longer. The original's ground ours lacks stayed within 0.1
 point of its area (`orig%`) but in 18.39, 1.4 to 1.7 %: a walkable AshlandsRibs top (y ~293, -61200,35000) has no link to the ground and is pruned. Interiors cover the original's interior faces as before. DotRecast refuses some watershed contours Recast
-only warns about (two outlines round a hole; "Bad outline", in a town zone of `--survey-interiors towns`): such a tile is built monotone.
+only warns about (two outlines round a hole; "Bad outline", in a town zone of `--survey-interiors towns`), and some polygon steps it throws on
+(a vertex removal whose hole has fewer than three corners: `RcMeshs.Triangulate` indexes a third one, **Verified** against DotRecast 2026.3.1's
+source): such a tile is built monotone, and one refused monotone too is left without polygons rather than failing the zone. **Observed**
+(`navmesh --zone 14,35 --base`): one watershed tile there (from -82944, 14400) threw so and failed the whole zone; built monotone, the zone builds.
 <a id="uncovered-contours"></a>**Uncovered contours** (engine choice, `NavUncoveredArea`): Recast's polygon step ear-clips each contour in plan and, finding no ear left,
 keeps the triangles made so far and only warns ("Bad triangulation"), so the rest of the region gets no polygon. A watershed tile whose polygons
 cover less area in plan than its contours is built monotone too, and the monotone mesh kept when it leaves less uncovered. **Observed** (#1393, zone
