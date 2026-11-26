@@ -421,6 +421,7 @@ public sealed class DecisionSystem
             row.Due = true;
             _anyRow = true;
             cold.Replan = false;
+            if (InventoryPause.WaitOver(world, cold)) cold.JobsWaitUntil = 0;
             LookAt(world, i, cold, row, asked);
         }
     }
@@ -446,13 +447,14 @@ public sealed class DecisionSystem
 
     /// <summary>
     /// Whether the chooser is asked for the character outside its think's turn, as the original's update replans: its replan bit or its mind's, an
-    /// order that held it, the plan step on a running follow (<see cref="FollowDefence.Due"/>), the order step's own asks
+    /// order that held it, the plan step on a running follow (<see cref="FollowDefence.Due"/>), the end of the jobs' wait after an inventory window
+    /// closed (<see cref="InventoryPause.WaitOver"/>), the order step's own asks
     /// (<see cref="Ai.OrderStep.Asks"/>).
     /// </summary>
     static bool Asked(World world, int slot, CharacterCold cold)
     {
         if (cold.Replan || cold.OrderWins || cold.Ai is { Replan: true }) return true;
-        if (FollowDefence.Due(world, slot, cold)) return true;
+        if (FollowDefence.Due(world, slot, cold) || InventoryPause.WaitOver(world, cold)) return true;
 
         return Ai.OrderStep.Asks(world, slot, cold, paused: false);
     }
@@ -943,6 +945,7 @@ public sealed class DecisionSystem
         {
             _picked = -1;
             var cold = world.Characters.Cold(slot)!;
+            if (InventoryPause.JobsWait(world, cold)) return DecisionCheck.No("an inventory window just closed");
             if (!urgent && !owner._asked && OnTrip(world, slot, cold) is { } trip) return trip;
 
             bool on = (cold.Orders & CharacterOrders.Jobs) != 0;

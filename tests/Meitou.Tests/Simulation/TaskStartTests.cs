@@ -102,6 +102,11 @@ public class TaskStartTests
         internal readonly ItemFactory Items;
 
         /// <summary>
+        /// The population data the rig's systems and fixtures are made from.
+        /// </summary>
+        internal readonly PopulationData Data;
+
+        /// <summary>
         /// With <c>ai</c>, the player's squad every player character joins (each NPC gets a squad of its own); null without.
         /// </summary>
         readonly Squad? _playerSquad;
@@ -111,7 +116,7 @@ public class TaskStartTests
         {
             var db = Database();
             if (ai && senses) AddFactions(db);
-            var data = PopulationData.Create(db, []);
+            var data = Data = PopulationData.Create(db, []);
             Items = new ItemFactory(db, BaseGame);
             Combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
                     new CombatOptions { SelfApproach = false, TickMedical = false });
