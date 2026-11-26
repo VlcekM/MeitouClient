@@ -5814,3 +5814,11 @@ msgstr "Dale al edificio un nombre propio, que se muestra en su panel, su invent
 #. machine-translated
 msgid "Leave it empty for the building's own name."
 msgstr "Déjalo vacío para el nombre original del edificio."
+
+#. machine-translated
+msgid "Mod: {1}"
+msgstr "Mod: {1}"
+
+#. machine-translated
+msgid "Mods: {1}"
+msgstr "Mods: {1}"
