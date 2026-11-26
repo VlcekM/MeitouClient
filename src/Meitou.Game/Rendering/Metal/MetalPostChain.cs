@@ -515,6 +515,79 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _ctx.EndNative(cmd);
     }
 
+    #region Characters' gathered light
+
+    /// <summary>
+    /// The characters' gather (made on first use) and its apply pass.
+    /// </summary>
+    Gi.MetalCharacterGather? _characterGather;
+
+    /// <summary>
+    /// See <see cref="_characterGather"/>.
+    /// </summary>
+    (Gi.MetalGiResolve.Pass Pass, SamplerSlot Traced, UniformHandle Strength, SamplerSlot Term, UniformHandle TermOn)? _characterApply;
+
+    /// <summary>
+    /// The characters' gathered light runs this frame: its switch, GTAO and the GI resolve, as on Vulkan.
+    /// </summary>
+    public bool CharacterOcclusionWanted => Options is { CharacterOcclusion: true, Ssao: true, Gtao: true } && GiResolve > 0;
+
+    /// <summary>
+    /// The characters' indirect light gathered by rays (docs/render-gi.md "Characters"), after the lamps' shadows: the gather, then the ambient light
+    /// the fragments took swapped for it (<see cref="Rendering.Gi.CharacterOcclusionPass.Apply"/>) and the floor.
+    /// </summary>
+    internal void RunCharacterOcclusion(Gi.MetalProbeGi probes)
+    {
+        if (!CharacterOcclusionWanted || _sceneColour is null || !_haveScene || probes.Scene.CharactersShown == 0) return;
+
+        int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        float tanY = MathF.Tan(_fov * 0.5f);
+        var rot = _view with { M41 = 0, M42 = 0, M43 = 0 };
+        // The kernels rebuild a ray from a pixel's row with ndc y = -1 at row 0: Metal's row 0 is the top, so the up axis is turned round.
+        var view = new Gi.MetalCharacterGather.View(_eye, new Vector3(rot.M11, rot.M21, rot.M31), -new Vector3(rot.M12, rot.M22, rot.M32),
+            ViewWindow.BackFor(rot, _fov, _aspect), ViewWindow.Tan(tanY * _aspect, tanY), new Vector2(_nearPlane, _farPlane), width, height);
+        _characterGather ??= new Gi.MetalCharacterGather(_ctx, probes);
+        if (_characterGather.Run(_ctx.Depth, _ctx.Albedo, view) is { } gathered) ApplyCharacterLight(gathered, width, height);
+    }
+
+    /// <summary>
+    /// The gathered light over the characters' pixels (the scene minus the apply's difference), then the floor; the sun's term gives the share of
+    /// the sky the fragment took beside its diffuse light while the sun is traced.
+    /// </summary>
+    void ApplyCharacterLight(GpuTexture gathered, int width, int height)
+    {
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        var resolve = _giResolve;
+        var a = _characterApply ??= MakeCharacterApply(resolve);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        resolve.SetView(a.Pass, _ctx.Depth, _ctx.Albedo, view, width, height, 1);
+        a.Pass.P.Bind(a.Traced, new SampledTexture(resolve.Point, gathered.View()));
+        a.Pass.P.Set(a.Strength, PostOptions.CharacterOcclusionStrength);
+
+        var term = TracedSun ? _tracedTerm : null;
+        a.Pass.P.Bind(a.Term, new SampledTexture(resolve.Point, (term ?? gathered).View()));
+        a.Pass.P.Set(a.TermOn, term is not null ? 1f : 0f);
+        a.Pass.P.ApplyGlobals();   // the probes, the sky's ambient and the haze
+
+        var floor = _lampFloor ??= resolve.Program(Rendering.Gi.LampShadowShaders.Floor, "metal lamp shadow floor");
+        var cmd = (MetalCommandList)_ctx.BeginNative("character light apply");
+        resolve.Fullscreen(cmd, a.Pass.P, _sceneColour!, LampTakeBack, load: true);
+        resolve.Fullscreen(cmd, floor.P, _sceneColour!, LampFloor, load: true);
+        _ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The characters' apply pass and its handles.
+    /// </summary>
+    static (Gi.MetalGiResolve.Pass, SamplerSlot, UniformHandle, SamplerSlot, UniformHandle) MakeCharacterApply(Gi.MetalGiResolve resolve)
+    {
+        var pass = resolve.Program(Rendering.Gi.CharacterOcclusionPass.Apply, "metal character light");
+        var p = pass.P;
+        return (pass, p.Sampler("uTraced"), p.Uniform("uTracedStrength"), p.Sampler("uTerm"), p.Uniform("uTermOn"));
+    }
+
+    #endregion
+
     /// <summary>
     /// The lamp shadows' apply pass and its handles.
     /// </summary>
@@ -768,6 +841,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _depthOfField?.Dispose();
         _giResolve?.Dispose();
         _lampShadows?.Dispose();
+        _characterGather?.Dispose();
         _tracedTerm?.Dispose();
         _sceneColour?.Dispose();
         foreach (var low in _lowTargets)

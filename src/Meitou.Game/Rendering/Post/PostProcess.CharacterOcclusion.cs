@@ -72,7 +72,7 @@ public sealed unsafe partial class PostProcess
     /// <summary>
     /// Whether this frame's characters should mark themselves as receivers for <see cref="RunCharacterOcclusion"/> (the surface target's bit 19).
     /// </summary>
-    internal bool CharacterOcclusionWanted => Options.CharacterOcclusion && GtaoOn && GiResolve > 0 && SupportsStorage(InternalFormat.Rgba16F);
+    public bool CharacterOcclusionWanted => Options.CharacterOcclusion && GtaoOn && GiResolve > 0 && SupportsStorage(InternalFormat.Rgba16F);
 
     /// <summary>
     /// Traces the characters' occlusion. <paramref name="scene"/> must hold this frame's traced scene with its characters.

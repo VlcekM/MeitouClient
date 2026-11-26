@@ -94,6 +94,12 @@ interface IWorldPostChain
     bool TracedDebug { get; set; }
 
     /// <summary>
+    /// Whether the characters' gathered light runs this frame (docs/render-gi.md "Characters"): the characters mark themselves as its receivers and
+    /// the traced scene holds them.
+    /// </summary>
+    bool CharacterOcclusionWanted { get; }
+
+    /// <summary>
     /// The sky's exposure band, read by the composite's exposure adaptation.
     /// </summary>
     (float Min, float Max)? AutoExposure { get; set; }

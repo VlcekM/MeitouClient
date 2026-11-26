@@ -210,8 +210,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   is on the game's Advanced page only, as is Lamp warmth.
 - Mutually exclusive techniques are one choice each (`WorldFrame.ChoiceSliders`): `Sun shadows` (Off / Faithful cascades / Meitou cascades /
   Traced / Traced near, cascades far), `Ambient occlusion type` (Off / SSAO / GTAO), `Global illumination` (Off / Probes / Probes + hybrid).
-  The switches they stand for (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game applies a saved choice after them at
-  start, so the launcher's choice wins and an older file of switches alone keeps its look.
+  The switches they stand for (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game (Vulkan and Metal) applies a saved choice after
+  them at start, so the launcher's choice wins and an older file of switches alone keeps its look.
 - A section's `groups` (null in older schemas: flat rows) are the menu's features (`FeatureGrouping.FeatureGroups`): one row headed by
   a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
   open while the launcher runs), named without the feature's name they repeat, as in the game. The Display section has two: the upscaler (render scale and its custom value, sharpness, DLSS preset) and HDR output (white and peak brightness).

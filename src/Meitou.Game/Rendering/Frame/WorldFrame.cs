@@ -623,10 +623,10 @@ static partial class WorldFrame
     /// <summary>
     /// Sun shadows (Off / Faithful cascades / Meitou cascades / Traced / Traced near, cascades far), ambient occlusion (Off / SSAO / GTAO) and
     /// global illumination (Off / Probes / Probes + hybrid) as choices: each reads and writes the Faithful / Meitou switches and the shadow distance
-    /// it stands for, so a settings file of the switches still loads. Traced needs the indirect light (the rays use its scene), so choosing it turns
+    /// it stands for, so a settings file of the switches still loads. Both settings panels have them (each where it has the switches). Traced needs the indirect light (the rays use its scene), so choosing it turns
     /// the GI on, and the GI off leaves the cascades.
     /// </summary>
-    static void AddChoiceSliders(List<Slider> sliders, List<Toggle> toggles, WorldGpu g)
+    internal static void AddChoiceSliders(List<Slider> sliders, List<Toggle> toggles, WorldGpu g)
     {
         if (sliders.FirstOrDefault(s => s.Label == ShadowDistanceSlider) is { } distance && g.Shadow is { } shadow
             && ChoiceToggle(toggles, "Shadows") is not null)

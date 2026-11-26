@@ -877,7 +877,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     /// <summary>
     /// Whether a Graphics switch has a row: not the techniques a choice stands for (<see cref="WorldFrame.ChoiceDrivenSwitches"/> but the two master
-    /// switches, when the choices exist: the Metal panel has none), nor one whose effect is off (<see cref="RowShown"/>).
+    /// switches, when the choices exist), nor one whose effect is off (<see cref="RowShown"/>).
     /// </summary>
     bool ShownSwitch(string label) =>
         !(WorldFrame.ChoiceDrivenSwitches.Contains(label) && label is not ("Ambient occlusion" or "Indirect light")

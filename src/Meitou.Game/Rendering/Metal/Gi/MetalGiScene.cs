@@ -79,6 +79,11 @@ internal sealed unsafe class MetalGiScene : IDisposable
     public bool Casters { get; set; }
 
     /// <summary>
+    /// True while the characters' gathered light wants the characters in the scene (they are there with <see cref="Casters"/> too).
+    /// </summary>
+    public bool Characters { get; set; }
+
+    /// <summary>
     /// How far the objects are traced while <see cref="Casters"/> (the shadows' range; at least the probes').
     /// </summary>
     public float Range { get; set; } = GiScene.ProbeRange;
@@ -587,16 +592,22 @@ internal sealed unsafe class MetalGiScene : IDisposable
     #region Characters
 
     /// <summary>
-    /// The characters the traced sun and lamps see (made the first time the casters are wanted).
+    /// The characters the traced sun, the lamps and the characters' gather see (made the first time they are wanted).
     /// </summary>
     MetalTracedCharacters? _people;
 
     /// <summary>
-    /// The characters while the scene holds the casters: skinned, their structures refitted, their instances last; dropped otherwise.
+    /// How many characters the scene holds this frame.
+    /// </summary>
+    public int CharactersShown => _people?.Shown ?? 0;
+
+    /// <summary>
+    /// The characters while the scene holds the casters or <see cref="Characters"/>: skinned, their structures refitted, their instances last;
+    /// dropped otherwise.
     /// </summary>
     void UpdateCharacters(Vector3 eye, Characters.CharacterRenderer? characters)
     {
-        if (!Casters || characters is null)
+        if (!(Casters || Characters) || characters is null)
         {
             _people?.Release();
             return;

@@ -1433,15 +1433,18 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             SettingsMenu.MetalUiResolutionSlider,
         };
         foreach (var slider in settingsValues.Sliders)
-            if (!GameHost.RunOnlyKeys().Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label) &&
-                host.Config.Graphics.TryGetValue(slider.Label, out float value))
+            if (!GameHost.RunOnlyKeys().Contains(slider.Label) && !metalDisplayKeys.Contains(slider.Label)
+                    && !WorldFrame.ChoiceSliders.Contains(slider.Label) && host.Config.Graphics.TryGetValue(slider.Label, out float value))
                 slider.Set(Math.Clamp(value, slider.Min, slider.Max));
-        foreach (var toggle in settingsValues.Toggles)
-            if (!LookPresets.HiddenSwitch(toggle.Label) && !GameHost.RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label)
-                    && host.Config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value)
-                    && (value >= 0.5f) != toggle.Get())
-                toggle.Set(value >= 0.5f);
-        settings.Tiers.ApplySavedPreset();
+
+        // The switches as saved, the technique choices after them, then the saved preset, as the Vulkan loop (GameLoop.ApplySavedGraphics): unless
+        // the command line chose the switches (--meitou / --faithful).
+        if (!Environment.GetCommandLineArgs().Any(a => a is "--meitou" or "--faithful"))
+        {
+            ApplySavedSwitches(settingsValues);
+            ApplySavedChoices(settingsValues);
+            settings.Tiers.ApplySavedPreset();
+        }
         if (host.GameOptions.Benchmark is { } tier) host.PlayBench.Applied = MetalBenchmark.ApplyTier(settings, settingsValues, tier);
         // The impostor atlas path is re-enabled after the frame-slot fence. Keep the diagnostic off switch as a
         // fallback; the saved "Far impostors" toggle is otherwise allowed through.
@@ -1451,6 +1454,29 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (!_metalCloudShadows) _sky.CloudShadows = false;
         if (!_metalShadows) _shadow.Enabled = false;
         if (_openSettingsForStill) settings.Visible = true;
+    }
+
+    /// <summary>
+    /// The saved switches (not the hidden ones, nor those the command line sets for this run).
+    /// </summary>
+    void ApplySavedSwitches(SettingsPanel settingsValues)
+    {
+        foreach (var toggle in settingsValues.Toggles)
+            if (!LookPresets.HiddenSwitch(toggle.Label) && !GameHost.RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label)
+                    && host.Config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value)
+                    && (value >= 0.5f) != toggle.Get())
+                toggle.Set(value >= 0.5f);
+    }
+
+    /// <summary>
+    /// The saved technique choices (<see cref="WorldFrame.ChoiceSliders"/>) after the switches they stand for: the launcher writes the choice
+    /// alone, and it wins.
+    /// </summary>
+    void ApplySavedChoices(SettingsPanel settingsValues)
+    {
+        foreach (var choice in settingsValues.Sliders.Where(s => WorldFrame.ChoiceSliders.Contains(s.Label)))
+            if (host.Config.Graphics.TryGetValue(choice.Label, out float c) && MathF.Round(c) != MathF.Round(choice.Get()))
+                choice.Set(Math.Clamp(c, choice.Min, choice.Max));
     }
 
     /// <summary>
@@ -1466,6 +1492,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         AddCharacterSettings(sliders, toggles);
         AddWaterSettings(sliders);
         AddEffectSettings(sliders, toggles);
+        WorldFrame.AddChoiceSliders(sliders, toggles, _worldGpu);   // the launcher's technique choices, over the switches above
         var actions = new List<PanelAction>();
         if (_foliage?.ImpostorDiskCache is { } cache)
             actions.Add(new PanelAction("Delete billboard cache", () =>
@@ -1623,6 +1650,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             () => Array.IndexOf(Meitou.Data.World.KenshiShadows.QualitySizes, _shadow.Settings.MapSize),
             v => _shadow.Settings = _shadow.Settings with { MapSize = Meitou.Data.World.KenshiShadows.MapSize((int)MathF.Round(v)) }, "0",
             Text: v => Meitou.Data.World.KenshiShadows.MapSize((int)MathF.Round(v)).ToString(CultureInfo.InvariantCulture) + "²"));
+        toggles.Add(SwitchToggle("shadows"));
         if (_shadow.Meitou)
         {
             sliders.Add(new Slider("Shadow filter 0-2 (Meitou; 0 low-end)", 0, 2, () => _shadow.FilterQuality,
@@ -1658,20 +1686,33 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
 
     /// <summary>
     /// The switches that need the indirect light's traced scene, under the same names as the Vulkan panel's (so the saved values and the quality
-    /// tiers reach them): the hybrid GI and its parts, the traced sun shadows and the lamp shadows.
+    /// tiers reach them): the hybrid GI and its parts, the traced sun shadows, the lamp shadows and the GI traced on characters.
     /// </summary>
     void AddTracedSettings(List<Toggle> toggles)
     {
+        var post = host.WorldOptions.Post;
         toggles.Add(SwitchToggle("gihybrid"));
-        toggles.AddRange(WorldFrame.GiHybridToggles(host.WorldOptions.Post));
+        toggles.AddRange(WorldFrame.GiHybridToggles(post));
         toggles.Add(SwitchToggle("traced"));
         toggles.Add(SwitchToggle("lampshadows"));
+        toggles.Add(new Toggle(WorldFrame.GiCharactersSwitch, () => post.CharacterOcclusion, v => post.CharacterOcclusion = v));
     }
 
     /// <summary>
-    /// The row of the Faithful / Meitou switch <paramref name="id"/> (<see cref="Enhancements"/>).
+    /// The row of the Faithful / Meitou switch <paramref name="id"/> over the live renderer (<see cref="WorldFrame.LiveSwitches"/>).
     /// </summary>
-    Toggle SwitchToggle(string id) => WorldFrame.SwitchToggle(WorldOptions.Switches(host.WorldOptions).First(e => e.Id == id));
+    Toggle SwitchToggle(string id) => WorldFrame.SwitchToggle(LiveSwitches.First(e => e.Id == id));
+
+    /// <summary>
+    /// The Faithful / Meitou switches over the live renderer, made the first time a row asks.
+    /// </summary>
+    IReadOnlyList<Enhancement> LiveSwitches =>
+        _liveSwitches ??= WorldFrame.LiveSwitches(host.WorldOptions, () => _worldGpu, () => host.Camera, () => host.Render);
+
+    /// <summary>
+    /// See <see cref="LiveSwitches"/>.
+    /// </summary>
+    IReadOnlyList<Enhancement>? _liveSwitches;
 
     /// <summary>
     /// The character and icon switches, and ground relief.
@@ -1776,6 +1817,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             v => host.WorldOptions.Post.ShaftAirDawn = MathF.Round(v * 10) / 10, "0.0"));
         sliders.Add(WorldFrame.ShaftQuality(host.WorldOptions.Post));
         sliders.Add(WorldFrame.OcclusionQuality(host.WorldOptions.Post));
+        toggles.Add(SwitchToggle("ao"));
         toggles.Add(SwitchToggle("gtao"));
         toggles.Add(new Toggle("Dithering", () => host.WorldOptions.Post.Dither, v => host.WorldOptions.Post.Dither = v));
     }

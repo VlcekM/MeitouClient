@@ -303,19 +303,24 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     public bool LampReceivers { get; set; }
 
     /// <summary>
-    /// The lamps' traced shadows over <paramref name="post"/>'s scene (<see cref="MetalPostChain.RunLampShadows"/>).
+    /// The lamps' traced shadows over <paramref name="post"/>'s scene (<see cref="MetalPostChain.RunLampShadows"/>), then the characters' gathered
+    /// light (<see cref="MetalPostChain.RunCharacterOcclusion"/>).
     /// </summary>
     public void FinishScene(Post.IWorldPostChain post, WorldLamps? lamps, uint skinTable)
     {
-        if (post is MetalPostChain chain && lamps is not null && _updated) chain.RunLampShadows(_scene, lamps, SceneToEye, skinTable);
+        if (post is not MetalPostChain chain || !_updated) return;
+
+        if (lamps is not null) chain.RunLampShadows(_scene, lamps, SceneToEye, skinTable);
+        chain.RunCharacterOcclusion(this);
     }
 
     /// <summary>
     /// The scene's casters for the traced sun (<see cref="MetalGiScene.Casters"/>).
     /// </summary>
-    public void SetCasters(bool casters, float range, float pixelsPerRadian)
+    public void SetCasters(bool casters, bool characters, float range, float pixelsPerRadian)
     {
         _scene.Casters = casters;
+        _scene.Characters = characters;
         _scene.Range = range;
         _scene.PixelsPerRadian = pixelsPerRadian;
     }

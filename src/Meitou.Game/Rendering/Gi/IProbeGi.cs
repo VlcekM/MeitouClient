@@ -57,9 +57,9 @@ internal interface IProbeGi : IDisposable
 
     /// <summary>
     /// The traced scene holds the sun's casters (while the sun is traced): the objects to <paramref name="range"/>, the small foliage by its size on
-    /// screen at <paramref name="pixelsPerRadian"/>.
+    /// screen at <paramref name="pixelsPerRadian"/>; and the characters with them, or alone while <paramref name="characters"/> (their gathered light).
     /// </summary>
-    void SetCasters(bool casters, float range, float pixelsPerRadian);
+    void SetCasters(bool casters, bool characters, float range, float pixelsPerRadian);
 
     /// <summary>
     /// True while the characters draw as the traced lamps' receivers (<c>uGiParams.z</c> bit 16, with the resolve).

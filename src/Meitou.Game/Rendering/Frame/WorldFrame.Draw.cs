@@ -640,7 +640,8 @@ static partial class WorldFrame
             probeGi.Rays = f.Post.Options.GiMoreRays ? GiProbes.MaxRays : GiProbes.DefaultRays;
             probeGi.CloudShadows = f.Post.Options.GiCloudShadowing;
             bool lampShadows = f.Post.Options.LampShadows && f.Post.GiResolve > 0 && gpu.Lamps is { Grid.W: > 0 };
-            probeGi.SetCasters(gpu.Traced || lampShadows, GiCasterRange(ref f), f.Render.TerrainPixelScale);
+            bool casters = gpu.Traced || lampShadows;
+            probeGi.SetCasters(casters, casters || f.Post.CharacterOcclusionWanted, GiCasterRange(ref f), f.Render.TerrainPixelScale);
             if (gpu.GiActive)
             {
                 var foliage = gpu.Foliage is { Enabled: true } shown ? shown : null;
@@ -1075,9 +1076,10 @@ static partial class WorldFrame
             && (lampShadows || gpu.Post is { CharacterOcclusionWanted: true });
         if (lampReceivers) gpu.Probes!.LampReceivers = true;
 
-        // Metal's probes: their own scene and flag (no character occlusion pass there yet).
+        // Metal's probes: their own scene and flag.
         bool metalShadows = gpu.PostChain is { Options.LampShadows: true, GiResolve: > 0 } && gpu.Lamps is { Grid.W: > 0 };
-        if (metalShadows && gpu.ProbeGi is { TracedReady: true } probeGi)
+        bool metalReceivers = metalShadows || gpu.PostChain is { CharacterOcclusionWanted: true };
+        if (metalReceivers && gpu.ProbeGi is { TracedReady: true } probeGi)
         {
             probeGi.LampReceivers = true;
             lampReceivers = true;
