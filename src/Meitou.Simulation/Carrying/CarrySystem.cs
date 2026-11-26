@@ -445,6 +445,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (table.TryResolveNext(open.Target, out int body2) && Openable(table, body2)
             && Nearest(table, Who(world, open.Looters), body2, s => PlayerOrders.CanRun(world, s, entry).CanRun) is int opener)
         {
+            InventoryPause.Told(world, opener);
             PlayerOrders.Give(world, opener, entry, open.Queued);
         }
     }
@@ -1334,7 +1335,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var player = world.Player;
         if (opening)
         {
-            OpenWindow(player, cold);   // an open-loot order: the window opens instead of a take-all
+            OpenWindow(world, i, cold);   // an open-loot order: the window opens instead of a take-all
             return;
         }
         int death = DeathUnits(victim.Inventory!);
@@ -1357,13 +1358,15 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// The open-loot walker's window opens: <see cref="PlayerState.OpenLoot"/> is its body, and the looter holds it
-    /// (<see cref="LootStart.WindowHeld"/>).
+    /// The open-loot walker's window opens: <see cref="PlayerState.OpenLoot"/> is its body, the looter holds it
+    /// (<see cref="LootStart.WindowHeld"/>) and, the player's, is selected (<see cref="InventoryPause.Focus"/>).
     /// </summary>
-    static void OpenWindow(PlayerState player, CharacterCold cold)
+    static void OpenWindow(World world, int slot, CharacterCold cold)
     {
+        var player = world.Player;
         (player.OpenLoot, player.LootOpener, player.OpeningLoot) = (player.OpeningLoot, player.LootWalker, CharacterId.None);
         cold.LootFlags |= LootStart.WindowHeld;
+        InventoryPause.Focus(world, slot);
     }
 
     /// <summary>
@@ -1377,20 +1380,20 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var cold = table.Cold(i)!;
         if (table.Next[i].Task != (byte)CharacterTask.Loot || !Opening(world, i) || cold.Inventory is null) return;
         if (!table.TryResolveNext(cold.CarryTarget, out int t) || !Openable(table, t)) return;
-        if (InReach(world, table.Next[i], table.Next[t], LootReach(world, i, t))) OpenWindow(world.Player, cold);
+        if (InReach(world, table.Next[i], table.Next[t], LootReach(world, i, t))) OpenWindow(world, i, cold);
     }
 
     /// <summary>
     /// The looter holding the open window (<c>Task_Loot_Order</c>'s update, <c>FUN_140354ef0</c>): it stays in the task, with no other task, while
-    /// the window stays open, and ends it when the window closes or a melee threat is within 40 (Character <c>+0x2b0</c>,
-    /// <see cref="CharacterFacts.ImmediateThreat"/>). Only this held phase tests the threat, not the walk to the body (#372). The task's end closes
-    /// the window (<see cref="CloseHeldWindow"/>).
+    /// the window stays open, and ends it when the window closes. The original also ends it at a melee threat within 40 (Character <c>+0x2b0</c>);
+    /// Meitou's pause ends it when the looter was out of combat when told and it or an ally near it fights now, and ignores combat otherwise
+    /// (<see cref="InventoryPause.CombatEnds"/>, engine choice). Only this held phase tests combat, not the walk to the body (#372). The task's
+    /// end closes the window (<see cref="CloseHeldWindow"/>).
     /// </summary>
     static void HoldWindow(World world, int i, CharacterCold cold)
     {
         bool open = world.Player.OpenLoot == cold.CarryTarget && world.Player.LootOpener == world.Characters.IdOf(i);
-        bool threat = world.SystemOf<CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, i);
-        if (open && !threat) return;
+        if (open && !InventoryPause.CombatEnds(world, i, cold)) return;
         End(world, i);
     }
 
