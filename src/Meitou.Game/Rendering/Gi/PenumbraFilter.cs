@@ -468,6 +468,17 @@ sealed unsafe class PenumbraFilter : IDisposable
     }
 
     /// <summary>
+    /// Releases the depth-plane target (after the frames in flight); the next run makes it again.
+    /// </summary>
+    public void ReleaseTargets()
+    {
+        _planes?.Dispose();
+        _planes = null;
+        _planesFrame = -1;
+        _planesDepth = null;
+    }
+
+    /// <summary>
     /// The kernel and the empty list buffer go.
     /// </summary>
     public void Dispose()
@@ -476,7 +487,7 @@ sealed unsafe class PenumbraFilter : IDisposable
         _ctx.Shaders.Dispose(_listProgram);
         _ctx.Shaders.Dispose(_halfProgram);
         _ctx.Shaders.Dispose(_planesProgram);
-        _planes?.Dispose();
+        ReleaseTargets();
         _noLists.Dispose();
     }
 

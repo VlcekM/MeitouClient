@@ -526,9 +526,19 @@ public sealed unsafe partial class TerrainDecalRenderer
     uint _staticDepthIndex = uint.MaxValue;
 
     /// <summary>
+    /// Milliseconds without a depth capture before the terrain or static depth copy is released.
+    /// </summary>
+    const long DepthCopyIdleMs = 5_000;
+
+    /// <summary>
     /// The frame the terrain depth was copied in (-1: never).
     /// </summary>
     long _terrainDepthFrame = -1;
+
+    /// <summary>
+    /// When the terrain and static depth copies were last captured (<see cref="Environment.TickCount64"/>).
+    /// </summary>
+    long _terrainDepthUsedAt, _staticDepthUsedAt;
 
     /// <summary>
     /// The <see cref="Surfaces"/> switch.
@@ -546,7 +556,12 @@ public sealed unsafe partial class TerrainDecalRenderer
         {
             if (value == _surfacesOn) return;
             _surfacesOn = value;
-            if (!value) ClearSurfaces();
+            if (!value)
+            {
+                ClearSurfaces();
+                FreeStaticDepth();
+                if (_footprints.Count == 0) FreeTerrainDepth();
+            }
         }
     }
 
@@ -595,6 +610,9 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// </summary>
     internal bool FootprintsNear(Vector3 eye, Vector4[] frustum)
     {
+        long now = Environment.TickCount64;
+        if (_staticDepth is not null && now - _staticDepthUsedAt >= DepthCopyIdleMs) FreeStaticDepth();
+
         foreach (var d in _footprints)
         {
             float radius = SoleRadius(d);
@@ -603,6 +621,7 @@ public sealed unsafe partial class TerrainDecalRenderer
                 return true;
         }
 
+        if (_terrainDepth is not null && now - _terrainDepthUsedAt >= DepthCopyIdleMs) FreeTerrainDepth();
         return false;
     }
 
@@ -1007,8 +1026,9 @@ public sealed unsafe partial class TerrainDecalRenderer
         cmd.Blit(sceneDepth, target, TextureMinFilter.Nearest);
         cmd.Order();
         _gpu.EndNative(cmd);
-        if (first) _terrainDepthFrame = _gpu.Frame.Number;
-        else _staticDepthFrame = _gpu.Frame.Number;
+        long now = Environment.TickCount64;
+        if (first) (_terrainDepthFrame, _terrainDepthUsedAt) = (_gpu.Frame.Number, now);
+        else (_staticDepthFrame, _staticDepthUsedAt) = (_gpu.Frame.Number, now);
     }
 
     /// <summary>
@@ -1188,16 +1208,34 @@ public sealed unsafe partial class TerrainDecalRenderer
     }
 
     /// <summary>
+    /// Releases the terrain depth copy and its bindless entry.
+    /// </summary>
+    void FreeTerrainDepth()
+    {
+        if (_terrainDepthIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, _terrainDepthIndex);
+        _terrainDepth?.Dispose();
+        (_terrainDepth, _terrainDepthIndex, _terrainDepthFrame) = (null, uint.MaxValue, -1);
+    }
+
+    /// <summary>
+    /// Releases the static depth copy and its bindless entry.
+    /// </summary>
+    void FreeStaticDepth()
+    {
+        if (_staticDepthIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, _staticDepthIndex);
+        _staticDepth?.Dispose();
+        (_staticDepth, _staticDepthIndex, _staticDepthFrame) = (null, uint.MaxValue, -1);
+    }
+
+    /// <summary>
     /// Frees the depth copies, their bindless entries and the surface program.
     /// </summary>
     void DisposeSurfaces()
     {
         _soles.Dispose();
         if (_surfaceDepthIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, _surfaceDepthIndex);
-        if (_terrainDepthIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, _terrainDepthIndex);
-        _terrainDepth?.Dispose();
-        _staticDepth?.Dispose();
-        if (_staticDepthIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, _staticDepthIndex);
+        FreeTerrainDepth();
+        FreeStaticDepth();
         if (_surfaceProgram is { } program)
         {
             _gpu.Pipelines.Forget(program);

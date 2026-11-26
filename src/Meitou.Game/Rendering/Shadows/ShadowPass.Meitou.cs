@@ -484,6 +484,7 @@ public sealed unsafe partial class ShadowPass
         DrawCascades(drawn, draw, toSun);
         Array.Clear(_casterViews);
         bool blockers = ContactHardening && _filterQuality > 0 && _blockers.Update(drawNow, count, _atlasSize, _atlasPlain);
+        if (!blockers) _blockers.Release();
         if (_coarse is not null)
         {
             _terrainMap ??= new TerrainShadowMap(Gpu, _coarse, _coarseSize);
@@ -742,7 +743,7 @@ public sealed unsafe partial class ShadowPass
     }
 
     /// <summary>
-    /// With the cascades past the rays, the sun map for what draws no traced pixel nearer than they start; else none, and it is not kept up.
+    /// With the cascades past the rays, the sun map for what draws no traced pixel nearer than they start; else none, and it is freed.
     /// </summary>
     void PutCascadesSunMap(ShadowView view, Vector3 toSun, float[] data, float[] ms)
     {
@@ -752,8 +753,7 @@ public sealed unsafe partial class ShadowPass
             return;
         }
 
-        _volumePublished = false;
-        Array.Clear(_sunMapTraced);
+        FreeVolume();
     }
 
     /// <summary>
@@ -796,7 +796,7 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     void DisposeMeitou()
     {
-        _volume?.Dispose();
+        FreeVolume();
         _terrainMap?.Dispose();
         _boundTerrain = null;
         _blockers.Dispose();
@@ -897,6 +897,8 @@ public sealed unsafe partial class ShadowPass
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
         ForgetCascades();   // back to the cascades: every one drawn again, as the maps hold what was there before the rays
+        FreeAtlas();
+        _blockers.Release();
 
         _timer.Begin();
         if (_coarse is not null) _terrainMap ??= new TerrainShadowMap(Gpu, _coarse, _coarseSize);
@@ -925,6 +927,20 @@ public sealed unsafe partial class ShadowPass
         _volume = Gpu.CreateTexture(desc);
         Array.Clear(_sunMapTraced);   // a new map holds nothing: every layer traced
         _volumeSampled = Sampled(_volume, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
+    }
+
+    /// <summary>
+    /// Frees the traced sun's depth map; the receivers get the stand-in until it is made and published again.
+    /// </summary>
+    void FreeVolume()
+    {
+        if (_volume is null) return;
+
+        _volume.Dispose();
+        _volume = null;
+        _volumeSampled = default;
+        _volumePublished = false;
+        Array.Clear(_sunMapTraced);
     }
 
     /// <summary>

@@ -78,15 +78,18 @@ sealed class VramPanel(GpuContext native)
                 $"of budget {heaps[i].Budget / 1048576.0:0.0} MB ({heaps[i].Flags})");
         }
 
-        ulong local = (ulong)alloc.Breakdown().Sum(o => (double)o.DeviceLocal) + empty + spare + scattered;
-        string ours = $"ours: {blocks / 1048576.0:0.0} MB in {alloc.BlockCount} blocks ({local / 1048576.0:0.0} MB device-local), " +
+        var breakdown = alloc.Breakdown();
+        ulong rebar = alloc.RebarUploadBytes;
+        ulong local = (ulong)breakdown.Sum(o => (double)o.DeviceLocal) + empty + spare + scattered;
+        string ours = $"ours: {blocks / 1048576.0:0.0} MB in {alloc.BlockCount} blocks " +
+            $"({local / 1048576.0:0.0} MB device-local, {rebar / 1048576.0:0.0} MB ReBAR uploads), " +
             $"{alloc.TotalUsedBytes / 1048576.0:0.0} MB used by {alloc.AllocationCount} allocations; ";
         w.WriteLine(ours + $"driver and others {(used > local ? used - local : 0) / 1048576.0:0.0} MB");
         w.WriteLine($"room in device-local blocks: empty {empty / 1048576.0:0.0} MB, spare {spare / 1048576.0:0.0} MB, " +
             $"scattered {scattered / 1048576.0:0.0} MB in {partBlocks} blocks");
         w.WriteLine();
         w.WriteLine("owners (MB, device-local MB, count):");
-        foreach (var o in alloc.Breakdown()) w.WriteLine($"{o.Bytes / 1048576.0,10:0.0}  {o.DeviceLocal / 1048576.0,10:0.0}  {o.Count,6}  {o.Name}");
+        foreach (var o in breakdown) w.WriteLine($"{o.Bytes / 1048576.0,10:0.0}  {o.DeviceLocal / 1048576.0,10:0.0}  {o.Count,6}  {o.Name}");
         w.WriteLine();
         more?.Invoke(w);
         alloc.WriteReport(w);

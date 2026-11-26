@@ -52,16 +52,10 @@ sealed unsafe class TracedSunPass : IDisposable
     readonly GpuSampler _sampler;
 
     /// <summary>
-    /// The filter that softens the rays' mask.
-    /// </summary>
-    readonly PenumbraFilter _penumbra;
-
-    /// <summary>
-    /// The rays' kernel and the penumbra filter.
+    /// The rays' kernel.
     /// </summary>
     public TracedSunPass(GpuContext ctx)
     {
-        _penumbra = new PenumbraFilter(ctx);
         this._ctx = ctx;
         _program = ctx.Shaders.Compute(TracedSunShaders.Mask, "traced sun",
         [
@@ -111,11 +105,11 @@ sealed unsafe class TracedSunPass : IDisposable
     }
 
     /// <summary>
-    /// Traces into <see cref="TracedSunTargets.Mask"/>, then filters it into <see cref="TracedSunTargets.Filtered"/>. <paramref name="inverse"/>:
-    /// NDC to the position relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth. Nothing depends on the frame: a
-    /// still view gives the same picture.
+    /// Traces into <see cref="TracedSunTargets.Mask"/>, then filters it with <paramref name="penumbra"/> into
+    /// <see cref="TracedSunTargets.Filtered"/>. <paramref name="inverse"/>: NDC to the position relative to the eye; <paramref name="pixelSlope"/>:
+    /// a pixel's width per unit of depth. Nothing depends on the frame: a still view gives the same picture.
     /// </summary>
-    public void Run(GiScene scene, in TracedSunTargets t, in Matrix4x4 inverse, Vector3 eye, Vector3 toSun, float pixelSlope)
+    public void Run(GiScene scene, in TracedSunTargets t, PenumbraFilter penumbra, in Matrix4x4 inverse, Vector3 eye, Vector3 toSun, float pixelSlope)
     {
         if (scene.Top is null) return;
 
@@ -137,19 +131,15 @@ sealed unsafe class TracedSunPass : IDisposable
         cmd.Dispatch((uint)((t.Width + 7) / 8), (uint)((t.Height + 7) / 8));
         cmd.Barrier(BarrierBatch.Full);
         var filter = new PenumbraTargets(t.Depth, t.Surface, t.Mask, t.Scratch, t.Filtered, t.Width, t.Height);
-        _penumbra.Run(cmd, filter, inverse, pixelSlope);
+        penumbra.Run(cmd, filter, inverse, pixelSlope);
         cmd.EndLabel();
         _ctx.EndNative(cmd);
     }
 
     /// <summary>
-    /// The kernel and the filter go.
+    /// The kernel goes.
     /// </summary>
-    public void Dispose()
-    {
-        _ctx.Shaders.Dispose(_program);
-        _penumbra.Dispose();
-    }
+    public void Dispose() => _ctx.Shaders.Dispose(_program);
 
     /// <summary>
     /// The rays' descriptors pushed: the depth, the surface, the term, the mask, the top level, the geometry records and the constants; then the

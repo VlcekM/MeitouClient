@@ -68,7 +68,8 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     int _portraitLive = -1;
     /// <summary>
-    /// The portrait atlas (sRGB, <see cref="PortraitColumns"/> × <see cref="PortraitRows"/> cells) and its depth, made on first use.
+    /// The portrait atlas (sRGB, <see cref="PortraitColumns"/> × <see cref="PortraitRows"/> cells), made on first use, and its depth, made on first
+    /// faithful draw.
     /// </summary>
     GpuTexture? _portraitColour, _portraitDepth;
     /// <summary>
@@ -78,6 +79,11 @@ internal sealed unsafe partial class CharacterRenderer
 
     // The enhanced portraits (Look): each drawn into this half-float square, then resolved into its cell of the atlas above.
     /// <summary>
+    /// Milliseconds without an enhanced portrait draw before the half-float square and its depth are released.
+    /// </summary>
+    const long PortraitHdrIdleMs = 10_000;
+
+    /// <summary>
     /// The enhanced portraits' half-float square and its depth (<see cref="PortraitSupersample"/> times a cell's size).
     /// </summary>
     GpuTexture? _portraitHdr, _portraitHdrDepth;
@@ -85,6 +91,10 @@ internal sealed unsafe partial class CharacterRenderer
     /// <see cref="_portraitHdr"/> sampled for the resolve.
     /// </summary>
     SampledTexture _portraitHdrSampled;
+    /// <summary>
+    /// When <see cref="DrawEnhancedPortraits"/> last ran (<see cref="Environment.TickCount64"/>).
+    /// </summary>
+    long _portraitHdrUsedAt;
 
     /// <summary>
     /// The atlas (sRGB, transparent where no character is), made on first use. Render thread.
@@ -98,8 +108,6 @@ internal sealed unsafe partial class CharacterRenderer
                 int w = PortraitCell * PortraitColumns, h = PortraitCell * PortraitRows;
                 _portraitColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, w, h,
                     Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "portraits"));
-                _portraitDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h, Use: TextureUse.DepthTarget,
-                    Name: "portraits depth"));
                 _portraitSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
                     _portraitColour.View());
                 _cleared = false;
@@ -155,8 +163,14 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public void DrawPortraits()
     {
-        if (PortraitRequests.Count == 0) return;
-        var atlas = PortraitAtlas.Texture;   // made on first use, with the depth
+        _visibility?.Idle();
+        if (PortraitRequests.Count == 0)
+        {
+            IdlePreviews();
+            return;
+        }
+
+        var atlas = PortraitAtlas.Texture;   // made on first use
         _portraitBudget = Covered ? int.MaxValue : PortraitsPerFrame;
         _liveByKey.Clear();
         for (int i = 0; i < _liveCount; i++) _liveByKey[_live[i].Key] = i;
@@ -164,10 +178,35 @@ internal sealed unsafe partial class CharacterRenderer
         if (!_cleared) ClearPortraitRects(atlas, [new PixelRect(0, 0, (uint)atlas.Desc.Width, (uint)atlas.Desc.Height)]);
         _cleared = true;
         ClearReplacedRecordCells(atlas);
-        if (!AnyPortraitDue()) return;
+        if (!AnyPortraitDue())
+        {
+            IdlePreviews();
+            return;
+        }
 
         if (_look.Enhanced) DrawEnhancedPortraits(atlas);
         else DrawFaithfulPortraits(atlas);
+        IdlePreviews();
+    }
+
+    /// <summary>
+    /// Releases idle preview targets (studio maps and the enhanced portrait square).
+    /// </summary>
+    void IdlePreviews()
+    {
+        IdleStudio();
+        IdlePortraitHdr();
+    }
+
+    /// <summary>
+    /// Releases the enhanced portraits' half-float square and depth after <see cref="PortraitHdrIdleMs"/> without an enhanced portrait draw.
+    /// </summary>
+    void IdlePortraitHdr()
+    {
+        if (_portraitHdr is null && _portraitHdrDepth is null) return;
+        if (Environment.TickCount64 - _portraitHdrUsedAt < PortraitHdrIdleMs) return;
+
+        DisposePortraitHdr();
     }
 
     /// <summary>
@@ -230,6 +269,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     void DrawEnhancedPortraits(GpuTexture atlas)
     {
+        _portraitHdrUsedAt = Environment.TickCount64;
         var supersampled = _look with { Supersample = PortraitSupersample };
         if (_portraitHdr is null)
         {
@@ -297,6 +337,9 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     void DrawFaithfulPortraits(GpuTexture atlas)
     {
+        _portraitDepth ??= Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, atlas.Desc.Width, atlas.Desc.Height,
+            Use: TextureUse.DepthTarget, Name: "portraits depth"));
+
         var pass = Gpu.BeginNative("portraits");
         var cells = PassTargets.Of(atlas, _portraitDepth);
         pass.BeginRendering(new RenderingDesc(cells.Colour, cells.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, cells.Width, cells.Height));

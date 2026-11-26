@@ -134,11 +134,24 @@ sealed class ShadowBlockerMap : IDisposable
     }
 
     /// <summary>
+    /// Frees the blocker map without touching its program; the receivers get the stand-in until it is made and published again.
+    /// </summary>
+    public void Release()
+    {
+        if (_blocker is null) return;
+
+        _blocker.Dispose();
+        _blocker = null;
+        _blockerSampled = default;
+        _blockerPublished = false;
+    }
+
+    /// <summary>
     /// Frees the map and its program.
     /// </summary>
     public void Dispose()
     {
-        _blocker?.Dispose();
+        Release();
         _blockerNative?.Dispose();
     }
 }

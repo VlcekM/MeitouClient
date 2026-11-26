@@ -36,9 +36,14 @@ public sealed unsafe partial class PostProcess
         public readonly UniformHandle SpecularOn;
 
         /// <summary>
-        /// Compiles the apply and looks up its slots.
+        /// Compiles the apply (in <paramref name="perLamp"/> mode, <c>uLost</c> is replaced by constant <c>(1, 0)</c> so no full-screen mask target
+        /// is needed) and looks up its slots.
         /// </summary>
-        public LampShadowApplyPass(GpuContext gpu) : base(gpu, Gi.LampShadowShaders.Apply, "post lamp shadows") =>
+        public LampShadowApplyPass(GpuContext gpu, bool perLamp) : base(gpu,
+            perLamp
+                ? Gi.LampShadowShaders.Apply.Replace("vec2 blocked = texelFetch(uLost, px, 0).rg;", "vec2 blocked = vec2(1.0, 0.0);")
+                : Gi.LampShadowShaders.Apply,
+            perLamp ? "post lamp shadows tiled" : "post lamp shadows") =>
             (Lost, Total, Total1, Specular, Plain, SpecularOn) = (P.Sampler("uLost"), P.Sampler("uTotal"), P.Sampler("uTotal1"),
                 P.Sampler("uSpecular"), P.Sampler("uPlain"), P.Uniform("uSpecularOn"));
     }
@@ -84,9 +89,9 @@ public sealed unsafe partial class PostProcess
     Gi.LampShadowPass? _lampShadowTrace;
 
     /// <summary>
-    /// The apply, made when first used.
+    /// The apply for full-screen mode and the one for tiled per-lamp mode, each made when first used.
     /// </summary>
-    LampShadowApplyPass? _lampShadowApply;
+    LampShadowApplyPass? _lampShadowApply, _lampShadowApplyTiled;
 
     /// <summary>
     /// The floor pass, made when first used.
@@ -126,35 +131,74 @@ public sealed unsafe partial class PostProcess
             return;
 
         MarkScene();
-        var lost = _lampLost ??= MakeLampLost();
-        _lampTotal ??= MakeLampLost();
-        var total1 = _lampTotal1 ??= MakeLampLost();
-        _lampScratch ??= MakeLampLost();
-        var filtered = _lampFiltered ??= MakeLampLost();
-        CloseSegment();
-
-        var trace = _lampShadowTrace ??= new Gi.LampShadowPass(Gpu);
+        var trace = _lampShadowTrace ??= new Gi.LampShadowPass(Gpu, SharedPenumbra());
         if (lamps.DebugReference is { } reference && lamps.RowOf(reference.Lamp) is { } debugRow)
         {
+            var lost = _lampLost ??= MakeLampLost();
+            CloseSegment();
             trace.RunReference(scene, lamps, depth.Texture, surface.Texture, lost.Texture, LampShadowViewNow(), debugRow, reference.Truth);
             ShowLampShadowReference(colour, lost);
             return;
         }
 
-        // With the tiles the rays are for what moves alone, a lamp at a time: total1 sums their lost light, filtered ends as 1.
+        // With the tiles the rays are for what moves alone, a lamp at a time: total1 sums their lost light, and the tiled apply uses constant
+        // (1, 0) without needing _lampLost, _lampScratch or _lampFiltered.
         bool perLamp = lamps.Tiles is not null;
+        _lampTotal ??= MakeLampLost();
+        var total1 = _lampTotal1 ??= MakeLampLost();
+        if (perLamp)
+        {
+            ReleaseFullScreenLampTargets();
+        }
+        else
+        {
+            _lampLost ??= MakeLampLost();
+            _lampScratch ??= MakeLampLost();
+            _lampFiltered ??= MakeLampLost();
+        }
+        CloseSegment();
+
         if (!TraceLampShadows(trace, scene, lamps, depth, surface, perLamp)) return;
 
-        ApplyLampShadows(colour, filtered, perLamp ? total1 : _lampTotal!, total1, perLamp && TracedTermTarget is not null ? _tracedTerm : null);
+        ApplyLampShadows(colour, perLamp ? null : _lampFiltered, perLamp ? total1 : _lampTotal, total1,
+            perLamp && TracedTermTarget is not null ? _tracedTerm : null, perLamp);
     }
 
     /// <summary>
-    /// Releases the trace and the pass programs.
+    /// Releases the full-screen-only lamp shadow targets (<see cref="_lampLost"/>, <see cref="_lampScratch"/>, <see cref="_lampFiltered"/>) when
+    /// running in tiled per-lamp mode.
+    /// </summary>
+    void ReleaseFullScreenLampTargets()
+    {
+        _lampLost?.Texture.Dispose();
+        _lampScratch?.Texture.Dispose();
+        _lampFiltered?.Texture.Dispose();
+        _lampLost = _lampScratch = _lampFiltered = null;
+    }
+
+    /// <summary>
+    /// Releases all lamp shadow targets and the trace's slice arrays when <see cref="PostOptions.LampShadows"/> is off.
+    /// </summary>
+    void ReleaseDisabledLampShadows()
+    {
+        if (Options.LampShadows) return;
+
+        ReleaseFullScreenLampTargets();
+        _lampTotal?.Texture.Dispose();
+        _lampTotal1?.Texture.Dispose();
+        _lampTotal = _lampTotal1 = null;
+        _lampShadowTrace?.ReleaseTargets();
+    }
+
+    /// <summary>
+    /// Releases the trace, the shared penumbra filter and the pass programs.
     /// </summary>
     void DisposeLampShadows()
     {
         _lampShadowTrace?.Dispose();
+        _penumbra?.Dispose();
         _lampShadowApply?.P.Dispose();
+        _lampShadowApplyTiled?.P.Dispose();
         _lampShadowFloor?.P.Dispose();
         _lampShow?.P.Dispose();
         _roomMaskPass?.Dispose();
@@ -187,27 +231,29 @@ public sealed unsafe partial class PostProcess
     /// </summary>
     bool TraceLampShadows(Gi.LampShadowPass trace, Gi.GiScene scene, WorldLamps lamps, Target2D depth, Target2D surface, bool perLamp)
     {
-        var (lost, total, total1) = (_lampLost!.Texture, _lampTotal!.Texture, _lampTotal1!.Texture);
-        var (scratch, filtered) = (_lampScratch!.Texture, _lampFiltered!.Texture);
+        var (total, total1) = (_lampTotal!.Texture, _lampTotal1!.Texture);
         if (!perLamp)
         {
-            trace.Run(scene, lamps, depth.Texture, surface.Texture, lost, total, total1, scratch, filtered, LampShadowViewNow(), SceneToEye);
+            trace.Run(scene, lamps, depth.Texture, surface.Texture, _lampLost!.Texture, total, total1, _lampScratch!.Texture, _lampFiltered!.Texture,
+                LampShadowViewNow(), SceneToEye);
             return true;
         }
 
         // This frame's depth pyramid tells each lamp's pass which cells of the screen can hold a mover's shadow.
         var pyramid = BuildHiz() ? Hiz!.ThisFrame() : default;
-        return trace.RunPerLamp(scene, lamps, depth.Texture, surface.Texture, total, total1, filtered, LampShadowViewNow(), SceneToEye, pyramid);
+        return trace.RunPerLamp(scene, lamps, depth.Texture, surface.Texture, total, total1, LampShadowViewNow(), SceneToEye, pyramid);
     }
 
     /// <summary>
     /// The filtered lost light off the scene, then the floor pass.
     /// </summary>
-    void ApplyLampShadows(Target2D colour, Target2D filtered, Target2D total, Target2D total1, Target2D? specular)
+    void ApplyLampShadows(Target2D colour, Target2D? filtered, Target2D total, Target2D total1, Target2D? specular, bool perLamp)
     {
-        var a = _lampShadowApply ??= new LampShadowApplyPass(Gpu);
+        var a = perLamp
+            ? (_lampShadowApplyTiled ??= new LampShadowApplyPass(Gpu, perLamp: true))
+            : (_lampShadowApply ??= new LampShadowApplyPass(Gpu, perLamp: false));
         SetGiView(a);
-        Bind(a.P, a.Lost, filtered);
+        if (!perLamp) Bind(a.P, a.Lost, filtered);
         Bind(a.P, a.Total, total);
         Bind(a.P, a.Total1, total1);
         Bind(a.P, a.Specular, specular);

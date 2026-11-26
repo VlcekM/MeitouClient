@@ -130,6 +130,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
         }
 
         _meitouValid = false;
+        _blockers.Release();
+        FreeVolume();
         var watch = Stopwatch.StartNew();
         Array.Clear(PhaseMs);
 
@@ -230,6 +232,14 @@ public sealed unsafe partial class ShadowPass : IDisposable
     public void Disable()
     {
         _meitouValid = false;
+        _volumePublished = false;
+        if (!Enabled)
+        {
+            FreeAtlas();
+            _blockers.Release();
+            FreeVolume();
+        }
+
         var data = new float[ReceiverBytes / 4];
         Upload(data);
     }
@@ -262,6 +272,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
         _atlas.Dispose();
         (_atlas, _atlasPublished) = (null, false);
+        (_atlasSize, _atlasLayers) = (0, 0);
+        (_atlasShadow, _atlasPlain) = (default, default);
+        ForgetCascades();
     }
 
     #endregion

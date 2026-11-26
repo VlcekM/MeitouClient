@@ -25,9 +25,27 @@ public sealed unsafe partial class PostProcess
     long _roomMaskFrame = -1;
 
     /// <summary>
+    /// Timestamp (<see cref="Environment.TickCount64"/>) of the last frame the room mask ran.
+    /// </summary>
+    long _roomMaskLastUsed;
+
+    /// <summary>
     /// This frame's rooms, or null when none were looked for (no interior in view, no traced scene).
     /// </summary>
     Target2D? RoomMaskNow => _roomMaskFrame == _frameIndex ? _roomMask : null;
+
+    /// <summary>
+    /// Releases <see cref="_roomMask"/> when unused for more than <see cref="IdleReleaseMs"/> milliseconds.
+    /// </summary>
+    void ReleaseIdleRoomMask(long now)
+    {
+        if (_roomMask is not null && now - _roomMaskLastUsed > IdleReleaseMs)
+        {
+            _roomMask.Texture.Dispose();
+            _roomMask = null;
+            _roomMaskFrame = -1;
+        }
+    }
 
     /// <summary>
     /// Finds this frame's rooms while an interior is in view (<see cref="IndoorExposure"/>). <paramref name="scene"/> must hold this frame's
@@ -39,6 +57,7 @@ public sealed unsafe partial class PostProcess
         if (IndoorExposure <= 0 || _exposureHold is not null || !MergeExposure || !MergeSupported || !_haveScene || depth is null || surface is null
             || scene?.Top is null || !SupportsStorage(InternalFormat.R32F)) return;
 
+        _roomMaskLastUsed = Environment.TickCount64;
         MarkScene();
         if (_roomMask is null)
         {

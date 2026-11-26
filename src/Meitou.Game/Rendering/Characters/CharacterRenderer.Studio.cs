@@ -79,11 +79,6 @@ internal sealed unsafe partial class CharacterRenderer
     const float StudioDepth = -5;
 
     /// <summary>
-    /// The colour target the sun's depth draw carries (its colour is unused).
-    /// </summary>
-    GpuTexture? _studioShadowColour;
-
-    /// <summary>
     /// The sun's shadow map.
     /// </summary>
     GpuTexture? _studioShadowDepth;
@@ -92,11 +87,6 @@ internal sealed unsafe partial class CharacterRenderer
     /// The screen occlusion, the preview's size.
     /// </summary>
     GpuTexture? _studioAo;
-
-    /// <summary>
-    /// The colour target the sky's depth draws carry (its colour is unused).
-    /// </summary>
-    GpuTexture? _studioSkyColour;
 
     /// <summary>
     /// The sky atlas: the character's depth from each spiral direction, a tile each.
@@ -134,9 +124,19 @@ internal sealed unsafe partial class CharacterRenderer
     const double StudioRetrySeconds = 5;
 
     /// <summary>
+    /// Milliseconds without a studio draw before the studio maps and screen occlusion are released.
+    /// </summary>
+    const long StudioIdleMs = 10_000;
+
+    /// <summary>
     /// When the driver last refused the studio's maps (a <see cref="Stopwatch"/> timestamp; 0: never).
     /// </summary>
     long _studioRefusedAt;
+
+    /// <summary>
+    /// When <see cref="StudioView"/> last ran (<see cref="Environment.TickCount64"/>).
+    /// </summary>
+    long _studioUsedAt;
 
     /// <summary>
     /// The previews are drawn in the studio.
@@ -180,6 +180,7 @@ internal sealed unsafe partial class CharacterRenderer
     ViewConstants StudioView(int index, Matrix4x4 viewProjection, Matrix4x4 projection, Vector3 eye, Vector3 toSun, GpuTexture colour,
         GpuTexture depth, int width, int height)
     {
+        _studioUsedAt = Environment.TickCount64;
         ref var l = ref _live[index];
         var centre = l.Centre;
         float radius = MathF.Max(l.Radius, 1f) * 1.3f;
@@ -194,7 +195,7 @@ internal sealed unsafe partial class CharacterRenderer
 
         // The camera's eye picks the levels of detail, so the map holds the meshes the picture shows (a coarser level from the sun's distance shaded
         // its own finer one).
-        DrawStudioDepth(index, Matrix4x4.CreateTranslation(-centre) * lightRelative, centre + toSun * (radius * 2), eye, _studioShadowColour!,
+        DrawStudioDepth(index, Matrix4x4.CreateTranslation(-centre) * lightRelative, centre + toSun * (radius * 2), eye, null,
             _studioShadowDepth!, StudioShadowSize, StudioShadowSize, "studio shadow");
 
         // The sky's visibility: the depth from every direction of the spiral, at the camera's levels of detail.
@@ -218,23 +219,19 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
-    /// The sun's shadow map and its carrier colour target, made on first use.
+    /// The sun's shadow map, made on first use.
     /// </summary>
     void MakeStudioShadow()
     {
         if (_studioShadowDepth is not null) return;
 
-        var colourDesc = new TextureDesc(InternalFormat.Rgba8, StudioShadowSize, StudioShadowSize, Use: TextureUse.ColourTarget,
-            Name: "studio shadow colour");
-        _studioShadowColour = Gpu.CreateTexture(colourDesc);
         _studioShadowDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent32F, StudioShadowSize, StudioShadowSize,
             Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "studio shadow"));
         _studioShadowIndex = Gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(StudioNearest(), _studioShadowDepth.View()));
     }
 
     /// <summary>
-    /// The sky atlas and its carrier colour target, made on first use: <see cref="StudioSkyColumns"/> tiles across, as many rows as the directions
-    /// fill.
+    /// The sky atlas, made on first use: <see cref="StudioSkyColumns"/> tiles across, as many rows as the directions fill.
     /// </summary>
     void MakeStudioSky()
     {
@@ -242,7 +239,6 @@ internal sealed unsafe partial class CharacterRenderer
 
         int w = StudioSkyTile * StudioSkyColumns;
         int h = StudioSkyTile * ((StudioSkyDirections + StudioSkyColumns - 1) / StudioSkyColumns);
-        _studioSkyColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h, Use: TextureUse.ColourTarget, Name: "studio sky colour"));
         var depthDesc = new TextureDesc(InternalFormat.DepthComponent32F, w, h, Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "studio sky");
         _studioSkyDepth = Gpu.CreateTexture(depthDesc);
         _studioSkyIndex = Gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(StudioNearest(), _studioSkyDepth.View()));
@@ -268,10 +264,9 @@ internal sealed unsafe partial class CharacterRenderer
         MakeStudioSky();
 
         var cmd = Gpu.BeginNative("studio sky");
-        var target = PassTargets.Of(_studioSkyColour!, _studioSkyDepth!);
-        cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
+        var target = PassTargets.Of(null, _studioSkyDepth!);
+        cmd.BeginRendering(new RenderingDesc(default, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
         Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
-        cmd.Clear(true, default, true, 1, new PixelRect(0, 0, (uint)target.Width, (uint)target.Height));
 
         int was = _portraitLive;
         _portraitLive = index;
@@ -315,9 +310,10 @@ internal sealed unsafe partial class CharacterRenderer
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
     /// <summary>
-    /// <paramref name="index"/>'s character's depth (cut-outs included) into <paramref name="depth"/>, cleared, its colour target only a carrier.
+    /// <paramref name="index"/>'s character's depth (cut-outs included) into <paramref name="depth"/>, cleared; <paramref name="colour"/> is
+    /// optional (null for depth-only maps).
     /// </summary>
-    void DrawStudioDepth(int index, Matrix4x4 viewProjection, Vector3 eye, Vector3 lodEye, GpuTexture colour, GpuTexture depth, int width,
+    void DrawStudioDepth(int index, Matrix4x4 viewProjection, Vector3 eye, Vector3 lodEye, GpuTexture? colour, GpuTexture depth, int width,
         int height, string label)
     {
         var cmd = Gpu.BeginNative(label);
@@ -325,7 +321,7 @@ internal sealed unsafe partial class CharacterRenderer
         cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
         Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
         var rect = new PixelRect(0, 0, (uint)width, (uint)height);
-        cmd.Clear(true, default, true, 1, rect);
+        cmd.Clear(colour is not null, default, true, 1, rect);
         Gpu.SetPassViewport(new PixelViewport(0, 0, width, height, 0, 1), rect);
 
         int was = _portraitLive;
@@ -370,6 +366,23 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
+    /// Releases the studio's maps and screen occlusion after <see cref="StudioIdleMs"/> without a studio draw.
+    /// </summary>
+    void IdleStudio()
+    {
+        if (_studioShadowDepth is null && _studioSkyDepth is null && _studioAo is null) return;
+        if (Environment.TickCount64 - _studioUsedAt < StudioIdleMs) return;
+
+        DisposeStudioMaps();
+        if (_studioAo is not null)
+        {
+            Gpu.Bindless.Free(BindlessKind.Texture2D, _studioAoIndex);
+            _studioAo.Dispose();
+            _studioAo = null;
+        }
+    }
+
+    /// <summary>
     /// Frees the studio's maps, their bindless slots, the occlusion pass and the imprints.
     /// </summary>
     void DisposeStudio()
@@ -384,18 +397,16 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
-    /// Frees the shadow and sky maps, their carriers and their bindless slots (a map half made by a refused <see cref="StudioMapsReady"/> too).
+    /// Frees the shadow and sky maps and their bindless slots (a map half made by a refused <see cref="StudioMapsReady"/> too).
     /// </summary>
     void DisposeStudioMaps()
     {
         if (_studioShadowDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioShadowIndex);
         if (_studioSkyDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioSkyIndex);
 
-        _studioSkyColour?.Dispose();
         _studioSkyDepth?.Dispose();
-        _studioShadowColour?.Dispose();
         _studioShadowDepth?.Dispose();
-        (_studioSkyColour, _studioSkyDepth, _studioShadowColour, _studioShadowDepth) = (null, null, null, null);
+        (_studioSkyDepth, _studioShadowDepth) = (null, null);
     }
 }
 

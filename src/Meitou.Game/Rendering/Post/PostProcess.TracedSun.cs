@@ -67,6 +67,37 @@ public sealed unsafe partial class PostProcess
     TracedDebugPass? _tracedDebugPass;
 
     /// <summary>
+    /// The penumbra filter shared by <see cref="Gi.TracedSunPass"/> and <see cref="Gi.LampShadowPass"/>, made when first used and owned here.
+    /// </summary>
+    Gi.PenumbraFilter? _penumbra;
+
+    /// <summary>
+    /// The shared penumbra filter (created on first use; disposed by <see cref="PostProcess"/>).
+    /// </summary>
+    Gi.PenumbraFilter SharedPenumbra() => _penumbra ??= new Gi.PenumbraFilter(Gpu);
+
+    /// <summary>
+    /// Releases the traced sun's targets when disabled (keeping <see cref="_tracedTerm"/> while <see cref="ContactSun"/> needs it), and the
+    /// shared penumbra filter's planes when both traced sun and lamp shadows are off.
+    /// </summary>
+    void ReleaseDisabledTracedSun()
+    {
+        if (!Options.TracedSun || GiResolve <= 0)
+        {
+            _tracedMask?.Texture.Dispose();
+            _tracedScratch?.Texture.Dispose();
+            _tracedFiltered?.Texture.Dispose();
+            _tracedMask = _tracedScratch = _tracedFiltered = null;
+        }
+        if ((!Options.TracedSun && !ContactSun) || GiResolve <= 0)
+        {
+            _tracedTerm?.Texture.Dispose();
+            _tracedTerm = null;
+        }
+        if (!Options.TracedSun && !Options.LampShadows) _penumbra?.ReleaseTargets();
+    }
+
+    /// <summary>
     /// This frame's sun is traced (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the scene targets carry
     /// <see cref="TracedTermTarget"/>.
     /// </summary>
@@ -120,7 +151,7 @@ public sealed unsafe partial class PostProcess
         float pixelSlope = 2 * MathF.Tan(_fovNow * 0.5f) / _height;
         var targets = new Gi.TracedSunTargets(_sceneDepth.Texture, _giAlbedo.Texture, _tracedTerm.Texture, _tracedMask.Texture,
             _tracedScratch.Texture, _tracedFiltered.Texture, _width, _height);
-        rays.Run(scene, targets, inverse, _eyeNow, toSun, pixelSlope);
+        rays.Run(scene, targets, SharedPenumbra(), inverse, _eyeNow, toSun, pixelSlope);
 
         var add = _tracedAddPass ??= new TracedAddPass(Gpu);
         SetGiView(add);

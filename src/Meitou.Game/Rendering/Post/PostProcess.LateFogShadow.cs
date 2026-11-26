@@ -57,6 +57,23 @@ public sealed partial class PostProcess
             (Scene, Shadow) = (P.Sampler("uScene"), P.Sampler("uShadow"));
     }
 
+    /// <summary>
+    /// The filtered shadow blended in-place onto an external upscaler's output (<see cref="PostProcessShaders.LateFogShadowAdd"/>).
+    /// </summary>
+    sealed class LateFogShadowAddPass : FullscreenProgram
+    {
+        /// <summary>
+        /// The filtered shadow.
+        /// </summary>
+        public readonly SamplerSlot Shadow;
+
+        /// <summary>
+        /// Compiles the additive apply and looks up its slot.
+        /// </summary>
+        public LateFogShadowAddPass(GpuContext gpu) : base(gpu, PostProcessShaders.LateFogShadowAdd, "post late fog shadow add") =>
+            Shadow = P.Sampler("uShadow");
+    }
+
     #endregion
 
     #region Late fog shadow
@@ -77,12 +94,17 @@ public sealed partial class PostProcess
     LateFogShadowPass? _lateFogShadow;
 
     /// <summary>
-    /// The apply, made when first used.
+    /// The apply into a separate target (for TAA, whose output is its next history), made when first used.
     /// </summary>
     LateFogShadowApplyPass? _lateFogShadowApply;
 
     /// <summary>
-    /// The half-size shadow; the filter's this and last frame and the composite, at the output's size.
+    /// The in-place additive apply (for external upscalers), made when first used.
+    /// </summary>
+    LateFogShadowAddPass? _lateFogShadowAdd;
+
+    /// <summary>
+    /// The half-size shadow; the filter's this and last frame, and the TAA-only composite target, at the output's size.
     /// </summary>
     Target2D? _fogShadowHalf, _lateFogNow, _lateFogLast, _lateFogOut;
 
@@ -90,6 +112,11 @@ public sealed partial class PostProcess
     /// Whether this frame prepared a half-size shadow, and whether the filter's last frame holds one.
     /// </summary>
     bool _lateFogPending, _lateFogValid;
+
+    /// <summary>
+    /// Timestamp (<see cref="Environment.TickCount64"/>) of the last frame the late fog shadow ran.
+    /// </summary>
+    long _lateFogLastUsed;
 
     /// <summary>
     /// The layers' grid the half-size shadow was prepared with, for the filter.
@@ -114,6 +141,7 @@ public sealed partial class PostProcess
     {
         if (!LateFogShadowOn || grid.Darkening <= 0) return;
 
+        _lateFogLastUsed = Environment.TickCount64;
         int hw = Math.Max((_width + 1) / 2, 1);
         int hh = Math.Max((_height + 1) / 2, 1);
         if (_fogShadowHalf is null || _fogShadowHalf.Width != hw || _fogShadowHalf.Height != hh)
@@ -131,10 +159,11 @@ public sealed partial class PostProcess
     }
 
     /// <summary>
-    /// The volumes' shadow over <paramref name="output"/> (the upscaler's), into a target of its own which it returns; <paramref name="output"/>
-    /// itself when there is none this frame.
+    /// The volumes' shadow over <paramref name="output"/> (the upscaler's): blended in-place onto <paramref name="output"/> when
+    /// <paramref name="inPlace"/> (external upscaler, whose output is not reused as history), or into <see cref="_lateFogOut"/> for TAA; returns
+    /// <paramref name="output"/> unchanged when there is no shadow this frame.
     /// </summary>
-    Target2D CompositeLateFogShadow(Target2D output, int targetWidth, int targetHeight, bool reset)
+    Target2D CompositeLateFogShadow(Target2D output, int targetWidth, int targetHeight, bool reset, bool inPlace)
     {
         if (!_lateFogPending)
         {
@@ -143,15 +172,39 @@ public sealed partial class PostProcess
         }
 
         _lateFogPending = false;
-        EnsureLateFogTargets(output, targetWidth, targetHeight);
+        _lateFogLastUsed = Environment.TickCount64;
+        EnsureLateFogTargets(output, targetWidth, targetHeight, inPlace);
         (_lateFogNow, _lateFogLast) = (_lateFogLast!, _lateFogNow);
         FilterLateFogShadow(targetWidth, targetHeight, reset);
-        ApplyLateFogShadow(output, targetWidth, targetHeight);
+        if (inPlace) ApplyLateFogShadowInPlace(output, targetWidth, targetHeight);
+        else ApplyLateFogShadow(output, targetWidth, targetHeight);
         Stamp("late fog shadow");
         CloseSegment();
         _lateFogValid = true;
 
-        return _lateFogOut!;
+        return inPlace ? output : _lateFogOut!;
+    }
+
+    /// <summary>
+    /// Releases the late fog shadow targets (after the frames in flight) and forgets the history.
+    /// </summary>
+    void FreeLateFogShadow()
+    {
+        foreach (var t in new[] { _fogShadowHalf, _lateFogNow, _lateFogLast, _lateFogOut }) t?.Texture.Dispose();
+        _fogShadowHalf = _lateFogNow = _lateFogLast = _lateFogOut = null;
+        _lateFogValid = _lateFogPending = false;
+    }
+
+    /// <summary>
+    /// Releases the late fog shadow targets when unused for more than <see cref="IdleReleaseMs"/> milliseconds.
+    /// </summary>
+    void ReleaseIdleLateFogShadow(long now)
+    {
+        if (!_lateFogPending && (_fogShadowHalf is not null || _lateFogNow is not null || _lateFogLast is not null || _lateFogOut is not null)
+            && now - _lateFogLastUsed > IdleReleaseMs)
+        {
+            FreeLateFogShadow();
+        }
     }
 
     /// <summary>
@@ -162,23 +215,40 @@ public sealed partial class PostProcess
         _fogShadowHalfPass?.P.Dispose();
         _lateFogShadow?.P.Dispose();
         _lateFogShadowApply?.P.Dispose();
-        foreach (var t in new[] { _fogShadowHalf, _lateFogNow, _lateFogLast, _lateFogOut }) t?.Texture.Dispose();
+        _lateFogShadowAdd?.P.Dispose();
+        FreeLateFogShadow();
     }
 
     /// <summary>
-    /// The filter's two targets and the composite's at the output's size; a new size drops the history.
+    /// The filter's two targets and, when not <paramref name="inPlace"/>, the composite's at the output's size; a new size drops the history.
     /// </summary>
-    void EnsureLateFogTargets(Target2D output, int targetWidth, int targetHeight)
+    void EnsureLateFogTargets(Target2D output, int targetWidth, int targetHeight, bool inPlace)
     {
-        if (_lateFogNow is not null && _lateFogNow.Width == targetWidth && _lateFogNow.Height == targetHeight) return;
+        if (inPlace && _lateFogOut is not null)
+        {
+            _lateFogOut.Texture.Dispose();
+            _lateFogOut = null;
+        }
 
-        foreach (var t in new[] { _lateFogNow, _lateFogLast, _lateFogOut }) t?.Texture.Dispose();   // released after the frames in flight
+        bool needFilter = _lateFogNow is null || _lateFogNow.Width != targetWidth || _lateFogNow.Height != targetHeight;
+        bool needOut = !inPlace && (_lateFogOut is null || _lateFogOut.Width != targetWidth || _lateFogOut.Height != targetHeight
+            || _lateFogOut.Format != output.Format);
+        if (!needFilter && !needOut) return;
 
         using var batch = Gpu.Uploads.Begin();
-        _lateFogNow = Make(batch, targetWidth, targetHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post late fog shadow a");
-        _lateFogLast = Make(batch, targetWidth, targetHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post late fog shadow b");
-        _lateFogOut = Make(batch, targetWidth, targetHeight, output.Format, TextureMinFilter.Linear, "post late fog shadow out");
-        _lateFogValid = false;
+        if (needFilter)
+        {
+            _lateFogNow?.Texture.Dispose();   // released after the frames in flight
+            _lateFogLast?.Texture.Dispose();
+            _lateFogNow = Make(batch, targetWidth, targetHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post late fog shadow a");
+            _lateFogLast = Make(batch, targetWidth, targetHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post late fog shadow b");
+            _lateFogValid = false;
+        }
+        if (needOut)
+        {
+            _lateFogOut?.Texture.Dispose();
+            _lateFogOut = Make(batch, targetWidth, targetHeight, output.Format, TextureMinFilter.Linear, "post late fog shadow out");
+        }
     }
 
     /// <summary>
@@ -199,7 +269,7 @@ public sealed partial class PostProcess
     }
 
     /// <summary>
-    /// The filtered shadow over <paramref name="output"/> into <see cref="_lateFogOut"/>.
+    /// The filtered shadow over <paramref name="output"/> into <see cref="_lateFogOut"/> (for TAA).
     /// </summary>
     void ApplyLateFogShadow(Target2D output, int targetWidth, int targetHeight)
     {
@@ -207,6 +277,19 @@ public sealed partial class PostProcess
         Bind(a.P, a.Scene, output);
         Bind(a.P, a.Shadow, _lateFogNow);
         Draw(a.P, _lateFogOut!.Attachment, _lateFogOut.Format, targetWidth, targetHeight, targetWidth, targetHeight, PassState);
+    }
+
+    /// <summary>
+    /// The filtered shadow added in-place onto <paramref name="output"/> via hardware blending, then clamped to zero.
+    /// </summary>
+    void ApplyLateFogShadowInPlace(Target2D output, int targetWidth, int targetHeight)
+    {
+        var a = _lateFogShadowAdd ??= new LateFogShadowAddPass(Gpu);
+        Bind(a.P, a.Shadow, _lateFogNow);
+        Draw(a.P, output.Attachment, output.Format, targetWidth, targetHeight, targetWidth, targetHeight, GiAddState);
+
+        var floor = _lampShadowFloor ??= new LampShadowFloorPass(Gpu);
+        Draw(floor.P, output.Attachment, output.Format, targetWidth, targetHeight, targetWidth, targetHeight, LampShadowFloorState);
     }
 
     #endregion

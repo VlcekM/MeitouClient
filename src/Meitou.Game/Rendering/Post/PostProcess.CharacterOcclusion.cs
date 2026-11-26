@@ -75,6 +75,20 @@ public sealed unsafe partial class PostProcess
     public bool CharacterOcclusionWanted => Options.CharacterOcclusion && GtaoOn && GiResolve > 0 && SupportsStorage(InternalFormat.Rgba16F);
 
     /// <summary>
+    /// Releases the character occlusion gather targets when <see cref="PostOptions.CharacterOcclusion"/> (or its prerequisites) is off.
+    /// </summary>
+    void ReleaseDisabledCharacterOcclusion()
+    {
+        if (CharacterOcclusionWanted) return;
+
+        _characterVisibility?.Texture.Dispose();
+        _characterGatherLast?.Texture.Dispose();
+        _characterGatherPooled?.Texture.Dispose();
+        _characterVisibility = _characterGatherLast = _characterGatherPooled = null;
+        _characterVisibilityFrame = -1;
+    }
+
+    /// <summary>
     /// Traces the characters' occlusion. <paramref name="scene"/> must hold this frame's traced scene with its characters.
     /// </summary>
     internal void RunCharacterOcclusion(Gi.GiProbes? rays, Gi.GiScene? scene)

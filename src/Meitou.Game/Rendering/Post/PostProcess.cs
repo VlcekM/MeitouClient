@@ -727,6 +727,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     #region Targets
 
     /// <summary>
+    /// Milliseconds an optional pass's targets may sit unused before being released.
+    /// </summary>
+    const long IdleReleaseMs = 5000;
+
+    /// <summary>
     /// Width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
     /// </summary>
     int _width, _height, _displayWidth, _displayHeight;
@@ -766,10 +771,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     IEnumerable<Target2D> Targets() =>
         new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _occlusion.A, _occlusion.B, _occlusion.Mask,
                 _ldr, _ldrFxaa, _smaaEdges, _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth,
-                _lowTargets[0].Soft, _lowTargets[1].Accum, _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _fogRate.Distance, _fogRate.Image,
-                _fogRate.Neutral, _giAlbedo, _giLow, _giLowSky, _ssrLowSky, _shafts.Injected, _shafts.Light, _shafts.Scatter, _shafts.Raw, _shafts.History,
-                _gtaoPacked, _terrainResolve, _lampLost, _ssrHit, _ssrLow, _tracedTerm, _tracedMask, _tracedScratch, _tracedFiltered, _lampScratch,
-                _lampFiltered, _lampTotal, _lampTotal1, _characterVisibility, _characterGatherLast, _characterGatherPooled, _roomMask }
+                _lowTargets[0].Soft, _lowTargets[0].AccumFar, _lowTargets[0].DepthFar, _lowTargets[0].SoftFar, _lowTargets[1].Accum,
+                _lowTargets[1].Depth, _lowTargets[1].Soft, _lowTargets[1].AccumFar, _lowTargets[1].DepthFar, _lowTargets[1].SoftFar, _softDepth,
+                _fogRate.Distance, _fogRate.Image, _fogRate.Neutral, _giAlbedo, _giLow, _giLowSky, _ssrLowSky, _shafts.Injected, _shafts.Light,
+                _shafts.Scatter, _shafts.Raw, _shafts.History, _gtaoPacked, _terrainResolve, _lampLost, _ssrHit, _ssrLow, _tracedTerm, _tracedMask,
+                _tracedScratch, _tracedFiltered, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1, _characterVisibility, _characterGatherLast,
+                _characterGatherPooled, _roomMask }
             .OfType<Target2D>();
 
     /// <summary>
@@ -784,17 +791,44 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _occlusion.Free();
         _gtaoPacked = _terrainResolve = null;
         _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
-        foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = null;
+        foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = l.AccumFar = l.DepthFar = l.SoftFar = null;
         _giAlbedo = _giLow = _giLowSky = _ssrLowSky = _softDepth = null;
         _tracedTerm = _tracedMask = _tracedScratch = _tracedFiltered = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = null;
         _lampLost = _ssrHit = _ssrLow = null;
         _characterVisibility = _characterGatherLast = _characterGatherPooled = _roomMask = null;
+        _characterVisibilityFrame = _roomMaskFrame = -1;
+        FreeLateFogShadow();
+        _lateParticles.Free();
+        FreeSceneLayers();
+        _lampShadowTrace?.ReleaseTargets();
+        _penumbra?.ReleaseTargets();
         _shafts.Free();
         _bloom.Free();
         _depthOfField?.Free();
         _dofPicture = null;
         _adaptedValid = _historyValid = _softDepthReady = false;
         _adaptedFrames = 0;
+    }
+
+    /// <summary>
+    /// Releases targets of optional features that are disabled or have been idle for more than <see cref="IdleReleaseMs"/> milliseconds.
+    /// </summary>
+    void ReleaseUnusedTargets()
+    {
+        ReleaseDisabledTracedSun();
+        ReleaseDisabledLampShadows();
+        if (!Options.DepthOfFieldOn)
+        {
+            _depthOfField?.Free();
+            _dofPicture = null;
+        }
+        ReleaseDisabledCharacterOcclusion();
+
+        long now = Environment.TickCount64;
+        ReleaseIdleLateFogShadow(now);
+        _lateParticles.ReleaseIfIdle(now, IdleReleaseMs);
+        ReleaseIdleRoomMask(now);
+        ReleaseIdleSceneLayers(now);
     }
 
     /// <summary>
@@ -876,8 +910,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 _motion = Make(batch, w, h, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post motion");
                 _upscaleDepth = Make(batch, w, h, InternalFormat.R32F, TextureMinFilter.Nearest, "post upscale depth");
 
-                // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either.
-                _reactive = Make(batch, w, h, InternalFormat.R32F, TextureMinFilter.Nearest, "post reactive");
+                // R32F, not R8: Streamline cannot size an R8_UNORM resource and drops it (DLSS's hint), FSR takes either. TAA reads motion.a instead.
+                if (up.Kind != UpscalerKind.Taa)
+                    _reactive = Make(batch, w, h, InternalFormat.R32F, TextureMinFilter.Nearest, "post reactive");
 
                 // The output; the TAA's second history is made when it first runs (a vendor upscaler keeps its own history: one image does).
                 _historyB = Make(batch, displayW, displayH, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post taa history");
@@ -1211,6 +1246,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (Unallocated) return;
         EnsureGi();
         EnsureAoSize();
+        ReleaseDisabledTracedSun();
         EnsureTracedSun();
         Collect();
         _stamps = _freeStamps.Count > 0 ? _freeStamps.Pop() : new StampSet();
@@ -1293,6 +1329,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         CloseSegment();
         if (!BuildHiz()) Hiz?.Invalidate();
         QueueStamps();
+        ReleaseUnusedTargets();
         (_previousRotation, _previousEye, _previousRest, _previousFov, _previousAspect, _previousValid) =
             (_viewRotation, _eyeNow, _eyeRestNow, _fovNow, _aspectNow, Temporal);
     }
@@ -1805,8 +1842,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (!done) reset = RunTaa(output, reset);
 
         // The vendor upscaler's output (not a history Meitou keeps): the fog volumes' shadow kept out of what was upscaled
-        // (FogShadowAfterUpscale), then the low-resolution particles over it, through their own temporal filter.
-        output = CompositeLateFogShadow(output, _displayWidth, _displayHeight, reset);
+        // (FogShadowAfterUpscale), then the low-resolution particles over it, through their own temporal filter. Under TAA, output is _historyB
+        // (read as history next frame), so late fog shadow writes to its own target instead of blending in-place.
+        output = CompositeLateFogShadow(output, _displayWidth, _displayHeight, reset, inPlace: done);
         _lateParticles.CompositeFiltered(_lowTargets[0], _lowTargets[1], output, _displayWidth, _displayHeight, reset);
         _historyValid = true;
 
@@ -1823,7 +1861,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         if (merged)
         {
-            _merged.Velocity(_motion!, _upscaleDepth!, external is null || WaterHeight is null ? null : _reactive!,
+            _merged.Velocity(_motion!, _upscaleDepth!, external is null || WaterHeight is null || _reactive is null ? null : _reactive,
                     cleanColour: external is not null);
         }
         else
@@ -1857,8 +1895,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     bool RunExternalUpscaler(IUpscaler external, bool merged, Target2D output, bool reset, float dt)
     {
         if (!merged) Velocity(_upscaleDepth!, 1);
-        if (!merged && WaterHeight is not null) Velocity(_reactive!, 2);
-        bool covered = Particles is { HasCoverage: true };
+        if (!merged && WaterHeight is not null && _reactive is not null) Velocity(_reactive, 2);
+        bool covered = Particles is { HasCoverage: true } && _reactive is not null;
         if (covered) Stamp("velocity");
         if (covered) RunCoverage(_reactive!, ColorMask.R, clear: WaterHeight is null);
         bool adaptedOn = AutoExposure is not null && _adaptedValid;
@@ -1888,7 +1926,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         Depth = _upscaleDepth!.Texture,
         Motion = _motion!.Texture,
         Output = output.Texture,
-        Reactive = WaterHeight is null && !covered ? null : _reactive!.Texture,
+        Reactive = (WaterHeight is null && !covered) || _reactive is null ? null : _reactive.Texture,
         Exposure = exposure?.Texture,
         Preset = Options.Upscale.DlssPreset,
         RenderWidth = _width,

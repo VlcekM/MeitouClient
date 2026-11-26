@@ -119,12 +119,13 @@ sealed unsafe class LampShadowPass : IDisposable
     }
 
     /// <summary>
-    /// Compiles the trace, per-lamp and classification programs and makes their pipelines.
+    /// Compiles the trace, per-lamp and classification programs and makes their pipelines; uses the caller's shared <paramref name="penumbra"/>
+    /// filter (not disposed here).
     /// </summary>
-    public LampShadowPass(GpuContext ctx)
+    public LampShadowPass(GpuContext ctx, PenumbraFilter penumbra)
     {
         _ctx = ctx;
-        _penumbra = new PenumbraFilter(ctx);
+        _penumbra = penumbra;
         _program = ctx.Shaders.Compute(LampShadowShaders.Trace(LampShadowShaders.MaxLamps), "lamp shadow trace",
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
@@ -353,7 +354,19 @@ sealed unsafe class LampShadowPass : IDisposable
     };
 
     /// <summary>
-    /// Disposes the programs, the cell lists and the filter.
+    /// Releases the per-lamp slice targets (after the frames in flight); the next run makes them again.
+    /// </summary>
+    public void ReleaseTargets()
+    {
+        _sliceLost?.Dispose();
+        _sliceScratch?.Dispose();
+        _sliceFiltered?.Dispose();
+        _sliceExact?.Dispose();
+        _sliceLost = _sliceScratch = _sliceFiltered = _sliceExact = null;
+    }
+
+    /// <summary>
+    /// Disposes the programs, the slice targets and the cell lists (the shared penumbra filter is owned by the caller).
     /// </summary>
     public void Dispose()
     {
@@ -365,12 +378,8 @@ sealed unsafe class LampShadowPass : IDisposable
         _ctx.Shaders.Dispose(_ownProgram);
         _ctx.Shaders.Dispose(_sumHalfProgram);
         _ctx.Shaders.Dispose(_classifyProgram);
-        _sliceLost?.Dispose();
-        _sliceScratch?.Dispose();
-        _sliceFiltered?.Dispose();
-        _sliceExact?.Dispose();
+        ReleaseTargets();
         _lists?.Dispose();
-        _penumbra.Dispose();
     }
 
     #endregion
@@ -650,15 +659,15 @@ sealed unsafe class LampShadowPass : IDisposable
 
     /// <summary>
     /// The rays of what moves, each lamp over the part of the screen its shadows can reach: traced, filtered and added to
-    /// <paramref name="sum"/>, the light lost per unit of albedo, whatever the number of lamps. <paramref name="filtered"/> ends as 1 everywhere,
-    /// the factor the drawing pass reads. False: nothing to do, <paramref name="sum"/> is untouched. <paramref name="light"/> takes a character's
-    /// lamps' specular (rgb what is lost of it, a the luminance of all of it): the apply takes that back.
+    /// <paramref name="sum"/>, the light lost per unit of albedo, whatever the number of lamps. False: nothing to do, <paramref name="sum"/> is
+    /// untouched. <paramref name="light"/> takes a character's lamps' specular (rgb what is lost of it, a the luminance of all of it): the apply
+    /// takes that back.
     /// The lamps are dealt into layers (<see cref="PlanLayers"/>) and the layers into rounds: a round's rays, filter and light are one dispatch
     /// each for all its lamps, a layer a slice. A lamp at a time cost its passes' start, wait and end a lamp (4 dispatches, each waited for):
     /// 3 ms for a town's 50 to 70 lamps, whose cells together cover a few screens.
     /// </summary>
     public bool RunPerLamp(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture light, GpuTexture sum,
-        GpuTexture filtered, in LampShadowView view, in Matrix4x4 inverse, in Meitou.Game.Rendering.Frame.OcclusionView pyramid = default)
+        in LampShadowView view, in Matrix4x4 inverse, in Meitou.Game.Rendering.Frame.OcclusionView pyramid = default)
     {
         (_grass, _grassReach) = (scene.GrassShadows, scene.GrassReach);
         _grassScene = scene;
@@ -696,7 +705,6 @@ sealed unsafe class LampShadowPass : IDisposable
         for (int round = 0; round < layout.Rounds; round++)
             TraceRound(cmd, scene, lamps, depth, surface, light, sum, targets, view, inverse, round, layout, listsSize, half != 0, sub);
 
-        Clear(cmd, filtered, 1);
         cmd.Barrier(BarrierBatch.Full);
         cmd.EndLabel();
         _ctx.EndNative(cmd);

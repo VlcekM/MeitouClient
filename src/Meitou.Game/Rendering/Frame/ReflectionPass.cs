@@ -90,10 +90,25 @@ public sealed class ReflectionPass : IDisposable
     readonly WorldRenderOptions _options = new();
 
     /// <summary>
+    /// Milliseconds the targets may sit unused before they are freed.
+    /// </summary>
+    const long IdleReleaseMs = 5_000;
+
+    /// <summary>
     /// The texture the water samples, and the depth beside it when the scene is drawn without multisampling; else the multisampled twins the scene is
     /// drawn into, resolved into the colour.
     /// </summary>
     GpuTexture? _colour, _depth, _msColour, _msDepth;
+
+    /// <summary>
+    /// Timestamp (<see cref="Environment.TickCount64"/>) when a reflection was last drawn or reused (0: none).
+    /// </summary>
+    long _lastDrawnMs;
+
+    /// <summary>
+    /// The water reflection level behind <see cref="Level"/>.
+    /// </summary>
+    int _level = DefaultLevel;
 
     /// <summary>
     /// The sample count of the targets in use, and the <see cref="Samples"/> they were made for.
@@ -159,7 +174,19 @@ public sealed class ReflectionPass : IDisposable
     /// counterpart of the shader's NO_REFLECTION branch), 1 sky and terrain, 2 adds the characters, 3 adds buildings (here every
     /// placed object), 4 everything (also foliage). The frame loop reads it for what to draw.
     /// </summary>
-    public int Level { get; set; } = DefaultLevel;
+    public int Level
+    {
+        get => _level;
+        set
+        {
+            _level = value;
+            if (_level <= 0)
+            {
+                Free();
+                Valid = false;
+            }
+        }
+    }
 
     /// <summary>
     /// The game's <c>reflection range</c>: the far clip is the haze distance (the game's view distance × 10) times this; the frame loop sets <see
@@ -448,6 +475,26 @@ public sealed class ReflectionPass : IDisposable
         _msColour?.Dispose();
         _msDepth?.Dispose();
         (_colour, _depth, _msColour, _msDepth) = (null, null, null, null);
+        (_width, _height) = (0, 0);
+        _hasImage = false;
+        _lastDrawnMs = 0;
+    }
+
+    /// <summary>
+    /// A frame that draws no reflection: frees the targets once none has been drawn or reused for <see cref="IdleReleaseMs"/>.
+    /// </summary>
+    public void Idle() => ReleaseIfIdle();
+
+    /// <summary>
+    /// Frees the targets once no reflection has been drawn or reused for <see cref="IdleReleaseMs"/>.
+    /// </summary>
+    void ReleaseIfIdle()
+    {
+        if (_colour is null) return;
+
+        long now = Environment.TickCount64;
+        if (_lastDrawnMs == 0) _lastDrawnMs = now;
+        else if (now - _lastDrawnMs >= IdleReleaseMs) Free();
     }
 
     /// <summary>
@@ -468,6 +515,14 @@ public sealed class ReflectionPass : IDisposable
         TerrainRenderer terrain, WorldRenderOptions render, SceneDraw? drawObjects)
     {
         Valid = false;
+        if (Level <= 0)
+        {
+            Free();
+            _noWater = false;
+            NearestWater = float.NaN;
+            return;
+        }
+
         var eye = camera.Eye;
         float plane = WorldWater.Height;
 
@@ -476,6 +531,7 @@ public sealed class ReflectionPass : IDisposable
         {
             _hasImage = _noWater = false;
             NearestWater = float.NaN;
+            ReleaseIfIdle();
             return;
         }
 
@@ -490,14 +546,23 @@ public sealed class ReflectionPass : IDisposable
             Valid = _hasImage;
             _skipped++;
             _age++;
+            if (_hasImage) _lastDrawnMs = Environment.TickCount64;
+            else ReleaseIfIdle();
             return;
         }
 
-        if (!StartImage(camera, eye, fullWidth, fullHeight, terrain, out var rect)) return;
+        if (!StartImage(camera, eye, fullWidth, fullHeight, terrain, out var rect))
+        {
+            ReleaseIfIdle();
+            return;
+        }
+
         Resize(Math.Max((int)(fullWidth * Scale), 64), Math.Max((int)(fullHeight * Scale), 64));
         _timer.Begin();
         RenderMirrored(camera, eye, fullWidth, fullHeight, plane, rect, sky, colours, light, terrain, render, drawObjects);
         _timer.End();
+        if (_hasImage) _lastDrawnMs = Environment.TickCount64;
+        else ReleaseIfIdle();
         CpuMs = watch.Elapsed.TotalMilliseconds;
         _cpuSamples.Add(CpuMs);
     }
@@ -518,10 +583,10 @@ public sealed class ReflectionPass : IDisposable
         rect = new Vector4(-1, -1, 1, 1);
         NearestWater = float.NaN;
         _noWater = false;
-        if (!CropToWater || Warm) return true;
+        if (!CropToWater) return true;
         if (WaterRect(camera, (float)fullWidth / fullHeight, out float nearestWater) is { } wet)
         {
-            rect = wet;
+            rect = Warm ? new Vector4(-1, -1, 1, 1) : wet;
             NearestWater = nearestWater;
             return true;
         }

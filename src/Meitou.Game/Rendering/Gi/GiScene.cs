@@ -466,9 +466,9 @@ internal sealed unsafe class GiScene : IDisposable
         public required BufferAllocation Instances, Records;
 
         /// <summary>
-        /// The slot's top-level structure.
+        /// The slot's top-level structure (null on slots past 0 while <see cref="SharedTop"/> is true).
         /// </summary>
-        public required AccelerationStructure Top;
+        public AccelerationStructure? Top;
 
         /// <summary>
         /// The instances (bytes) the slot's top level was last built over (ReuseTop).
@@ -524,7 +524,7 @@ internal sealed unsafe class GiScene : IDisposable
             {
                 Instances = _device.Allocator.CreateBuffer((ulong)(MaxInstances * InstanceRecord.Size), use, MemoryKind.Upload, "gi instances"),
                 Records = _device.Allocator.CreateBuffer((ulong)(MaxRecords * GeometryRecord.Size), use, MemoryKind.Upload, "gi geometry records"),
-                Top = AccelerationStructure.CreateTop(_device, MaxInstances, "gi top level"),
+                Top = i == 0 || !SharedTop ? AccelerationStructure.CreateTop(_device, MaxInstances, "gi top level") : null,
             };
         }
     }
@@ -549,6 +549,7 @@ internal sealed unsafe class GiScene : IDisposable
 
         // The top level and what it was built over: the first slot's for all of them, or each slot's own.
         var topSlot = SharedTop ? _slots[0] : slot;
+        var top = topSlot.Top ??= AccelerationStructure.CreateTop(_device, MaxInstances, "gi top level");
         ClearFrame();
 
         // With the pass meter (MEITOU_PASS_STATS=1) the native list is cut after its barrier and before the top level, to time the barrier, the
@@ -565,11 +566,11 @@ internal sealed unsafe class GiScene : IDisposable
         UpdateGrass(eye, foliage);
         UpdateCharacters(eye, characters);
         Evict();
-        BuildTop(slot, topSlot);
+        BuildTop(slot, topSlot, top);
 
         CollectionsMarshal.AsSpan(_records).CopyTo(new Span<GeometryRecord>(slot.Records.Mapped, MaxRecords));
         CloseScene();
-        Top = topSlot.Top;
+        Top = top;
         Records = new GpuBufferBinding(slot.Records.Handle, 0, (ulong)(Math.Max(_records.Count, 1) * GeometryRecord.Size));
         InstanceCount = _instances.Count;
         UpdateMs = (float)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
@@ -839,7 +840,7 @@ internal sealed unsafe class GiScene : IDisposable
     /// near grass move: their structures were refitted this frame, so the top level is refitted over them (built again now and then, as it loses
     /// quality).
     /// </summary>
-    void BuildTop(FrameSlot slot, FrameSlot topSlot)
+    void BuildTop(FrameSlot slot, FrameSlot topSlot, AccelerationStructure top)
     {
         var bytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(_instances));
         bool equal = ReuseTop && topSlot.BuiltTrace == TopFastTrace && topSlot.BuiltBytes is { } built
@@ -865,7 +866,7 @@ internal sealed unsafe class GiScene : IDisposable
         CollectionsMarshal.AsSpan(_instances).CopyTo(new Span<InstanceRecord>(slot.Instances.Mapped, MaxInstances));
         var info = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = slot.Instances.Buffer };
         ulong address = _device.Vk.GetBufferDeviceAddress(_device.Device, in info);
-        topSlot.Top.RebuildTop(cmd, address, (uint)_instances.Count, TopFastTrace, updatable: moving, refit: refitTop);
+        top.RebuildTop(cmd, address, (uint)_instances.Count, TopFastTrace, updatable: moving, refit: refitTop);
         topSlot.Refits = refitTop ? topSlot.Refits + 1 : 0;
         topSlot.BuiltUpdatable = moving;
         RememberTop(topSlot, bytes);
@@ -1335,7 +1336,7 @@ internal sealed unsafe class GiScene : IDisposable
         _meshes.Clear();
         foreach (var s in _slots)
         {
-            s.Top.Dispose();
+            s.Top?.Dispose();
             _device.DeferFree(s.Instances);
             _device.DeferFree(s.Records);
         }

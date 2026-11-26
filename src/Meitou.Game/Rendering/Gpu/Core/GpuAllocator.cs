@@ -359,6 +359,27 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// Buffers and images still alive (destroyed on dispose).
     /// </summary>
     public int LiveResourceCount { get { lock (_gate) return _liveBuffers.Count + _liveImages.Count; } }
+    /// <summary>
+    /// Bytes of live upload buffers and images placed in device-local (resizable-BAR) memory.
+    /// </summary>
+    public ulong RebarUploadBytes
+    {
+        get
+        {
+            ulong total = 0;
+
+            lock (_gate)
+            {
+                foreach (var b in _liveBuffers)
+                    if (b.Kind == MemoryKind.Upload && IsDeviceLocal(b.Allocation.MemoryTypeIndex)) total += b.Allocation.Size;
+
+                foreach (var i in _liveImages)
+                    if (i.Kind == MemoryKind.Upload && IsDeviceLocal(i.Allocation.MemoryTypeIndex)) total += i.Allocation.Size;
+            }
+
+            return total;
+        }
+    }
 
     /// <summary>
     /// The live resources by owner, largest first: buffers and images grouped by <see cref="Owner"/>, with the count, the bytes of their
@@ -368,17 +389,19 @@ public sealed unsafe class GpuAllocator : IDisposable
     {
         var groups = new Dictionary<string, (int Count, ulong Bytes, ulong DeviceLocal)>();
 
-        void Add(string name, ulong bytes, MemoryKind kind)
+        void Add(string name, Allocation alloc)
         {
             string key = Owner(name);
             var g = groups.GetValueOrDefault(key);
-            groups[key] = (g.Count + 1, g.Bytes + bytes, g.DeviceLocal + (kind == MemoryKind.DeviceLocal ? bytes : 0));
+            ulong bytes = alloc.Size;
+            ulong local = IsDeviceLocal(alloc.MemoryTypeIndex) ? bytes : 0;
+            groups[key] = (g.Count + 1, g.Bytes + bytes, g.DeviceLocal + local);
         }
 
         lock (_gate)
         {
-            foreach (var b in _liveBuffers) Add(b.Name, b.Allocation.Size, b.Kind);
-            foreach (var i in _liveImages) Add(i.Name, i.Allocation.Size, i.Kind);
+            foreach (var b in _liveBuffers) Add(b.Name, b.Allocation);
+            foreach (var i in _liveImages) Add(i.Name, i.Allocation);
         }
 
         return groups.Select(g => (g.Key, g.Value.Count, g.Value.Bytes, g.Value.DeviceLocal)).OrderByDescending(g => g.Bytes).ToList();
@@ -562,6 +585,11 @@ public sealed unsafe class GpuAllocator : IDisposable
     }
 
     #region Memory type choice
+
+    /// <summary>
+    /// Whether memory type <paramref name="i"/> has <see cref="MemoryPropertyFlags.DeviceLocalBit"/>.
+    /// </summary>
+    bool IsDeviceLocal(uint i) => (_memProps.MemoryTypes[(int)i].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) != 0;
 
     /// <summary>
     /// A memory type counts as resizable BAR: device-local, host visible and coherent, on a heap of at least <see cref="RebarMinHeap"/>.

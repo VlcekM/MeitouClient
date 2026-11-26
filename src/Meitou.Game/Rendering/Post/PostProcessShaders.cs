@@ -504,6 +504,21 @@ static class PostProcessShaders
         """;
 
     /// <summary>
+    /// The fog volumes' filtered shadow (<see cref="LateFogShadow"/>) for hardware additive blending onto an external upscaler's output (not reused
+    /// as history), followed by <see cref="Gi.LampShadowShaders.Floor"/> to clamp negative values to zero.
+    /// </summary>
+    public const string LateFogShadowAdd = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uShadow;
+        void main()
+        {
+            fragColour = vec4(texelFetch(uShadow, ivec2(gl_FragCoord.xy), 0).rgb, 0.0);
+        }
+        """;
+
+    /// <summary>
     /// The merged scene layers (<c>layer-merge</c>, docs/render-post.md "Merged scene layers"): the light shafts' apply, the fog volumes and the
     /// SSAO's factor in one pass over the scene colour instead of three. Each is a (colour, factor) the scene is blended by as
     /// <c>scene * a + rgb</c>; in their old order (shafts, fog, occlusion) they compose to <c>((scene * a1 + c1) * a2 + c2) * ao</c> =

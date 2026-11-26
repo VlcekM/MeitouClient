@@ -12,7 +12,7 @@ namespace Meitou.Game.Rendering.Terrain;
 public static class TerrainMaterialCache
 {
     /// <summary>
-    /// The cache is used (false: every pixel shades the layers; the levels keep what they hold).
+    /// The cache is used (false: every pixel shades the layers and the cache levels are freed).
     /// </summary>
     public static bool Enabled { get; set; } = !GpuContext.DiagNoMaterialCache;
 }
@@ -142,8 +142,11 @@ sealed class MaterialCache : IDisposable
     /// </summary>
     public void Record(Vector3 eye, Vector3 focus)
     {
-        // Switched off, the levels keep what they hold (an A/B alternation finds them whole); the strips catch up when it is back on.
-        if (!TerrainMaterialCache.Enabled) return;
+        if (!TerrainMaterialCache.Enabled || TerrainSimpleShading.Enabled)
+        {
+            ReleaseCache();
+            return;
+        }
         if (_cacheRefused || _terrain.TextureSet is not { HasBiomes: true, MapState: 2 } t || _terrain.FrameOptions is not { Textures: true })
         {
             Array.Clear(_cacheOrigin);
@@ -309,9 +312,28 @@ sealed class MaterialCache : IDisposable
         _cacheAlbedoIndex = _gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(sampler, _cacheAlbedo.View()));
         _cacheNormalIndex = _gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(sampler, _cacheNormal.View()));
         GpuSetLayout[] sets = [_nativeFrame.SetLayout, GpuSetLayout.Bindless, _constantsLayout];
-        _cacheProgram = new TerrainProgram(_gpu, sets, TerrainShaders.MaterialBakeVertexNative(), TerrainShaders.MaterialBakeFragmentNative(),
+        _cacheProgram ??= new TerrainProgram(_gpu, sets, TerrainShaders.MaterialBakeVertexNative(), TerrainShaders.MaterialBakeFragmentNative(),
             "terrain material bake");
         return true;
+    }
+
+    /// <summary>
+    /// Frees the cache levels and their bindless entries without touching the bake program; rebuilt if re-enabled.
+    /// </summary>
+    void ReleaseCache()
+    {
+        if (_cacheAlbedo is null && _cacheNormal is null) return;
+
+        if (_cacheAlbedoIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheAlbedoIndex);
+        if (_cacheNormalIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheNormalIndex);
+        _cacheAlbedoIndex = _cacheNormalIndex = uint.MaxValue;
+        _cacheAlbedo?.Dispose();
+        _cacheNormal?.Dispose();
+        _cacheAlbedo = _cacheNormal = null;
+        Array.Clear(_cacheOrigin);
+        Array.Fill(_cacheBuilt, -1);
+        Array.Clear(_cacheStale);
+        Array.Clear(_cacheCursor);
     }
 
     /// <summary>
@@ -427,7 +449,7 @@ sealed class MaterialCache : IDisposable
     /// </summary>
     public void Apply(ref TerrainConstants c)
     {
-        if (!TerrainMaterialCache.Enabled || _cacheAlbedo is null || c.FieldCount > 0 || c.Debug != 0) return;
+        if (!TerrainMaterialCache.Enabled || TerrainSimpleShading.Enabled || _cacheAlbedo is null || c.FieldCount > 0 || c.Debug != 0) return;
         bool any = false;
         for (int k = 0; k < CacheLevels; k++)
         {
@@ -444,10 +466,7 @@ sealed class MaterialCache : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_cacheAlbedoIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheAlbedoIndex);
-        if (_cacheNormalIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheNormalIndex);
-        _cacheAlbedo?.Dispose();
-        _cacheNormal?.Dispose();
+        ReleaseCache();
         _cacheProgram?.Dispose();
     }
 }

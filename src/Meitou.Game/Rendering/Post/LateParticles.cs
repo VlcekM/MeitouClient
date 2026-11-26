@@ -96,6 +96,11 @@ sealed class LateParticles(PostProcess post)
     bool _lateParticlesValid;
 
     /// <summary>
+    /// Timestamp (<see cref="Environment.TickCount64"/>) of the last frame the late particles ran.
+    /// </summary>
+    long _lastUsedMs;
+
+    /// <summary>
     /// The low-resolution particles kept for after the vendor upscaler (<paramref name="half"/> and <paramref name="quarter"/>), both sizes through
     /// the filter, over its output <paramref name="target"/> (<paramref name="reset"/>: no history).
     /// </summary>
@@ -108,6 +113,7 @@ sealed class LateParticles(PostProcess post)
             _lateParticlesValid = false;
             return;
         }
+        _lastUsedMs = Environment.TickCount64;
         EnsureLayers(targetWidth, targetHeight);
         (_lateParticlesNow, _lateParticlesLast) = (_lateParticlesLast!, _lateParticlesNow);
         bool history = _lateParticlesValid && !reset;
@@ -171,14 +177,32 @@ sealed class LateParticles(PostProcess post)
     #region Lifetime
 
     /// <summary>
+    /// Releases the ping-pong layers (after the frames in flight) and forgets the history.
+    /// </summary>
+    public void Free()
+    {
+        _lateParticlesNow?.Texture.Dispose();
+        _lateParticlesLast?.Texture.Dispose();
+        _lateParticlesNow = _lateParticlesLast = null;
+        _lateParticlesValid = false;
+    }
+
+    /// <summary>
+    /// Releases the ping-pong layers when the late particles have been idle for more than <paramref name="idleMs"/> milliseconds.
+    /// </summary>
+    public void ReleaseIfIdle(long now, long idleMs)
+    {
+        if ((_lateParticlesNow is not null || _lateParticlesLast is not null) && now - _lastUsedMs > idleMs) Free();
+    }
+
+    /// <summary>
     /// Disposes the passes and the layers.
     /// </summary>
     public void Dispose()
     {
         _lateParticles?.P.Dispose();
         _lateParticlesApply?.P.Dispose();
-        _lateParticlesNow?.Texture.Dispose();
-        _lateParticlesLast?.Texture.Dispose();
+        Free();
     }
 
     #endregion

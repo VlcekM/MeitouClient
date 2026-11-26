@@ -850,7 +850,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// Follows the eye: lays out zones and loads meshes and textures around it, within <see cref="BudgetMs"/> of render-thread time
     /// (<see cref="CoveredBudgetMs"/> under the loading screen).
     /// </summary>
-    public void Update(Vector3 eye) => Update(eye, Covered ? Math.Max(BudgetMs, CoveredBudgetMs) : BudgetMs);
+    public void Update(Vector3 eye)
+    {
+        _glassScene.Idle();
+        Update(eye, Covered ? Math.Max(BudgetMs, CoveredBudgetMs) : BudgetMs);
+    }
 
     /// <summary>
     /// Tells the object textures' mip streaming (<see cref="MipStreaming"/>) the camera: the render size in pixels and the vertical field of view.

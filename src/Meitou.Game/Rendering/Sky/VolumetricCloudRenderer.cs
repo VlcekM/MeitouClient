@@ -59,9 +59,19 @@ public sealed class VolumetricCloudRenderer : IDisposable
     public double ShadowGpuMs { get; private set; }
 
     /// <summary>
+    /// Milliseconds the reflection cloud history may sit unused before its targets are freed.
+    /// </summary>
+    const long MirrorIdleReleaseMs = 5_000;
+
+    /// <summary>
     /// The main view's history and the water reflection's.
     /// </summary>
     readonly ViewHistory _main = new(), _mirror = new();
+
+    /// <summary>
+    /// Timestamp (<see cref="Environment.TickCount64"/>) when <see cref="_mirror"/> was last rendered (0: not in use).
+    /// </summary>
+    long _mirrorLastUsedMs;
 
     /// <summary>
     /// The world-space sun-transmission map (512² R16F; made on the first <see cref="RenderShadow"/>).
@@ -242,7 +252,16 @@ public sealed class VolumetricCloudRenderer : IDisposable
         if (!Matrix4x4.Invert(viewProjection, out var inverse)) return default;
         var h = reflection ? _mirror : _main;
         var timer = reflection ? _mirrorTimer : _mainTimer;
-        if (!reflection) MainMotion = null;
+        if (!reflection)
+        {
+            MainMotion = null;
+            if (_mirror.Current is not null && Environment.TickCount64 - _mirrorLastUsedMs > MirrorIdleReleaseMs)
+            {
+                _mirror.Dispose();
+                _mirrorLastUsedMs = 0;
+            }
+        }
+        else _mirrorLastUsedMs = Environment.TickCount64;
         _samples.Clear();
         if (timer.Poll(_samples) is { } ms)
         {

@@ -61,9 +61,19 @@ sealed unsafe class CharacterVisibility : IDisposable
     GpuTexture? _idTarget, _slopeTarget, _coarseTarget;
 
     /// <summary>
+    /// Milliseconds without an id pass before the visibility targets are released.
+    /// </summary>
+    const long IdleMs = 5_000;
+
+    /// <summary>
     /// Their bindless indices.
     /// </summary>
     uint _idIndex, _slopeIndex, _coarseIndex;
+
+    /// <summary>
+    /// When <see cref="Open"/> last ran (<see cref="Environment.TickCount64"/>).
+    /// </summary>
+    long _lastUsedAt;
 
     /// <summary>
     /// Whether the device has what the visibility buffer needs: Vulkan with the meshes read by address, fragment barycentrics, <c>gl_PrimitiveID</c>
@@ -102,11 +112,23 @@ sealed unsafe class CharacterVisibility : IDisposable
     /// </summary>
     public void Open(IWorldPostChain post, int stage)
     {
+        _lastUsedAt = Environment.TickCount64;
         var scene = post.SceneTargets;
         if (_idTarget is null || _idTarget.Desc.Width != scene.Width || _idTarget.Desc.Height != scene.Height) MakeTargets(scene.Width, scene.Height);
 
         var targets = post.WithShadingRate(PassTargets.Of(_idTarget, post.SceneDepth, _slopeTarget, _coarseTarget));
         _host.Open(stage, targets, new ClearColour(0, 0, 0, 0));
+    }
+
+    /// <summary>
+    /// Releases the visibility targets after <see cref="IdleMs"/> without an id pass.
+    /// </summary>
+    public void Idle()
+    {
+        if (_idTarget is null) return;
+        if (Environment.TickCount64 - _lastUsedAt < IdleMs) return;
+
+        FreeTargets();
     }
 
     /// <summary>

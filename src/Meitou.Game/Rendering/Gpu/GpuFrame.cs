@@ -14,6 +14,11 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
     #region Frame
 
     /// <summary>
+    /// Regular constants chunks a slot keeps beyond what its last cycle used (16 MB): a peak's are freed once it has passed.
+    /// </summary>
+    const int ConstantsKeep = 2;
+
+    /// <summary>
     /// Regular staging chunks a slot keeps beyond what its last cycle used (32 MB): a loading peak's are freed once it has passed.
     /// </summary>
     const int StagingKeep = 4;
@@ -162,7 +167,7 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
         UploadCommands = uploads;
         PreFrame.Handle = uploads;
         PreFrame.Invalidate();
-        _constants[Slot].Reset();
+        _constants[Slot].Reset(ConstantsKeep);
         _staging[Slot].Reset(StagingKeep);
         foreach (var p in _pools[Slot]) _device.Vk.ResetDescriptorPool(_device.Device, p, 0);
 
