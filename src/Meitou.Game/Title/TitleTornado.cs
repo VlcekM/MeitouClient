@@ -9,34 +9,40 @@ namespace Meitou.Game.Title;
 sealed class TitleTornado
 {
     /// <summary>
-    /// The particle system of the twister (a dust devil of the base game's).
+    /// The particle system of the twister: the base game's narrow dust devil (rings 8 and 20 wide, small particles thrown up fast, a vortex).
     /// </summary>
-    public const string System = "kenshi_twister_dust1";
+    public const string System = "kenshi_twister_dust2";
+
+    /// <summary>
+    /// The dust's colour in place of the system's hue at the funnel's foot and at its top: a faked light (the scene's makes the dust glow orange
+    /// against the title's sun), dense dust in shade at the ground brightening to sunlit sand.
+    /// </summary>
+    static readonly Vector3 FootColour = new(0.7f, 0.6f, 0.48f), TopColour = new(1.35f, 1.27f, 1.12f);
 
     /// <summary>
     /// The bursts stacked up the funnel.
     /// </summary>
-    const int FunnelLevels = 24;
+    const int FunnelLevels = 16;
     /// <summary>
     /// The funnel's top above the ground, over the flight's (<see cref="Height"/>).
     /// </summary>
     const float FunnelTop = 330;
     /// <summary>
-    /// The size of the funnel's foot and of its top against the system's own (its rings are 70 to 130 wide).
+    /// The scale of the funnel's foot and of its top against the system's own (its rings, particles and speeds).
     /// </summary>
-    const float FootSize = 0.04f, TopSize = 1.8f;
+    const float FootStretch = 1, TopStretch = 6;
 
     /// <summary>
-    /// The share of their own life the funnel's particles live: the system's swell and climb for 6 to 10 s, which turns a stack into one cloud; shorter,
-    /// each ring stays at its height and the stack keeps its funnel's outline.
+    /// The share of their own life the foot's particles live; a wider level's in proportion less, so every ring climbs about as far (its speeds
+    /// grow with it) and the stack keeps its funnel's outline.
     /// </summary>
-    public const float LifeScale = 0.6f;
+    const float FootLife = 0.35f;
 
     /// <summary>
-    /// The twister's funnel: bursts of <see cref="System"/> stacked up from the ground, each its height and its size, a thin foot flaring out to a
-    /// wide top. One burst alone reads as haze round the 2.5x fighters.
+    /// The twister's funnel: bursts of <see cref="System"/> stacked up from the ground, each its height, its scale and its particles' share of
+    /// life and its colour, a thin foot flaring out to a wide top.
     /// </summary>
-    public static readonly (float Height, float Size)[] Funnel = Enumerable.Range(0, FunnelLevels)
+    public static readonly (float Height, float Stretch, float LifeScale, Vector3 Colour)[] Funnel = Enumerable.Range(0, FunnelLevels)
         .Select(FunnelLevel)
         .ToArray();
 
@@ -91,11 +97,12 @@ sealed class TitleTornado
     public bool Enabled { get; set; } = true;
 
     /// <summary>
-    /// A blow landed on the fighter in slot <paramref name="victim"/>: it may fly, unless it is in the air already.
+    /// A blow landed on the fighter in slot <paramref name="victim"/>: it may fly, unless a fighter is in the air already (one twister at a time:
+    /// several at once blend into one cloud).
     /// </summary>
     public void Hit(int victim)
     {
-        if (!Enabled || _flights.ContainsKey(victim) || !Rolls(DateTime.Today)) return;
+        if (!Enabled || _flights.Count > 0 || !Rolls(DateTime.Today)) return;
 
         _flights[victim] = 0;
         _starting.Add(victim);
@@ -150,12 +157,14 @@ sealed class TitleTornado
     }
 
     /// <summary>
-    /// The funnel's level <paramref name="k"/>: evenly up to <see cref="FunnelTop"/>, its width growing with the cube of its height.
+    /// The funnel's level <paramref name="k"/>: evenly up to <see cref="FunnelTop"/>, its scale growing with the square of its height, its colour lightening
+    /// fastest near the ground.
     /// </summary>
-    static (float Height, float Size) FunnelLevel(int k)
+    static (float Height, float Stretch, float LifeScale, Vector3 Colour) FunnelLevel(int k)
     {
         float t = k / (float)(FunnelLevels - 1);
-        return (FunnelTop * t, FootSize + (TopSize - FootSize) * t * t * t);
+        float stretch = FootStretch + (TopStretch - FootStretch) * t * t;
+        return (FunnelTop * t, stretch, FootLife / stretch, Vector3.Lerp(FootColour, TopColour, MathF.Sqrt(t)));
     }
 
     /// <summary>

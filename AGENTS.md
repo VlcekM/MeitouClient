@@ -82,6 +82,13 @@ drop-in replacement that runs original content and mods unchanged.
 - After merging a branch into master, remove its worktree (`git worktree remove`) and delete the branch
   (`git branch -d`) without asking, once the worktree has no uncommitted work.
 
+## Rendering on both backends
+
+- A change to what is drawn (a new effect, pass, shader, particle use, setting or preset entry) is implemented for Metal too, where
+  Metal can do it, even when nobody can test on a Mac: then something that misbehaves on Metal gets noticed, where something missing
+  does not. At least check that the `-p:MeitouMetal=true` build passes, and say in the change that the Metal side is untested.
+- Where Metal can't do it, say so: a Metal note in the feature's doc and, for a setting, `LauncherSchema`'s Vulkan-only mark.
+
 ## Player-facing text
 
 - Meitou's own texts go through `Loc.Tr` (placeholders `{1}`, never concatenation or `$"..."`) and need a translation in every built-in

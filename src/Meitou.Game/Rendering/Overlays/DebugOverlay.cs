@@ -243,12 +243,12 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     /// <summary>
     /// The overlay, or null when no font is found: a monospace system font (the columns are padded with spaces), else, if <paramref name="resolve"/>
-    /// finds game files, the game's standard face (proportional, so columns drift).
+    /// finds game files, the game's standard face (proportional, so columns drift). Its glyphs are baked at <paramref name="pixelHeight"/>.
     /// </summary>
-    public static DebugOverlay? TryCreate(IGpuContext gpu, Func<string, string?>? resolve = null)
+    public static DebugOverlay? TryCreate(IGpuContext gpu, Func<string, string?>? resolve = null, float pixelHeight = 16)
     {
         var path = FontCandidates.FirstOrDefault(File.Exists) ?? resolve?.Invoke(UiPainter.StandardFontFile);
-        return path is null ? null : new DebugOverlay(gpu, File.ReadAllBytes(path));
+        return path is null ? null : new DebugOverlay(gpu, File.ReadAllBytes(path), pixelHeight);
     }
 
     /// <summary>

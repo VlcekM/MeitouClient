@@ -23,6 +23,7 @@ using Meitou.Game.Rendering.Metal;
 using Meitou.Game.Rendering.Metal.Gi;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
 using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
@@ -586,6 +587,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _ctx.Finish();
         _hud?.DisposeUi();
         _overlay?.Dispose();
+        host.TitleScreen.DisposeTitleScene();   // its particles' buffers are this context's, released before it goes (as on Vulkan)
         // The shared world owns terrain (and its textures), sky, weather surfaces, particles, lamps, objects, foliage,
         // water, characters, interior masks, streamer and shadow. Metal's post chain and the picture target are local.
         host.Gpu?.Dispose();
@@ -698,6 +700,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             vramSample: _guardEnabled ? () => ((ulong)_ctx.Device.CurrentAllocatedSize, _memoryBudget) : null);
         _worldGpu.PostChain = _postChain;
         host.Gpu = _worldGpu;
+        if (metalParticles && !host.WorldOptions.NoParticles)
+            host.TitleScreen.TitleParticleFactory = () => ParticleRenderer.Create(_ctx, host.Assets, _worldGpu.Particles?.Library);
         // The combat aftermath's renderers and store exist before a loaded save's decals are read and before the first frame.
         host.BloodDecals.SetUpBlood(_ctx);
         host.SetUpTrails(_ctx);
@@ -3185,12 +3189,14 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // effects, the particles and the post chain, then the overlays over the finished picture. The Metal chain fills the
         // seam's Vulkan-only gaps (no reflection, GI, low-resolution particles or fog-rate target).
         PrepareSharedDraw();
-        var savedParticles = host.Gpu.Particles;
-        // the staged title sky and its own dust, not the world's weather
+        var (savedParticles, savedDensity, savedWeatherParticles) = (host.Gpu.Particles, host.Gpu.ParticleDensity, host.Gpu.WeatherParticles);
+        // the staged title sky and its own particles (its dust and the fight's twisters), not the world's weather: as the title's world pass
         if (titleLook)
         {
             host.Gpu.Weather = null;
-            host.Gpu.Particles = null;
+            host.Gpu.Particles = host.TitleScreen.PrepareTitleParticles(host.RealTime.Elapsed.TotalSeconds);
+            host.Gpu.ParticleDensity = 0.3f;
+            host.Gpu.WeatherParticles = true;
         }
         if (host.TickAhead) host.Session.BeginTickAhead();
         try
@@ -3203,7 +3209,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             if (host.TickAhead) host.Session.EndTickAhead();
             host.Gpu.Weather = savedWeather;
-            host.Gpu.Particles = savedParticles;
+            (host.Gpu.Particles, host.Gpu.ParticleDensity, host.Gpu.WeatherParticles) = (savedParticles, savedDensity, savedWeatherParticles);
             if (titleLook)
             {
                 host.Scene.Clock = savedClock;

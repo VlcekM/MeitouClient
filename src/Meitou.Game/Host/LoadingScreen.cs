@@ -27,6 +27,16 @@ sealed class LoadingScreen : IDisposable
     /// The original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf); null without the font.
     /// </summary>
     DebugOverlay? _stamp;
+
+    /// <summary>
+    /// The overlay's face baked at <see cref="StepBakedPixels"/> for the running step's text, sharp at twice the 1080-row size (null: the overlay's).
+    /// </summary>
+    DebugOverlay? _step;
+
+    /// <summary>
+    /// The size <see cref="_step"/>'s glyphs are baked at.
+    /// </summary>
+    const float StepBakedPixels = 32;
     /// <summary>
     /// Paints the layout's controls; null when the original's layout did not load (the spinner only).
     /// </summary>
@@ -132,7 +142,8 @@ sealed class LoadingScreen : IDisposable
                 ? [.. set.Elements("Group").Select(g => (string?)g.Attribute("name")).OfType<string>()] : [];
             var painter = new UiPainter(overlay, resources, resolve);
             var stamp = resolve("MailartRubberstamp-Regular.ttf") is { } stampFile ? DebugOverlay.FromFont(overlay.Gpu, stampFile, 64) : null;
-            return new(overlay, painter, resources, layout, tips, pictures, groups) { _stamp = stamp, Faithful = faithful };
+            var step = DebugOverlay.TryCreate(overlay.Gpu, resolve, StepBakedPixels);
+            return new(overlay, painter, resources, layout, tips, pictures, groups) { _stamp = stamp, _step = step, Faithful = faithful };
         }
         catch (Exception e) when (e is IOException or InvalidDataException or System.Xml.XmlException)
         {
@@ -284,6 +295,24 @@ sealed class LoadingScreen : IDisposable
     }
 
     /// <summary>
+    /// The running step's text between <paramref name="left"/> and <paramref name="right"/>, centred on <paramref name="cy"/>: 16 pixels at 1080
+    /// rows, scaled with the height like the rest of the panel (a Retina screen's pixels too), in <see cref="_step"/>'s face where it was made;
+    /// left out when it does not fit.
+    /// </summary>
+    void DrawStep(int width, int height, float s, float left, float right, float cy)
+    {
+        if (_label.Length == 0) return;
+
+        var face = _step ?? _overlay;
+        float scale = 16 * s / (_step is null ? 16 : StepBakedPixels);
+        if (left + _label.Length * face.CharWidth * scale > right) return;
+
+        face.Target = _overlay.Target;
+        face.TextScaled(_label, left, cy - face.LineHeight * scale / 2, new Vector4(0.62f, 0.6f, 0.52f, 1), scale);
+        if (_step is not null) _step.Flush(width, height);
+    }
+
+    /// <summary>
     /// The tip's font size in pixels: 16 at 1080 rows, scaled with the height, at least 8.
     /// </summary>
     static int TipPixels(float s) => Math.Max(8, (int)MathF.Round(16 * s));
@@ -310,8 +339,7 @@ sealed class LoadingScreen : IDisposable
 
         float outer = Math.Min(rowHeight * 0.45f, 22 * s), inner = outer * 0.45f, cx = x1 - outer;
         DrawSpinner(cx, cy, outer, inner, s);
-        if (_label.Length > 0 && textEnd + 12 * s + _label.Length * _overlay.CharWidth <= cx - outer - 12 * s)
-            _overlay.Text(_label, textEnd + 12 * s, cy - _overlay.LineHeight / 2, new Vector4(0.62f, 0.6f, 0.52f, 1));
+        DrawStep(width, height, s, textEnd + 12 * s, cx - outer - 12 * s, cy);
         _overlay.Rect(x0 - 2, barTop - 2, x1 + 2, barTop + barHeight + 2, new Vector4(0.35f, 0.31f, 0.24f, 1));
         _overlay.Rect(x0, barTop, x1, barTop + barHeight, new Vector4(0.08f, 0.07f, 0.06f, 1));
         _overlay.Rect(x0, barTop, x0 + (x1 - x0) * progress, barTop + barHeight, new Vector4(0.78f, 0.66f, 0.42f, 1));
@@ -374,6 +402,7 @@ sealed class LoadingScreen : IDisposable
     {
         _painter?.Dispose();
         _stamp?.Dispose();
+        _step?.Dispose();
     }
 
     #endregion
