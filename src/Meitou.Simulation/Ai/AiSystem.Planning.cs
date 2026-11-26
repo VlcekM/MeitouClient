@@ -596,7 +596,7 @@ public sealed partial class AiSystem
             if (t.IsNone) return true;
             var p = Me.Position;
             var mind = _world.Characters.Cold(_slot)?.Ai;
-            if (mind is not null && mind.ArrivedThere(Flat(t.Position), Flat(p))) return true;   // its walk there ended on its own (isAtLocation)
+            if (mind is not null && mind.ArrivedThere(Flat(t.Position), p)) return true;   // its walk there ended on its own (isAtLocation)
             if (t.Kind == Targets.Work) return AtWorkTarget(t.Position, mind?.WorkRange ?? WorkReach);
             float slack = t.Kind switch
             {

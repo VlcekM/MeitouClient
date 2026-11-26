@@ -1201,19 +1201,32 @@ public sealed class AiMind
     /// <summary>
     /// Where it stood when the walk to <see cref="ArrivedAt"/> finished. Not hashed: it follows the position.
     /// </summary>
-    public Vector2 ArrivedFrom { get; set; }
+    public Vector3 ArrivedFrom { get; set; }
 
     /// <summary>
-    /// How far (units) it may have moved from <see cref="ArrivedFrom"/> and still count as arrived at <see cref="ArrivedAt"/> (engine choice: shoves
-    /// from its neighbours stay within it, another system's walk, a round to a door, does not).
+    /// How far (units, X/Z) it may have moved from <see cref="ArrivedFrom"/> and still count as arrived at <see cref="ArrivedAt"/> (engine choice:
+    /// shoves from its neighbours stay within it, another system's walk, a round to a door, does not).
     /// </summary>
     public const float ArrivedDrift = 20;
 
     /// <summary>
-    /// Its last walk finished at <paramref name="target"/> and it still stands where that walk ended (<see cref="ArrivedDrift"/>).
+    /// How far up or down it may have moved from <see cref="ArrivedFrom"/> and still count as arrived: the original's |dy| slack of
+    /// <c>isAtLocation</c> (20). Past it, it is on another floor, as one a fight took from a roof to the floor under it (#1446).
     /// </summary>
-    public bool ArrivedThere(Vector2 target, Vector2 here) =>
-        ArrivedAt == target && Vector2.DistanceSquared(here, ArrivedFrom) <= ArrivedDrift * ArrivedDrift;
+    public const float ArrivedRise = 20;
+
+    /// <summary>
+    /// Its last walk finished at <paramref name="target"/> and it still stands where that walk ended (<see cref="ArrivedDrift"/>, on the same floor:
+    /// <see cref="ArrivedRise"/>).
+    /// </summary>
+    public bool ArrivedThere(Vector2 target, Vector3 here)
+    {
+        if (ArrivedAt != target || MathF.Abs(here.Y - ArrivedFrom.Y) >= ArrivedRise) return false;
+
+        float dx = here.X - ArrivedFrom.X;
+        float dz = here.Z - ArrivedFrom.Z;
+        return dx * dx + dz * dz <= ArrivedDrift * ArrivedDrift;
+    }
 
     /// <summary>
     /// Walks in a row that ended away from the spot (no way there, or interrupted); at <see cref="AiSystem.MaxFailedWalks"/> it gives the spot up.

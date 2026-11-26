@@ -3549,7 +3549,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             // The walk is over: arrived, or it ended elsewhere (no way there, or a fight took it).
             mind.Walking = false;
-            WalkOver(table, slot, mind, target, here, away);
+            WalkOver(table, slot, mind, target, away);
             if (mind.FailedWalks >= MaxFailedWalks)
             {
                 mind.FailedWalks = 0;
@@ -3573,7 +3573,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             }
         }
 
-        if (away && mind.ArrivedThere(target, here)) return true;   // its path ended there and it has not been moved off since: arrived
+        if (away && mind.ArrivedThere(target, n.Position)) return true;   // its path ended there and it has not been moved off since: arrived
         if (away)
         {
             WalkTo(world, slot, target, mode);
@@ -3600,7 +3600,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// and one it gave up ends the goal's commitment; one another system stopped (a captive job's or lock round's stand) is neither, so the next
     /// act-out walks again.
     /// </summary>
-    static void WalkOver(CharacterTable table, int slot, AiMind mind, Vector2 target, Vector2 here, bool away)
+    static void WalkOver(CharacterTable table, int slot, AiMind mind, Vector2 target, bool away)
     {
         if (!away)
         {
@@ -3614,7 +3614,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (!fought && cold.WalkEnd == WalkEnd.Finished && table.Next[slot].Task == (byte)CharacterTask.Idle)
         {
             mind.ArrivedAt = target;
-            mind.ArrivedFrom = here;
+            mind.ArrivedFrom = table.Next[slot].Position;
             mind.FailedWalks = 0;
             return;
         }

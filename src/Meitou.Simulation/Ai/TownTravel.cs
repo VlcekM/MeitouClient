@@ -187,7 +187,7 @@ internal sealed class TownTravel(PopulationData data)
         if (cold.WalkEnd == WalkEnd.Finished)
         {
             mind.ArrivedAt = n.Goal;
-            mind.ArrivedFrom = new Vector2(n.Position.X, n.Position.Z);
+            mind.ArrivedFrom = n.Position;
         }
 
         return WalkOutcome.Over;
@@ -210,7 +210,7 @@ internal sealed class TownTravel(PopulationData data)
         ref var n = ref world.Characters.Next[slot];
         var point = Waypoint(system, world, town);
         var here = new Vector2(n.Position.X, n.Position.Z);
-        if (mind.ArrivedThere(point, here) || Vector2.DistanceSquared(here, point) <= system.Settings.PostSlack * system.Settings.PostSlack)
+        if (mind.ArrivedThere(point, n.Position) || Vector2.DistanceSquared(here, point) <= system.Settings.PostSlack * system.Settings.PostSlack)
         {
             AiSystem.Become(world, slot, CharacterTask.Idle);
             return;
