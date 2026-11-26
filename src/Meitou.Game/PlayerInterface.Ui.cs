@@ -1025,6 +1025,7 @@ sealed partial class PlayerInterface
         MessageRoller.AddNotice(controls);
         InventoryWindows.AddInventoryDrag(controls);
         ItemsWindow.AddDrag(controls);
+        OrdersPanel.AddJobDrag(controls);
 
         AddUnderLayers(controls);
 
