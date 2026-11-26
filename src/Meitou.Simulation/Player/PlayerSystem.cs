@@ -176,6 +176,8 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
                 ContainerAccess.OpenContainerInput(world, open, _pickUps);
                 break;
             case Items.CloseContainer:
+                if (player.OpenContainer is not null) InventoryPause.Closed(world, player.ContainerOpener);
+                if (!player.OpenLoot.IsNone) InventoryPause.Closed(world, player.LootOpener);
                 player.OpenContainer = player.OpeningContainer = null;
                 player.OpenLoot = player.OpeningLoot = CharacterId.None;
                 break;
