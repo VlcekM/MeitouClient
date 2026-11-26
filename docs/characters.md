@@ -190,9 +190,9 @@ Engine extension, not in the original: a WEAPON of `skill category` 5 (Unarmed; 
   `AttachMode.SharedSkeleton`), in its grade's model, whether the character fights or not, also beside a drawn weapon and, like an armour
   sleeve, on a lost arm. `bare sword` and `sheath` are not used. A mod's knuckles, claws or arm braces author `mesh` skinned to the `Bip01`
   forearm and hand bones.
-- **Icon**: an instance carries a manufacturer's model as its material, which its look ignores, so with no picture of that exact name it takes
-  the picture of the record's own first `material`, `<item>.<own material>.png` (`ItemIcons.WornWeaponPicture`): a mod ships one icon for every
-  grade.
+- **Icon**: an instance carries a manufacturer's model as its material, which its look ignores, so the picture of the record's own first
+  `material`, `<item>.<own material>.png`, comes before one of the model's name (`ItemIcons.WornWeaponPicture`): a mod ships one icon for
+  every grade.
 - **Hidden hands**: with `hide hands` true (a bool only mods set), the body's hand vertices are not drawn while it is worn, so a weapon that
   encloses the fist shows no fingers through it (`CharacterAppearance.HiddenHands`). Every body vertex carries bit 22 and, when its heaviest
   bone is `Bip01 L Hand` / `Bip01 R Hand` or below it, bit 20 / 21 in its colour Y (`CharacterContent.MarkBody`); the body's instance flags
