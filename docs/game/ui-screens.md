@@ -1330,8 +1330,8 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     full kit. Any other: swapped, the old item on the mouse. Meitou: `HeldItems.Combine`, `InventoryCommands.Join`; in a trade, or for an item
     with a buy-back receipt, a stack of the kind takes what it has room for (a full one nothing) and a kind that does not stack is swapped.
   - Over no window (`FUN_1407136a0`): a character picked under the pointer other than the source owner is given the item (a live animal's grid takes nothing, [animals](animals.md#pack-animals); Meitou, engine choice as a pick-up: what no grid takes goes into a free slot that takes it, e.g. a 10x1 polearm into `back`; no trade;
-    range checked; "No room for that item." or the container message; from a non-player owner "Got caught stealing." may follow); otherwise it is dropped on the ground only from the player's
-    own windows or a window of a player-faction owner, else it goes back.
+    range checked; "No room for that item." or the container message; from a non-player owner "Got caught stealing." may follow); otherwise it is dropped on the ground from the player's
+    own windows, a window of a player-faction owner, or an open character loot window (rolling pickpocket, marking theft and butchering a downed body if a death item is dropped), else it goes back.
   - Back to origin (`FUN_14070d860`): its old cell if still free, else auto-added to that inventory, else that inventory is arranged and it is tried again, else it is dropped on the ground.
     For a live animal the auto-add leaves its shut grid out: Raw Meat swapped out of a pack beast's Garru Backpack and sent back with Esc, its cell now taken, goes into a free
     cell of the bag, though the hidden grid has room (**Observed**, original 1.0.68). Meitou: `HeldItems.ReturnHeldItem` adds with

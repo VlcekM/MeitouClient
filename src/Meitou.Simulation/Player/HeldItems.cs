@@ -816,20 +816,41 @@ sealed class HeldItems(PopulationData? data)
     }
 
     /// <summary>
-    /// Drops the held item on the ground (<c>FUN_1407136a0</c>): only out of the player's own windows (a character of the player's faction, a
-    /// machine, a container of the player's faction); otherwise it goes back. It lands at the feet of its window's character (else of its holder), a
-    /// little ahead (engine choice), turned at random.
+    /// Drops the held item on the ground (<c>FUN_1407136a0</c>): out of the player's own windows (a character of the player's faction, a machine, a
+    /// container of the player's faction) or an open character loot window (rolling pickpocket, marking theft, clearing any death-item flag and
+    /// butchering a live downed body as other loot takes do); otherwise it goes back. It lands at the feet of its window's character (else of its
+    /// holder), a little ahead (engine choice), turned at random.
     /// </summary>
     void DropHeldItem(World world)
     {
         if (world.Player.Held is not { } held) return;
-        if (!HeldItemTheft.FromPlayerWindow(world, held) || DropSpot(world, held) is not var (at, slot))
+
+        bool own = HeldItemTheft.FromPlayerWindow(world, held);
+        if ((!own && held.From.Holder != ItemHolder.Character) || DropSpot(world, held) is not var (at, slot))
         {
             ReturnHeldItem(world);
             return;
         }
+
+        if (!own && HeldItemTheft.Caught(world, held, Crime.CrimeSystem.TakeKind.Drag))
+        {
+            ReturnHeldItem(world);
+            return;
+        }
+
+        var item = held.Item;
+        bool death = item.Death;
+        item.Death = false;
+        if (!own) item.Mark = HeldItemTheft.MarkForDrop(world, held);
+
         world.Player.Held = null;
-        Ground(world, held.Item, at, slot);
+        Ground(world, item, at, slot);
+
+        if (!own)
+        {
+            HeldItemTheft.LeftLoot(world, held, death);
+            HeldItemTheft.ReportTake(world, held, item.Quantity, caught: false);
+        }
     }
 
     /// <summary>

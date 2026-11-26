@@ -281,6 +281,89 @@ public class CarryTests
         Assert.Empty(rig.Cold(animal).Inventory!.Items);
     }
 
+    [Fact]
+    public void Dropping_a_death_item_from_open_loot_drops_it_on_the_ground_and_butchers_the_body()
+    {
+        using var rig = new Rig();
+        var looter = rig.Add(1000, 2000);
+        var animal = rig.Add(1010, 2000, player: false, squad: 1, faction: 2);
+        var meat = Item("meat", 1, 1, 3, stack: true);
+        meat.Death = true;
+        rig.Cold(animal).Inventory!.Add(meat);
+        rig.Body(animal).KnockOut(10000);
+        rig.World.RunTick();
+        rig.Say(new OpenLootOrder([looter], animal) { Tick = rig.World.Tick });
+        for (int t = 0; t < 200 && rig.World.Player.OpenLoot != animal; t++) rig.World.RunTick();
+
+        Assert.Equal(animal, rig.World.Player.OpenLoot);
+
+        var token = new InventoryItemToken(0, meat.Record, meat.Section, meat.X, meat.Y, meat.Quantity, meat.Quality);
+        rig.Say(new LiftItem(looter, ItemOwner.Of(animal), token, meat.Quantity) { Tick = rig.World.Tick });
+        rig.World.RunTick();
+        rig.Say(new DropHeld { Tick = rig.World.Tick });
+        rig.World.RunTick();
+
+        Assert.Equal((true, DeathCause.Butchered), (rig.Body(animal).Dead, rig.Body(animal).Cause));
+        Assert.Contains($"{rig.Cold(animal).Name} has been butchered", rig.World.TakeMessages());
+        Assert.Empty(rig.Cold(animal).Inventory!.Items);
+        Assert.Null(rig.World.Player.Held);
+
+        var dropped = Assert.Single(rig.World.GroundItems.All);
+        Assert.Equal(("meat", 3, false), (dropped.Item.Record, dropped.Item.Quantity, dropped.Item.Death));
+    }
+
+    [Fact]
+    public void Dropping_a_normal_item_from_open_loot_drops_it_on_the_ground_without_killing_the_body()
+    {
+        using var rig = new Rig();
+        var looter = rig.Add(1000, 2000);
+        var enemy = rig.Add(1010, 2000, player: false, squad: 1, faction: 2);
+        var sword = Item("sword", 1, 1, 1);
+        rig.Cold(enemy).Inventory!.Add(sword);
+        rig.Body(enemy).KnockOut(10000);
+        rig.World.RunTick();
+        rig.Say(new OpenLootOrder([looter], enemy) { Tick = rig.World.Tick });
+        for (int t = 0; t < 200 && rig.World.Player.OpenLoot != enemy; t++) rig.World.RunTick();
+
+        var token = new InventoryItemToken(0, sword.Record, sword.Section, sword.X, sword.Y, sword.Quantity, sword.Quality);
+        rig.Say(new LiftItem(looter, ItemOwner.Of(enemy), token, 1) { Tick = rig.World.Tick });
+        rig.World.RunTick();
+        rig.Say(new DropHeld { Tick = rig.World.Tick });
+        rig.World.RunTick();
+
+        Assert.False(rig.Body(enemy).Dead);
+        Assert.Empty(rig.Cold(enemy).Inventory!.Items);
+        Assert.Null(rig.World.Player.Held);
+
+        var dropped = Assert.Single(rig.World.GroundItems.All);
+        Assert.Equal("sword", dropped.Item.Record);
+    }
+
+    [Fact]
+    public void Dropping_from_trader_stock_returns_the_item_instead_of_dropping_it()
+    {
+        using var rig = new Rig();
+        var buyer = rig.Add(1000, 2000);
+        var stock = new Inventory();
+        var goods = Item("cup", 1, 1, 1);
+        rig.World.Player.Held = new HeldItem
+        {
+            Item = goods,
+            From = ItemOwner.Stock,
+            Grid = stock,
+            Section = "main",
+            X = 0,
+            Y = 0,
+            Actor = buyer,
+        };
+        rig.Say(new DropHeld { Tick = rig.World.Tick });
+        rig.World.RunTick();
+
+        Assert.Empty(rig.World.GroundItems.All);
+        Assert.Null(rig.World.Player.Held);
+        Assert.Single(stock.Items, i => i.Record == "cup");
+    }
+
     // ------------------------------------------------------------------ determinism
 
     /// <summary>
