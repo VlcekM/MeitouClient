@@ -536,8 +536,9 @@ start chooser, save/load slots and confirmations, the in-game Esc menu, the load
 audio system (main theme, interface sounds, ambience, music and world emitters, with the saved volume sliders).
 Photo mode (P, [viewer](viewer.md#photo-mode)) runs on the shared `PhotoMode`, wired in `MetalGameLoop`'s `Photo mode` region and its
 key, pointer, wheel, frame, overlay-pass and picture hooks; its panel and guides draw into the overlay's one pass. The depth of field runs
-(`DepthOfField`, [post](render-post.md#depth-of-field)), so the Focus tab's rows act. The ambient animation (water, clouds) keeps the real
-clock, so it does not stop with the paused simulation.
+(`DepthOfField`, [post](render-post.md#depth-of-field)), so the Focus tab's rows act.
+World particles, water and wet surfaces use the interpolated game clock and stop during pause, including in photo mode.
+The title scene uses real time.
 Still missing: the pointer sprite, the free camera and the cinema camera, the control channel's `mouse` and `click`, and
 the tiled screenshot of `screens.cfg`'s `multiplier`.
 

@@ -1701,11 +1701,7 @@ sealed partial class GameHost(
     /// </summary>
     void DrawFrame(int width, int height)
     {
-        // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds. The clock moves in
-        // whole 1/30 s ticks, so it runs on by the alpha the characters are drawn at; at 1x the weather particles otherwise moved at 30 Hz.
-        double shownSeconds = Session.Clock.GameSeconds + Session.SimulationAlpha * Session.Simulation.TickSeconds;
-        float gameTime = (float)(shownSeconds / 600 % 1e4);
-        if (Gpu.Surfaces is { } wetSurfaces) wetSurfaces.Seconds = (float)(shownSeconds % 4096);
+        float gameTime = ShownGameTime();
         float hour = (float)Session.Clock.HourOfDay;
 
         // The next world tick runs on its own thread while the world is drawn from the shown snapshots (docs/simulation.md "Tick ahead"): from here
@@ -1722,6 +1718,21 @@ sealed partial class GameHost(
         }
 
         if (TickAhead) NoteAheadTick();
+    }
+
+    /// <summary>
+    /// The world frame's animation time (particles, water, wet surfaces) in <see cref="WorldFrame.Draw"/>'s 1/600 s units, and the wet surfaces'
+    /// seconds set from it: game time, so still while paused and faster at higher speeds, as the original's effect clock (dt × speed, 0 paused).
+    /// The clock moves in whole 1/30 s ticks, so it runs on by the alpha the characters are drawn at; at 1x the weather particles otherwise moved
+    /// at 30 Hz. Both hosts' world frames read it.
+    /// </summary>
+    internal float ShownGameTime()
+    {
+        double shownSeconds = Session.Clock.GameSeconds + Session.SimulationAlpha * Session.Simulation.TickSeconds;
+
+        if (Gpu.Surfaces is { } wetSurfaces) wetSurfaces.Seconds = (float)(shownSeconds % 4096);
+
+        return (float)(shownSeconds / 600 % 1e4);
     }
 
     #endregion
