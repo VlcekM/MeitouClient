@@ -5862,3 +5862,11 @@ msgstr "권운 밀도"
 #. machine-translated
 msgid "Controls the density (thickness/visibility) of the Cirrus clouds."
 msgstr "권운의 밀도(두께/가시성)를 조절합니다."
+
+#. machine-translated
+msgid "Drop from loot"
+msgstr "전리품에서 떨어뜨리기"
+
+#. machine-translated
+msgid "An item dragged out of a knocked-out or dead character's inventory onto the ground drops there, as a take from that character: it can be seen as theft, and a body whose meat or parts are dropped is butchered. In the game it goes back to the body."
+msgstr "기절했거나 죽은 캐릭터의 인벤토리에서 땅으로 끌어 놓은 아이템은 그 자리에 떨어지며, 그 캐릭터에게서 가져간 것으로 취급됩니다: 절도로 보일 수 있고, 고기나 부품을 떨어뜨린 몸은 도축됩니다. 게임에서는 몸으로 돌아갑니다."

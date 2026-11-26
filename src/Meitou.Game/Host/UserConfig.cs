@@ -676,6 +676,11 @@ sealed class UserConfig
     /// </summary>
     public bool TakeIntoBackpack { get; set; }
     /// <summary>
+    /// Items dragged out of a non-player character's loot window onto the ground drop there (Advanced settings, Meitou, on by default; off: they go
+    /// back, as in the game; <c>World.DropFromLoot</c>).
+    /// </summary>
+    public bool DropFromLoot { get; set; } = true;
+    /// <summary>
     /// The pan speed factor while Shift is held (Controls settings, <see cref="MinShiftPanMultiplier"/> … <see cref="MaxShiftPanMultiplier"/>,
     /// default 2).
     /// </summary>

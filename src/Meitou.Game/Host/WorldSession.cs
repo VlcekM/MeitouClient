@@ -159,6 +159,7 @@ public sealed class WorldSession : IDisposable
         next.PickUpTheftFix = World.PickUpTheftFix;
         next.CounterTalk = World.CounterTalk;
         next.TakeIntoBackpack = World.TakeIntoBackpack;
+        next.DropFromLoot = World.DropFromLoot;
         next.ActionLog = World.ActionLog;
         try
         {

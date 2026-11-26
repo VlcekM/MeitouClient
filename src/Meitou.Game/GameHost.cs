@@ -660,6 +660,7 @@ sealed partial class GameHost(
         Session.World.PickUpTheftFix = Config.FixPickUpTheft;
         Session.World.CounterTalk = Config.CounterTalk;
         Session.World.TakeIntoBackpack = Config.TakeIntoBackpack;
+        Session.World.DropFromLoot = Config.DropFromLoot;
         Session.World.ActionLog = ActionLogs.Log;
         Session.Simulation.SetFastSpeeds(Config.FastSpeed, Config.FastestSpeed);
         if (Gpu.Characters is { } nearChars)

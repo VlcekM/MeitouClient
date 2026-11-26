@@ -532,6 +532,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool TakeIntoBackpack { get; set; }
     /// <summary>
+    /// An item dragged out of a non-player character's open loot window onto the ground drops there, as a take from that character (Advanced
+    /// settings, Meitou, on by default); off, it goes back, as in the game (docs/game/ui-screens.md "Over no window").
+    /// </summary>
+    public bool DropFromLoot { get; set; } = true;
+    /// <summary>
     /// The player: faction, money, selection.
     /// </summary>
     public PlayerState Player { get; } = new();

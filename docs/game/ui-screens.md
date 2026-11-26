@@ -1337,7 +1337,9 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     range checked; "No room for that item." or the container message; from a non-player owner "Got caught stealing." may follow); otherwise it is dropped on the ground only from the player's
     own windows or a window of a player-faction owner, else it goes back. The gate is the window's drop flag (+9), which the trade/loot opener (`FUN_1407918a0`) sets
     for the other party only when it is of the player's faction and not dead (**Verified**, decompile). A knocked-out Mercenary Captain's inventory item and equipped sword
-    dragged onto the ground go back to his loot window while the looter's own pants drop (**Observed**, original 1.0.65 via KenshiHarness).
+    dragged onto the ground go back to his loot window while the looter's own pants drop (**Observed**, original 1.0.65 via KenshiHarness). Meitou, with Drop from loot (Advanced settings, `World.DropFromLoot`, on): an
+    open character loot window drops too, after the pickpocket roll as a take, marking the theft and butchering a downed body whose death item is
+    dropped (`HeldItems.DropHeldItem`); off, as the game.
   - Back to origin (`FUN_14070d860`): its old cell if still free, else auto-added to that inventory, else that inventory is arranged and it is tried again, else it is dropped on the ground.
     For a live animal the auto-add leaves its shut grid out: Raw Meat swapped out of a pack beast's Garru Backpack and sent back with Esc, its cell now taken, goes into a free
     cell of the bag, though the hidden grid has room (**Observed**, original 1.0.68). Meitou: `HeldItems.ReturnHeldItem` adds with

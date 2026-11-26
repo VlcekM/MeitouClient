@@ -546,6 +546,7 @@ sealed class GameLoop(GameHost host)
             PickUpTheftChanged = on => host.Session.World.PickUpTheftFix = on,
             CounterTalkChanged = on => host.Session.World.CounterTalk = on,
             TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,
+            DropFromLootChanged = on => host.Session.World.DropFromLoot = on,
             TimeSpeedsChanged = () => host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed),
             AnimalsPickUpChanged = on => EachSystem<Simulation.Player.PlayerSystem>(players => players.AnimalsPickUp = on),
             OffscreenChanged = ApplyOffscreenSettings,

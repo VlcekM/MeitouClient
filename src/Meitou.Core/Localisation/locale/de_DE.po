@@ -5865,3 +5865,11 @@ msgstr "Zirrus-Dichte"
 #. machine-translated
 msgid "Controls the density (thickness/visibility) of the Cirrus clouds."
 msgstr "Steuert die Dichte (Dicke/Sichtbarkeit) der Zirruswolken."
+
+#. machine-translated
+msgid "Drop from loot"
+msgstr "Aus Beute fallen lassen"
+
+#. machine-translated
+msgid "An item dragged out of a knocked-out or dead character's inventory onto the ground drops there, as a take from that character: it can be seen as theft, and a body whose meat or parts are dropped is butchered. In the game it goes back to the body."
+msgstr "Ein Gegenstand, der aus dem Inventar einer bewusstlosen oder toten Figur auf den Boden gezogen wird, fällt dort hin, als von dieser Figur genommen: Das kann als Diebstahl gesehen werden, und ein Körper, dessen Fleisch oder Teile fallen gelassen werden, wird zerlegt. Im Spiel kehrt er zum Körper zurück."

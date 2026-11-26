@@ -816,20 +816,54 @@ sealed class HeldItems(PopulationData? data)
     }
 
     /// <summary>
-    /// Drops the held item on the ground (<c>FUN_1407136a0</c>): only out of the player's own windows (a character of the player's faction, a
-    /// machine, a container of the player's faction); otherwise it goes back. It lands at the feet of its window's character (else of its holder), a
-    /// little ahead (engine choice), turned at random.
+    /// Drops the held item on the ground (<c>FUN_1407136a0</c>): out of the player's own windows (a character of the player's faction, a machine, a
+    /// container of the player's faction), and with <see cref="World.DropFromLoot"/> (Meitou) out of an open character loot window too
+    /// (<see cref="DropLoot"/>); otherwise it goes back, as the game sends back anything from a non-player window. It lands at the feet of its
+    /// window's character (else of its holder), a little ahead (engine choice), turned at random.
     /// </summary>
     void DropHeldItem(World world)
     {
         if (world.Player.Held is not { } held) return;
-        if (!HeldItemTheft.FromPlayerWindow(world, held) || DropSpot(world, held) is not var (at, slot))
+
+        bool own = HeldItemTheft.FromPlayerWindow(world, held);
+        bool loot = !own && world.DropFromLoot && held.From.Holder == ItemHolder.Character;
+        if (!own && !loot || DropSpot(world, held) is not var (at, slot))
         {
             ReturnHeldItem(world);
             return;
         }
+
+        if (loot)
+        {
+            DropLoot(world, held, at, slot);
+            return;
+        }
+
         world.Player.Held = null;
         Ground(world, held.Item, at, slot);
+    }
+
+    /// <summary>
+    /// Drops the held item out of a non-player character's loot window (<see cref="World.DropFromLoot"/>) as other loot takes go: the pickpocket
+    /// roll (caught, it goes back), the theft mark, the death-item flag cleared and a downed body butchered for it, and the goods-taken report.
+    /// </summary>
+    void DropLoot(World world, HeldItem held, Vector3 at, int slot)
+    {
+        if (HeldItemTheft.Caught(world, held, Crime.CrimeSystem.TakeKind.Drag))
+        {
+            ReturnHeldItem(world);
+            return;
+        }
+
+        var item = held.Item;
+        bool death = item.Death;
+        int units = item.Quantity;
+        (item.Death, item.Mark) = (false, HeldItemTheft.MarkForDrop(world, held));
+        world.Player.Held = null;
+        Ground(world, item, at, slot);
+
+        HeldItemTheft.LeftLoot(world, held, death);
+        HeldItemTheft.ReportTake(world, held, units, caught: false);
     }
 
     /// <summary>

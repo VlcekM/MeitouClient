@@ -542,6 +542,10 @@ msgid "An animal in a cage or on a pole breathes, looks around and lies down whe
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "An item dragged out of a knocked-out or dead character's inventory onto the ground drops there, as a take from that character: it can be seen as theft, and a body whose meat or parts are dropped is butchered. In the game it goes back to the body."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "Animals pick up items"
 msgstr ""
 
@@ -1619,6 +1623,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Draw the interface at the screen's size over a stretched picture (virtual Retina pixels, or a smaller render resolution), so it stays sharp. Off: it is drawn at the render size with the picture."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Drop from loot"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs

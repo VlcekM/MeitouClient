@@ -50,6 +50,12 @@ static class HeldItemTheft
     }
 
     /// <summary>
+    /// The stolen mark a held item gets when dropped on the ground out of a non-player character's window: the body's when the take marks
+    /// (<see cref="Crime.CrimeSystem.MarksTheft"/>) and the item is unmarked, else unchanged.
+    /// </summary>
+    internal static StolenMark MarkForDrop(World world, HeldItem held) => TheftMark(world, held, -1, overwrite: false);
+
+    /// <summary>
     /// The faction owning the container or machine at <paramref name="site"/>: a container's or town machine's owner, else (the player's own
     /// machine) the player's.
     /// </summary>

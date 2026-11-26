@@ -6695,3 +6695,11 @@ msgstr "卷云密度"
 #. machine-translated
 msgid "Controls the density (thickness/visibility) of the Cirrus clouds."
 msgstr "控制卷云的密度（厚度/可见度）。"
+
+#. machine-translated
+msgid "Drop from loot"
+msgstr "从战利品丢弃"
+
+#. machine-translated
+msgid "An item dragged out of a knocked-out or dead character's inventory onto the ground drops there, as a take from that character: it can be seen as theft, and a body whose meat or parts are dropped is butchered. In the game it goes back to the body."
+msgstr "从昏迷或死亡角色的物品栏拖到地上的物品会落在那里，视为从该角色处拿取：可能被视为偷窃，被丢下肉或部件的尸体会被屠宰。原版游戏中物品会回到尸体上。"

@@ -993,6 +993,11 @@ sealed class GamePages(SettingsMenu menu)
             + "behind them. Meitou: shopkeepers can be reached from the customer's side of the counter.",
             Toggle: new("Talk across shop counters", () => menu.Config.CounterTalk,
                 v => { menu.Config.CounterTalk = v; menu.CounterTalkChanged?.Invoke(v); }, Remaster: true)));
+        result.Add(new("Drop from loot",
+            "An item dragged out of a knocked-out or dead character's inventory onto the ground drops there, as a take from that character: "
+            + "it can be seen as theft, and a body whose meat or parts are dropped is butchered. In the game it goes back to the body.",
+            Toggle: new("Drop from loot", () => menu.Config.DropFromLoot,
+                v => { menu.Config.DropFromLoot = v; menu.DropFromLootChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
             Toggle: new("Hover outline", () => menu.Config.HoverOutline, v => menu.Config.HoverOutline = v, Remaster: true, OnOff: true)));
         result.Add(new("Building outline",

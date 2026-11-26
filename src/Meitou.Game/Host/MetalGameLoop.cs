@@ -804,6 +804,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Session.World.PickUpTheftFix = host.Config.FixPickUpTheft;
         host.Session.World.CounterTalk = host.Config.CounterTalk;
         host.Session.World.TakeIntoBackpack = host.Config.TakeIntoBackpack;
+        host.Session.World.DropFromLoot = host.Config.DropFromLoot;
         host.Session.World.ActionLog = host.ActionLogs.Log;
         host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed);
         host.Render.Grid = host.Sandbox.IsSandbox;
@@ -1369,6 +1370,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             PickUpTheftChanged = on => host.Session.World.PickUpTheftFix = on,
             CounterTalkChanged = on => host.Session.World.CounterTalk = on,
             TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,
+            DropFromLootChanged = on => host.Session.World.DropFromLoot = on,
             TutorialsChanged = on => { if (host.Saves.Tutorials is { } t) t.Enabled = on; },
             ResetTutorials = () => host.Saves.Tutorials?.Reset(),
             OffscreenChanged = () =>
