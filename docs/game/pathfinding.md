@@ -458,7 +458,12 @@ faces it only drew thin cuts, so the floor under the walls stayed meshed and wal
 the floor; polygons whose centre is outside it are dropped from the interior (so neither the border closure nor a join keeps them).
 **Ruin joins** (engine choice after the original's stitch, which joins open edges within 2 apart and 10 in height, Generator): every ruin's open edges
 link to the exterior's along its hull within `NavInteriors.RuinHullJoinDistance` (5; both are cut on the hull, ours each up to a cell and the 1.3-cell
-contour error off it). **Observed** (`--compare-interiors`, 24 ruins whose tiles were built intact, before: none reached): reached now 6 (Old Storm
+contour error off it). A doorless interior's hull join also links exterior ground the zone's own seeds did not keep (not another building's
+door polygons), and that link does not keep it (`NavInteriors.CarryKeep`): the street's seeds or the closure from the next zone decide, so ground
+only the interior touches stays pruned. A ruin has no door seed, and where the street round it is kept only by the closure (Venge, zone 37.34) a
+join to kept polygons alone found none and the ruin stayed sealed. **Observed** (#1474's save, `probe path`): from the street the Waystation ruin
+`37.34:3-rebirth-INGAME`'s floor is reached up its steps; before, no path. **Observed** (`--compare-interiors`, 24 ruins whose tiles were built
+intact, before: none reached): reached now 6 (Old Storm
 House `9.56:12-`, Outpost s-I `14.5:6-`, Ancient Lab `18.15:130-`, Longhouse `18.35:23-`, Old Storm House `29.28:52-`, Outpost s-III `50.24:66-`:
 their floor meets the exterior on the hull, our edges 2.6..4.3 apart, height 0.1..1); the other 18 stay unjoined: within 10 in height their nearest
 exterior edge is 9.0..135 away or none (Outposts s-II/s-IV and Watchtowers: the boundary ring stands 9..11 inside the hull and the exterior ends ~4
@@ -640,7 +645,8 @@ at 1166.4; the original has no faces on the riser and a hole over the cap, the g
 `FilterLowHangingWalkableObstacles`): a cutting top is walked only under the climb (9 cells, 4.5), not at it: 45.9's ours only 8,068 → 1,860;
 over 15 zones (`--compare`) ours only −371, original only +139 (0.5 %); towns' interiors ours only −19.3k, original only +1.75k. Without the
 filter the towns' ours only falls 70.6k but original only rises 9.1k, so some low obstacle the original walks over (which) needs it.
-**Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
+**Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept
+(a doorless interior's hull join also to ground it did not keep, "Ruin joins"), and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`, not over narrow exterior edges: "Narrow portals"); exterior polygons stay
 limited to kept ones, else a door joined to a pruned landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`,
 Metal Wallhouse `51.43:1281-Dialogue-INGAME`).

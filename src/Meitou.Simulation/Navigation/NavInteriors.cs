@@ -83,13 +83,15 @@ internal static class NavInteriors
         }
 
         int exteriorCount = exterior.PolygonCount;
+        var uncarried = new HashSet<long>();
         for (int k = 0; k < interiors.Count; k++)
         {
+            float hullDistance = interiors[k].Ruin ? RuinHullJoinDistance : HullJoinDistance;
             Join(vertices, polygons, neighbours, areas, kept, links, doorOf, doorIds, exteriorCount, offsets[k], interiors[k].Mesh.PolygonCount,
-                interiors[k].Doorless, interiors[k].Key ?? $"interior {k}", log, interiors[k].Ruin ? RuinHullJoinDistance : HullJoinDistance);
+                interiors[k].Doorless, interiors[k].Key ?? $"interior {k}", log, hullDistance, uncarried);
         }
 
-        CarryKeep(new KeptSet(vertices, polygons, neighbours, links, areas, kept, exteriorCount));
+        CarryKeep(new KeptSet(vertices, polygons, neighbours, links, areas, kept, exteriorCount, uncarried));
 
         var heights = new List<HeightGrid?>();
         foreach (var m in interiors.Select(i => i.Mesh).Prepend(exterior))
@@ -172,9 +174,9 @@ internal static class NavInteriors
 
     /// <summary>
     /// An interior is joined whatever its own pruning kept (it may have no seed: an Ancient Lab or Ash Dome without doors or nodes), to exterior
-    /// polygons the exterior's pruning kept, and the regions joined to a kept polygon are kept too (engine choice; the original connects these
-    /// interiors, docs/game/pathfinding.md "Door joins"). Between exterior polygons it stops at edges the seed flood does not pass
-    /// (<see cref="SeedPruner.MinPortalWidth"/>).
+    /// polygons the exterior's pruning kept (a doorless one also to ground it had not kept, a link CarryKeep does not cross), and the regions
+    /// joined to a kept polygon are kept too (engine choice; the original connects these interiors, docs/game/pathfinding.md "Door joins").
+    /// Between exterior polygons it stops at edges the seed flood does not pass (<see cref="SeedPruner.MinPortalWidth"/>).
     /// </summary>
     static void CarryKeep(KeptSet m)
     {
@@ -196,7 +198,9 @@ internal static class NavInteriors
             if (m.Links[p] is { } l)
             {
                 for (int i = 1; i < l.Count; i += 2)
-                    Keep(l[i]);
+                {
+                    if (!m.Uncarried.Contains(LinkKey(p, l[i]))) Keep(l[i]);
+                }
             }
         }
 
@@ -240,9 +244,10 @@ internal static class NavInteriors
         bool doorless,
         string name,
         Action<string>? log,
-        float hullDistance)
+        float hullDistance,
+        HashSet<long> uncarried)
     {
-        var join = new InteriorJoin(v, polygons, neighbours, areas, kept, links, exteriorCount, first, log);
+        var join = new InteriorJoin(v, polygons, neighbours, areas, kept, links, exteriorCount, first, log, uncarried);
         for (int door = 0; door < doorIds.Count; door++)
         {
             var inside = Enumerable.Range(first, count).Where(p => areas[p] == NavArea.Door && doorOf[p] == door).ToList();
@@ -284,7 +289,14 @@ internal static class NavInteriors
     }
 
     /// <summary>
+    /// The key of the link from polygon <paramref name="from"/> to polygon <paramref name="to"/> in <see cref="KeptSet.Uncarried"/>.
+    /// </summary>
+    static long LinkKey(int from, int to) => ((long)from << 32) | (uint)to;
+
+    /// <summary>
     /// The combined mesh's lists <see cref="CarryKeep"/> reads; polygons from <paramref name="ExteriorCount"/> on are the interiors'.
+    /// <paramref name="Uncarried"/>: the links (<see cref="LinkKey"/>) a doorless interior made to exterior ground its pruning had not kept, which
+    /// CarryKeep does not cross.
     /// </summary>
     readonly record struct KeptSet(
         List<Vector3> Vertices,
@@ -293,7 +305,8 @@ internal static class NavInteriors
         List<List<int>?> Links,
         List<byte> Areas,
         List<bool> Kept,
-        int ExteriorCount);
+        int ExteriorCount,
+        HashSet<long> Uncarried);
 
     /// <summary>
     /// The joining of one interior (polygons from <paramref name="first"/> on) to the exterior's first <paramref name="exteriorCount"/> polygons of
@@ -308,7 +321,8 @@ internal static class NavInteriors
         List<List<int>?> links,
         int exteriorCount,
         int first,
-        Action<string>? log)
+        Action<string>? log,
+        HashSet<long> uncarried)
     {
         /// <summary>
         /// Links the interior's polygons of one door to the exterior: to the exterior's polygons of the same door, else to those the pruning cut
@@ -375,9 +389,15 @@ internal static class NavInteriors
             var (lo, hi) = Bounds(inside);
             lo -= new Vector2(JoinDistance);
             hi += new Vector2(JoinDistance);
-            var near = Near(lo, hi);
+
+            // Every walkable exterior polygon but another building's door, kept or not: a doorless interior has no exterior seed of its own, so
+            // where the zone's own seeds keep none of the ground round it (the street kept only by the closure from the next zone, a ruin in Venge,
+            // #1474) a kept-only search finds nothing and the interior stays sealed. The original stitches a ruin to the tile's exterior whatever
+            // its pruning (docs/game/pathfinding.md "Ruin joins"). A link to ground not kept does not keep it (CarryKeep): the street's own seeds
+            // or the closure decide, so ground only the interior touches stays pruned.
+            var near = Near(lo, hi, keptOnly: false).Where(q => kept[q] || areas[q] != NavArea.Door).ToList();
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", distance: hullDistance);
+            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", distance: hullDistance, uncarried: uncarried);
         }
 
         /// <summary>
@@ -420,12 +440,13 @@ internal static class NavInteriors
         }
 
         /// <summary>
-        /// The kept exterior polygons with a vertex in the plan box [<paramref name="lo"/>, <paramref name="hi"/>].
+        /// The walkable exterior polygons with a vertex in the plan box [<paramref name="lo"/>, <paramref name="hi"/>]: only those the exterior's
+        /// pruning kept, unless <paramref name="keptOnly"/> is false.
         /// </summary>
-        List<int> Near(Vector2 lo, Vector2 hi)
+        List<int> Near(Vector2 lo, Vector2 hi, bool keptOnly = true)
         {
             return Enumerable.Range(0, exteriorCount)
-                .Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => InPlan(v[i], lo, hi)))
+                .Where(q => (kept[q] || !keptOnly) && areas[q] != NavArea.Null && polygons[q].Any(i => InPlan(v[i], lo, hi)))
                 .ToList();
         }
 
@@ -465,7 +486,7 @@ internal static class NavInteriors
         /// null).
         /// </summary>
         int Link(List<(int, int)> openInside, List<(int, int)> openOutside, string kind, HashSet<int>? counted = null, float distance = JoinDistance,
-            float minOverlap = 0)
+            float minOverlap = 0, HashSet<long>? uncarried = null)
         {
             int joined = 0;
             foreach (var (p, e) in openInside)
@@ -481,6 +502,7 @@ internal static class NavInteriors
                     log?.Invoke($"    door join {kind}: interior polygon {p - first} edge {e} to exterior {q} edge {f}");
                     (links[p] ??= []).AddRange([e, q]);
                     (links[q] ??= []).AddRange([f, p]);
+                    if (uncarried is not null && !kept[q]) uncarried.Add(LinkKey(p, q));
                     if (counted is null || counted.Contains(p)) joined++;
                 }
             }
