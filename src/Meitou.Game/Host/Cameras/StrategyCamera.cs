@@ -150,6 +150,11 @@ public sealed class StrategyCamera
     }
 
     /// <summary>
+    /// The signature before <c>height</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Place(Vector2 pivotXz, float yaw, float pitch, float distance) => Place(pivotXz, yaw, pitch, distance, null);
+
+    /// <summary>
     /// One zoom step of <paramref name="notches"/> wheel notches (positive zooms in).
     /// </summary>
     public void Zoom(float notches)

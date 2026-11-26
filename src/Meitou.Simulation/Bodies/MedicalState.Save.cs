@@ -59,6 +59,12 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
+    /// The signature before <c>ints</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void WriteSave(IDictionary<string, float> floats, IDictionary<string, bool> bools, IDictionary<string, string> strings) =>
+        WriteSave(floats, bools, strings, null);
+
+    /// <summary>
     /// Writes <c>meitou limb&lt;k&gt;</c> (Meitou-only, docs/formats/save.md "Limbs") for each extra limb that is not original, after removing every
     /// such key the record already has: a record read from a save is written again, and its keys may name positions that hold other parts now (an
     /// extra limb healed, or a mod's part dropped). The original reads its keys by name, so it ignores these; the <c>limbs</c> value keeps the first
@@ -246,6 +252,13 @@ public sealed partial class MedicalState
         foreach (var p in state.Parts) p.WasDown = p.IsDown;
         return state;
     }
+
+    /// <summary>
+    /// The signature before <c>ints</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static MedicalState ReadSave(RaceData race, IReadOnlyDictionary<string, float> floats, IReadOnlyDictionary<string, bool> bools,
+        IReadOnlyDictionary<string, string> strings, Func<string, BodyPartTemplate?> resolve) =>
+        ReadSave(race, floats, bools, strings, resolve, null);
 
     /// <summary>
     /// The state saved for part <paramref name="k"/> as an extra limb (<see cref="WriteExtraLimbs"/>): 1 a stump, 3 crushed; original without the

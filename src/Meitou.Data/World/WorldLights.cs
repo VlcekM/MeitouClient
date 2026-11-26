@@ -103,7 +103,48 @@ public sealed record WorldLight(
     string BuildingId,
     string PlacementId,
     bool? PowerOn = null,
-    Vector3? FloorAnchor = null);
+    Vector3? FloorAnchor = null)
+{
+    /// <summary>
+    /// The signature before <c>FloorAnchor</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public WorldLight(
+        Vector3 position, Vector3 colour, float intensity, float radius, WorldLightType type, Vector3 direction, float innerAngle, float outerAngle,
+        float falloff, WorldLightEffect effect, WorldLightRule rule, bool interior, int floor, string lightId, string buildingId, string placementId,
+        bool? powerOn)
+        : this(
+            position, colour, intensity, radius, type, direction, innerAngle, outerAngle, falloff, effect, rule, interior, floor, lightId, buildingId,
+            placementId, powerOn, null)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>FloorAnchor</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(
+        out Vector3 position, out Vector3 colour, out float intensity, out float radius, out WorldLightType type, out Vector3 direction,
+        out float innerAngle, out float outerAngle, out float falloff, out WorldLightEffect effect, out WorldLightRule rule, out bool interior,
+        out int floor, out string lightId, out string buildingId, out string placementId, out bool? powerOn)
+    {
+        position = Position;
+        colour = Colour;
+        intensity = Intensity;
+        radius = Radius;
+        type = Type;
+        direction = Direction;
+        innerAngle = InnerAngle;
+        outerAngle = OuterAngle;
+        falloff = Falloff;
+        effect = Effect;
+        rule = Rule;
+        interior = Interior;
+        floor = Floor;
+        lightId = LightId;
+        buildingId = BuildingId;
+        placementId = PlacementId;
+        powerOn = PowerOn;
+    }
+}
 
 /// <summary>
 /// The world's light list (docs/formats/lights.md): the LIGHT instances of every placed building, of the buildings' doors and of their exterior (and

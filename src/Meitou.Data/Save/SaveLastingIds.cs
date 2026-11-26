@@ -20,7 +20,26 @@ public static class SaveLastingIds
     /// One character's id: its save handle, the id (never 0), the string id of the record the character was made from and the code mods' tags on
     /// it by mod id (null: none).
     /// </summary>
-    public readonly record struct Entry(Hand Hand, ulong Id, string Record, IReadOnlyDictionary<string, string>? Tags = null);
+    public readonly record struct Entry(Hand Hand, ulong Id, string Record, IReadOnlyDictionary<string, string>? Tags = null)
+    {
+        /// <summary>
+        /// The signature before <c>Tags</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+        /// </summary>
+        public Entry(Hand hand, ulong id, string record)
+            : this(hand, id, record, null)
+        {
+        }
+
+        /// <summary>
+        /// The signature before <c>Tags</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+        /// </summary>
+        public void Deconstruct(out Hand hand, out ulong id, out string record)
+        {
+            hand = Hand;
+            id = Id;
+            record = Record;
+        }
+    }
 
     /// <summary>
     /// What a file holds: the entries, the high half of the ids the game gives (0: none chosen) and the counter their low half is made from.

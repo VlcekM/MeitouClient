@@ -19,7 +19,31 @@ namespace Meitou.Game.Rendering.Overlays;
 /// <param name="Through">Drawn through walls (a mod's tint, docs/modding.md "Glow"): its characters as drawn in the mask where the scene hides them,
 /// blended towards the tint, with no outline and nothing where they are seen.</param>
 public readonly record struct HoverMask(GpuTexture Colour, GpuTexture Depth, float Near, float Far, Vector4 Tint,
-    IReadOnlyList<(Vector3 Centre, float Radius)> Spheres, bool Through = false);
+    IReadOnlyList<(Vector3 Centre, float Radius)> Spheres, bool Through = false)
+{
+    /// <summary>
+    /// The signature before <c>Through</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public HoverMask(GpuTexture colour, GpuTexture depth, float near, float far, Vector4 tint, IReadOnlyList<(Vector3 Centre, float Radius)> spheres)
+        : this(colour, depth, near, far, tint, spheres, false)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>Through</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(
+        out GpuTexture colour, out GpuTexture depth, out float near, out float far, out Vector4 tint,
+        out IReadOnlyList<(Vector3 Centre, float Radius)> spheres)
+    {
+        colour = Colour;
+        depth = Depth;
+        near = Near;
+        far = Far;
+        tint = Tint;
+        spheres = Spheres;
+    }
+}
 
 /// <summary>
 /// The hover outline (Meitou only, docs/game/ui-input.md "Hover outline"): the character under the mouse (and, with Alt held, those near) and the

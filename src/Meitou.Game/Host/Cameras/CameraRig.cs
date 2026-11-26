@@ -117,6 +117,11 @@ public sealed class CameraRig
     }
 
     /// <summary>
+    /// The signature before <c>height</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Place(Vector2 pivotXz, float yaw, float pitch, float distance) => Place(pivotXz, yaw, pitch, distance, null);
+
+    /// <summary>
     /// Cuts to the free camera at <paramref name="from"/>'s eye looking the same way (a host's camera handed back, e.g. after the
     /// cinematic camera flew it: only the free camera can stand at any eye); with <paramref name="strategy"/> it then leaves free flight
     /// as <c>;</c> does (the pivot where the view meets the ground).

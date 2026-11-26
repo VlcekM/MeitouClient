@@ -918,7 +918,26 @@ public readonly record struct PrisonView(bool Locked, float Sentence, double Hou
 /// hours an escaped slave or ex-slave has left to lie low (<see cref="Locks.FixtureRegistry.SlaveHoursLeft"/>) and whether it has been seen (the
 /// recently-wanted marker runs, <see cref="CharacterCold.RecentlyWanted"/>).
 /// </summary>
-public readonly record struct SlaveView(int State, string Owner, float Looks = 0, int HoursLeft = 0, bool Seen = false);
+public readonly record struct SlaveView(int State, string Owner, float Looks = 0, int HoursLeft = 0, bool Seen = false)
+{
+    /// <summary>
+    /// The signature before <c>HoursLeft</c> and <c>Seen</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public SlaveView(int state, string owner, float looks)
+        : this(state, owner, looks, 0, false)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>HoursLeft</c> and <c>Seen</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out int state, out string owner, out float looks)
+    {
+        state = State;
+        owner = Owner;
+        looks = Looks;
+    }
+}
 
 /// <summary>
 /// A disguise for the data panel and the health word (docs/game/ui-screens.md "Which lines"): the clothing level, the uniform faction's name, the

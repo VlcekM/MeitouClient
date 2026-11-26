@@ -20,6 +20,14 @@
     <MeitouMetal Condition="'$(MeitouMetal)' == ''">$([MSBuild]::IsOSPlatform('OSX'))</MeitouMetal>
   </PropertyGroup>
 
+  <!-- The public API check (docs/modding.md "API compatibility"): the build of each assembly in Meitou.References fails when a public member of
+       the baseline release's package is gone, unless the project's CompatibilitySuppressions.xml lists it. Release.yml requires the baseline
+       to be the last full release. -->
+  <PropertyGroup>
+    <MeitouApiBaseline>0.23.2</MeitouApiBaseline>
+    <ApiCompatValidateAssemblies Condition="$([System.String]::Copy(';Meitou.Core;Meitou.Data;Meitou.Simulation;Meitou.Game;').Contains(';$(MSBuildProjectName);'))">true</ApiCompatValidateAssemblies>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(MeitouMetal)' == 'true'">
     <DefineConstants>$(DefineConstants);MEITOU_METAL</DefineConstants>
   </PropertyGroup>

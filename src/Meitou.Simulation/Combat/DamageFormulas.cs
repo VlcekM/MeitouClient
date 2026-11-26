@@ -91,6 +91,12 @@ public static class DamageFormulas
         Lerp(Math.Clamp(encumbrance, 0, 1), 0.2f, 1f) * (martialArts + unarmedBonus - dustPenalty) * scale;
 
     /// <summary>
+    /// The signature before <c>scale</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static float UnarmedRating(float martialArts, float unarmedBonus, float dustPenalty, float encumbrance) =>
+        UnarmedRating(martialArts, unarmedBonus, dustPenalty, encumbrance, 1);
+
+    /// <summary>
     /// A fist (<b>Verified</b>, <c>FUN_1408868b0</c> disassembled): with f = lerp(rating x 0.01, 0.25, 1), total = f x (<c>unarmed damage mult</c> x
     /// toughness + strength + 10), at least 1; blunt share g = lerp(rating x 0.01, 1, 0.4); blunt = g x total, cut = (1 - g) x total. Toughness is
     /// the stat times the read-time scale (no multiplier row); strength is the effective strength. No term is halved.

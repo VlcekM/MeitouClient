@@ -15,7 +15,45 @@ public readonly record struct SnapHost(string Id, string Parent, bool IsLevel, b
 /// world bounding box in <see cref="Box"/> (null without readable mesh bounds).
 /// </summary>
 public readonly record struct SnapTarget(string Record, Vector3 Position, Quaternion Rotation, SnapHost? Host = null,
-    (Vector3 Min, Vector3 Max)? Box = null);
+    (Vector3 Min, Vector3 Max)? Box = null)
+{
+    /// <summary>
+    /// The signature before <c>Host</c> and <c>Box</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public SnapTarget(string record, Vector3 position, Quaternion rotation)
+        : this(record, position, rotation, null, null)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>Box</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public SnapTarget(string record, Vector3 position, Quaternion rotation, SnapHost? host)
+        : this(record, position, rotation, host, null)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>Host</c> and <c>Box</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out string record, out Vector3 position, out Quaternion rotation)
+    {
+        record = Record;
+        position = Position;
+        rotation = Rotation;
+    }
+
+    /// <summary>
+    /// The signature before <c>Box</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out string record, out Vector3 position, out Quaternion rotation, out SnapHost? host)
+    {
+        record = Record;
+        position = Position;
+        rotation = Rotation;
+        host = Host;
+    }
+}
 
 /// <summary>
 /// The snap of a <c>snaps to</c> ghost (docs/game/buildings-production.md "Snapping to a building"): the nearest building or building snap node of

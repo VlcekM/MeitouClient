@@ -80,6 +80,12 @@ public static class PlatoonJobs
     }
 
     /// <summary>
+    /// The signature before <c>restored</c> and <c>savedPackage</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static (AiPackage? Package, PlatoonJob Job) For(AiDatabase ai, SquadTemplate template, string? factionId) =>
+        For(ai, template, factionId, false, null);
+
+    /// <summary>
     /// The unloaded job of a package's <c>unloaded</c> mode (none for an unknown mode).
     /// </summary>
     public static PlatoonJob JobOf(int unloaded) => unloaded switch

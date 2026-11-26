@@ -12,7 +12,28 @@ namespace Meitou.Simulation.Ai;
 /// <param name="EndsWithTask">TaskData <c>+0x21</c>: a committing row whose commitment ends with its task's timer (<see cref="AiMind.TaskCommitUntil"/>),
 /// the running task ended and a replan asked (<c>FUN_14050f0b0</c>, <b>Verified</b>); without it only the goal's timer ends it.</param>
 public readonly record struct TaskProfile(float Desire, float CommitMin = 0, float CommitRange = 0, bool Commits = false, float Crowd = 1,
-    bool EndsWithTask = false);
+    bool EndsWithTask = false)
+{
+    /// <summary>
+    /// The signature before <c>EndsWithTask</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public TaskProfile(float desire, float commitMin, float commitRange, bool commits, float crowd)
+        : this(desire, commitMin, commitRange, commits, crowd, false)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>EndsWithTask</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out float desire, out float commitMin, out float commitRange, out bool commits, out float crowd)
+    {
+        desire = Desire;
+        commitMin = CommitMin;
+        commitRange = CommitRange;
+        commits = Commits;
+        crowd = Crowd;
+    }
+}
 
 /// <summary>
 /// The <see cref="TaskProfile"/> of every goal type the engine acts out (<see cref="TaskBehaviours"/>); other types get the default (the registered

@@ -39,6 +39,16 @@ public static class BorderlessFullScreen
     }
 
     /// <summary>
+    /// The signature before <c>followWindow</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static void Toggle(IWindow window, int? monitorIndex) => Toggle(window, monitorIndex, true);
+
+    /// <summary>
+    /// The signature before <c>monitorIndex</c> and <c>followWindow</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static void Toggle(IWindow window) => Toggle(window, null, true);
+
+    /// <summary>
     /// Moves a full-screen window to monitor <paramref name="monitorIndex"/>, or to the one it is on when that is null (a changed Monitor setting);
     /// a window not in full screen is left where it is.
     /// </summary>

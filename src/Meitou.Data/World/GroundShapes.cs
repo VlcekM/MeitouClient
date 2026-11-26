@@ -33,6 +33,12 @@ public sealed class GroundShapes(GameDatabase db, InteriorCollisions collisions)
     }
 
     /// <summary>
+    /// The signature before <c>from</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public GroundHit? Hit(GameRecord building, string id, Vector3 position, Quaternion rotation, bool destroyed, Vector2 at) =>
+        Hit(building, id, position, rotation, destroyed, at, float.PositiveInfinity);
+
+    /// <summary>
     /// Reads a placed building's group-9 triangles and their X/Z box.
     /// </summary>
     Shape Read(GameRecord building, string id, Vector3 position, Quaternion rotation, bool destroyed)

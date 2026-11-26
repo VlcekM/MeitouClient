@@ -86,6 +86,11 @@ public static class BuildingShape
     }
 
     /// <summary>
+    /// The signature before <c>from</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static GroundHit? TopOf(Vector3[] corners, Vector2 at) => TopOf(corners, at, float.PositiveInfinity);
+
+    /// <summary>
     /// The radius of the building's bounding box: half the diagonal of the box round its drawn parts' render-mesh bounds placed in the world (a
     /// collision-only part makes no entity, <c>FUN_14055f6e0</c> mode 2); 0 when no part's bounds can be read.
     /// </summary>

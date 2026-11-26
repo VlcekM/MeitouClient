@@ -689,6 +689,12 @@ public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld w
         return u;
     }
 
+    /// <summary>
+    /// The signature before <c>stretch</c> and <c>keepLocal</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public EffectUnit Spawn(Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour) =>
+        Spawn(position, orientation, seconds, size, lifeScale, recolour, 1, false);
+
     public override void Update(float dt, in EffectCamera camera, WeatherEffectInput weather)
     {
         foreach (var u in _units) Tick(u, dt, camera, ParticleEnvironment.None);

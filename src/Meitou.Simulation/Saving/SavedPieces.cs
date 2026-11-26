@@ -99,4 +99,15 @@ public sealed class SavedPieces
 /// key presence; read once when the entries are indexed: finding the list scans the zone file's records). Its keys are read only from a zone that is
 /// not loaded fresh, as the original's loader guard has it (docs/game/buildings-production.md "NPC generator state").
 /// </summary>
-public sealed record SavedPiece(SaveZone Zone, FcsInstance Instance, FcsRecord? State, bool Fresh);
+public sealed record SavedPiece(SaveZone Zone, FcsInstance Instance, FcsRecord? State, bool Fresh)
+{
+    /// <summary>
+    /// The signature before <c>Fresh</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out SaveZone zone, out FcsInstance instance, out FcsRecord? state)
+    {
+        zone = Zone;
+        instance = Instance;
+        state = State;
+    }
+}

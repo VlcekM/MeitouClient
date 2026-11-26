@@ -69,6 +69,12 @@ public sealed partial class WwisePlayer
     }
 
     /// <summary>
+    /// The signature before <c>playing</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void PostLoose(string key, WwisePcm sound, ulong gameObject, float volumeDb, bool placed) =>
+        PostLoose(key, sound, gameObject, volumeDb, placed, 0);
+
+    /// <summary>
     /// On the audio thread: files the samples once, then plays them as a new sound node on the object.
     /// </summary>
     void PlayLoose(string key, WwisePcm sound, ulong gameObject, float volumeDb, bool placed, uint playing)

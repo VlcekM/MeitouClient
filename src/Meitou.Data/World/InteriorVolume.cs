@@ -480,6 +480,13 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     }
 
     /// <summary>
+    /// The signature before <c>ground</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation,
+        InteriorCollisions collision, bool gateways) =>
+        For(db, building, placementId, position, rotation, collision, gateways, null);
+
+    /// <summary>
     /// Whether the part <paramref name="partId"/> or one of its <c>parts</c> (a few levels down) names a render mesh.
     /// </summary>
     static bool DrawsMesh(GameDatabase db, string partId, int depth)

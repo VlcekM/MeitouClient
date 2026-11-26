@@ -193,6 +193,11 @@ public sealed partial class MedicalState
         return scaled > 0.999f ? 1 : scaled;
     }
 
+    /// <summary>
+    /// The signature before <c>fullSlack</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public float RestedLevel(RaceData race) => RestedLevel(race, 0);
+
     #endregion
 
     #region Splints

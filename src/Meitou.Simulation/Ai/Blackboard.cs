@@ -181,7 +181,27 @@ public interface IPackageRules
 /// A guarded gate: its door leaf's centre at the leaf's foot, the unit X/Z way through it pointing away from the town, and half the leaf's width.
 /// <paramref name="Inside"/>: its guards stand on the town's side of the leaf (a gate the player built, so they never pass through it).
 /// </summary>
-public readonly record struct GatePost(TownBuilding Building, Vector3 Door, Vector2 Out, float HalfWidth, bool Inside = false);
+public readonly record struct GatePost(TownBuilding Building, Vector3 Door, Vector2 Out, float HalfWidth, bool Inside = false)
+{
+    /// <summary>
+    /// The signature before <c>Inside</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public GatePost(TownBuilding building, Vector3 door, Vector2 outward, float halfWidth)
+        : this(building, door, outward, halfWidth, false)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>Inside</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out TownBuilding building, out Vector3 door, out Vector2 outward, out float halfWidth)
+    {
+        building = Building;
+        door = Door;
+        outward = Out;
+        halfWidth = HalfWidth;
+    }
+}
 
 /// <summary>
 /// A seat a member sitting around claimed: the piece <paramref name="Index"/> (<see cref="TownBuilding.SeatAt"/>) of <paramref name="Building"/>.
@@ -710,6 +730,12 @@ public sealed class Blackboard
     }
 
     /// <summary>
+    /// The signature before <c>phase</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void StartContract(AiPackage package, double now, double hours, IPackageRules? rules, CharacterId? target, bool anyRange) =>
+        StartContract(package, now, hours, rules, target, anyRange, false);
+
+    /// <summary>
     /// Ends the running contract now, as its hours running out would (engine API for code mods, not in the original): its end talk to its target,
     /// and the slots choose again on the next update. False when none runs.
     /// </summary>
@@ -779,6 +805,13 @@ public sealed class Blackboard
         if (MissionTown < 0) ContractTown = mission;
         else if (mission.Site >= 0) (MissionTown, Destination) = (mission.Site, targetTown is { IsNone: false } kept ? kept : mission);
     }
+
+    /// <summary>
+    /// The signature before <c>phase</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void ResumeContract(AiPackage package, double end, IPackageRules? rules, CharacterId? target, bool anyRange, CharacterId? employer,
+        CampaignTown? town, CampaignTown? targetTown) =>
+        ResumeContract(package, end, rules, target, anyRange, employer, town, targetTown, false);
 
     /// <summary>
     /// The package <c>change AI</c> put in place of the template's (saved as <c>replacementAI</c>); null: the template's.

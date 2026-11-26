@@ -100,6 +100,14 @@ public sealed class WeatherGroups : IDisposable
     }
 
     /// <summary>
+    /// The signature before <c>warmer</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public WeatherGroups(ParticleLibrary library, EffectWorld world)
+        : this(library, world, null)
+    {
+    }
+
+    /// <summary>
     /// A group fading out after a weather or region change.
     /// </summary>
     sealed class RetiringGroup(EffectGroup group, WeatherEffectInput input, float alpha)

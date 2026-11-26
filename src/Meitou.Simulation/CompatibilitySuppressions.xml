@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
+<Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Meitou.Simulation.Ai.AiMind.ArrivedThere(System.Numerics.Vector2,System.Numerics.Vector2)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Meitou.Simulation.Ai.AiMind.get_ArrivedFrom</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Meitou.Simulation.Combat.DefenceFormulas.DodgeSkill(System.Single,System.Single)</Target>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Meitou.Simulation.Combat.RangedFormulas.SkillBlend(System.Single,System.Single,System.Single)</Target>
+  </Suppression>
+</Suppressions>

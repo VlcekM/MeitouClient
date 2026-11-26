@@ -3,7 +3,16 @@ namespace Meitou.Content;
 /// <summary>
 /// A Steam Workshop original and, when checked against a port, the compared version's update time (Unix seconds).
 /// </summary>
-public sealed record MatchedItem(ulong Id, long? Updated = null);
+public sealed record MatchedItem(ulong Id, long? Updated = null)
+{
+    /// <summary>
+    /// The signature before <c>Updated</c> became nullable, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public MatchedItem(ulong id, long updated)
+        : this(id, (long?)updated)
+    {
+    }
+}
 
 /// <summary>
 /// A mod whose feature Meitou has built in (docs/formats/rekenshi.md): its <c>.mod</c> name or its code mod's id (or neither: matched by its

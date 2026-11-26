@@ -182,6 +182,11 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
+    /// The signature before <c>disguise</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public bool RegardsFriendly(World world, int a, int b) => RegardsFriendly(world, a, b, false);
+
+    /// <summary>
     /// The loot finder's <c>FUN_14059a7b0</c> (DC 54, <see cref="ScrewOver(World, CharacterId, CharacterCold, CharacterId, CharacterCold)"/>) for two
     /// characters by slot.
     /// </summary>

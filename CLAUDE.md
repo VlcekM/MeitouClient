@@ -92,6 +92,8 @@ drop-in replacement that runs original content and mods unchanged.
 
 - Contract: [docs/modding.md](docs/modding.md) and [docs/modding-dependencies.md](docs/modding-dependencies.md). A change to
   `CodeModManifest`, `ModHost` or `ModContext` updates them; bump `ModApi.Version` when an older game would misread the manifest.
+- A public method or constructor that gains a parameter keeps its old signature as a forwarding overload; the build fails on any public
+  member gone since the last release unless `CompatibilitySuppressions.xml` lists it ([API compatibility](docs/modding.md#api-compatibility)).
 
 ## Build
 

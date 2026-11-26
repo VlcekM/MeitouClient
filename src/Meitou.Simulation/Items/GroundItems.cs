@@ -20,7 +20,39 @@ public readonly record struct FallSource(CharacterId Character, string Bone, lon
 /// </summary>
 public readonly record struct GroundItemSnapshot(int Id, string Record, string Name, Vector3 Position, Quaternion Rotation, bool Dropped,
     Data.Fcs.FcsRecordType Type = default, int Level = 0, float Quality = 0, int OwnedBy = -1, FallSource? Fall = null, string Material = "",
-    string ModTag = "");
+    string ModTag = "")
+{
+    /// <summary>
+    /// The signature before <c>ModTag</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public GroundItemSnapshot(
+        int id, string record, string name, Vector3 position, Quaternion rotation, bool dropped, Data.Fcs.FcsRecordType type, int level,
+        float quality, int ownedBy, FallSource? fall, string material)
+        : this(id, record, name, position, rotation, dropped, type, level, quality, ownedBy, fall, material, "")
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>ModTag</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(
+        out int id, out string record, out string name, out Vector3 position, out Quaternion rotation, out bool dropped,
+        out Data.Fcs.FcsRecordType type, out int level, out float quality, out int ownedBy, out FallSource? fall, out string material)
+    {
+        id = Id;
+        record = Record;
+        name = Name;
+        position = Position;
+        rotation = Rotation;
+        dropped = Dropped;
+        type = Type;
+        level = Level;
+        quality = Quality;
+        ownedBy = OwnedBy;
+        fall = Fall;
+        material = Material;
+    }
+}
 
 /// <summary>
 /// One loose item: where it lies and how it is turned (a saved item's whole rotation, written back as read; a dropped one turned about Y, saved

@@ -115,6 +115,14 @@ public sealed unsafe class VulkanDisplay : IDisposable
     }
 
     /// <summary>
+    /// The signature before <c>monitor</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public VulkanDisplay(WindowOptions? options, bool vsync, bool dlss, FrameGenerationMethod frameGeneration, bool hdr)
+        : this(options, vsync, dlss, frameGeneration, hdr, null)
+    {
+    }
+
+    /// <summary>
     /// Whether AMD's library loaded (and why not), and the first of the device's extra queues that is the layer's (those before are
     /// Streamline's).
     /// </summary>

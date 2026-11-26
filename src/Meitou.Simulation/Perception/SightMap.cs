@@ -47,11 +47,22 @@ public interface ISightSource
     /// </summary>
     GroundHit? TopAt(TownBuilding building, bool destroyed, System.Numerics.Vector2 at, float from = float.PositiveInfinity) => null;
     /// <summary>
+    /// The signature before <c>from</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    GroundHit? TopAt(TownBuilding building, bool destroyed, System.Numerics.Vector2 at) =>
+        TopAt(building, destroyed, at, float.PositiveInfinity);
+    /// <summary>
     /// As <see cref="TopAt(TownBuilding, bool, System.Numerics.Vector2, float)"/> for any placed BUILDING <paramref name="record"/> (a player's site,
     /// a camp piece), cached by <paramref name="id"/>; null by default.
     /// </summary>
     GroundHit? TopAt(string record, string id, System.Numerics.Vector3 position, System.Numerics.Quaternion rotation, bool destroyed,
         System.Numerics.Vector2 at, float from = float.PositiveInfinity) => null;
+    /// <summary>
+    /// The signature before <c>from</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    GroundHit? TopAt(string record, string id, System.Numerics.Vector3 position, System.Numerics.Quaternion rotation, bool destroyed,
+        System.Numerics.Vector2 at) =>
+        TopAt(record, id, position, rotation, destroyed, at, float.PositiveInfinity);
     /// <summary>
     /// The radius of the building's bounding box, as it stands or as a ruin (<see cref="BuildingShape.BoundsRadius"/>); 0 by default.
     /// </summary>

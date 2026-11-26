@@ -21,7 +21,30 @@ public static class SaveWeaponBlood
     /// One character's weapon: the blood on it (0..1), how wet it still is (1 just struck), the colour of the victim's blood (0..1 RGB, not yet dried)
     /// and whether the weapon on the back is the one; and the stain its worn items keep on each of the body's first 8 parts (0..1), null for none.
     /// </summary>
-    public readonly record struct Entry(Hand Hand, float Amount, float Wet, float R, float G, float B, bool Back, float[]? Worn = null);
+    public readonly record struct Entry(Hand Hand, float Amount, float Wet, float R, float G, float B, bool Back, float[]? Worn = null)
+    {
+        /// <summary>
+        /// The signature before <c>Worn</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+        /// </summary>
+        public Entry(Hand hand, float amount, float wet, float r, float g, float b, bool back)
+            : this(hand, amount, wet, r, g, b, back, null)
+        {
+        }
+
+        /// <summary>
+        /// The signature before <c>Worn</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+        /// </summary>
+        public void Deconstruct(out Hand hand, out float amount, out float wet, out float r, out float g, out float b, out bool back)
+        {
+            hand = Hand;
+            amount = Amount;
+            wet = Wet;
+            r = R;
+            g = G;
+            b = B;
+            back = Back;
+        }
+    }
 
     /// <summary>
     /// The file for <paramref name="entries"/>.

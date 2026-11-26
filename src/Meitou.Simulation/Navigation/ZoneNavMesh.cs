@@ -501,6 +501,12 @@ public sealed class ZoneNavMesh
     }
 
     /// <summary>
+    /// The signature before <c>heightSlack</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public int Nearest(float x, float y, float z, float maxDistance, out float distance, Func<int, bool>? skip) =>
+        Nearest(x, y, z, maxDistance, out distance, skip, float.PositiveInfinity);
+
+    /// <summary>
     /// The number of polygons the seed pass kept.
     /// </summary>
     public int KeptCount

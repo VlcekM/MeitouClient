@@ -741,6 +741,21 @@ public sealed unsafe class ParticleRenderer : IDisposable
     }
 
     /// <summary>
+    /// The signature before <c>scatters</c>, <c>stretch</c> and <c>keepLocal</c>, kept for code mods built against it
+    /// (docs/modding.md "API compatibility").
+    /// </summary>
+    public EffectUnit? Burst(
+        string system, Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour) =>
+        Burst(system, position, orientation, seconds, size, lifeScale, recolour, false, 1, false);
+
+    /// <summary>
+    /// The signature before <c>stretch</c> and <c>keepLocal</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public EffectUnit? Burst(string system, Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour,
+        bool scatters) =>
+        Burst(system, position, orientation, seconds, size, lifeScale, recolour, scatters, 1, false);
+
+    /// <summary>
     /// Moves a <see cref="Burst"/>'s emitter to <paramref name="position"/>, turned by <paramref name="orientation"/>, from the next
     /// <see cref="Update"/> (no wait for the running simulation); the particles it threw already stay where they are (a neck's spurt that follows the
     /// falling body).

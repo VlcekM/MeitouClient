@@ -110,6 +110,12 @@ public static partial class NestFurniture
     }
 
     /// <summary>
+    /// The signature before <c>atY</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static NestLayout Scatter(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ulong seed, string idPrefix, PlacementRay? ray) =>
+        Scatter(db, nest, at, walk, seed, idPrefix, ray, 0);
+
+    /// <summary>
     /// Lays out the <c>debris building</c> pieces: <c>num centrepoints</c> centres, and each entry's buildings round each centre.
     /// </summary>
     static void Buildings(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, string idPrefix,

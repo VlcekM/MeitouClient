@@ -204,6 +204,14 @@ public sealed class CharacterDraft
     }
 
     /// <summary>
+    /// The signature before <c>shown</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public CharacterDraft(GameDatabase db, string installRoot, FcsRecord appearance, string name)
+        : this(db, installRoot, appearance, name, null)
+    {
+    }
+
+    /// <summary>
     /// A deep copy of an appearance record (keys and their order kept).
     /// </summary>
     public static FcsRecord Copy(FcsRecord source)

@@ -214,6 +214,14 @@ public static class TechniqueChooser
     }
 
     /// <summary>
+    /// The signature before <c>stumbleFallback</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static int ChooseReaction(
+        IReadOnlyList<CombatTechnique> all, int category, bool prone, bool canBlock, int blowDirection, float blockChancePercent,
+        float dodgeChancePercent, float chanceRoll, float pickRoll, bool stumbling) =>
+        ChooseReaction(all, category, prone, canBlock, blowDirection, blockChancePercent, dodgeChancePercent, chanceRoll, pickRoll, stumbling, -1);
+
+    /// <summary>
     /// The sum of the reaction weights of <paramref name="category"/> for <paramref name="pool"/>.
     /// </summary>
     static float ReactionTotal(IReadOnlyList<CombatTechnique> all, int category, bool prone, ReactionPool pool, int blowDirection)

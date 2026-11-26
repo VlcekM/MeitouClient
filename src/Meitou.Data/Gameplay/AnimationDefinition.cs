@@ -379,6 +379,11 @@ public sealed record AnimationDefinition
     }
 
     /// <summary>
+    /// The signature before <c>scale</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public float SpeedWeight(float v) => SpeedWeight(v, 1);
+
+    /// <summary>
     /// The leg weight (<b>Verified</b>): the same ramp, without the sigmoid, over the health of the more hurt leg against that side's damage min /
     /// ideal / max, a min under 1 read as -101 and a max over 99 as 101 (the loader's rule).
     /// </summary>

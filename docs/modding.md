@@ -2069,6 +2069,23 @@ come back. Last, it runs the game without mods: if that differs too, the fault i
   publicizer package (BepInEx.AssemblyPublicizer.MSBuild with `Publicize="true"`) on a release folder's assemblies. Compatibility is per game
   version ([Why this shape](#why-this-shape)): public names change too, as after v0.17.1, and internals change without notice.
 
+### API compatibility
+
+- A public method or constructor that gains a parameter keeps its old signature as an overload forwarding to the new one. C# fills a default
+  in at the call site, so a mod's source still compiles against the new one while its built DLL asks for the old signature and throws
+  `MissingMethodException`. The old copy drops any defaults it had (both carrying them makes a short call ambiguous, CS0121); a positional
+  record keeps its old constructor and `Deconstruct`. A member whose old form cannot be forwarded (a changed type, a removed behaviour) is
+  removed on purpose.
+- The build checks the public surface of the four assemblies in the [reference package](#reference-package) (`Directory.Build.props`,
+  `Directory.Build.targets`): ApiCompat (`Microsoft.DotNet.ApiCompat.Task`) compares each against its reference assembly in the
+  `Meitou.References` of the release `MeitouApiBaseline` names, downloaded at restore, and fails on a public type or member that is gone. A
+  removal meant to stay is listed in that project's `CompatibilitySuppressions.xml`: `dotnet build -p:ApiCompatGenerateSuppressionFile=true`
+  rewrites the files, whose diff is the review; delete their `<Left>`/`<Right>` lines (the builder's paths), so an entry matches every
+  configuration and framework. **Verified** (2026-11-26, the `Meitou.References` 0.23.0 package against master): a member
+  replaced by a version with an added optional parameter (`Inventory.HasRoomFor(ItemInstance)`) is reported as removed (CP0002).
+- `MeitouApiBaseline` is the last full release: `release.yml` refuses a release while it names an older one. Raise it once a release's
+  package is on nuget.org and regenerate the suppression files.
+
 ## Platforms
 
 - Managed DLLs run unchanged on the Windows, Linux and macOS builds.

@@ -1478,6 +1478,13 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
+    /// The signature before <c>maxMembers</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public int SpawnPlatoon(
+        World world, int faction, string templateId, int homeSite, Vector2 around, float minRadius, float maxRadius, long money) =>
+        SpawnPlatoon(world, faction, templateId, homeSite, around, minRadius, maxRadius, money, 0);
+
+    /// <summary>
     /// A code mod's player character (engine API, not in the original): one fresh character of the CHARACTER or ANIMAL_CHARACTER record
     /// <paramref name="recordId"/>, made as a new game makes the player's (a look rolled for the player's faction, body, starting items, name),
     /// stands idle on the ground at <paramref name="at"/> as a member of the player squad <paramref name="squadId"/>, leading it when it has no

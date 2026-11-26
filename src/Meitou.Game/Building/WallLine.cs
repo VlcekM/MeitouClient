@@ -7,7 +7,26 @@ namespace Meitou.Game.Building;
 /// One piece of a wall line: a BUILDING (the wall, a short piece, a connector or a wedge) standing at its start point, facing along its own +Z;
 /// <paramref name="Joint"/> for a bend piece at a snapped joint.
 /// </summary>
-public readonly record struct WallPiece(BuildingBuildData Data, Vector3 Position, Quaternion Rotation, bool Joint = false);
+public readonly record struct WallPiece(BuildingBuildData Data, Vector3 Position, Quaternion Rotation, bool Joint = false)
+{
+    /// <summary>
+    /// The signature before <c>Joint</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public WallPiece(BuildingBuildData data, Vector3 position, Quaternion rotation)
+        : this(data, position, rotation, false)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>Joint</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out BuildingBuildData data, out Vector3 position, out Quaternion rotation)
+    {
+        data = Data;
+        position = Position;
+        rotation = Rotation;
+    }
+}
 
 /// <summary>
 /// A link point a line can snap to: where it is, the wall's direction there (horizontal) and the original's code (1 free end, 2 free start, 3 joined

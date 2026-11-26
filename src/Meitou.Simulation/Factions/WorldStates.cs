@@ -63,6 +63,16 @@ public sealed class WorldStates(GameDatabase db, FactionRelations relations) : I
     }
 
     /// <summary>
+    /// The signature before <c>variables</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Refresh(UniqueCharacters uniques, int playerFaction, ModWorldStates? mods) => Refresh(uniques, playerFaction, mods, null);
+
+    /// <summary>
+    /// The signature before <c>mods</c> and <c>variables</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Refresh(UniqueCharacters uniques, int playerFaction) => Refresh(uniques, playerFaction, null, null);
+
+    /// <summary>
     /// The state's record, read once (null: not a WORLD_EVENT_STATE).
     /// </summary>
     public WorldEventStateData? Find(string id) =>

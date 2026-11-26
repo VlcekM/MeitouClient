@@ -40,6 +40,11 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// The signature before <c>save</c> and <c>handles</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void LayoutsFromSave(World world, PopulationData data) => LayoutsFromSave(world, data, null, null);
+
+    /// <summary>
     /// Resident templates' layout names indexed by building key and by level handle, for <see cref="LayoutsFromSave"/>.
     /// </summary>
     sealed record ResidentLayoutMap(

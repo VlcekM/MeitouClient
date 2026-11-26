@@ -52,6 +52,10 @@ jobs:
             exit 0
           }
           if (git tag -l "v$v") { throw "tag v$v already exists" }
+          # The public API check's baseline (MeitouApiBaseline, docs/modding.md "API compatibility") must be the last full release.
+          $previous = git tag -l "v[0-9]*" --sort=-v:refname | Where-Object { $_ -notmatch '-' } | Select-Object -First 1
+          $baseline = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.MeitouApiBaseline | Where-Object { $_ } | Select-Object -First 1
+          if ($previous -and "v$baseline" -ne $previous) { throw "MeitouApiBaseline is $baseline; set it to the last full release, $previous" }
           # The version's CHANGELOG.md section (from its "## v<version>" heading to the next "## "): required.
           $lines = Get-Content CHANGELOG.md
           $start = [Array]::IndexOf($lines, "## v$v")

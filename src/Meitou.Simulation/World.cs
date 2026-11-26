@@ -1158,6 +1158,11 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
+    /// The signature before <c>views</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void RunTick(bool publish) => RunTick(publish, true);
+
+    /// <summary>
     /// Phase 1: the due commands, then each system's inputs.
     /// </summary>
     void RunInputs(CharacterTable table, TickProfile? prof)

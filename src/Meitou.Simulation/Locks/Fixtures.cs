@@ -541,7 +541,29 @@ public sealed record BedDetail(string Name, string? Town, int Cost, float Healin
 /// blow (its Door Condition row).
 /// </summary>
 public readonly record struct DoorDetail(bool Open, bool Locked, int Level, bool Broken, string Record = "", bool WantsLock = false,
-    float Progress = 1);
+    float Progress = 1)
+{
+    /// <summary>
+    /// The signature before <c>Progress</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public DoorDetail(bool open, bool locked, int level, bool broken, string record, bool wantsLock)
+        : this(open, locked, level, broken, record, wantsLock, 1)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>Progress</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out bool open, out bool locked, out int level, out bool broken, out string record, out bool wantsLock)
+    {
+        open = Open;
+        locked = Locked;
+        level = Level;
+        broken = Broken;
+        record = Record;
+        wantsLock = WantsLock;
+    }
+}
 
 /// <summary>
 /// Where the simulation tells navigation that a building's doors are shut for paths (the game host forwards it to the navmesh's door table). Serial

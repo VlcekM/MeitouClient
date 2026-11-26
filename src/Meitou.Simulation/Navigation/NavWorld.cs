@@ -382,6 +382,12 @@ public sealed class NavWorld
     }
 
     /// <summary>
+    /// The signature before <c>heightSlack</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public bool TryFindPolygon(Vector3 p, float maxDistance, out NavRef polygon, out Vector3 snapped, Func<NavRef, bool>? skip) =>
+        TryFindPolygon(p, maxDistance, out polygon, out snapped, skip, float.PositiveInfinity);
+
+    /// <summary>
     /// The polygon a path to <paramref name="goal"/> ends on: the one <see cref="TryFindPolygon"/> finds within <see cref="NavQuery.GoalSnap"/>,
     /// unless that one is on another floor (more than <see cref="NavQuery.GoalFloorSlack"/> above or below the goal) and a polygon on the goal's own
     /// floor lies nearer the goal in 3D, within <see cref="NavQuery.GoalFloorReach"/> on the XZ plane. The original takes the goal face as the

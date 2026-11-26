@@ -111,6 +111,11 @@ public static class GroundItemSave
     }
 
     /// <summary>
+    /// The signature before <c>poses</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static List<(SaveItem Item, int Camp)> Write(SaveGame game, World world, ItemFactory factory) => Write(game, world, factory, null);
+
+    /// <summary>
     /// A ground item's list entry: where it lies (<see cref="PoseOf"/>) and its item.
     /// </summary>
     static (Vector3 Position, Quaternion Rotation, SaveItem Item) SavedEntry(GroundItem item, Func<int, (Vector3, Quaternion)?>? poses)

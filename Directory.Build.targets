@@ -17,6 +17,27 @@
     <AdditionalFiles Include="**/*.axaml" Exclude="bin/**;obj/**" Condition="'$(MSBuildProjectName)' == 'Meitou.Launcher'" />
   </ItemGroup>
 
+  <!-- The public API check (Directory.Build.props): the baseline is the release's own reference assembly and the libraries beside it in
+       Meitou.References, downloaded, never referenced (its build/ targets would put the old assemblies into the build). -->
+  <ItemGroup Condition="'$(ApiCompatValidateAssemblies)' == 'true'">
+    <PackageReference Include="Microsoft.DotNet.ApiCompat.Task" Version="11.0.100" PrivateAssets="all" />
+    <PackageDownload Include="Meitou.References" Version="[$(MeitouApiBaseline)]" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(ApiCompatValidateAssemblies)' == 'true'">
+    <MeitouApiBaselineDirectory>$(NuGetPackageRoot)meitou.references/$(MeitouApiBaseline)/assemblies/$(TargetFramework)/ref/</MeitouApiBaselineDirectory>
+    <ApiCompatContractAssembly>$(MeitouApiBaselineDirectory)$(AssemblyName).dll</ApiCompatContractAssembly>
+    <ApiCompatUseImplementationReferencesForContract>false</ApiCompatUseImplementationReferencesForContract>
+  </PropertyGroup>
+  <!-- The baseline resolves its references in its own package (its other Meitou assemblies, as released) and the framework. -->
+  <Target Name="MeitouApiBaselineReferences" AfterTargets="GetReferencesForApiCompatValidateAssemblies"
+          Condition="'$(ApiCompatValidateAssemblies)' == 'true'">
+    <ItemGroup>
+      <ApiCompatContractAssemblyReferences Include="$(MeitouApiBaselineDirectory)" />
+      <ApiCompatContractAssemblyReferences Include="@(ReferencePathWithRefAssemblies)"
+                                           Condition="'%(ReferencePathWithRefAssemblies.FrameworkReferenceName)' == 'Microsoft.NETCore.App'" />
+    </ItemGroup>
+  </Target>
+
   <!-- The packaged macOS OpenAL and GLFW binaries require Sonoma. CI builds the same versions for Ventura. -->
   <PropertyGroup>
     <MeitouMacNativeDirectory>$(MSBuildThisFileDirectory)macos-runtime/$(RuntimeIdentifier)</MeitouMacNativeDirectory>

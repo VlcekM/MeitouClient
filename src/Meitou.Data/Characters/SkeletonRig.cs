@@ -291,6 +291,14 @@ public sealed class SkeletonRig
     }
 
     /// <summary>
+    /// The signature before <c>linkSource</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public SkeletonRig(OgreSkeleton skeleton, IReadOnlyList<Lazy<OgreSkeleton?>>? linked)
+        : this(skeleton, linked, null)
+    {
+    }
+
+    /// <summary>
     /// A working set for posing on the calling thread; give it back with <see cref="Return"/>.
     /// </summary>
     public PoseScratch Rent()
@@ -500,6 +508,13 @@ public sealed class PoseScratch
     }
 
     /// <summary>
+    /// The signature before <c>unitMovement</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Pose(
+        BodyShapeData? shape, ReadOnlySpan<ActiveLayer> layers, Span<Matrix4x4> skin, BonePose? overrides, (float Neck, float Head) pitch) =>
+        Pose(shape, layers, skin, overrides, pitch, false);
+
+    /// <summary>
     /// The posed derived (model-space) transform of a bone: scale, rotation, translation.
     /// </summary>
     public Matrix4x4 BoneTransform(int h) =>
@@ -530,6 +545,12 @@ public sealed class PoseScratch
         BlendLayers(layers, count, movement);
         Derive(shape, overrides, pitch);
     }
+
+    /// <summary>
+    /// The signature before <c>unitMovement</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void PoseDerived(BodyShapeData? shape, ReadOnlySpan<ActiveLayer> layers, BonePose? overrides, (float Neck, float Head) pitch) =>
+        PoseDerived(shape, layers, overrides, pitch, false);
 
     /// <summary>
     /// Starts every bone's local transform at its binding one.

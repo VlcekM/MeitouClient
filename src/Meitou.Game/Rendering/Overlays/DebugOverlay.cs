@@ -884,7 +884,23 @@ public sealed unsafe class DebugOverlay : IDisposable
         /// solid shapes (a replay into a pass of that size reuses both).
         /// </summary>
         public readonly record struct Recorded(DebugOverlay Owner, SampledTexture? Image, PixelRect Clip, SampledTexture? Atlas, int First,
-            int Count, bool Contained, bool Solid, int PassWidth, int PassHeight);
+            int Count, bool Contained, bool Solid, int PassWidth, int PassHeight)
+        {
+            /// <summary>
+            /// The signature before <c>Contained</c>, <c>Solid</c>, <c>PassWidth</c> and <c>PassHeight</c>, kept for code mods built against it
+            /// (docs/modding.md "API compatibility").
+            /// </summary>
+            public void Deconstruct(
+                out DebugOverlay owner, out SampledTexture? image, out PixelRect clip, out SampledTexture? atlas, out int first, out int count)
+            {
+                owner = Owner;
+                image = Image;
+                clip = Clip;
+                atlas = Atlas;
+                first = First;
+                count = Count;
+            }
+        }
 
         /// <summary>
         /// The adds recorded since <see cref="BeginRecording"/>; null when not recording.

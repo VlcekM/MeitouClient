@@ -17,6 +17,25 @@ public readonly record struct PlanTarget(byte Kind, Vector3 Position, CharacterI
     public const byte Found = 11;
 
     /// <summary>
+    /// The signature before <c>Character</c>, <c>Fixture</c>, <c>Record</c> and <c>Item</c>, kept for code mods built against it
+    /// (docs/modding.md "API compatibility").
+    /// </summary>
+    public PlanTarget(byte kind, Vector3 position)
+        : this(kind, position, null, null, null, -1)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>Character</c>, <c>Fixture</c>, <c>Record</c> and <c>Item</c>, kept for code mods built against it
+    /// (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out byte kind, out Vector3 position)
+    {
+        kind = Kind;
+        position = Position;
+    }
+
+    /// <summary>
     /// A finder's character target, at its place.
     /// </summary>
     public static PlanTarget OfCharacter(CharacterId character, Vector3 at) => new(Found, at, character);

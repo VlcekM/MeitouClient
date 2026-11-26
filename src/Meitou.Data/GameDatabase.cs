@@ -147,6 +147,11 @@ public sealed class GameDatabase
     }
 
     /// <summary>
+    /// The signature before <c>edit</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public static GameDatabase Load(LoadOrder loadOrder) => Load(loadOrder, null);
+
+    /// <summary>
     /// Reads and applies one data file of the load order as the game does (docs/formats/fcs-mod.md, "Game loader", "Files that fail to load"): one
     /// that does not open or has a file type outside 8..17 is left out (<see cref="NotLoaded"/>); one that ends early is applied as far as the
     /// loader gets.

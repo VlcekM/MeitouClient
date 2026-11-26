@@ -184,6 +184,11 @@ public sealed class Inventory(int width, int height)
         || InventoryCommands.FitsInBag(item) && Backpack?.Contents is { } bag && Room(bag, "backpack_content", item);
 
     /// <summary>
+    /// The signature before <c>mainShut</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public bool HasRoomFor(ItemInstance item) => HasRoomFor(item, false);
+
+    /// <summary>
     /// Whether <paramref name="section"/> takes one unit of <paramref name="item"/> (a dry run): a stack of it with room left, or a free cell.
     /// </summary>
     public bool HasRoomIn(string section, ItemInstance item) => Room(this, section, item);
