@@ -243,6 +243,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **Navigation**: the navmesh treats a door as open once `doa >= 0.6` (`FUN_140298d10` -> `FUN_1403a6070`); closed faces are
   blocked for every filter ([pathfinding](pathfinding.md)). A locked lock makes `Task_OpenDoor` fail ("It's locked.") for anyone,
   owner included: the owner must unlock first (**Verified**).
+  Meitou's accessibility checks and navmesh share `FixtureRegistry.BlocksPaths`: a locked leaf already open to the threshold permits passage.
+  **Observed** (#1512 save, headless): the player shop's door was fully open with its lock still set. Lord Nagata stayed inside before the fix
+  and walked out toward his bed with the shared check.
 - **Locked doors on the way** (**Verified**, row table `FUN_140319a60` and the evaluators named): every walk row (1, 29, 67) lists 59
   `DESTINATION_IS_ACCESSIBLE` and 60 `LOCATION_IS_ACCESSIBLE`. 60 (`FUN_1405a2710`) holds outdoors (location type 0xb), for a destination in
   the walker's own location (or a prisoner caged in that building), and otherwise only when the building the walker stands in has an open door
