@@ -423,9 +423,12 @@ public sealed partial class FixtureRegistry
     {
         if (instance is null) return null;
 
-        // A container is selected by its fixture id, which is no building's key unless the container is a level building of its own.
-        bool empty = Find(instance) is { Contents.Items.Count: 0 };
-        if (!_byBuilding.TryGetValue(instance, out var list)) return empty ? new BuildingDetail(instance, []) { Empty = true } : null;
+        // A container or cage is selected by its fixture id, which is no building's key unless it is a level building of its own.
+        var own = Find(instance);
+        bool empty = own is { Contents.Items.Count: 0 };
+        var lockDetail = own is { Kind: not FixtureKind.Door, Lock: { } l } ? new LockDetail(l.EffectivelyLocked, l.Level) : (LockDetail?)null;
+        if (!_byBuilding.TryGetValue(instance, out var list))
+            return empty || lockDetail is not null ? new BuildingDetail(instance, []) { Empty = empty, Lock = lockDetail } : null;
 
         var doorList = list.Where(f => f.Kind == FixtureKind.Door).OrderBy(f => f.DoorIndex)
             .Select(f
@@ -436,6 +439,7 @@ public sealed partial class FixtureRegistry
             SalePrice = SalePrice(instance, faction),
             ResidentsPublic = PublicDayOf(instance),
             Empty = empty,
+            Lock = lockDetail,
         };
     }
 

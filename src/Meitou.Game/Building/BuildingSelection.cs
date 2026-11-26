@@ -476,6 +476,7 @@ sealed class BuildingSelection(PlayerInterface player)
                 stats.Add(new("Healing bonus:", Loc.Tr("x{1,num}", bed.HealingBonus), PlayerInterface.MainColour));
         }
 
+        AddLockLines(detail?.Lock, state);
         if (playerSite && site is { LevelPlacement: null }) AddUpgradeLines(site, state);
 
         // The construction buttons (Building slot 117, FUN_1402fea10): Dismantle in BadBright, and while unfinished PAUSE CONSTRUCTION,
@@ -701,6 +702,18 @@ sealed class BuildingSelection(PlayerInterface player)
         state.Add(site.Paused
             ? new("", Loc.Tr("[PAUSED]"), ValueColour: PausedColour, Action: "meitou:building-pause")
             : new("", Loc.Tr("PAUSE CONSTRUCTION"), ValueColour: PlayerInterface.MainColour, Action: "meitou:building-pause"));
+    }
+
+    /// <summary>
+    /// A selected container's or cage's lock rows (UseableStuff / StorageBuilding slot 40 <c>FUN_140304e90</c> section 3, after <c>Cost to use:</c>):
+    /// <c>Lock state:</c> Locked or Unlocked and <c>Lock complexity:</c> <c>Level {1,num}</c>; none for furniture without a lock (#1502).
+    /// </summary>
+    static void AddLockLines(Simulation.Locks.LockDetail? lockDetail, List<PlayerInterface.HudLine> state)
+    {
+        if (lockDetail is not { } l) return;
+
+        state.Add(new("Lock state:", Loc.Tr(l.Locked ? "Locked" : "Unlocked")));
+        state.Add(new("Lock complexity:", Loc.Tr("Level {1,num}", l.Level)));
     }
 
     /// <summary>

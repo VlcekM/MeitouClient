@@ -579,7 +579,17 @@ public sealed record BuildingDetail(string Instance, IReadOnlyList<DoorDetail> D
     /// Whether the selected container's inventory holds no items (the panel's <c>[EMPTY]</c>).
     /// </summary>
     public bool Empty { get; init; }
+
+    /// <summary>
+    /// The selected container's or cage's own lock (the panel's <c>Lock state:</c> and <c>Lock complexity:</c>); null for one without a lock.
+    /// </summary>
+    public LockDetail? Lock { get; init; }
 }
+
+/// <summary>
+/// A selected fixture's lock for the panel: whether it is effectively locked and its level (0..100).
+/// </summary>
+public readonly record struct LockDetail(bool Locked, int Level);
 
 /// <summary>
 /// The selected bed's own panel data; cost uses the same faction rules as sleeping (-1 private, 0 free).

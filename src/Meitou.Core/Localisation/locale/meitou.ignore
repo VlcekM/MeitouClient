@@ -392,6 +392,7 @@ Leader
 Left-Click
 Leg injury penalty:
 Leg injury:
+Level {1,num}
 Lightweight
 Limb trauma
 Limbs disabled:
@@ -402,6 +403,8 @@ Loading
 Loading...
 Location
 Lock
+Lock complexity:
+Lock state:
 Locked
 Locked (lvl: {1,num})
 Locking
