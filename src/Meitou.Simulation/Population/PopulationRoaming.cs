@@ -831,22 +831,48 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The squad's effective leader (<c>FUN_140792b90</c>, <b>Verified</b>): its leader while standing, else the cached <see cref="Squad.Backup"/>
-    /// while standing, else the first member (in list order) that is not down and stands in an active zone, which is cached as the backup; else the
-    /// leader itself, down or not. The member scan is skipped while the leader is in a bed or cage: the original tests the <i>leader's</i> bed or
-    /// cage state there, not the member's (<b>Verified</b> by the decompile; possibly a slip of the original).
+    /// while standing (and, an engine guard, still in the squad), else the first member (in list order) that is not down and stands in an active
+    /// zone, which is cached as the backup; else the leader itself, down or not. The member scan is skipped while the leader is in a bed or cage: the
+    /// original tests the <i>leader's</i> bed or cage state there, not the member's (<b>Verified</b> by the decompile; possibly a slip of the original).
     /// </summary>
     internal CharacterId EffectiveLeader(World world, Squad squad)
     {
+        var lead = FindEffectiveLeader(world, squad, out bool scanned);
+        if (scanned) squad.Backup = lead;
+
+        return lead;
+    }
+
+    /// <summary>
+    /// <see cref="EffectiveLeader"/> without caching a backup: a pure read, safe in any phase (the AI's think reads it from its partitions).
+    /// </summary>
+    internal CharacterId ActingLeader(World world, Squad squad) => FindEffectiveLeader(world, squad, out _);
+
+    /// <summary>
+    /// The squad's effective leader (<see cref="ActingLeader"/>) from any phase: its leader while standing (checked first, without looking up this
+    /// system), else as <see cref="ActingLeader"/> finds it; the stored leader without a population system.
+    /// </summary>
+    internal static CharacterId ActingLeaderOf(World world, Squad squad) =>
+        Standing(world.Characters, squad.Leader) ? squad.Leader : world.SystemOf<PopulationSystem>()?.ActingLeader(world, squad) ?? squad.Leader;
+
+    /// <summary>
+    /// <see cref="EffectiveLeader"/>'s search; <paramref name="scanned"/> when the answer came from the member scan, the one the original caches.
+    /// </summary>
+    CharacterId FindEffectiveLeader(World world, Squad squad, out bool scanned)
+    {
+        scanned = false;
         var table = world.Characters;
         if (Standing(table, squad.Leader)) return squad.Leader;
-        if (Standing(table, squad.Backup)) return squad.Backup;
+
+        // A backup that has left the squad since it was cached (split off, recruited, moved) is passed over (engine guard).
+        if (Standing(table, squad.Backup) && squad.Members.Contains(squad.Backup)) return squad.Backup;
         if (table.TryResolveNext(squad.Leader, out int ls) && table.Cold(ls) is { InSomething: not Locks.HeldState.None }) return squad.Leader;
         foreach (var m in squad.Members)
         {
             if (Ai.SquadIntact.Down(table, m) || !table.TryResolveNext(m, out int s)) continue;
             var at = table.Previous[s].Position;
             if (!_active.Contains(WorldLayout.ZoneOf(at.X, at.Z))) continue;
-            squad.Backup = m;
+            scanned = true;
             return m;
         }
 

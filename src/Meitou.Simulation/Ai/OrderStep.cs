@@ -131,8 +131,8 @@ internal static class OrderStep
 
         if (routine == CharacterTask.Wander)
             TaskStart.Become(world, slot, CharacterTask.Wander, TaskType.Wanderer, TaskSource.Goal);
-        else if (world.Squads.Find(cold.SquadId) is { } squad && squad.Leader != world.Characters.IdOf(slot)
-                && world.Characters.TryResolveNext(squad.Leader, out _))
+        else if (world.Squads.Find(cold.SquadId) is { } squad && Population.PopulationSystem.ActingLeaderOf(world, squad) is var lead
+                && lead != world.Characters.IdOf(slot) && world.Characters.TryResolveNext(lead, out _))
             TaskStart.Become(world, slot, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
     }
 

@@ -1509,8 +1509,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             squad.Money += price;
         }
 
-        string what = Units(units, item.ShownName());
-        world.Post(Loc.Tr(sell ? "{1} sold {2} for c.{3}" : "{1} bought {2} for c.{3}", world.ShownName(cold), what, price));
         _heldDeal = world.TradeObservers.Active ? new HeldDeal(c, t, sell, item.Record, units, price, buyback) : null;
         return receipt;
     }
@@ -1585,7 +1583,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         world.Player.Money -= price;
         squad.Money += price;
-        world.Post(Loc.Tr("{1} bought {2} for c.{3}", world.ShownName(cold), Units(placed, item.ShownName()), price));
         ReportDeal(world, c, t, false, item.Record, placed, price, buyback);
     }
 
@@ -1721,7 +1718,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         squad.Money -= price;
         world.Player.Money += price;
-        world.Post(Loc.Tr("{1} sold {2} for c.{3}", world.ShownName(cold), Units(placed, item.ShownName()), price));
         ReportDeal(world, c, t, true, item.Record, placed, price, buyback);
     }
 
@@ -1957,11 +1953,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (units >= item.Quantity) from.Remove(item);
         else item.Quantity -= units;
     }
-
-    /// <summary>
-    /// "N x name", or the name alone for one.
-    /// </summary>
-    static string Units(int n, string name) => n == 1 ? name : $"{n} x {name}";
 
     #endregion
 

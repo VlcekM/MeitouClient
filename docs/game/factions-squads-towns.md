@@ -43,7 +43,12 @@ Do not reuse one zero-weight convention for both.
 CARRY_MODE ragdoll (`FUN_1407d1440`, [ragdolls](ragdolls.md)), or posture `+0xe0` of 3 PS_PLAYING_DEAD or 4 PS_KO; a limb-only ragdoll or a crawl is not down) and not `inSomething` (`+0x2f8`, bed or cage), else the backup under the same test, else the first member of the container list (animals included) that is not down and
 stands in a loaded or requested zone, cached as the backup; else the leader itself, usable or not. That member scan tests the *leader's* `+0x2f8`, not the member's (so a leader in a
 bed or cage is kept). The stored leader is never replaced there. Meitou (`PopulationSystem.EffectiveLeader`, `Squad.Backup`):
-the same rule for a loaded platoon's place, the unload anchor and the owner character of a building's goods ([theft](carry-loot.md#theft-and-witnesses)); down is `CharacterFacts.Down`, the same `isDown`. A campaign's announcement is task 129 in the leader's AI package, and animals get only
+the same rule for a loaded platoon's place, the unload anchor and the owner character of a building's goods ([theft](carry-loot.md#theft-and-witnesses)); down is `CharacterFacts.Down`, the same `isDown`.
+The AI reads it too (`PopulationSystem.ActingLeaderOf`, the same search without caching the backup, so the think's partitions may ask): the effective
+leader takes the Leader list ([precedence](ai-tasks.md#precedence) step 4, `AiSystem.RoleOf`) and walks the patrol, and a member following its leader
+(a LEADER goal, a patrol's followers, the default follow target) follows it. **Observed** (#1453 save, `probe watch`): a manhunter carrying his
+knocked-out leader walked the patrol with him on his shoulder, as the issue's video of the original shows; before, he followed the leader he carried.
+A campaign's announcement is task 129 in the leader's AI package, and animals get only
 `dialog animal`, so an animal never announces. Meitou keeps one leader: a squad without one (leaving, a save or stand-in without a leader), and an NPC squad whose leader died while a member
 lives, takes its first living member that is not an animal, else its first living one (`SquadRegistry.Successor`, engine choice), who then acts
 the leader's goals (a patrol), so the squad does not stand by the corpse. A player squad edited on the squads screen still makes its index 0 the leader.

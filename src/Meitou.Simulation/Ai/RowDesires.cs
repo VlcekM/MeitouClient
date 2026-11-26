@@ -367,7 +367,9 @@ internal sealed class RowDesires(AiSystem ai)
     {
         if (ask.Target.Character is { } who) return who;
 
-        return Kidnap.ObedientSlave.OwnerOf(world, ask.Cold) ?? ask.Squad?.Leader ?? CharacterId.None;
+        if (Kidnap.ObedientSlave.OwnerOf(world, ask.Cold) is { } owner) return owner;
+
+        return ask.Squad is { } squad ? PopulationSystem.ActingLeaderOf(world, squad) : CharacterId.None;
     }
 
     /// <summary>

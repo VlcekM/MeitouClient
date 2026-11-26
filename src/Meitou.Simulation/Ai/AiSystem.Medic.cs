@@ -34,7 +34,7 @@ public sealed partial class AiSystem
     internal bool ListsGoal(World world, int slot, TaskType type)
     {
         if (world.Characters.Cold(slot) is not { Ai: { Squad: var squad } mind } cold || squad.Ai is not { } board) return false;
-        var roles = ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(squad, world.Characters.IdOf(slot), cold)];
+        var roles = ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(world, squad, world.Characters.IdOf(slot), cold)];
         for (int k = 0; k < roles.Count; k++)
             if (roles[k].Task.Type == type) return true;
         for (int k = 0; k < mind.RaceGoals.Count; k++)

@@ -170,7 +170,7 @@ sealed class HomeBedClaims
     /// </summary>
     static bool BedOpen(World world, Blackboard board, Squad squad, CharacterId id, CharacterCold cold)
     {
-        var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, id, cold)];
+        var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(world, squad, id, cold)];
         int hour = world.Hour;
         foreach (var goal in roles)
             if (IsBedGoal(goal.Task.Type) && goal.InWindow(hour)) return true;

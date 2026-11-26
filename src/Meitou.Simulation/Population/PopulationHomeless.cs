@@ -221,6 +221,10 @@ public sealed partial class PopulationSystem
     void PatrolStep(World world, Squad squad, int slot, int group, ZoneCoordinate zone)
     {
         var table = world.Characters;
+
+        // The patrol is walked by the squad's effective leader (FUN_140792b90): a member standing in for a leader who is down (docs/game/ai-tasks.md
+        // "Precedence" step 4 gives it the leader's goals). Read without caching a backup: every squad passes here, patrolling or not.
+        if (table.TryResolveNext(ActingLeader(world, squad), out int lead)) slot = lead;
         if (!Patrols(table.Cold(slot))) return;
         _patrolSeen.Add(squad.Id);
         var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
