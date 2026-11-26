@@ -1319,7 +1319,7 @@ static partial class WorldFrame
         gpu.Terrain.Activate();
         var post = gpu.PostChain ?? throw new InvalidOperationException("the sky frame needs the post-processing chain");
         post.GiResolve = 0;
-        if (gpu.Post is { } vulkanPost) vulkanPost.SsrSurfaces = false;
+        post.SsrSurfaces = false;
         post.Begin(width, height);
         if (post is PostProcess { Unallocated: true }) return;
         float aspect = width / (float)Math.Max(height, 1);
@@ -1480,7 +1480,7 @@ static partial class WorldFrame
             : (ShadowPass.LandmarkCasters?)null;
         shadow.CameraFlying = gpu.CameraFlying;
         shadow.Traced = gpu.Traced;   // the rays take the sun, characters included (Gi.TracedCharacters)
-        shadow.FarCascades = gpu.Post is { Options.TracedFarCascades: true };   // ... as far as the handoff, the cascades past it
+        shadow.FarCascades = gpu.PostChain is { Options.TracedFarCascades: true };   // ... as far as the handoff, the cascades past it
         shadow.Render(view, light.SunDirection, casters.Draw, sunHeight, landmarks, casters.Prepare);
         shadow.CasterStats = casters.Stats();
     }

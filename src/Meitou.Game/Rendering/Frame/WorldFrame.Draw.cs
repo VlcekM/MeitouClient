@@ -270,20 +270,21 @@ static partial class WorldFrame
 
         // The reflections subtract the sky's reflection as the surfaces stored it: lit by the probes they need the resolve, whose fragments leave
         // it unoccluded.
-        bool reflections = gpu.Post is { Options.Ssr: true } && (giResolve || !probesShade);
+        bool reflections = post.Options.Ssr && (giResolve || !probesShade);
+        post.SsrSurfaces = reflections;
 
         if (gpu.Post is { } giPost)
         {
             giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
-            giPost.SsrSurfaces = reflections;
             giPost.GiCache = giResolve && post.Options.GiCaching ? gpu.GiCache : null;
         }
 
-        // Metal's probes: the resolve and its relocation (no reflections there yet).
+        // Metal's probes: the resolve, its relocation and the reflections' surfaces.
         if (gpu.ProbeGi is { } probeGi)
         {
             post.GiResolve = giResolve ? gpu.GiResolve : 0;
             probeGi.Resolve = giResolve;
+            probeGi.Reflections = reflections;
             probeGi.Relocate = giResolve && post.Options.GiRelocating;
         }
 
@@ -827,6 +828,7 @@ static partial class WorldFrame
         // The mirrored scene keeps the flat ambient: the probes' light is not worth a second view's reads in a blurred reflection
         // (docs/render-gi.md).
         if (gpu.Probes is { } reflectedProbes) reflectedProbes.InReflection = reflecting && !reflectedProbes.Reflected;
+        if (gpu.ProbeGi is { } metalReflected) metalReflected.InReflection = reflecting;
         if (reflecting)
         {
             bool anything = gpu.Objects is not null || gpu.Characters is not null || gpu.Foliage is not null;
@@ -834,6 +836,7 @@ static partial class WorldFrame
                 anything ? (vp, e, frustum) => DrawReflectedScene(gpu, render, light, vp, e, frustum) : null);
         }
         if (gpu.Probes is not null) gpu.Probes.InReflection = false;
+        if (gpu.ProbeGi is not null) gpu.ProbeGi.InReflection = false;
 
         // What the reflection's rect learnt for the water pass: the nearest water in view, or NaN when no pass ran to find out.
         if (gpu.Water is { } gated) gated.NearestWater = reflecting ? gpu.Reflection!.NearestWater : float.NaN;

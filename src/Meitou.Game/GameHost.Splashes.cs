@@ -139,7 +139,7 @@ sealed partial class GameHost
     /// Once a frame, after the wave field's bodies (<see cref="UpdateWakes"/>): the ground events the characters' dominant clips passed since the last
     /// frame.
     /// </summary>
-    void UpdateSplashes()
+    internal void UpdateSplashes()
     {
         if (Gpu.Particles is not { } particles || Scene.Database is not { } db || AnimationLibrary is not { } library
             || Gpu.Characters is not { } characters)

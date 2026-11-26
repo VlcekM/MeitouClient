@@ -7,19 +7,19 @@ using SharpMetal.Metal;
 namespace Meitou.Game.Rendering.Metal.Gi;
 
 /// <summary>
-/// The characters' gathered indirect light on Metal (docs/render-gi.md "Characters", "Metal"): Vulkan's kernels (<see cref="GiShaders.GatherPool"/>,
-/// <see cref="GiShaders.CharacterGather"/>) with the probe update's constants and hit inputs, as <see cref="GiProbes.TraceCharacterGather"/> binds
-/// them. A texel a pixel, two targets swapped each frame (a ray's hit on a character reads the last frame's), and the last one pooled. Render thread
-/// only.
+/// The rays traced from the screen's pixels on Metal, with the probe update's constants and hit inputs as Vulkan's <see cref="GiProbes"/> binds them:
+/// the characters' gathered indirect light (docs/render-gi.md "Characters", "Metal"; <see cref="GiShaders.GatherPool"/>,
+/// <see cref="GiShaders.CharacterGather"/>: a texel a pixel, two targets swapped each frame, a ray's hit on a character reading the last frame's, and
+/// the last one pooled) and the reflections' rays (docs/render-gi.md "Reflections"; <see cref="GiShaders.Reflect"/>). Render thread only.
 /// </summary>
-sealed unsafe class MetalCharacterGather(MetalContext ctx, MetalProbeGi probes) : IDisposable
+sealed unsafe class MetalScreenRays(MetalContext ctx, MetalProbeGi probes) : IDisposable
 {
     #region State
 
     /// <summary>
     /// The gather and the pool kernels and their pipelines (made on first use).
     /// </summary>
-    (MetalProgram Program, GpuComputePipeline Pipeline) _gather, _pool;
+    (MetalProgram Program, GpuComputePipeline Pipeline) _gather, _pool, _reflect;
 
     /// <summary>
     /// This frame's gather, the last frame's, and the last pooled over a block, at the render size.
@@ -62,7 +62,7 @@ sealed unsafe class MetalCharacterGather(MetalContext ctx, MetalProbeGi probes) 
     /// The pool of the last gather and this frame's gather over <paramref name="depth"/> and <paramref name="surface"/>; the gathered light (rgb, alpha
     /// 1 on a character's pixel), or null without a probe update this frame.
     /// </summary>
-    public GpuTexture? Run(GpuTexture depth, GpuTexture surface, in View v)
+    public GpuTexture? GatherCharacters(GpuTexture depth, GpuTexture surface, in View v)
     {
         if (probes.Scene.Top is null || !probes.UpdatedThisFrame) return null;
 
@@ -120,23 +120,62 @@ sealed unsafe class MetalCharacterGather(MetalContext ctx, MetalProbeGi probes) 
     void Gather(MetalCommandList cmd, GpuTexture depth, GpuTexture surface, (MTLBuffer Buffer, ulong Offset) camera,
         (MTLBuffer Buffer, ulong Offset) constants, GpuTexture last, in View v)
     {
+        var e = Trace(cmd, _gather, _now!, depth, surface, camera, constants);
+        Bind(e, _gather.Program, 19, last);
+        Bind(e, _gather.Program, 20, _pooled!);
+        cmd.Dispatch((uint)((v.Width + 7) / 8), (uint)((v.Height + 7) / 8));
+    }
+
+    /// <summary>
+    /// The reflections' rays over the marched hits in <paramref name="hit"/> (a texel a block of <paramref name="divisor"/> pixels): a hit replaces
+    /// the march's, a miss proves the sky open past it. False without a probe update this frame (the march's hits stand).
+    /// </summary>
+    public bool Reflect(GpuTexture hit, GpuTexture depth, GpuTexture surface, in View v, int divisor)
+    {
+        if (probes.Scene.Top is null || !probes.UpdatedThisFrame) return false;
+
+        _reflect = _reflect.Program is null ? Kernel((MetalShaders)ctx.Shaders, GiShaders.Reflect, "metal gi reflect") : _reflect;
+        var camera = Upload(new Camera
+        {
+            Eye = new Vector4(v.Eye, 0),
+            Right = new Vector4(v.Right, 0),
+            Up = new Vector4(v.Up, 0),
+            Back = new Vector4(v.Back, 0),
+            View = new Vector4(v.Tan, v.Planes.X, v.Planes.Y),
+            Sizes = new Vector4(v.Width, v.Height, divisor, 0),
+        });
+        var constants = Upload(probes.LastConstants);
+
+        var cmd = (MetalCommandList)ctx.BeginNative("gi reflect");
+        Trace(cmd, _reflect, hit, depth, surface, camera, constants);
+        cmd.Dispatch((uint)((hit.Desc.Width + 7) / 8), (uint)((hit.Desc.Height + 7) / 8));
+        cmd.EndCompute();
+        ctx.EndNative(cmd);
+        return true;
+    }
+
+    /// <summary>
+    /// What both ray kernels bind: the scene, its records, <paramref name="target"/>, the probes' constants and hit inputs, the surfaces and depth,
+    /// the camera, the bindless table and the scene's resources.
+    /// </summary>
+    MTLComputeCommandEncoder Trace(MetalCommandList cmd, (MetalProgram Program, GpuComputePipeline Pipeline) kernel, GpuTexture target, GpuTexture depth,
+        GpuTexture surface, (MTLBuffer Buffer, ulong Offset) camera, (MTLBuffer Buffer, ulong Offset) constants)
+    {
         var scene = probes.Scene;
-        var program = _gather.Program;
-        cmd.BindPipeline(_gather.Pipeline);
+        var program = kernel.Program;
+        cmd.BindPipeline(kernel.Pipeline);
         var e = cmd.ComputeEncoder();
         e.SetAccelerationStructure(scene.Top!.Value, 0);
         e.SetBuffer(scene.Records, 0, 1);
-        e.SetTexture(ctx.TextureAt(_now!), 2);
+        e.SetTexture(ctx.TextureAt(target), 2);
         e.SetBuffer(constants.Buffer, constants.Offset, 3);
         probes.BindHitInputs(e, program);
         Bind(e, program, 13, surface);
         Bind(e, program, 14, depth);
         e.SetBuffer(camera.Buffer, camera.Offset, 15);
-        Bind(e, program, 19, last);
-        Bind(e, program, 20, _pooled!);
         cmd.BindBindlessTable(new GpuProgram(program.Info.Index, program.Info), Frame.NativeShaders.BindlessSet, GpuBindPoint.Compute);
         cmd.UseResources(scene.Resident, scene.Resident.Length);
-        cmd.Dispatch((uint)((v.Width + 7) / 8), (uint)((v.Height + 7) / 8));
+        return e;
     }
 
     #endregion

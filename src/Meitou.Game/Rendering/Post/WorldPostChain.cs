@@ -100,6 +100,12 @@ interface IWorldPostChain
     bool CharacterOcclusionWanted { get; }
 
     /// <summary>
+    /// The lit surfaces store their gloss for the reflections (docs/render-gi.md "Reflections"): the scene keeps the surface target even without
+    /// <see cref="GiResolve"/>. Set before <see cref="Begin"/>.
+    /// </summary>
+    bool SsrSurfaces { get; set; }
+
+    /// <summary>
     /// The sky's exposure band, read by the composite's exposure adaptation.
     /// </summary>
     (float Min, float Max)? AutoExposure { get; set; }

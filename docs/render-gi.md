@@ -155,7 +155,7 @@ three; `gi-grain`: still 0.115 / 0.132 / 0.104, pixels changing beyond the probe
 beside them (the plane weight keeps other cells off, not the cell's own mean point).
 ## Reflections
 
-`ssr` Enhancement, off by default, Vulkan only; `Gi/SsrShaders.cs`, `GiShaders.Reflect`, `PostProcess.Reflections.cs`. Replaces the sky cubemap's
+`ssr` Enhancement, off by default; `Gi/SsrShaders.cs`, `GiShaders.Reflect`, `PostProcess.Reflections.cs` (Metal: [below](#metal)). Replaces the sky cubemap's
 reflection (`uAtmoSpecular`) on surfaces that write the surface target; water writes 0 and keeps `ReflectionPass`; characters, foliage and grass write 0 too (they
 read the probes in shader), so they mirror nothing but appear in what others mirror. Runs after the resolve, before shafts, fog volumes and SSAO.
 With the switch on, `uGiParams.z` gains bit 2 (bits: 1 resolve, 2 reflections, 4 traced sun): every lit fragment writes the target, `1 + gloss * 62` in bits 10-15 and bit 8 only if it takes the probes (so
@@ -233,7 +233,8 @@ a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`Prob
   kernels compute NDC with row 0 at the bottom, so the inverse they take has y turned round first. While traced the scene holds the casters
   (`MetalGiScene.Casters`): objects to the shadows' range, the small foliage by size on screen, cut parts as candidates, and the characters
   (`MetalTracedCharacters`: `TracedCharacters.Skin`, its push block renamed `Push`; a refittable bottom level each, the skinned buffers declared
-  written so their builds wait for the kernel).
+  written so their builds wait for the kernel). Traced near, cascades far ([render-shadows](render-shadows.md#traced-near-cascades-far)) as on Vulkan: the shared
+  `ShadowPass` takes the switch from the frame's post chain (`WorldGpu.PostChain`).
 - **Lamp shadows** (`MetalLampShadows`, `MetalPostChain.RunLampShadows`, after the resolve): Vulkan's full-screen trace (every lamp of a pixel's
   cell; no tile cache on Metal, so the per-lamp passes do not run), the shared penumbra filter (`named`), the apply (reverse subtract) and floor (max)
   passes. While on, the scene holds the casters and the characters draw as the lamps' receivers (`uGiParams.z` bit 16).
@@ -241,14 +242,18 @@ a Metal traced scene, running the **same shaders** (`GiShaders.ProbeTrace`/`Prob
   (its `Expand` kernel, then a bottom level a patch built or refitted after it), cut-out instances under the grass mask; the mask kernel takes
   their ray constants. No blades map: Metal's lamp shadows trace every pixel, not by tiles. **Observed** (new game, 16:00, a scrub plain near
   (-53050, 2245), Extreme): 108 patches, 14 MB; the clumps' shadows on the ground, 3 % of the pixels changed.
-- **Characters' gathered light** (`MetalCharacterGather`, `MetalPostChain.RunCharacterOcclusion`, after the lamp shadows): `GatherPool` and
+- **Characters' gathered light** (`MetalScreenRays`, `MetalPostChain.RunCharacterOcclusion`, after the lamp shadows): `GatherPool` and
   `CharacterGather` with the probe update's constants and hit inputs, the camera's up axis turned round (the kernels rebuild rays from a pixel's
   row); then `CharacterOcclusionPass.Apply` and the lamp shadows' floor. The scene holds the characters for it alone too (`MetalGiScene.Characters`).
 - **Settings.** The Metal panel has the switches under the Vulkan panel's names (Hybrid GI and its four parts, Traced sun shadows and their grass, Lamp
   shadows, GI traced on characters),
   so the saved values and the quality tiers reach them, and the technique choices over them (`WorldFrame.AddChoiceSliders`: Sun shadows,
   Ambient occlusion type, Global illumination), loaded after the switches and saved as Vulkan does, so the launcher's choice reaches Metal.
-- **Not on Metal** (Vulkan has them): reflections' rays.
+- **Reflections** (`MetalReflections`, from `MetalPostChain.ApplySsao` before the shafts, fog volumes and occlusion): the march, shade and apply as
+  resolve programs, the march's projection to a pixel turned round (`ssrPixel`); the rays by `MetalScreenRays.Reflect` (`GiShaders.Reflect`, the
+  camera's up turned round). The probes add `uGiParams.z` bit 2 and, while the water's reflection draws, keep the flat ambient
+  (`IProbeGi.InReflection`, as Vulkan's). **Observed** (`city_night`, the same camera): the change from the switch 1.8 mean against Vulkan's 2.1,
+  the lit ground 0.9 darker against 0.4; save water_day: the water's pixels keep no gloss (it writes 0), so the pond is left to its own reflection.
   The Metal panel has no rows for the Hybrid GI, traced sun or lamp shadows switches: `--meitou gihybrid,traced,lampshadows` and `--gi-hybrid`
   turn them on.
 - **Observed** (Apple M6, macOS 27.2, play bench settle and orbit on `bench-bases-2026-10-27`, 1920x1080 scene, probes + resolve + relocation, one run

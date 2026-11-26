@@ -303,6 +303,16 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     public bool LampReceivers { get; set; }
 
     /// <summary>
+    /// True while the lit fragments store their gloss for the reflections (<c>uGiParams.z</c> bit 2).
+    /// </summary>
+    public bool Reflections { get; set; }
+
+    /// <summary>
+    /// True while the water reflection draws: the mirrored scene keeps the flat ambient.
+    /// </summary>
+    public bool InReflection { get; set; }
+
+    /// <summary>
     /// The lamps' traced shadows over <paramref name="post"/>'s scene (<see cref="MetalPostChain.RunLampShadows"/>), then the characters' gathered
     /// light (<see cref="MetalPostChain.RunCharacterOcclusion"/>).
     /// </summary>
@@ -405,9 +415,12 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     public int Listed { get; private set; }
 
     /// <summary>
-    /// <c>uGiParams</c>: x on and filled, y the strength, z bits 1 the resolve and 4 the traced sun, w the indoor gain (0 bypasses indoor GI).
+    /// <c>uGiParams</c>: x on and filled, y the strength, z bits 1 the resolve, 2 the reflections, 4 the traced sun and 16 the lamps' receivers, w the
+    /// indoor gain (0 bypasses indoor GI).
     /// </summary>
-    Vector4 Params => new(Enabled && Active && Shade && _updated ? 1 : 0, Strength, (Resolve ? 1 : 0) + (Resolve && Traced ? 4 : 0) + (Resolve && LampReceivers ? 16 : 0),
+    Vector4 Params => new(Enabled && Active && Shade && !InReflection && _updated ? 1 : 0, Strength, (Resolve ? 1 : 0)
+        + (Reflections && !InReflection ? 2 : 0) + (Resolve && Traced ? 4 : 0)
+        + (Resolve && LampReceivers ? 16 : 0),
         InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
 
     /// <summary>

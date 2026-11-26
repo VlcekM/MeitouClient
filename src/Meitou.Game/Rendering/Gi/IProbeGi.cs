@@ -72,6 +72,17 @@ internal interface IProbeGi : IDisposable
     bool LampReceivers { get; set; }
 
     /// <summary>
+    /// True while the lit fragments store their gloss for the reflections (<c>uGiParams.z</c> bit 2; docs/render-gi.md "Reflections").
+    /// </summary>
+    bool Reflections { get; set; }
+
+    /// <summary>
+    /// True while the water reflection draws: the mirrored scene keeps the flat ambient (no probes' light, no surface target for the resolve or the
+    /// reflections), as Vulkan's <see cref="GiProbes.InReflection"/>.
+    /// </summary>
+    bool InReflection { get; set; }
+
+    /// <summary>
     /// After the GI resolve, over <paramref name="post"/>'s scene: the lamps' traced shadows (when their switch is on). <paramref name="skinTable"/>:
     /// the characters' skin scattering table's bindless index.
     /// </summary>

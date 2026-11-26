@@ -99,6 +99,11 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     }
 
     /// <summary>
+    /// The last run's two low results: the probes' light and the share of the sky's ambient taken back (null before the first run).
+    /// </summary>
+    internal (GpuTexture Light, GpuTexture Sky)? Results => _low is { } light && _lowSky is { } sky ? (light, sky) : null;
+
+    /// <summary>
     /// <paramref name="shader"/> with its reconstruction's y turned round for top-down targets.
     /// </summary>
     internal static string Flip(string shader)

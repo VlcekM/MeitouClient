@@ -300,8 +300,9 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _ctx.LodBias = Temporal ? MathF.Log2(sceneWidth / (float)_displayWidth) - 0.5f : 0f;
         AutoExposure = null;
         WaterHeight = null;
-        _ctx.StoreSurface = GiResolve > 0;
+        _ctx.StoreSurface = GiResolve > 0 || SsrSurfaces;
         _giResolved = false;
+        _reflected = false;
         CharactersDrawn = true;
         _haveScene = false;
     }
@@ -515,15 +516,55 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _ctx.EndNative(cmd);
     }
 
+    #region Reflections
+
+    /// <summary>
+    /// The reflections (made on first use).
+    /// </summary>
+    Gi.MetalReflections? _reflections;
+
+    /// <summary>
+    /// Whether this frame's reflections ran (<see cref="RunReflections"/> once a frame).
+    /// </summary>
+    bool _reflected;
+
+    /// <summary>
+    /// See <see cref="IWorldPostChain.SsrSurfaces"/>.
+    /// </summary>
+    public bool SsrSurfaces { get; set; }
+
+    /// <summary>
+    /// The reflections over the scene (docs/render-gi.md "Reflections"), once a frame, after the GI resolve and the lamps' and characters' passes and
+    /// before the shafts, the fog volumes and the occlusion (<see cref="ApplySsao"/>): at the resolve's size, half without it; the rays while the
+    /// probes traced this frame.
+    /// </summary>
+    void RunReflections()
+    {
+        if (_reflected || !SsrSurfaces || _sceneColour is null || !_haveScene) return;
+
+        _reflected = true;
+        int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        _reflections ??= new Gi.MetalReflections(_ctx);
+        if (Probes is { } probes) _screenRays ??= new Gi.MetalScreenRays(_ctx, probes);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        var resolved = GiResolve > 0 && _giResolved ? _giResolve.Results : null;
+        var frame = new Gi.MetalReflections.Frame(_sceneColour, _ctx.Depth, _ctx.Albedo, view, ScreenRayView(width, height),
+            GiResolve > 0 ? GiResolve : 2, resolved);
+        _reflections.Run(_giResolve, _screenRays, frame);
+    }
+
+    #endregion
+
     #region Characters' gathered light
 
     /// <summary>
     /// The characters' gather (made on first use) and its apply pass.
     /// </summary>
-    Gi.MetalCharacterGather? _characterGather;
+    Gi.MetalScreenRays? _screenRays;
 
     /// <summary>
-    /// See <see cref="_characterGather"/>.
+    /// See <see cref="_screenRays"/>.
     /// </summary>
     (Gi.MetalGiResolve.Pass Pass, SamplerSlot Traced, UniformHandle Strength, SamplerSlot Term, UniformHandle TermOn)? _characterApply;
 
@@ -541,13 +582,21 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         if (!CharacterOcclusionWanted || _sceneColour is null || !_haveScene || probes.Scene.CharactersShown == 0) return;
 
         int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        _screenRays ??= new Gi.MetalScreenRays(_ctx, probes);
+        if (_screenRays.GatherCharacters(_ctx.Depth, _ctx.Albedo, ScreenRayView(width, height)) is { } gathered)
+            ApplyCharacterLight(gathered, width, height);
+    }
+
+    /// <summary>
+    /// The camera as the screen's ray kernels read it. They rebuild a ray from a pixel's row with ndc y = -1 at row 0: Metal's row 0 is the top, so
+    /// the up axis is turned round.
+    /// </summary>
+    Gi.MetalScreenRays.View ScreenRayView(int width, int height)
+    {
         float tanY = MathF.Tan(_fov * 0.5f);
         var rot = _view with { M41 = 0, M42 = 0, M43 = 0 };
-        // The kernels rebuild a ray from a pixel's row with ndc y = -1 at row 0: Metal's row 0 is the top, so the up axis is turned round.
-        var view = new Gi.MetalCharacterGather.View(_eye, new Vector3(rot.M11, rot.M21, rot.M31), -new Vector3(rot.M12, rot.M22, rot.M32),
+        return new Gi.MetalScreenRays.View(_eye, new Vector3(rot.M11, rot.M21, rot.M31), -new Vector3(rot.M12, rot.M22, rot.M32),
             ViewWindow.BackFor(rot, _fov, _aspect), ViewWindow.Tan(tanY * _aspect, tanY), new Vector2(_nearPlane, _farPlane), width, height);
-        _characterGather ??= new Gi.MetalCharacterGather(_ctx, probes);
-        if (_characterGather.Run(_ctx.Depth, _ctx.Albedo, view) is { } gathered) ApplyCharacterLight(gathered, width, height);
     }
 
     /// <summary>
@@ -639,10 +688,12 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public void BuildShadingRate(Vector3 eye) { }
 
     /// <summary>
-    /// Applies the pending light shafts and fog volumes and the occlusion (SSAO, or GTAO while <c>gtao</c> is on) to the scene colour, when any is on.
+    /// The reflections first (<see cref="RunReflections"/>), then the pending light shafts and fog volumes and the occlusion (SSAO, or GTAO while
+    /// <c>gtao</c> is on) applied to the scene colour, when any is on.
     /// </summary>
     public void ApplySsao()
     {
+        RunReflections();
         if (_sceneColour is null || (!_volumesPending && !Options.Ssao && !_composite.ShaftsPending)) return;
         var cmd = (MetalCommandList)_ctx.BeginNative("post scene effects");
         _composite.ApplyScene(cmd, _sceneColour, _ctx.Depth, Inputs, _volumesPending, Options.Ssao, Options.ContactParams, GtaoFrame);
@@ -841,7 +892,8 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _depthOfField?.Dispose();
         _giResolve?.Dispose();
         _lampShadows?.Dispose();
-        _characterGather?.Dispose();
+        _screenRays?.Dispose();
+        _reflections?.Dispose();
         _tracedTerm?.Dispose();
         _sceneColour?.Dispose();
         foreach (var low in _lowTargets)

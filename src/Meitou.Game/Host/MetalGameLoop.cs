@@ -1491,7 +1491,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         AddWorldSettings(sliders, toggles);
         AddLightingSettings(sliders, toggles);
         AddCharacterSettings(sliders, toggles);
-        AddWaterSettings(sliders);
+        AddWaterSettings(sliders, toggles);
         AddEffectSettings(sliders, toggles);
         WorldFrame.AddChoiceSliders(sliders, toggles, _worldGpu);   // the launcher's technique choices, over the switches above
         var actions = new List<PanelAction>();
@@ -1678,6 +1678,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             toggles.Add(new Toggle("Indoor GI", () => probeGi.InteriorEnabled, v => probeGi.InteriorEnabled = v));
             AddTracedSettings(toggles);
         }
+        toggles.Add(SwitchToggle("ssr"));
         toggles.Add(new Toggle("Cloud shadows", () => _sky.CloudShadows, v => _sky.CloudShadows = v));
         toggles.Add(new Toggle("Night air", () => _sky.NightAir, v => _sky.NightAir = v));
         toggles.Add(new Toggle("Planetshine", () => _sky.Planetshine, v => _sky.Planetshine = v));
@@ -1697,6 +1698,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         toggles.AddRange(WorldFrame.GiHybridToggles(post));
         toggles.Add(SwitchToggle("traced"));
         toggles.Add(new Toggle(WorldFrame.TracedGrassSwitch, () => post.TracedGrass, v => post.TracedGrass = v));
+        toggles.Add(new Toggle(WorldFrame.TracedFarCascadesSwitch, () => post.TracedFarCascades, v => post.TracedFarCascades = v));
         toggles.Add(SwitchToggle("lampshadows"));
         toggles.Add(new Toggle(WorldFrame.GiCharactersSwitch, () => post.CharacterOcclusion, v => post.CharacterOcclusion = v));
     }
@@ -1749,10 +1751,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The water reflection and the Meitou water clarity.
+    /// The water reflection, the Meitou water clarity and its contact foam.
     /// </summary>
-    void AddWaterSettings(List<Slider> sliders)
+    void AddWaterSettings(List<Slider> sliders, List<Toggle> toggles)
     {
+        toggles.Add(SwitchToggle("contactfoam"));
         // Water reflection: the same game setting and reflection range the Vulkan panel exposes; the reflection pass is seam-neutral.
         if (_worldGpu.Reflection is { } reflection)
         {
@@ -3263,6 +3266,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Gpu.GameHours = host.Session.Clock.HoursSinceStart;
         host.BloodDecals.UpdateBlood();
         host.UpdateTrails();
+        host.UpdateWakes();
+        host.UpdateSplashes();
         host.Modding.UpdateModHits();
         host.Modding.UpdateModFrames();
         host.Modding.UpdateModProjectiles();
