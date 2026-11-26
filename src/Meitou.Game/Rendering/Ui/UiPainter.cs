@@ -949,7 +949,8 @@ public sealed partial class UiPainter : IDisposable
             font.Target = _overlay.Target;
         }
 
-        var laid = LayOutText(c.Caption, font, textArea.Width, scale, c.Properties.GetValueOrDefault("WordWrap") == "true", original,
+        bool crop = original && c.Properties.GetValueOrDefault("Ellipsize") != "true";
+        var laid = LayOutText(c.Caption, font, textArea.Width, scale, c.Properties.GetValueOrDefault("WordWrap") == "true", crop,
             focused, focused && c.Properties.GetValueOrDefault("Numeric") == "true");
         string align = c.Properties.GetValueOrDefault("TextAlign") ?? "Left VCenter";
         float y = CaptionTop(c, textArea, font, scale, laid.Lines.Count, align);
