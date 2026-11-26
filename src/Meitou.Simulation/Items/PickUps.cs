@@ -168,7 +168,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     {
         var c = world.Characters.Cold(slot)!;
         if (order.Detail is GroundPick pick ? world.GroundItems.Find(pick.Id) is null
-                : world.Fixtures.Find(order.Site!) is not { Contents: not null })
+                : GroundBags.Find(world, order.Site) is null)
             return OrderCheck.Gone;
         return c is { Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } && c.CarriedBy.IsNone ? OrderCheck.Run
                 : OrderCheck.Blocked();
@@ -194,7 +194,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     /// <summary>
     /// Saved: a container order (kind 0); a pick-up of a ground item names a runtime id and is not saved.
     /// </summary>
-    int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is null ? 0 : -1;
+    int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is null && !GroundBags.IsKey(order.Site) ? 0 : -1;
     /// <inheritdoc/>
     object? IOrderOwner.LoadDetail(World world, CharacterId self, Meitou.Data.Gameplay.Ai.TaskType row, int kind, CharacterId target) => null;
 

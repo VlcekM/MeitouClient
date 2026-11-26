@@ -264,11 +264,12 @@ public static class RowStates
         !target.Character.IsNone && !world.Characters.TryResolveNext(target.Character, out _) || SiteGone(world, target.Site);
 
     /// <summary>
-    /// Whether <paramref name="site"/> names a site the world does not have (a build site, a fixture, a town seat, a rock, a town dummy or turret);
-    /// false for none.
+    /// Whether <paramref name="site"/> names a site the world does not have (a build site, a fixture, a ground bag, a town seat, a rock, a town dummy or
+    /// turret); false for none.
     /// </summary>
     public static bool SiteGone(World world, string? site) =>
         site is not null && world.Buildings.Find(site) is null && world.Fixtures.Find(site) is null
+        && Items.GroundBags.Lying(world, site) is null
         && !Production.ProductionSystem.IsNatural(site) && !FixtureRegistry.IsDummy(site) && !FixtureRegistry.IsSeat(site)
         && !Production.ProductionSystem.IsTownWork(site);
 

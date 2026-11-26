@@ -1178,7 +1178,7 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   rules), `Container`, `Door` and `Building` (a player-built site, also a bed's or cage's, after the game's rows), `Furniture` (a cage that
   is no player-built site, a town's or camp's: `Id` its fixture id, `Record` its BUILDING, after the cage's rows; a caged character's press opens
   that menu and its `Character` one beside it), `GroundItem` (the hold
-  menu Pick Up plus the rows; a quick click still picks up) and `WorldPoint` (the ground under the cursor, `Position` the point; an untitled
+  menu: Pick Up, a bag's Pick Up / Steal and Loot, then the rows; a quick click still picks up) and `WorldPoint` (the ground under the cursor, `Position` the point; an untitled
   menu of the rows; a quick click still moves there). A target that gets no rows behaves as without the mod. Engine API, not in the original.
   **Observed** headless (rows, faults; not the menus in a running game).
   A `UiMenuVerb` takes `Colour` (RGB 0 to 1, clamped; an unavailable row stays greyed). `registration.AddMenuRowOverrides(row => override)`

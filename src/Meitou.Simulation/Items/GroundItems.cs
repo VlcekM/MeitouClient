@@ -23,6 +23,11 @@ public readonly record struct GroundItemSnapshot(int Id, string Record, string N
     string ModTag = "")
 {
     /// <summary>
+    /// The item has an inventory (a bag), so a held press shows its menu with Loot (<see cref="GroundBags"/>).
+    /// </summary>
+    public bool HasInventory { get; init; }
+
+    /// <summary>
     /// The signature before <c>ModTag</c>, kept for code mods built against it (docs/modding.md "API compatibility").
     /// </summary>
     public GroundItemSnapshot(
@@ -224,13 +229,20 @@ public sealed class GroundItems
     /// </summary>
     internal IReadOnlyList<GroundItemSnapshot> Published()
     {
-        if (_publishedAt != Revision)
-            (_published,
-                    _publishedAt) = ([.. _items.Select(i
-                            => new GroundItemSnapshot(i.Id, i.Item.Record, i.Item.Name, i.Position, i.Rotation, i.Dropped, i.Item.Type, i.Item.Level,
-                                    i.Item.Quality, i.OwnedBy, i.Fall, i.Item.MaterialId, i.Item.ModTag))], Revision);
+        if (_publishedAt != Revision) (_published, _publishedAt) = ([.. _items.Select(Publish)], Revision);
         return _published;
     }
+
+    /// <summary>
+    /// One item as published.
+    /// </summary>
+    static GroundItemSnapshot Publish(GroundItem i) =>
+        new(i.Id, i.Item.Record, i.Item.Name, i.Position, i.Rotation, i.Dropped, i.Item.Type, i.Item.Level, i.Item.Quality, i.OwnedBy, i.Fall,
+            i.Item.MaterialId, i.Item.ModTag)
+        {
+            HasInventory = i.Item.Contents is not null,
+        };
+
     /// <summary>
     /// Whether an item of <paramref name="record"/> lies on the ground: a quick test before a finder's scan. The record set is made again only when
     /// <see cref="Revision"/> changed (an item's record never changes); a set once made is only read, so the parallel think may ask too.

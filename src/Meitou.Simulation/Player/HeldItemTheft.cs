@@ -26,7 +26,7 @@ static class HeldItemTheft
     /// (<see cref="Production.ProductionSystem.TownGoods"/>); null for any other site.
     /// </summary>
     static Crime.StealSource? Goods(World world, string site) =>
-        world.Fixtures.Find(site) is { Contents: not null } box ? Crime.StealSource.Of(box)
+        GroundBags.Find(world, site) is { } box ? Crime.StealSource.Of(box)
         : world.SystemOf<Production.ProductionSystem>()?.TownGoods(site);
 
     /// <summary>

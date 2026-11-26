@@ -382,7 +382,7 @@ public sealed partial class World
     /// </summary>
     Production.MachineSnapshot? OpenContainerView()
     {
-        if (Player.OpenContainer is not { } id || Fixtures.Find(id) is not { Contents: not null } f) return null;
+        if (Player.OpenContainer is not { } id || Items.GroundBags.Find(this, id) is not { Contents: not null } f) return null;
 
         var grid = f.Contents;
         float? steal = Characters.TryResolveNext(Player.ContainerOpener, out int thief)

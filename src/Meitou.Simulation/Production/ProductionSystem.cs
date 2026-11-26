@@ -472,7 +472,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                     if (InventoryCommands.Arrange(world, grid, ItemOwner.AtSite(arrange.Site), InventoryArrangeReason.Button)) world.Machines.Touch();
                     break;
                 case ArrangeMachine arrange when world.Player.OpenContainer == arrange.Site
-                    && world.Fixtures.Find(arrange.Site) is { Contents: { } contents } fixture:
+                    && Meitou.Simulation.Items.GroundBags.Find(world, arrange.Site) is { Contents: { } contents } fixture:
                     if (InventoryCommands.Arrange(world, contents, ItemOwner.AtSite(arrange.Site), InventoryArrangeReason.Button))
                     {
                         world.Fixtures.Touch(fixture);

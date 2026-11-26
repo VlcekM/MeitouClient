@@ -143,8 +143,8 @@ sealed class GroundItemPicks(PlayerInterface player)
 
     /// <summary>
     /// A right click on a ground item, with a selection (true): the pick-up order at once. A plain item has no inventory, so the original adds no
-    /// verb and a held press shows no menu (<c>FUN_1407a6bc0</c> adds Pick Up / Steal and Loot only for an item with an inventory;
-    /// docs/game/ui-input.md "Ground item labels").
+    /// verb and a held press shows no menu; a bag's held press shows Pick Up / Steal and Loot (<c>FUN_1407a6bc0</c> adds 3 and 26 only for an item
+    /// with an inventory; docs/game/ui-input.md "Ground item labels").
     /// </summary>
     internal bool GroundItemClick(Vector2 p)
     {
@@ -152,24 +152,40 @@ sealed class GroundItemPicks(PlayerInterface player)
 
         bool alt = player.AltHeld;
         void PickUp() => player.Say(new Simulation.Items.PickUpItemOrder([], item) { Tick = player.Session.World.Tick, Alt = alt });
-        if (!ModMenuPress(p, item, PickUp)) PickUp();
+        if (!MenuPress(p, item, PickUp)) PickUp();
         return true;
     }
 
     /// <summary>
-    /// A right press on ground item <paramref name="item"/> the code mods give rows for (<see cref="UiMenuTargetKind.GroundItem"/>): held, the
-    /// menu of Pick Up and their rows opens; released quickly, <paramref name="pickUp"/> runs as without them. False without such rows.
+    /// A right press on ground item <paramref name="item"/> with a menu: a bag (<see cref="Simulation.Items.GroundItemSnapshot.HasInventory"/>) or
+    /// one the code mods give rows for (<see cref="UiMenuTargetKind.GroundItem"/>). Held, the menu opens (<see cref="MenuRows"/>); released quickly,
+    /// <paramref name="pickUp"/> runs as without it. False without a menu.
     /// </summary>
-    bool ModMenuPress(Vector2 p, int item, Action pickUp)
+    bool MenuPress(Vector2 p, int item, Action pickUp)
     {
-        var found = player.Session.CurrentSnapshot.GroundItems.Where(g => g.Id == item).Select(g => (Simulation.Items.GroundItemSnapshot?)g).FirstOrDefault();
-        if (found is not { } g) return false;
+        var g = player.Session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == item);
+        if (g.Id != item) return false;   // ground item ids start at 1, so the default is none
 
         var target = new UiMenuTarget(UiMenuTargetKind.GroundItem, g.Name, g.Position) { GroundItem = g, Record = g.Record };
-        if (player.ModTargetVerbs(target) is not { Count: > 0 }) return false;
+        if (!g.HasInventory && player.ModTargetVerbs(target) is not { Count: > 0 }) return false;
 
         var window = player.ContextMenuWindow;
-        return window.ContextPressOn(p, at => window.Menu(LabelName(g), at, [("Pick Up", pickUp), .. player.ModTargetVerbs(target)]), pickUp);
+        return window.ContextPressOn(p, at => window.Menu(LabelName(g), at, MenuRows(g, target, pickUp)), pickUp);
+    }
+
+    /// <summary>
+    /// A ground item's menu rows: a bag's 3 Pick Up, or Steal when picking it up would be stealing it (the label of <c>FUN_14079b2d0</c>), and 26
+    /// Loot (an item's 26 is never Inventory or Trade), which opens its contents as a container's (<see cref="Simulation.Items.GroundBags"/>); the
+    /// menu's orders skip the quick click's Alt test (<c>FUN_1407fa650</c>), as a container's. A plain item's rows are Pick Up and the mods'.
+    /// </summary>
+    List<(string Caption, Action Give)> MenuRows(Simulation.Items.GroundItemSnapshot g, UiMenuTarget target, Action pickUp)
+    {
+        if (!g.HasInventory) return [("Pick Up", pickUp), .. player.ModTargetVerbs(target)];
+
+        int id = g.Id;
+        void Take() => player.Say(new Simulation.Items.PickUpItemOrder([], id) { Tick = player.Session.World.Tick, Alt = true });
+        void Loot() => player.ContextMenuWindow.OpenContainer(Simulation.Items.GroundBags.Key(id), true);
+        return [(Stealing(g) ? "Steal" : "Pick Up", Take), ("Loot", Loot), .. player.ModTargetVerbs(target)];
     }
 
     /// <summary>

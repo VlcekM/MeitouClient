@@ -46,7 +46,7 @@ public static class ContainerAccess
     /// </summary>
     internal static void OpenContainerInput(World world, Items.OpenContainerOrder order, IOrderOwner owner)
     {
-        if (world.Fixtures.Find(order.Fixture) is not { Contents: not null } fixture) return;
+        if (GroundBags.Find(world, order.Fixture) is not { } fixture) return;
         var table = world.Characters;
         int best = -1;
         float bestDistance = float.MaxValue;
@@ -130,7 +130,7 @@ public static class ContainerAccess
         var table = world.Characters;
         if (player.OpeningContainer is { } wanted)
         {
-            if (world.Fixtures.Find(wanted) is not { Contents: not null } fixture || !table.TryResolveNext(player.ContainerWalker, out int s)
+            if (GroundBags.Find(world, wanted) is not { } fixture || !table.TryResolveNext(player.ContainerWalker, out int s)
                     || table.Cold(s) is not { Medical.Incapacitated: false } || !table.Cold(s)!.CarriedBy.IsNone)
                 player.OpeningContainer = null;
             else
@@ -150,7 +150,7 @@ public static class ContainerAccess
             // The original has no walk-away test: the windows stay until the player closes them (docs/game/locks.md "Containers"); only an opener
             // who is down or gone closes it here.
             int o = -1;
-            bool keep = world.Fixtures.Find(open) is { Contents: not null } && table.TryResolveNext(player.ContainerOpener, out o)
+            bool keep = GroundBags.Find(world, open) is not null && table.TryResolveNext(player.ContainerOpener, out o)
                     && table.Cold(o) is { Medical.Incapacitated: false };
             if (!keep) player.OpenContainer = null;
 
@@ -212,7 +212,7 @@ public static class ContainerAccess
     internal static Locks.Fixture? ContainerFor(World world, string site, CharacterId who, out CharacterCold? cold)
     {
         cold = null;
-        if (world.Fixtures.Find(site) is not { Contents: not null } f) return null;
+        if (GroundBags.Find(world, site) is not { } f) return null;
         var table = world.Characters;
         if (!table.TryResolveNext(who, out int slot) || table.Cold(slot) is not { Inventory: not null } c)
             return f;
