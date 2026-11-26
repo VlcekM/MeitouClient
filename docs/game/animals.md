@@ -101,6 +101,11 @@ Clip filter (`FUN_14051d660`, **Verified** for the strafe list, Inferred for wal
 
 Job clips: an animal standing in a captive job's clip (eating a body: `eat`) plays the ANIMAL_ANIMATION of that record name from its own list; the library's first record of the name is the humanoid ANIMATION `eat` (43889), which an animal skeleton cannot play. Blood Spider, Skin Spider, the dogs and raptors have it; the Skimmer's `eat (attack1)` is taken by its name's start (engine choice); the gorillos' and Land Bat's skeletons lack the clip, so they stand in an idle (**Verified** by headless check of the merged base data, #623). Meitou: `AnimalPlan.Action`.
 
+Sleeping on the ground: `Task_SleepOnFloor`'s start (`FUN_140348170`, **Verified** by decompile) names its animation `sleeponfloor`, the record name of
+the Down column, so an animal asleep plays its fall once, then its lying clip, as a downed one does. **Observed** (original 1.0.68, issue #1438's save, a
+`skimmer patrol group nocturnal` pack by day): the Skimmers lie sunk in the sand, only their backs and spines showing (its `sleep`). Meitou:
+`AnimationSystem.UpdateAnimal` for an animal resting with the sleep behaviour.
+
 ## Death items
 
 The meat, skins, teeth (animals) and cores/CPUs (robots, Gurglers) a body yields. Not dropped at death: they are in the inventory
