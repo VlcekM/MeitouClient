@@ -2085,7 +2085,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   ([UseableStuff verbs](game/ui-input.md#context-menu-verbs)); a saved order or job keeps the id. Picked as a bed is (its collision, else its middle within
   30 px); pointer `use`. Selected, its panel shows `Training:`, Workers and Max Skill Level ([Selected building](game/ui-screens.md#selected-building)). One user at a time across both sides: a resident pretend-operating it (221, town goals) counts as an operator, so an order or job finds it in use, and a dummy a character operates (walking there included) is skipped by the residents' staying-home and sitting-around claims, a held claim dropped (`ProductionSystem.OperatorsOf`, `TownPlaceClaims`).
 - **Items.** `PutInMachine` and `TakeFromMachine` move items between a character within 40 of the building's footprint and the machine:
-  inputs, output, or storage cells.
+  inputs, output, or storage cells. A take goes into the character's open bag window first, as the original's right click does
+  ([ui-input](game/ui-input.md)); a rock's or bench's output too, not only storage (`ProductionSystem.Placed` with `bagFirst`, #1481).
 - **Research** (`Construction/ResearchState`). A queue paid at queue time from the benches' storage; a paid id is never
   charged again.
   - Bench level is the best `tech level` a complete player bench reached; it never falls (0 again on a load).

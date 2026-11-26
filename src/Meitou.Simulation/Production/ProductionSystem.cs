@@ -2466,7 +2466,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             && mark == StolenMark.None)
             item.Mark = Crime.CrimeSystem.GoodsMark(world, Crime.StealSource.Of(container));
 
-        bool bagFirst = take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack;
+        bool bagFirst = BagFirst(world, cold, take);
         int wanted = InventoryCommands.ClickCount(item, take.Count);
         if (Caught(world, container, take.Character, InventoryCommands.HasRoomFor(cold.Inventory!, item, bagFirst, cold)))
         {
@@ -2655,7 +2655,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
         if (take.Slot == -2 && m.Craft is { } craft)
         {
-            TakeCrafted(world, m, craft, root, take.Index, take.Count);
+            TakeCrafted(world, m, craft, root, take.Index, take.Count, BagFirst(world, cold, take));
             return;
         }
 
@@ -2665,12 +2665,17 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (take.Count > 0) held.Count = Math.Min(held.Count, take.Count);
         if (held.Count <= 0 || _items.Create(held.Item, held.Count) is not { } made) return;
         made.Mark = mark;
-        int moved = Placed(root, made);
+        int moved = Placed(root, made, BagFirst(world, cold, take));
         if (moved <= 0) return;
         if (take.Slot == -2) m.Output!.Count -= moved;
         else m.Inputs[take.Slot].Count -= moved;
         world.Machines.Touch();
     }
+
+    /// <summary>
+    /// Whether a take puts into the taker's bag first: its bag window is open, or the player's "Loot into backpack" is on.
+    /// </summary>
+    static bool BagFirst(World world, CharacterCold cold, TakeFromMachine take) => take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack;
 
     /// <summary>
     /// Whether the take out of town machine <paramref name="m"/> finds room for one unit with the stolen mark <paramref name="mark"/> (a dry run): a
@@ -2686,7 +2691,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             var item = storage.Items[take.Index];
             var kept = item.Mark;
             if (mark != StolenMark.None && kept == StolenMark.None) item.Mark = mark;
-            bool room = InventoryCommands.HasRoomFor(cold.Inventory!, item, take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack, cold);
+            bool room = InventoryCommands.HasRoomFor(cold.Inventory!, item, BagFirst(world, cold, take), cold);
             item.Mark = kept;
             return room;
         }
@@ -2714,7 +2719,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (mark != StolenMark.None && kept == StolenMark.None) item.Mark = mark;
 
         int moved = InventoryCommands.MoveInto(storage, item, InventoryCommands.ClickCount(item, take.Count), cold.Inventory!,
-            take.BagFirst || cold.IsPlayer && world.TakeIntoBackpack, out bool worn, cold);
+            BagFirst(world, cold, take), out bool worn, cold);
         if (storage.Items.Contains(item)) item.Mark = kept;   // what stayed keeps its mark
         if (moved > 0) world.Machines.Touch();
         if (worn) Assembly?.RefreshEquipment(cold);

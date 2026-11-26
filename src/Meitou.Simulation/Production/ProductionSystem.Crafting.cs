@@ -437,24 +437,24 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A finished item (at most <paramref name="count"/> units, 0: all) taken from a bench's output into a character's inventory (what does not fit
-    /// stays).
+    /// A finished item (at most <paramref name="count"/> units, 0: all) taken from a bench's output into a character's inventory, its bag first with
+    /// <paramref name="bagFirst"/> (what does not fit stays).
     /// </summary>
-    void TakeCrafted(World world, Machine m, CraftState state, Inventory root, int index, int count = 0)
+    void TakeCrafted(World world, Machine m, CraftState state, Inventory root, int index, int count = 0, bool bagFirst = false)
     {
         if (index < 0 || index >= state.Done.Count) return;
         var item = state.Done[index];
         if (count > 0 && count < item.Quantity)
         {
             var unit = item.WithQuantity(count);
-            item.Quantity -= count;
-            if (!root.Add(unit)) item.Quantity += unit.Quantity;
+            item.Quantity -= Placed(root, unit, bagFirst);
             world.Machines.Touch();
             return;
         }
 
+        int units = item.Quantity;
         state.Done.RemoveAt(index);
-        if (!root.Add(item) && item.Quantity > 0) state.Done.Insert(index, item);
+        if (Placed(root, item, bagFirst) < units && item.Quantity > 0) state.Done.Insert(index, item);
         world.Machines.Touch();
     }
 }

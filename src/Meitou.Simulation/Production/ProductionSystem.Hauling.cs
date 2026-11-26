@@ -244,6 +244,20 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
+    /// <see cref="Placed(Inventory, ItemInstance)"/> for a right click's take out of a machine: with <paramref name="bagFirst"/> (the bag window
+    /// open) the units go into the worn bag first, as the original's move into a character does (<c>FUN_14070dcd0</c>; a container holding items
+    /// never, <see cref="InventoryCommands.FitsInBag"/>), what is left as <see cref="Inventory.Add"/> places it (#1481).
+    /// </summary>
+    internal static int Placed(Inventory into, ItemInstance item, bool bagFirst)
+    {
+        int before = item.Quantity;
+        var bag = bagFirst && InventoryCommands.FitsInBag(item) ? into.Backpack?.Contents : null;
+        if (bag is not null && bag.AddTo("backpack_content", item)) return before;
+
+        return before - item.Quantity + Placed(into, item);
+    }
+
+    /// <summary>
     /// A fetch's take at a storage, the player's haul and an NPC worker's (<see cref="Kidnap.TownDutySystem"/>): up to <paramref name="room"/> units
     /// of <paramref name="want"/> out of the storage's main grid into <paramref name="into"/>, what finds no room going back; the units moved.
     /// </summary>
