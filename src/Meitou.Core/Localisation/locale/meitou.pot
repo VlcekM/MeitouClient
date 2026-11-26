@@ -7039,10 +7039,6 @@ msgstr ""
 msgid "{1} at {2}: run {3} of {4}, launch {5} of {6}"
 msgstr ""
 
-#: src/Meitou.Simulation/Trading/TradeSystem.cs
-msgid "{1} bought {2} for c.{3}"
-msgstr ""
-
 #: launcher/Meitou.Launcher/GraphicsPage.cs
 msgid "{1} changes from the game"
 msgstr ""
@@ -7207,10 +7203,6 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkRunner.cs
 msgid "{1} skipped: this build has no such benchmark."
-msgstr ""
-
-#: src/Meitou.Simulation/Trading/TradeSystem.cs
-msgid "{1} sold {2} for c.{3}"
 msgstr ""
 
 #: src/Meitou.Game/Mods/GameMods.cs
