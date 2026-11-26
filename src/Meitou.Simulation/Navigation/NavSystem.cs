@@ -138,12 +138,10 @@ public sealed class NavSystem : IDisposable
     public void UnloadZones(IReadOnlyCollection<ZoneCoordinate> zones) => _service.Unload(zones);
 
     /// <summary>
-    /// Builds a zone again if its mesh is loaded (a zone that is not is built with the current buildings when it is asked for).
+    /// Builds a zone again if its mesh is loaded or currently queued/building (a zone that is neither is built with the current buildings when it is
+    /// asked for).
     /// </summary>
-    public void RebuildZone(ZoneCoordinate zone)
-    {
-        if (Walkability.World.Find(zone) is not null) _ = _service.Rebuild(zone);
-    }
+    public void RebuildZone(ZoneCoordinate zone) => _ = _service.Rebuild(zone);
 
     /// <summary>
     /// The long-range grid's terrain: the heightmap downsampled by 2, read once, falling back to <paramref name="terrainHeight"/> off its window.

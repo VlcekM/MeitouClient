@@ -264,6 +264,11 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public (int Floor, float Y)? SurfaceUnder(Vector3 feet) => _floors?.Value.SurfaceUnder(feet);
 
     /// <summary>
+    /// The height of the highest floor surface at (<paramref name="x"/>, <paramref name="z"/>) on floors up to <paramref name="floor"/>, or null.
+    /// </summary>
+    public float? HighestFloorUpTo(float x, float z, int floor) => _floors?.Value.HighestUpTo(x, z, floor);
+
+    /// <summary>
     /// The interior mask collision's triangles in world space (three corners each): the indoor space itself, concave where the building is.
     /// </summary>
     Vector3[] _maskCorners = [];

@@ -752,11 +752,16 @@ public sealed class SightMap
     /// one hung from a ceiling is under it. The parent is a town building's instance id when placed in Meitou, its full key when read from the
     /// original's save, and a player building's site id.
     /// </summary>
+    /// <summary>
+    /// The room key for <paramref name="site"/>'s parent: a town building's full key or a player building's site id.
+    /// </summary>
+    string ParentKey(Construction.BuildSite site, string parent) =>
+        parent.Contains(':') || _siteRooms.ContainsKey(parent) ? parent : BuildingKey.Of(site.Zone, parent);
+
     int RoomOfLamp(Construction.BuildSite site)
     {
         if (site.Parent is not { } parent) return -1;
-        string key = parent.Contains(':') || _siteRooms.ContainsKey(parent) ? parent : BuildingKey.Of(site.Zone, parent);
-        if (!_roomOf.TryGetValue(key, out int room)) return -1;
+        if (!_roomOf.TryGetValue(ParentKey(site, parent), out int room)) return -1;
         return _source!.HangsFromCeiling(site.Record) || _rooms[room].Volume.Covered(site.Position) ? room : -1;
     }
 
@@ -792,6 +797,19 @@ public sealed class SightMap
     /// The floor of <paramref name="building"/> at <paramref name="at"/> (an object's <c>getFloor</c>); 0 for a building the map does not hold.
     /// </summary>
     public int FloorAt(string building, Vector3 at) => _roomOf.TryGetValue(building, out int r) ? _rooms[r].Volume.FloorAt(at) : 0;
+
+    /// <summary>
+    /// The height of floor <see cref="Construction.BuildSite.Floor"/> of the building holding <paramref name="site"/> at its X/Z position, or null
+    /// when the map holds no room or no floor surface there (used by construction so a ceiling-mounted site targets its own floor rather than the
+    /// slab directly above the ceiling).
+    /// </summary>
+    public float? FloorHeightOf(Construction.BuildSite site)
+    {
+        if (site.Parent is not { } parent) return null;
+        return _roomOf.TryGetValue(ParentKey(site, parent), out int room)
+            ? _rooms[room].Volume.HighestFloorUpTo(site.Position.X, site.Position.Z, site.Floor)
+            : null;
+    }
 
     /// <summary>
     /// Whether the ground point (<paramref name="x"/>, <paramref name="z"/>) lies under or in <paramref name="building"/>'s indoor volume; false for
