@@ -134,6 +134,7 @@ public static partial class SaveCapture
 
         var builder = prepared ?? PrepareBase(data, loaded, options);
         var game = builder.Game;
+        VariableSave.Strip(game);
         s_memoryPass = new MemoryPass();
         SavedKit.OwnerNotes = s_memoryPass.Owners;
         SavedKit.Factions = data.Factions;
@@ -163,6 +164,9 @@ public static partial class SaveCapture
         options.HandlesWritten?.Invoke(s_memoryPass?.Handles ?? []);
         game.LastingIds = world.LastingIds.Write(game, s_memoryPass?.ColdHandles ?? []);
         WriteMemories();
+
+        // Last, as the variables keep their data string ids, whose numbers no later record may count from.
+        VariableSave.Write(game, world, data.Db);
         return game;
     }
 

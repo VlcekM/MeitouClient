@@ -238,11 +238,14 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
     public IWorldStates States => ReferenceEquals(_data.States, IWorldStates.None) ? _live : _data.States;
 
     /// <summary>
-    /// The live world states take the unique table, the player's faction and the code mods' values (serial; every tick, again after a look's unique
-    /// refresh, and before the loading screen's builds).
+    /// The live world states take the unique table, the player's faction, the code mods' values and the world's variables (serial; every tick, again
+    /// after a look's unique refresh, and before the loading screen's builds).
     /// </summary>
-    void RefreshStates(World world) =>
-        _live.Refresh(world.Uniques, world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction, world.ModStatesOrNull);
+    void RefreshStates(World world)
+    {
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction;
+        _live.Refresh(world.Uniques, player, world.ModStatesOrNull, world.Variables);
+    }
 
     /// <summary>
     /// Whether the tick takes every build and drains the roaming and wild queues at once (set behind the loading screen).

@@ -221,7 +221,7 @@ public static class SaveLoader
         entry.Value.BuildingList?.Bools.ContainsKey("imported") != true;
 
     /// <summary>
-    /// The research, the player's buildings and machines, the NPC town and rock machines and the zones' loose items.
+    /// The research, the Extra Extensions variables, the player's buildings and machines, the NPC town and rock machines and the zones' loose items.
     /// </summary>
     static void LoadWorks(World world, SaveGame save, PopulationData data, int playerIndex, LoadedSave loaded)
     {
@@ -230,6 +230,7 @@ public static class SaveLoader
 
         // The research the player has finished, and the buildings the player made (docs/simulation.md "Buildings").
         ResearchSave.Load(save.Research, world.Research, data.Db);
+        VariableSave.Load(save, world, data.Db);
         if (playerFaction is not null) BuildingSave.Read(save, world, data.Db, playerFaction.Id, playerIndex, data);
 
         // The machines of the player's complete buildings: recipe slots, storage, farms (docs/simulation.md "Production").

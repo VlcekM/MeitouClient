@@ -89,9 +89,11 @@ public static class SaveImport
         AddArtifacts(game, data);
         FilterZones(game, playerId, options);
 
-        // The weather and the terrain decals are the new world's; the research is the start's unless it is imported.
+        // The weather and the terrain decals are the new world's; the research is the start's unless it is imported. The Extra Extensions
+        // variables are the data's: the plugin reads them back only in a load (its loadAllPlatoons hook, which the import never calls).
         var records = game.Quick.Records;
         records.RemoveAll(r => r.RecordType is FcsRecordType.Biomes or FcsRecordType.TerrainDecals or FcsRecordType.WarSavestate);
+        records.RemoveAll(VariableSave.IsVariable);
         if ((options & ImportOptions.Research) == 0) ResetResearch(records);
 
         game.Camera.PlayerMoney = Math.Max(0, game.Camera.PlayerMoney);

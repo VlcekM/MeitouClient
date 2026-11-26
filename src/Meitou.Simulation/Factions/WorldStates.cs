@@ -10,8 +10,9 @@ namespace Meitou.Simulation.Factions;
 /// queries): a state holds when every <c>NPC is</c> unique has its state (and, with <c>player involvement</c>, one other than alive has the player
 /// flag), no <c>NPC is NOT</c> unique has its state (with the player flag needed for an alive one), and each <c>player ally</c> / <c>player enemy</c>
 /// faction is or is not the player's ally (relation ≥ 50) / hostile to it (≤ -30) as the entry says. A unique with no entry is alive and the player
-/// not involved, so a new game answers by the data alone. Nothing is saved: the unique table and the relations are. A state a code mod set a value on
-/// answers that value instead (<see cref="ModWorldState"/>).
+/// not involved, so a new game answers by the data alone. BFrizz's Extra Extensions variable conditions are ANDed on (<see cref="VariablesHold"/>).
+/// Nothing is saved: the unique table, the relations and the variables are. A state a code mod set a value on answers that value instead
+/// (<see cref="ModWorldState"/>).
 /// <para>The population refreshes the unique states it reads every tick (<see cref="Refresh"/>, serial; a look's own changes to the table are taken
 /// again at once); a query reads that copy, so the build threads may ask at any time.</para>
 /// </summary>
@@ -33,6 +34,10 @@ public sealed class WorldStates(GameDatabase db, FactionRelations relations) : I
     /// The <see cref="ModWorldStates.Version"/> <see cref="_current"/> was taken at (0: none set).
     /// </summary>
     long _modVersion;
+    /// <summary>
+    /// The world's Extra Extensions variables, read live (null: every variable has its record's value).
+    /// </summary>
+    volatile WorldVariables? _variables;
 
     /// <summary>
     /// The unique states (state and player flag by record id), the player's faction and the code mods' values (null: none), as taken by
@@ -42,10 +47,12 @@ public sealed class WorldStates(GameDatabase db, FactionRelations relations) : I
         IReadOnlyDictionary<string, bool>? Mods = null);
 
     /// <summary>
-    /// Takes the unique table's states, the player's faction and the code mods' world state values (serial phase); cheap when nothing changed.
+    /// Takes the unique table's states, the player's faction and the code mods' world state values (serial phase), and the world's variables, which
+    /// are read live; cheap when nothing changed.
     /// </summary>
-    public void Refresh(UniqueCharacters uniques, int playerFaction, ModWorldStates? mods = null)
+    public void Refresh(UniqueCharacters uniques, int playerFaction, ModWorldStates? mods = null, WorldVariables? variables = null)
     {
+        _variables = variables;
         long modVersion = mods?.Version ?? 0;
         if (uniques.Version == _version && _current.Player == playerFaction && modVersion == _modVersion) return;
         _version = uniques.Version;
@@ -89,6 +96,23 @@ public sealed class WorldStates(GameDatabase db, FactionRelations relations) : I
             if (relations.IndexOf(faction) is var f and >= 0 && relations.IsAlly(f, p) != ally) return false;
         foreach (var (faction, enemy) in s.PlayerEnemy)
             if (relations.IndexOf(faction) is var f and >= 0 && relations.IsHostile(f, p) != enemy) return false;
+        return VariablesHold(s);
+    }
+
+    /// <summary>
+    /// BFrizz's Extra Extensions conditions, ANDed onto the answer by the plugin's <c>isTrue</c> hook (docs/game/factions-squads-towns.md "Relations
+    /// and world states"): each list's first variable with a <c>value</c> against its val0, and no list without one.
+    /// </summary>
+    bool VariablesHold(WorldEventStateData s)
+    {
+        if (s.VariablesNeverHold) return false;
+
+        var variables = _variables;
+        foreach (var test in s.Variables)
+        {
+            int value = variables?.Value(db, test.Variable) ?? db.Find(test.Variable)!.GetInt("value");
+            if (!test.Holds(value)) return false;
+        }
         return true;
     }
 }

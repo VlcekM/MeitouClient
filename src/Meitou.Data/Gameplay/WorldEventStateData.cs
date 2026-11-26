@@ -45,6 +45,17 @@ public sealed record WorldEventStateData
     public bool PlayerInvolvement { get; init; }
 
     /// <summary>
+    /// BFrizz's Extra Extensions variable conditions (<c>variable equals</c>, <c>variable less than</c>, <c>variable greater than</c>): per list the
+    /// record has, its first reference whose VARIABLE has a <c>value</c> (docs/game/factions-squads-towns.md "Relations and world states").
+    /// </summary>
+    public IReadOnlyList<VariableTest> Variables { get; init; } = [];
+
+    /// <summary>
+    /// A variable list the record has holds no reference with a <c>value</c>, so the state is never true.
+    /// </summary>
+    public bool VariablesNeverHold { get; init; }
+
+    /// <summary>
     /// Reads a WORLD_EVENT_STATE record.
     /// </summary>
     public static WorldEventStateData From(GameDatabase db, GameRecord r)
@@ -56,6 +67,7 @@ public sealed record WorldEventStateData
                 .Where(x => db.Find(x.TargetStringId) is { Type: FcsRecordType.Faction })
                 .Select(x => (x.TargetStringId, x.Values.Value0 == 1))];
 
+        var variables = VariableData.WorldStateTests(db, r, out bool neverHold);
         return new WorldEventStateData
         {
             Id = r.StringId,
@@ -65,6 +77,8 @@ public sealed record WorldEventStateData
             PlayerAlly = Factions("player ally"),
             PlayerEnemy = Factions("player enemy"),
             PlayerInvolvement = r.GetBool("player involvement"),
+            Variables = variables,
+            VariablesNeverHold = neverHold,
         };
     }
 }

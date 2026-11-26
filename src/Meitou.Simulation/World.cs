@@ -696,6 +696,10 @@ public sealed partial class World : IDisposable
     /// </summary>
     public UniqueCharacters Uniques { get; } = new();
     /// <summary>
+    /// BFrizz's Extra Extensions variables, as lines and the save set them (docs/game/dialogue.md "Variables").
+    /// </summary>
+    public WorldVariables Variables { get; } = new();
+    /// <summary>
     /// The characters' lasting ids, which code mods key their data per character by (docs/modding.md "Character ids").
     /// </summary>
     public LastingIds LastingIds { get; }
@@ -1600,6 +1604,9 @@ public sealed partial class World : IDisposable
 
         // only once a code mod set a character save field
         ("save fields", static (World w, ref StateHasher h) => { if (w.SaveFields.Any) w.SaveFields.Hash(ref h); }),
+
+        // only once a variable was set
+        ("variables", static (World w, ref StateHasher h) => { if (w.Variables.Count > 0) w.Variables.Hash(ref h); }),
 
         // only while a code mod's world state has a value
         ("mod states", static (World w, ref StateHasher h) => w.HashModStates(ref h)),

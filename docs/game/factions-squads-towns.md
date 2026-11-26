@@ -16,6 +16,12 @@ WORLD_EVENT_STATE (`FUN_1409a7e00`, **Observed** by code): holds when every `NPC
 enemy` hostile to it. With `player involvement`, an `NPC is` other than alive or an `NPC is NOT` alive also needs the unique's player
 flag. A unique with no entry counts as alive, so a new game answers by the data alone; nothing is stored. A `world state` list entry
 (`FUN_1409a9a70`: spawn gates, weighted picks, campaigns) passes when the state's answer equals (v0 == 1); a missing record is skipped.
+BFrizz's Extra Extensions ([variables](dialogue.md#variables)) ANDs three VARIABLE lists onto the answer (its `isTrue` hook): `variable equals`,
+`variable less than`, `variable greater than`. For each list the record has, the first reference whose VARIABLE has an int `value` decides:
+`value` ==, < or > its val0; the later references are not read. A list with no such reference (or none at all) fails the state. **Observed**
+(disassembly of the workshop build's `BFrizz_Extra_Extensions.dll`: it compares `value` with val0, unlike the 'less' / 'greater' swap in
+the published `WorldStates.cpp` and the repository's first commit). fcs.def also declares `variables equal`, which the plugin never reads.
+Meitou (`WorldStates.VariablesHold`, the variables read live) as the plugin.
 Meitou only: a code mod may set a state's answer, which then replaces the conditions ([modding](../modding.md), "World states").
 
 ## Squad factory

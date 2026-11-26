@@ -243,15 +243,25 @@ child's (`FUN_1406ad9d0`).
 
 #### Variables
 
-BFrizz's Extra Extensions (RE_Kenshi plugin, workshop 3625832102) adds VARIABLE records (one int `value`) and three DIALOGUE / DIALOGUE_LINE /
-WORD_SWAPS reference lists: `variable equals`, `variable less than`, `variable greater than`, each passing when the referenced variable's `value`
-is `==`, `<` or `>` the reference's val0; all references must pass, and one whose record has no `value` is skipped. They are ANDed onto
-`DialogLineData::checkTags` (`FUN_140674c50`), which the line check calls first, so a failing variable fails the line before any other test; they
-add no score. **Observed** (its `fcs.def`; the same author's KenshiLib_Examples `WorldStates.cpp`, whose dialogue hook does exactly this).
-Quests & Contracts (workshop 3797459646) gates its barman and trader replies with them, on variables its own `Ledger.dll` writes (type 1000
-records, `value` 0); without them every such reply passes, 254 replies under a Tech Hunter trader's `trader1` (#1442). Meitou
-(`DialogueSystem.VariablesHold`) applies the three lists whether or not the plugin's mod is enabled; nothing writes a variable (the plugin's
-`set variable` / `add to variable` effects are not run), so each keeps its record's `value`.
+BFrizz's Extra Extensions (RE_Kenshi plugin, workshop 3625832102; source: github.com/BFrizzleFoShizzle/BFrizz_Extra_Extensions; the workshop DLL
+matches its first commit but for the world-state comparisons) adds VARIABLE records (type 1000, one int `value`) and, on DIALOGUE /
+DIALOGUE_LINE / WORD_SWAPS, three condition lists and two [effects](#effects). Its type 1000 and DCs 1000-1006 sit at Meitou's
+`SimulationExtensions.FirstModCode`, so a code mod claiming either number would clash with it. **Observed** (its `fcs.def`, source and disassembly).
+- `variable equals`, `variable less than`, `variable greater than`: each passes when the referenced variable's `value` is `==`, `<` or `>` the
+  reference's val0; all references must pass, and one whose record has no `value` is skipped. They are ANDed onto `DialogLineData::checkTags`
+  (`FUN_140674c50`), which the line check calls first, so a failing variable fails the line before any other test; they add no score.
+- `set variable` (`value` = val0) and `add to variable` (`value` += val0, an int sum): every reference whose record has a `value`, all sets
+  then all adds, run by its `Dialogue::_doActions` hook (`FUN_140680560`) before the line's own effects, after its `take item` / `destroy item`
+  actions.
+- The values live in the shared game data, so a change is seen at once by every check, and WORLD_EVENT_STATEs test them too
+  ([world states](factions-squads-towns.md#relations-and-world-states)). They are [saved](../formats/save.md#variables) in `quick.save`.
+
+Quests & Contracts (workshop 3797459646) gates its barman and trader replies with them, on variables its own `Ledger.dll` writes; without them
+every such reply passes, 254 replies under a Tech Hunter trader's `trader1` (#1442). Better Banking (workshop 3651996394) keeps an account balance
+in one VARIABLE (`BankBalance`) with 18 `add to variable` lines and 125 conditions. Meitou (`DialogueSystem.VariablesHold`,
+`WorldVariables`, per world) runs the lists and effects whether or not the plugin's mod is enabled. Not built: the plugin's DCs 1000-1006
+(`DC_IS_SLEEPING` .. `DC_ARMOUR_LEVEL`) fail as unknown codes, and its `take item`, `take item from squad`, `destroy item` and
+`destroy item from squad` do nothing.
 
 #### Retargeting
 
@@ -628,6 +638,7 @@ Talk menu's dry run is picking.
 ## Effects
 
 `FUN_140680560(dialogue, line)`, run when a line is said or a reply clicked, in this order:
+0. With BFrizz's Extra Extensions, its [variable effects](#variables) (its hook runs ahead of the function).
 1. `unlocks` (listed unlocked, **and the current dialogue locked**), `unlock but keep me` (listed unlocked), `locks`: the speaker's own
    lock map (the state `FUN_140680560` runs on: the owner's, or for a chained bubble line its speaker's, [chain](#ambient-conversations)).
 2. `interrupt` stored as the pending event-1 dialogue.

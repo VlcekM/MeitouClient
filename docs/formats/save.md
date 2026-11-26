@@ -71,6 +71,15 @@ order finished; every sample holds only `finished0` = `5359-gamedata.base`), flo
 `current prog<k>`, and `paid<k>` (**Observed**, [research](../game/buildings-production.md#research)). Meitou (`Saving/ResearchSave`) round-trips all of them;
 progress of research taken off the queue is not saved (as the original).
 
+<a id="variables"></a>**Variables** (BFrizz's Extra Extensions, [dialogue](../game/dialogue.md#variables); **Observed**: the plugin's source and
+disassembly, `FUN_1406c0750` / `FUN_1406bf780` / `FUN_1406c0840` read by disassembly): its `FactionManager::saveGameState` hook (`FUN_140375210`)
+copies every VARIABLE record (type 1000) of the game data into `quick.save` (`createNewData` with the record's own string id and name, then
+`updateFrom`: all its fields, `value` as it now is). `saveGame` (`FUN_140375360`) empties its container first (`clearButDontDestroyPlatoons`),
+so each save holds each variable once. Its `GameWorld::loadAllPlatoons` hook (`FUN_1409eee70`, called only by `loadGame`, not by an import)
+merges each saved VARIABLE over the game data's record of the same type and id (`updateData`; a saved one the data lacks is dropped). Meitou
+(`Saving/VariableSave`): the same; a capture drops the copied save's VARIABLE records and writes the data's last, each under the next number;
+an import drops them, so the data's values apply (Better Banking's page: "Importing your save will reset all variables").
+
 **Blueprint items** (**Verified**: 1954 INVENTORY_ITEM_STATEs in the owner's saves): `base data sid` is the look ITEM (`BLUEPRINT_ITEM`,
 `BLUEPRINT_ITEM_ARMOUR`, ...), `company sid` = `material sid` = the RESEARCH id, `item function` 11. Meitou (`SavedKit`) rebuilds them from the research.
 

@@ -162,7 +162,7 @@ public sealed partial class DialogueSystem
     bool Check(World world, Conversation c, DialogueNode node, CharacterId me, CharacterId other, bool retarget = true)
     {
         var table = world.Characters;
-        if (!VariablesHold(node)) return false;
+        if (!VariablesHold(world, node)) return false;
         if (!table.TryResolveNext(me, out int ms) || table.Cold(ms) is not { } mc) return false;
         var tc = Cold(world, other);
         if (!SpeakerPasses(world, c, node, me, ms, mc, tc, other)) return false;
@@ -183,20 +183,13 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// BFrizz's Extra Extensions variable conditions (docs/game/dialogue.md "Variables"), ANDed onto the line check's first test: each variable's
-    /// <c>value</c> against the reference's val0. Nothing writes a variable, so each keeps the value its record gives.
+    /// current value (<see cref="World.Variables"/>) against the reference's val0.
     /// </summary>
-    bool VariablesHold(DialogueNode node)
+    bool VariablesHold(World world, DialogueNode node)
     {
         foreach (var test in node.Variables)
         {
-            int value = _data.Db.Find(test.Variable)!.GetInt("value");
-            bool holds = test.Compare switch
-            {
-                VariableCompare.Equals => value == test.Value,
-                VariableCompare.LessThan => value < test.Value,
-                _ => value > test.Value,
-            };
-            if (!holds) return false;
+            if (!test.Holds(world.Variables.Value(_data.Db, test.Variable))) return false;
         }
         return true;
     }

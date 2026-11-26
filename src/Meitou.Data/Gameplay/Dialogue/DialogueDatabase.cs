@@ -98,33 +98,6 @@ public readonly record struct DialogueCondition(int Condition, int CompareBy, in
 public readonly record struct DialogueEffect(int Action, int Value);
 
 /// <summary>
-/// How a <see cref="VariableTest"/> compares the variable's <c>value</c> with the reference's val0.
-/// </summary>
-public enum VariableCompare
-{
-    /// <summary>
-    /// <c>variable equals</c>: value == val0.
-    /// </summary>
-    Equals,
-
-    /// <summary>
-    /// <c>variable less than</c>: value &lt; val0.
-    /// </summary>
-    LessThan,
-
-    /// <summary>
-    /// <c>variable greater than</c>: value &gt; val0.
-    /// </summary>
-    GreaterThan,
-}
-
-/// <summary>
-/// One BFrizz's Extra Extensions variable condition of a line (docs/game/dialogue.md "Variables"): the referenced record's string id, the
-/// comparison and the reference's val0.
-/// </summary>
-public readonly record struct VariableTest(string Variable, VariableCompare Compare, int Value);
-
-/// <summary>
 /// One DIALOGUE (a root), DIALOGUE_LINE or WORD_SWAPS record as the game reads it (docs/game/dialogue.md "DIALOGUE and DIALOGUE_LINE"): shared by
 /// every character, immutable once built. <see cref="Children"/> are sorted by <see cref="Score"/>, highest first; the tree may link back to
 /// earlier nodes.
@@ -319,6 +292,16 @@ public sealed class DialogueNode
     /// The Extra Extensions variable conditions (<c>variable equals</c>, <c>variable less than</c>, <c>variable greater than</c>), in list order.
     /// </summary>
     public IReadOnlyList<VariableTest> Variables { get; internal set; } = [];
+
+    /// <summary>
+    /// The Extra Extensions <c>set variable</c> effects: each variable set to val0.
+    /// </summary>
+    public IReadOnlyList<VariableChange> SetVariables { get; internal set; } = [];
+
+    /// <summary>
+    /// The Extra Extensions <c>add to variable</c> effects: val0 (negative to take away) added to each variable.
+    /// </summary>
+    public IReadOnlyList<VariableChange> AddToVariables { get; internal set; } = [];
 
     /// <summary>
     /// <c>give item</c>: items and counts (val0).
@@ -768,7 +751,9 @@ public sealed class DialogueDatabase(GameDatabase db)
         if (itemTyped) node.TargetHasItemFunction = db.Find(typeRefs[0].TargetStringId)!.GetInt("item function");
 
         node.WorldStates = [.. record.GetReferences("world state").Select(r => (r.TargetStringId, r.Values.Value0 != 0))];
-        node.Variables = [.. VariableTests(record)];
+        node.Variables = VariableData.DialogueTests(db, record);
+        node.SetVariables = VariableData.Changes(db, record, "set variable");
+        node.AddToVariables = VariableData.Changes(db, record, "add to variable");
         node.GiveItems = [.. record.GetReferences("give item").Select(r => (r.TargetStringId, r.Values.Value0))];
         node.ChangeRelations = [.. record.GetReferences("change relations").Select(r => (r.TargetStringId, r.Values.Value0))];
         node.Unlocks = [.. record.GetReferences("unlocks").Select(r => r.TargetStringId)];
@@ -782,28 +767,6 @@ public sealed class DialogueDatabase(GameDatabase db)
         node.TriggerCampaigns = [.. record.GetReferences("trigger campaign")
             .Select(r => new CampaignLink(r.TargetStringId, r.Values.Value0, r.Values.Value1, r.Values.Value2))];
         return itemTyped;
-    }
-
-    /// <summary>
-    /// The record's Extra Extensions variable conditions (docs/game/dialogue.md "Variables"): a reference whose record does not resolve or has no
-    /// <c>value</c> is skipped, as the plugin skips it.
-    /// </summary>
-    IEnumerable<VariableTest> VariableTests(GameRecord record)
-    {
-        (string List, VariableCompare Compare)[] lists =
-        [
-            ("variable equals", VariableCompare.Equals),
-            ("variable less than", VariableCompare.LessThan),
-            ("variable greater than", VariableCompare.GreaterThan),
-        ];
-        foreach (var (list, compare) in lists)
-        {
-            foreach (var r in record.GetReferences(list))
-            {
-                if (db.Find(r.TargetStringId) is { } variable && variable.Ints.ContainsKey("value"))
-                    yield return new VariableTest(r.TargetStringId, compare, r.Values.Value0);
-            }
-        }
     }
 
     /// <summary>

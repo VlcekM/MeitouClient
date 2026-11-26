@@ -33,12 +33,14 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// A line's effects (<c>FUN_140680560</c>, docs/game/dialogue.md "Effects"), run as it is said or clicked, with <paramref name="me"/> the
-    /// NPC-side speaker and the player character the target, in the original's order: locks, interrupt, relation changes, then the DA effects in data
-    /// order, then AI changes and contracts. Not built yet: arrests other than the bounty desk's hand-over, DA 5, 15, 17,
+    /// NPC-side speaker and the player character the target, in the original's order: BFrizz's Extra Extensions variable changes (its hook runs
+    /// first), locks, interrupt, relation changes, then the DA effects in data order, then AI changes and contracts. Not built yet: arrests other than the bounty desk's hand-over, DA 5, 15, 17,
     /// 39 and 58 (docs/game/dialogue.md "Effects").
     /// </summary>
     void RunEffects(World world, Conversation c, DialogueNode line, CharacterId me)
     {
+        if (line.SetVariables.Count + line.AddToVariables.Count > 0) world.Variables.Apply(_data.Db, line.SetVariables, line.AddToVariables);
+
         var mc = Cold(world, me);
         if (mc is not null) RunLocks(c, line, mc);
         if (line.Interrupt is { } interrupt)
