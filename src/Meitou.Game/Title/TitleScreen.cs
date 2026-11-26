@@ -108,12 +108,15 @@ sealed class TitleScreen(GameHost host)
         var build = bodyFromStats
             ? Data.Characters.CharacterShape.BuildFromStats(saved!.Female, stats!, static (stats, s) => stats.Stored(s), hunger)
             : (Data.Characters.BodyBuild?)null;
-        _titleComposition = new(host.Install, db, host.Scene.GroundAt, host.Sandbox.SandboxRecord(db), saved) { SavedBuild = build };
-        if (host.PopData is { } data && host.AnimationLengths is { } lengths && host.AnimationLibrary is { } library)
+        _titleComposition = new(host.Install, db, host.Scene.GroundAt, host.Sandbox.SandboxRecord(db), saved)
         {
-            TitleBattle = TitleBattle.Create(data, host.Scene.GroundAt, _titleComposition.Fights, lengths, library);
-            if (TitleBattle is not null) TitleBattle.Tornado.Enabled = host.WorldOptions.Screenshot is null;
-        }
+            SavedBuild = build,
+            FlightClips = host.AnimationLibrary is { } clips && host.AnimationLengths is { } clipLengths
+                ? WandererClips(clips, clipLengths)
+                : FlightClips.None,
+        };
+        if (host.PopData is { } data && host.AnimationLengths is { } lengths && host.AnimationLibrary is { } library)
+            StageBattle(data, lengths, library);
 
         if (host.ActiveCharacters is { } characters)
         {
@@ -238,11 +241,45 @@ sealed class TitleScreen(GameHost host)
     }
 
     /// <summary>
-    /// The title's character source: the composition's wanderer and the fighters.
+    /// Stages the road fight on the composition's centres: the twister easter egg on (not for a screenshot), and, when it rolls, the Beak Thing's
+    /// ambush (<see cref="TitleAmbush"/>) with the walk it takes at the wanderer as long as his stagger.
+    /// </summary>
+    void StageBattle(Simulation.Population.PopulationData data, Data.Gameplay.AnimationLengths lengths, Data.Gameplay.AnimationLibrary library)
+    {
+        var composition = _titleComposition!;
+        bool screenshot = host.WorldOptions.Screenshot is not null;
+        var ambush = TitleAmbush.Rolls(screenshot) ? composition.Stage(TitleBattle.DisplayScale) : (TitleStage?)null;
+
+        TitleBattle = TitleBattle.Create(data, host.Scene.GroundAt, composition.Fights, lengths, library, ambush, host.CharacterRigs);
+        if (TitleBattle is not null) TitleBattle.Tornado.Enabled = !screenshot;
+        if (TitleBattle?.Ambush is { } beak) beak.WalkSeconds = composition.StaggerSeconds;
+    }
+
+    /// <summary>
+    /// The wanderer's clips for his flight from the title's Beak Thing that <paramref name="library"/> has: a dodge back for the start (with its own
+    /// step back, the clip's root track), and a person's plain walk and run, legs and arms.
+    /// </summary>
+    static FlightClips WandererClips(Data.Gameplay.AnimationLibrary library, Data.Gameplay.AnimationLengths lengths)
+    {
+        FlightClip[] Of(params int[] records) => [.. records
+            .Where(i => i >= 0)
+            .Select(i => library.Definitions[i])
+            .Select(d => new FlightClip(d.Clip, d.PlaySpeed > 0 ? d.PlaySpeed : 1, lengths.Of(d.Clip)))];
+
+        var startle = Of(library.IndexOfAny("Dodge back"));
+        var walk = Of(library.IndexOf("walk lower"), library.IndexOf("walk upper"));
+        var run = Of(library.IndexOf("run lower"), library.IndexOf("run upper"));
+        Func<float, System.Numerics.Vector2>? travel = startle.Length > 0 ? t => lengths.Root(startle[0].Clip, t * startle[0].Rate) : null;
+
+        return new(startle, walk, run, travel);
+    }
+
+    /// <summary>
+    /// The title's character source: the composition's wanderer (running from the Beak Thing once it turns for the hill) and the fighters.
     /// </summary>
     void FillTitleCharacters(CharacterDrawList list)
     {
-        _titleComposition?.Fill(list);
+        _titleComposition?.Fill(list, TitleBattle?.Ambush?.ChaseSeconds);
         TitleBattle?.Fill(list);
     }
 
