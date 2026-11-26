@@ -847,8 +847,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Resolves each placed site against actual town radii after the ghost's candidate-town search; a site outside every town gets
-    /// the canonical NO_TOWN handle. A parent in a level building keeps its existing NPC-town association.
+    /// Finalises each placed site's town after the ghost and wall town passes (<c>FUN_14057cc70</c>): a proposed player town is kept regardless of its
+    /// current radius so reassessment can extend the outpost; a site with no proposed town takes the closest containing non-nest town or the canonical
+    /// NO_TOWN handle. A parent in a level building keeps its existing NPC-town association.
     /// </summary>
     void AssignFinalTowns(World world, List<BuildSite> placed)
     {
@@ -880,12 +881,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Whether the town the ghost proposed is a player-faction town whose actual radius contains the site.
+    /// Whether the town the ghost or wall pass proposed is a live player-faction outpost.
     /// </summary>
     static bool ProposedTownHolds(World world, BuildSite site) =>
         world.Buildings.FindTown(site.Town) is { } candidate
-        && candidate.Owner == world.Player.Faction
-        && DistanceXz(candidate.Position, site.Position) <= candidate.Radius;
+        && candidate.Owner == world.Player.Faction;
 
     /// <summary>
     /// Puts the site in player town <paramref name="town"/> (0: a level town, kept as the unresolved handle), clearing any foreign handle.

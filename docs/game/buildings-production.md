@@ -302,20 +302,24 @@ shows the first failing message in this order (**Verified** unless marked):
   No residents: the template lists none, and the resident pick (`Town::chooseResidents` `FUN_1409370d0`, from the building
   `default resident` / `residents override`) runs from `ZoneManager::loadPhase2` (`FUN_140a0e760`) only for towns whose faction
   lacks the player flag (FACTION `+0x250`) (**Verified** by decompile and its only caller).
-- **Town at materialization** (**Verified**, GOG executable: placement commit `0x1404d6c40`, building creation
-  `0x14057c610`, containment lookup `0x140927fd0`; decompile names `FUN_1404d72a0`, `FUN_14057cc70`,
-  `FUN_140928890`): the 5000-unit ghost lookup above proposes a town; creation rejects a player town when the
-  building's root position is outside its actual radius (X/Z, boundary included). It then chooses the nearest
-  containing non-nest town of any owner; no containing town gives the live `NO_TOWN` object. Its fixed handle is
-  `(TYPE=13, C=511, CS=-1064864767, I=0, S=0)` (**Verified**, GOG `TownNull` constructor `0x140934720`,
-  decompile `FUN_140934fe0`, and the zero initial slot/serial from `RootObjectBase`; **Observed** in the original's
-  saved Wind Generator II `1099-zone28.30-INGAME`). NO_TOWN contributes to no outpost radius or power frame.
-  Town-creating buildings use a separate nearest-town path (`FUN_140927e40`); Meitou founds their outpost directly.
-  Meitou: `ConstructionSystem` retains a containing proposed player town, otherwise compares all registered towns and
-  non-nest `PopulationData.Sites` by distance within their radii. Level towns keep `Town = 0`, `ForeignTown = null`,
+- **Town at materialization** (**Verified**, Steam/GOG 1.0.68: placement commit `FUN_1404d72a0`, building creation
+  `FUN_14057cc70`, zone load `FUN_1409ffad0`, containment lookup `FUN_140928890`): the 5000-unit ghost lookup
+  and wall pass above propose a town (`param_4`). In `FUN_14057cc70`, the radius check that logs
+  `"Import warning: Building ... outside range of town town ..."` and rejects a player town outside its current
+  radius is gated on `ZoneMapContent+0xa8` (set when a zone has no saved `.zone` file yet, was imported, or was
+  repopulated by a town override). When `+0xa8` is 0 (a loaded saved zone), a proposed town is kept regardless of
+  its current radius so the subsequent reassessment expands the outpost; only when no town was proposed (`param_4`
+  null, e.g. a non-`creates player town` building outside the 5000/2500 ranges) does creation fall back to
+  `FUN_140928890`, choosing the nearest containing non-nest town of any owner or the live `NO_TOWN` object. Its
+  fixed handle is `(TYPE=13, C=511, CS=-1064864767, I=0, S=0)` (**Verified**, GOG `TownNull` constructor
+  `0x140934720`, decompile `FUN_140934fe0`, and the zero initial slot/serial from `RootObjectBase`; **Observed**
+  in the original's saved Wind Generator II `1099-zone28.30-INGAME`). NO_TOWN contributes to no outpost radius or
+  power frame.
+  Meitou: `ConstructionSystem` keeps any proposed player town (allowing bases to extend without requiring a save
+  and reload of a fresh zone); only a placement with no proposed town compares all registered towns and non-nest
+  `PopulationData.Sites` by distance within their radii. Level towns keep `Town = 0`, `ForeignTown = null`,
   `InNoTown = false`, using the existing nearest-town power fallback. Only no containing town records `Hand.NoTown`
-  with `InNoTown`; furniture inherits its placed parent's town state. **Unknown:** exact level-town identity persistence
-  for a new placement when another non-containing town is nearer; this fallback does not store the selected level handle.
+  with `InNoTown`; furniture inherits its placed parent's town state.
 - **Later adoption** (**Verified**, GOG founding path `0x1404d6730`, decompile `FUN_1404d6d90`): founding an
   outpost explicitly moves existing player buildings into it when their town is a player town or NO_TOWN and their
   nearest town of any faction within 8000 is the new one. An NPC-town building is excluded. Meitou clears the old
@@ -508,8 +512,7 @@ and pick-up `FUN_1404d4240`, `FUN_1404d5130`, `FUN_1404e1f70`, `FUN_1404e27e0`);
 
 Meitou only (the original draws no town range): while build mode holds a building, each player outpost's radius
 ([centre and radius](#placement), "Centre, radius and placement-time merge") is drawn as a red band 10 units wide inside the
-radius, on the terrain, fainter where the scene hides it (`TownRangeRing`, rebuilt when the outposts change). A building whose
-root stands outside every ring belongs to no town and gets no power ("Town at materialization").
+radius, on the terrain, fainter where the scene hides it (`TownRangeRing`, rebuilt when the outposts change).
 
 ### Upgrades
 

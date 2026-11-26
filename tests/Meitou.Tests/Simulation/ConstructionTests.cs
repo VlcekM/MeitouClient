@@ -444,18 +444,19 @@ public class ConstructionTests
     }
 
     /// <summary>
-    /// A regular placement joins a town of any owner whose actual radius contains it; the 5000-unit candidate search does not extend town ownership.
+    /// A placement within <see cref="ConstructionSystem.JoinTownRange"/> of a player outpost joins that outpost even past its current radius (so
+    /// reassessment can extend the base); outside that range, a non-town-creating placement joins only a town whose radius contains it, else NO_TOWN.
     /// </summary>
     [Theory]
     [InlineData(1249, true, false)]
     [InlineData(1249, true, true)]
     [InlineData(1250, true, false)]
     [InlineData(1250, true, true)]
-    [InlineData(1251, false, false)]
+    [InlineData(1251, true, false)]
     [InlineData(1251, false, true)]
     [InlineData(5001, false, false)]
     [InlineData(5001, false, true)]
-    public void A_placed_building_joins_only_a_town_that_contains_it(float distance, bool contained, bool levelTown)
+    public void A_placed_building_joins_only_a_town_that_contains_it(float distance, bool joined, bool levelTown)
     {
         var population = levelTown ? new PopulationData
         {
@@ -466,10 +467,10 @@ public class ConstructionTests
         using var rig = new Rig(population: population);
         var town = rig.World.Buildings.AddTown(new Vector3(0, 300, 0), Rig.PlayerFaction);
         town.Override = levelTown ? 1 : 1250;
-        if (levelTown) town.Position = new Vector3(-3000, 300, 0);
+        if (levelTown) town.Position = new Vector3(-10000, 300, 0);
         rig.World.Buildings.Add(new BuildSite
         {
-            Id = rig.World.Buildings.NewId(new ZoneCoordinate(32, 32)), Record = Hut, Position = new Vector3(0, 300, 0), Town = town.Number,
+            Id = rig.World.Buildings.NewId(new ZoneCoordinate(32, 32)), Record = Hut, Position = town.Position, Town = town.Number,
             Owner = Rig.PlayerFaction, Materials = [], Complete = true, Target = 1, Progress = 1,
         });
 
@@ -477,10 +478,10 @@ public class ConstructionTests
         rig.World.RunTicks(2);
 
         var placed = rig.World.Buildings.All.Single(site => site.Record == Shed);
-        Assert.Equal(contained && !levelTown ? town.Number : 0, placed.Town);
-        if (contained && levelTown) Assert.Equal(-1, TownLookup.KeyOf(rig.World, placed));
-        Assert.Equal(!contained, placed.InNoTown);
-        Assert.Equal(!contained, placed.ForeignTown is not null);
+        Assert.Equal(joined && !levelTown ? town.Number : 0, placed.Town);
+        if (joined && levelTown) Assert.Equal(-1, TownLookup.KeyOf(rig.World, placed));
+        Assert.Equal(!joined, placed.InNoTown);
+        Assert.Equal(!joined, placed.ForeignTown is not null);
     }
 
     /// <summary>

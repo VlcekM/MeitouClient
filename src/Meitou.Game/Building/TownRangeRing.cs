@@ -4,9 +4,8 @@ namespace Meitou.Game.Building;
 
 /// <summary>
 /// Meitou only (docs/game/buildings-production.md "Town range ring"): while build mode holds a building, each of the player's outposts draws its
-/// radius as a red band on the ground, so the player sees where a new building still joins that outpost (and its power) and where it would stand
-/// in no town. Drawn by <see cref="Rendering.Overlays.NavmeshOverlayRenderer"/> (<c>WorldGpu.TownRangeOverlay</c>); the band is rebuilt only when
-/// the player's outposts change.
+/// current radius as a red band on the ground. Drawn by <see cref="Rendering.Overlays.NavmeshOverlayRenderer"/> (<c>WorldGpu.TownRangeOverlay</c>);
+/// the band is rebuilt only when the player's outposts change.
 /// </summary>
 sealed class TownRangeRing(GameHost host)
 {
