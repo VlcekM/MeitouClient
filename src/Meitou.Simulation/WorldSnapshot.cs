@@ -1190,6 +1190,10 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public Production.ResearchSnapshot Research { get; init; } = Production.ResearchSnapshot.Empty;
     /// <summary>
+    /// The crafting stations the Craft tab lists: the player's faction's and its allies' (<see cref="Production.ProductionSystem.CraftStationsView"/>).
+    /// </summary>
+    public IReadOnlyList<Production.CraftStationView> CraftStations { get; init; } = [];
+    /// <summary>
     /// What each of the player's crafting benches can craft (by site), for the Craft tab.
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<Production.CraftOptionView>> Crafts { get; init; } =

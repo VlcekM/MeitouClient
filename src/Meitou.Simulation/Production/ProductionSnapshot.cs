@@ -155,6 +155,11 @@ public sealed record CraftView(IReadOnlyList<(string Key, string Name, float Pro
 }
 
 /// <summary>
+/// A station of the overview's Craft tab (<see cref="ProductionSystem.CraftStationsView"/>): its machine's site and the name it shows.
+/// </summary>
+public readonly record struct CraftStationView(string Site, string Name);
+
+/// <summary>
 /// Something a bench can craft, with its hours and inputs per item, and whether research and the bench level allow it now.
 /// </summary>
 public sealed record CraftOptionView(string Key, string Name, CraftKind Kind, int Level, float Hours,

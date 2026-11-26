@@ -1733,15 +1733,25 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// The player's crafting benches.
+    /// The crafting benches the tab lists (<see cref="Simulation.WorldSnapshot.CraftStations"/>: the player's faction's and its allies').
     /// </summary>
-    List<MachineSnapshot> CraftStations() => [.. player.Session.CurrentSnapshot.Machines.Where(m => m.Craft is not null)];
+    List<MachineSnapshot> CraftStations()
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        var listed = snapshot.CraftStations.Select(s => s.Site).ToHashSet(StringComparer.Ordinal);
+        return [.. snapshot.Machines.Where(m => m.Craft is not null && listed.Contains(m.Site))];
+    }
 
     /// <summary>
-    /// A station's name: its site's, else its record.
+    /// A station's name: its player building's as shown, else the one the world published for it.
     /// </summary>
-    string StationName(MachineSnapshot m) =>
-        player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == m.Site) is { } site ? player.Build.ShownSiteName(site) : m.Record;
+    string StationName(MachineSnapshot m)
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        if (snapshot.Buildings.FirstOrDefault(s => s.Id == m.Site) is { } site) return player.Build.ShownSiteName(site);
+
+        return snapshot.CraftStations.FirstOrDefault(s => s.Site == m.Site).Name ?? m.Record;
+    }
 
     /// <summary>
     /// Opens the Craft tab on a bench (the building window's QUEUE... button).

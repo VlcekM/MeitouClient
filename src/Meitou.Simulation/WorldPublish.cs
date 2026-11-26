@@ -350,6 +350,7 @@ public sealed partial class World
             Outposts = _production?.OutpostView(this) ?? [],
             WorkSites = _production?.WorkSitesView(this) ?? [],
             MapSquads = _mapSquads.Published(this),
+            CraftStations = _production?.CraftStationsView(this) ?? [],
             Crafts = _production?.CraftsView(this) ?? Snapshot.Crafts,
             Smiths = _production?.SmithsView(this) ?? Snapshot.Smiths
         };

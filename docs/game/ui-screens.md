@@ -1217,7 +1217,10 @@ Overview tab 2 (`ResearchTab`), part of `ManagementScreen` (constructor `FUN_140
 
 ### Craft tab
 
-Overview tab 3 (`CraftingQueue`, constructor `FUN_1402bf0f0`; Meitou: `ProductionWindows`; the rules are in [buildings-production](buildings-production.md#crafting)). A layout with a
+Overview tab 3 (`CraftingQueue`, constructor `FUN_1402bf0f0`; Meitou: `ProductionWindows`; the rules are in [buildings-production](buildings-production.md#crafting)). STATIONS
+(`CraftingStationsList`, filled by `FUN_1402bed80`) lists every loaded building of functionality 6 (crafting) whose faction is the player's or an ally of it
+(`FUN_140a00690` over all towns with the player's faction, `FUN_1406b2630`: the same faction or relation 50 or more), each by its name (**Verified**,
+decompile); a town bench of any other faction is not listed. Meitou: `ProductionSystem.CraftStationsView` (#1445). A layout with a
 `QueuePanel` (older ones, e.g. the Dark UI mod's, which have no `CraftQueue`) gets a `CraftQueue` ItemBox created inside it, skin `Kenshi_ItemBoxEmpty`, align
 stretch; the research tab does the same with `ResearchQueueList` in `ResearchQueuePanel` (`FUN_14049f5b0`) (**Verified**, decompile; Meitou: `QueueBox`, #463). The skin `Kenshi_ItemBoxEmpty` (`gui/templates/kenshi_templates.xml`) gives the box a `VScroll` 15 wide (`Kenshi_ScrollBarV`), so a queue taller than the box scrolls (**Observed**, the template); Meitou: `QueueView` draws that bar when the queue overflows and scrolls the rows with its arrows, track, thumb and the wheel (#1224). `CraftQueue` is an
 ItemBox of the bench's queue (building `+0x498` deque, filled by `FUN_1402b5ca0`, the ITEMS click `FUN_1402b9770` and the save loader); its tooltip callback `FUN_1402be650` sets the hovered index
