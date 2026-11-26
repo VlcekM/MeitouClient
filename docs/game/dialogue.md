@@ -241,6 +241,18 @@ child's (`FUN_1406ad9d0`).
 8. `chance permanent` below 99: a roll made once per character and line, then cached.
 9. The DC list in order ([Conditions](#conditions)).
 
+#### Variables
+
+BFrizz's Extra Extensions (RE_Kenshi plugin, workshop 3625832102) adds VARIABLE records (one int `value`) and three DIALOGUE / DIALOGUE_LINE /
+WORD_SWAPS reference lists: `variable equals`, `variable less than`, `variable greater than`, each passing when the referenced variable's `value`
+is `==`, `<` or `>` the reference's val0; all references must pass, and one whose record has no `value` is skipped. They are ANDed onto
+`DialogLineData::checkTags` (`FUN_140674c50`), which the line check calls first, so a failing variable fails the line before any other test; they
+add no score. **Observed** (its `fcs.def`; the same author's KenshiLib_Examples `WorldStates.cpp`, whose dialogue hook does exactly this).
+Quests & Contracts (workshop 3797459646) gates its barman and trader replies with them, on variables its own `Ledger.dll` writes (type 1000
+records, `value` 0); without them every such reply passes, 254 replies under a Tech Hunter trader's `trader1` (#1442). Meitou
+(`DialogueSystem.VariablesHold`) applies the three lists whether or not the plugin's mod is enabled; nothing writes a variable (the plugin's
+`set variable` / `add to variable` effects are not run), so each keeps its record's `value`.
+
 #### Retargeting
 
 `FUN_140671930` (**Verified**): a matching squad member that is not the checked state's owner and not its target already is copied into the state's target
