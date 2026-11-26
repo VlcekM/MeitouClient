@@ -3390,6 +3390,10 @@ msgstr ""
 msgid "Mod list saved: {1} enabled."
 msgstr ""
 
+#: src/Meitou.Game/Ui/RecordModsText.cs
+msgid "Mod: {1}"
+msgstr ""
+
 #: src/Meitou.Game/Title/DataLoadErrors.cs
 msgid "Modifications to the GLOBAL_CONSTANTS will be lost, you'll have to set them again, sorry!"
 msgstr ""
@@ -3412,6 +3416,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/ModsFromSave.cs
 msgid "Mods of the save '{1}' applied."
+msgstr ""
+
+#: src/Meitou.Game/Ui/RecordModsText.cs
+msgid "Mods: {1}"
 msgstr ""
 
 #: src/Meitou.Game/Mods/ModReport.cs
