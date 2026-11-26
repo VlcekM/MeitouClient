@@ -93,13 +93,20 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     #region Orders
 
     /// <summary>
-    /// The <see cref="OrderEntry.Detail"/> of the Medic button's one-shot order (the job's finder looked at once, then a First aid 25).
+    /// The <see cref="OrderEntry.Detail"/> of the Medic button's one-shot order: the job's finder looked at after each treatment, then a First aid 25
+    /// on its pick (<see cref="IOrderOwner.Repeats"/>). <see cref="Robotics"/>: Robotics 57 was given too, so the look takes robots as well.
     /// </summary>
-    static readonly object MedicButton = new();
-    /// <summary>
-    /// The same with Robotics 57 given too: the look takes robots as well.
-    /// </summary>
-    static readonly object RoboticsButton = new();
+    sealed class ButtonLook(bool robotics)
+    {
+        /// <summary>
+        /// Whether the look uses the Robotics finder.
+        /// </summary>
+        public bool Robotics { get; } = robotics;
+        /// <summary>
+        /// The patient of the treatment the order started last (none before the first).
+        /// </summary>
+        public CharacterId Last { get; set; } = CharacterId.None;
+    }
     /// <summary>
     /// Dialogue events 18-22 (EV_HEALING_OTHER_START ... EV_FIRSTAID_KIT_EMPTY).
     /// </summary>
@@ -167,10 +174,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
             if (!job.Job)
             {
-                var detail = robotics ? RoboticsButton : MedicButton;
-
                 // the button: a look for a patient after each treatment
-                PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = detail }, job.Queued);
+                PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = new ButtonLook(robotics) }, job.Queued);
                 continue;
             }
 
@@ -211,7 +216,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     {
         var table = world.Characters;
         var cold = table.Cold(slot)!;
-        if (order.Detail == MedicButton || order.Detail == RoboticsButton) return OrderCheck.Run;
+        if (order.Detail is ButtonLook) return OrderCheck.Run;
 
         if (order.Row == TaskType.Rest) return CanAct(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         if (IsJobEntry(order.Row)) return JobEntryCheck(world, slot, cold, order.Row);
@@ -234,9 +239,10 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// <inheritdoc/>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
-        if (order.Detail == MedicButton || order.Detail == RoboticsButton)
+        if (order.Detail is ButtonLook look)
         {
-            HealSomeone(world, slot, SquadGoals.Of(world), robotics: order.Detail == RoboticsButton, TaskSource.Order);
+            if (HealSomeone(world, slot, SquadGoals.Of(world), look.Robotics, TaskSource.Order))
+                look.Last = world.Characters.Cold(slot)!.Running?.Target ?? CharacterId.None;
             return;
         }
 
@@ -269,14 +275,17 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// <summary>
     /// The Medic button's order (58, with 57) stays at the front after each treatment while its finder still gives a patient: the original pops a
     /// front order only once it is done (58's effect, <c>!needsFirstAid</c>) or its desire x finder is 0 (docs/game/ai-tasks.md "Precedence"),
-    /// so the button treats patient after patient, as its tooltip says ("heal everyone else in the squad").
+    /// so the button treats patient after patient, as its tooltip says ("heal everyone else in the squad"). A finished patient has no need left, so
+    /// a pick of the patient just treated means its treatment ended unfinished (a kit the wound needs and the medic lacks, a fight, a lost path):
+    /// the order then leaves, as it did after one treatment, rather than start the same treatment again.
     /// </summary>
     bool IOrderOwner.Repeats(World world, int slot, OrderEntry order)
     {
-        if (order.Detail != MedicButton && order.Detail != RoboticsButton) return false;
+        if (order.Detail is not ButtonLook look) return false;
 
-        bool robotics = order.Detail == RoboticsButton;
-        return FindPatient(world, slot, SquadGoals.Of(world), robotics, ordered: true).Slot >= 0;
+        var table = world.Characters;
+        int pick = FindPatient(world, slot, SquadGoals.Of(world), look.Robotics, ordered: true).Slot;
+        return pick >= 0 && table.IdOf(pick) != look.Last;
     }
 
     /// <summary>
