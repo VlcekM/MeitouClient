@@ -30,6 +30,11 @@ public sealed class MetalCommandList : IGpuCommandList
     /// </summary>
     readonly Stack<string> _labels = new();
     /// <summary>
+    /// The labels opened as the command buffer's own debug groups (no encoder open then) and not yet closed, innermost last: a split of the frame
+    /// (<see cref="MoveTo"/>) closes them on the old command buffer and opens them again on the new one.
+    /// </summary>
+    readonly List<string> _commandGroups = [];
+    /// <summary>
     /// The command buffer the encoders record into.
     /// </summary>
     MTLCommandBuffer _command;
@@ -295,6 +300,33 @@ public sealed class MetalCommandList : IGpuCommandList
         _render.EndEncoding();
         _render = default;
     }
+
+    /// <summary>
+    /// Ends the open rendering mid-way, for a split of the frame inside it (<see cref="MetalContext.SplitFrame"/>; its attachments are stored, as
+    /// <see cref="MetalContext.StoreAll"/> makes them): its description, to go on with <see cref="ResumeRendering"/>.
+    /// </summary>
+    internal RenderingDesc SuspendRendering()
+    {
+        var d = _renderDesc;
+        EndRendering();
+        return d;
+    }
+
+    /// <summary>
+    /// Opens rendering <paramref name="d"/> again after <see cref="SuspendRendering"/>: every attachment loads what the first part stored.
+    /// </summary>
+    internal void ResumeRendering(in RenderingDesc d) => BeginRendering(d with
+    {
+        Colour = Loaded(d.Colour),
+        Extra = Loaded(d.Extra),
+        Extra2 = Loaded(d.Extra2),
+        Depth = Loaded(d.Depth),
+    });
+
+    /// <summary>
+    /// <paramref name="t"/> loading its contents (none: as it is).
+    /// </summary>
+    static RenderTarget Loaded(in RenderTarget t) => t.IsNull ? t : t with { Load = LoadOp.Load };
 
     /// <summary>
     /// Clears a depth area (a shadow tile, the depth between slices): a fullscreen triangle under the rect's scissor.
@@ -1170,7 +1202,11 @@ public sealed class MetalCommandList : IGpuCommandList
         _labels.Push(name);
         if (_render.NativePtr != IntPtr.Zero) _render.PushDebugGroup((NSString)name);
         else if (_blit.NativePtr != IntPtr.Zero) _blit.PushDebugGroup((NSString)name);
-        else _command.PushDebugGroup((NSString)name);
+        else
+        {
+            _command.PushDebugGroup((NSString)name);
+            _commandGroups.Add(name);
+        }
     }
 
     /// <inheritdoc/>
@@ -1179,7 +1215,11 @@ public sealed class MetalCommandList : IGpuCommandList
         if (_labels.Count > 0) _labels.Pop();
         if (_render.NativePtr != IntPtr.Zero) _render.PopDebugGroup();
         else if (_blit.NativePtr != IntPtr.Zero) _blit.PopDebugGroup();
-        else _command.PopDebugGroup();
+        else
+        {
+            _command.PopDebugGroup();
+            if (_commandGroups.Count > 0) _commandGroups.RemoveAt(_commandGroups.Count - 1);
+        }
     }
 
     #endregion
@@ -1218,7 +1258,24 @@ public sealed class MetalCommandList : IGpuCommandList
     /// <summary>
     /// The frame's list is reused every frame of its slot: the next frame's command buffer comes in here.
     /// </summary>
-    internal void Rebind(MTLCommandBuffer next) => _command = next;
+    internal void Rebind(MTLCommandBuffer next)
+    {
+        _command = next;
+        _commandGroups.Clear();
+    }
+
+    /// <summary>
+    /// Recording moves on to <paramref name="next"/> mid-frame (the profiler's split, <see cref="MetalContext.SplitFrame"/>): the open encoders
+    /// end, the command buffer's open debug groups close on the old one and open again on <paramref name="next"/>.
+    /// </summary>
+    internal void MoveTo(MTLCommandBuffer next)
+    {
+        Finish();
+        for (int i = _commandGroups.Count - 1; i >= 0; i--) _command.PopDebugGroup();
+        _command = next;
+        foreach (var name in _commandGroups) _command.PushDebugGroup((NSString)name);
+        Invalidate();
+    }
 
     /// <summary>
     /// Closes what is open (the upload batch's own encoder is the caller's).

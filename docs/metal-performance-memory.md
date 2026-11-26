@@ -376,13 +376,30 @@ Use the manual `Ctrl+/` capture after the world has warmed up; capture one frame
 from the game loop. The unattended `MEITOU_METAL_CAPTURE_AT`/`MEITOU_METAL_CAPTURE_PATH` trigger was removed after
 a capture-related system restart; do not reintroduce it.
 
-## Metal timestamp limitation and private statics
+## Metal profiler
 
-Apple silicon supports GPU counter sampling only at **stage boundaries**. A mid-encoder
-`sampleCountersInBuffer` is unsupported (the render and blit encoders assert), and configuring the pass descriptor's
-sample-buffer attachments for our render passes also crashed the process in the 2026-10-23 experiment. Do not wire
-per-lap Metal timestamps yet. Prefer `MEITOU_METAL_TRACE` and the existing A/B timings. If a capture is unavoidable,
-quit the game before opening one frame in Xcode and do not capture multiple frames (one trace is already 2.3-2.6 GB).
+F12 cycles the shared profiler chart (`FrameProfiler`: gpu, cpu, off; nothing shown at start) with the CPU stages, the sim rows and the
+header's memory (Metal's allocated size against the GPU budget). Not on Metal: the VRAM pie and dump (Shift/Ctrl+Shift+F12) and the spike
+log's GPU side.
+
+Apple silicon supports GPU counter sampling only at **stage boundaries**: a mid-encoder `sampleCountersInBuffer` is unsupported (the render and
+blit encoders assert), and configuring the pass descriptor's sample-buffer attachments for our render passes crashed the process (2026-10-23).
+So the GPU chart (`MetalStageTimer`) does not sample counters: while it is shown, each stage lap commits the frame's commands so far as a command
+buffer of their own (`MetalContext.SplitFrame`) and a stage's time is its command buffers' `GPUStartTime`-`GPUEndTime`, each counted from the
+previous one's end (consecutive buffers overlap; the idle gaps are not counted). The separate pre-frame (GPU cull, FFT, bakes) recorded so far is
+committed just before each split, so every scene part runs after the pre-frame work recorded with it; its time is charted as uploads. A lap inside
+the host pass ends the rendering and opens it again loading its attachments, every attachment stored while the chart is shown (`StoreAll`); a
+lap inside another native segment is not split (its work goes to the next stage). The CPU chart shows no GPU column (no splits then).
+
+**Observed** (2026-11-26, M6, title scene, windowed Retina, the user's Ultra-class settings): 41 fps over 26 s both with the chart off and
+with the gpu chart's splits (before laps inside the pass were split); with the pass split too, the gpu chart read about 13 ms a frame (foliage
+3.1, shadows 1.4, terrain 1.2, objects and characters 1.0 each) at the window's 60 fps cap, and the picture was unchanged. Two approaches
+failed: enqueuing the one pre-frame ahead of the first split and committing it at the frame's end hung the game (the queue waited for it while
+the frame waited for work behind it), and recording later pre-frame work into the frame's list put the GPU cull inside the shadows' rendering.
+
+For one frame's detail, quit the game before opening a capture in Xcode and do not capture multiple frames (one trace is already 2.3-2.6 GB).
+
+## Private statics
 
 The static terrain experiment is behind `MEITOU_METAL_PRIVATE_STATIC=1`: it gives the static terrain textures and the
 terrain patch vertex/index buffers private Metal storage (Microsoft's staging uploads stay shared). A 20-second A/B was

@@ -377,7 +377,6 @@ All environment variables starting with `MEITOU_` are automatically recorded in 
 | `MEITOU_METAL_TRACE` | `Host/MetalGameLoop.cs`, `MetalPipelines.cs`, `MetalStage.cs` | `1`: traces the Metal frame loop plus pipeline state and shader library compile times. |
 | `MEITOU_METAL_NO_BUILDINGS` | `Host/MetalGameLoop.cs` | `1`: skips runtime building, ground-item, and lamp updates (freeze diagnostic). |
 | `MEITOU_METAL_NO_PARTICLE_COVERAGE` | `src/Meitou.Game/Rendering/Metal/MetalPostChain.cs` | `1`/`true`: stops particles from writing TAA coverage alpha. |
-| `MEITOU_METAL_OVERLAY` | `Host/MetalGameLoop.cs` | `1`: draws frame-stats overlay onto screenshots. |
 | `MEITOU_METAL_SETTINGS` | `Host/MetalGameLoop.cs` | `1`/`true`: opens the Settings panel automatically for still captures. |
 | `MEITOU_METAL_FAST_MATH` | `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` | Controls Metal fast-math compilation (`1` on, `0` off, unset = Metal default on). |
 | `MEITOU_METAL_DUMP` | `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` | Dumps translated MSL shader source files into this folder. |

@@ -9,7 +9,9 @@ namespace Meitou.Game.Rendering.Profiling;
 /// <summary>
 /// Where the frame time goes, per <see cref="StageClock"/> stage: the render thread's time (stopwatch laps) and the GPU's (a timestamp at every lap;
 /// a stage's time is the gap since the stamp before, summed when a stage runs more than once). Keeps the last <see cref="History"/> frames and draws
-/// them with the <see cref="DebugOverlay"/> as one chart, a line per stage. GPU timings are read a few frames late, without waiting.
+/// them with the <see cref="DebugOverlay"/> as one chart, a line per stage. GPU timings are read a few frames late, without waiting. On a backend
+/// without Vulkan's timestamps the GPU side comes from an <see cref="IStageGpuTimer"/>, and the VRAM pie, the VRAM dump and the spike log are not
+/// there.
 /// </summary>
 public sealed class FrameProfiler : IDisposable
 {
@@ -122,9 +124,19 @@ public sealed class FrameProfiler : IDisposable
     readonly Func<double>? _gpuFrameMs;
 
     /// <summary>
-    /// The native timestamps' context (VkGl provides the seam).
+    /// The native timestamps' context (VkGl provides the seam); null on a backend with its own GPU timer (<see cref="_timer"/>).
     /// </summary>
-    readonly GpuContext _native;
+    readonly GpuContext? _native;
+
+    /// <summary>
+    /// The GPU stage times of a backend without Vulkan's timestamps; null on Vulkan.
+    /// </summary>
+    readonly IStageGpuTimer? _timer;
+
+    /// <summary>
+    /// The video memory in use and the budget, for the header, on a backend without the VRAM panel (<see cref="_vramPanel"/>).
+    /// </summary>
+    readonly Func<(ulong Used, ulong Budget)>? _memory;
 
     /// <summary>
     /// The slot of the frame being made.
@@ -245,7 +257,18 @@ public sealed class FrameProfiler : IDisposable
         _vramPanel = new VramPanel(gpu);
         _spikes = new SpikeRun(gpu);
         GpuContext.ProfilePreFrame = true;
-        _recordStamp = cmd => cmd.Timestamp(_native.Frame.Timestamps, _pendingStamp);
+        _recordStamp = cmd => cmd.Timestamp(gpu.Frame.Timestamps, _pendingStamp);
+    }
+
+    /// <summary>
+    /// A profiler whose GPU stage times come from <paramref name="timer"/> (a backend without Vulkan's timestamps), the header's video memory from
+    /// <paramref name="memory"/>.
+    /// </summary>
+    internal FrameProfiler(IStageGpuTimer timer, Func<(ulong Used, ulong Budget)> memory)
+    {
+        _timer = timer;
+        _memory = memory;
+        _recordStamp = _ => { };
     }
 
     /// <summary>
@@ -268,7 +291,8 @@ public sealed class FrameProfiler : IDisposable
         StageClock.Ms[StageClock.Sim] = _outsideSim;
         _outsideSim = 0;
         StageClock.Profiler = this;
-        Stamp(-1);
+        if (_timer is not null) _timer.BeginFrame(_slot, Showing == Mode.Gpu);
+        else Stamp(-1);
     }
 
     /// <summary>
@@ -310,15 +334,18 @@ public sealed class FrameProfiler : IDisposable
         StageClock.Profiler = null;
         StageClock.EndFrame();
         _submitted[_slot] = StageClock.SubmissionStarted;
-        _pending[_slot] = _stampCount[_slot] > 1;
+        _pending[_slot] = _timer?.EndFrame(_slot) ?? _stampCount[_slot] > 1;
         StampsLastFrame = _stampCount[_slot] + _preCount[_slot];
 
         // Complete when the context has ended the frame already (else the total falls back to gpuFrameMs).
-        _slotWhole[_slot] = _native.CurrentFrameStamps;
-        _slotPreEnd[_slot] = _native.LastFrameStamps.PreEnd;
+        if (_native is not null)
+        {
+            _slotWhole[_slot] = _native.CurrentFrameStamps;
+            _slotPreEnd[_slot] = _native.LastFrameStamps.PreEnd;
+        }
         double sum = RecordCpuStages();
         _frameTime[_cpuHead] = (float)_frameMs;
-        if (SpikeLog.Enabled) _spikes.RecordCpu(_slot, sum, _cpu[Total], _cpuCount);
+        if (SpikeLog.Enabled) _spikes?.RecordCpu(_slot, sum, _cpu[Total], _cpuCount);
         _cpuHead = (_cpuHead + 1) % History;
         _cpuCount = Math.Min(_cpuCount + 1, History);
     }
@@ -435,7 +462,7 @@ public sealed class FrameProfiler : IDisposable
     void RecordPre(IGpuCommandList cmd, int stage)
     {
         int n = _preCount[_slot];
-        if (n >= MaxPre) return;
+        if (n >= MaxPre || _native is null) return;
 
         var q = _native.Frame.Timestamps.Allocate();
         if (!q.IsValid) return;
@@ -452,6 +479,12 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     internal void Stamp(int stage)
     {
+        if (_native is null)
+        {
+            if (stage >= 0) _timer?.Lap(_slot, stage);
+            return;
+        }
+
         int n = _stampCount[_slot];
         if (n >= MaxStamps) return;
 
@@ -470,7 +503,7 @@ public sealed class FrameProfiler : IDisposable
     /// <summary>
     /// Reads stamp <paramref name="i"/> of slot <paramref name="s"/> in nanoseconds; false while it is not ready.
     /// </summary>
-    bool TryStamp(int s, int i, out ulong ns) => _native.Frame.Timestamps.TryRead(_nativeStamps[s, i], out ns);
+    bool TryStamp(int s, int i, out ulong ns) => _native!.Frame.Timestamps.TryRead(_nativeStamps[s, i], out ns);
 
     /// <summary>
     /// Reads the GPU stage times of slot <paramref name="s"/> when they are ready, into the GPU history.
@@ -478,6 +511,11 @@ public sealed class FrameProfiler : IDisposable
     void Collect(int s)
     {
         if (!_pending[s]) return;
+        if (_native is null)
+        {
+            CollectTimer(s);
+            return;
+        }
 
         int n = _stampCount[s];
         if (!TryStamp(s, n - 1, out _)) return;
@@ -511,8 +549,30 @@ public sealed class FrameProfiler : IDisposable
         double own = arena.TryRead(whole.Begin, out ulong wb) && arena.TryRead(whole.End, out ulong we) && we >= wb ? (we - wb) / 1e6 : 0;
         double total = own > 0 ? Math.Max(own, sum) : _gpuFrameMs?.Invoke() is > 0 and var t ? Math.Max(t, sum) : sum;
         PublishGpuFrame(s, total, sum);
-        if (SpikeLog.Enabled && _spikes.FrameOf(s) > SpikeLog.SkipFrames) _spikes.RecordRunGpu(_gpuFrame, total, sum);
-        if (SpikeLog.Enabled && _spikes.NotesOf(s) is { } notes) _spikes.ReportSpike(s, total, sum, notes, _gpuFrame, _gpu[Total], _gpuCount);
+        if (SpikeLog.Enabled && _spikes!.FrameOf(s) > SpikeLog.SkipFrames) _spikes.RecordRunGpu(_gpuFrame, total, sum);
+        if (SpikeLog.Enabled && _spikes!.NotesOf(s) is { } notes) _spikes.ReportSpike(s, total, sum, notes, _gpuFrame, _gpu[Total], _gpuCount);
+        AdvanceGpu(s);
+    }
+
+    /// <summary>
+    /// Reads slot <paramref name="s"/>'s stage times from <see cref="_timer"/> when its frame has completed, into the GPU history.
+    /// </summary>
+    void CollectTimer(int s)
+    {
+        Array.Clear(_gpuFrame);
+        if (!_timer!.TryCollect(s, _gpuFrame, out double total)) return;
+
+        double sum = 0;
+        for (int k = 0; k < Stages; k++) sum += _gpuFrame[k];
+        PublishGpuFrame(s, Math.Max(total, sum), sum);
+        AdvanceGpu(s);
+    }
+
+    /// <summary>
+    /// The GPU history moves on past the frame of slot <paramref name="s"/>, read.
+    /// </summary>
+    void AdvanceGpu(int s)
+    {
         _gpuHead = (_gpuHead + 1) % History;
         _gpuCount = Math.Min(_gpuCount + 1, History);
         _pending[s] = false;
@@ -525,7 +585,7 @@ public sealed class FrameProfiler : IDisposable
     double CollectPreFrame(int s, (QuerySlot Begin, QuerySlot End) whole)
     {
         double sum = 0;
-        var arena = _native.Frame.Timestamps;
+        var arena = _native!.Frame.Timestamps;
         if (arena.TryRead(whole.Begin, out ulong cursor))
         {
             for (int i = 0; i < _preCount[s]; i++)
@@ -717,8 +777,7 @@ public sealed class FrameProfiler : IDisposable
     void DrawHeader(DebugOverlay overlay, bool showGpu, float x0, float y0)
     {
         float cw = overlay.CharWidth;
-        _vramPanel.Refresh();
-        var (vram, ram) = (_vramPanel.Vram, _vramPanel.Ram);
+        var (vram, ram) = Memory();
 
         // The process's RAM: its working set (all it holds in physical memory) and the managed heap within it.
         string header = string.Create(CultureInfo.InvariantCulture,
@@ -731,6 +790,17 @@ public sealed class FrameProfiler : IDisposable
         string frame = string.Create(CultureInfo.InvariantCulture,
             $"frame {frameMean:0.00} ms ({(frameMean > 0 ? 1000 / frameMean : 0):0} fps), max {Max(_frameTime, _cpuHead, _cpuCount):0.00}");
         overlay.Text(frame, x0 + Pad + header.Length * cw, y0 + Pad, FrameColour);
+    }
+
+    /// <summary>
+    /// The header's video memory and RAM: the VRAM panel's (read every 30 frames), else the backend's figures and the process's now.
+    /// </summary>
+    ((ulong Used, ulong Budget) Vram, (long WorkingSet, long Managed) Ram) Memory()
+    {
+        if (_vramPanel is null) return (_memory!(), (Environment.WorkingSet, GC.GetTotalMemory(false)));
+
+        _vramPanel.Refresh();
+        return (_vramPanel.Vram, _vramPanel.Ram);
     }
 
     /// <summary>
@@ -871,33 +941,41 @@ public sealed class FrameProfiler : IDisposable
     #region VRAM
 
     /// <summary>
-    /// The VRAM pie, the header's figures and the VRAM dump (<see cref="VramPanel"/>).
+    /// The VRAM pie, the header's figures and the VRAM dump (<see cref="VramPanel"/>); null without Vulkan.
     /// </summary>
-    readonly VramPanel _vramPanel;
+    readonly VramPanel? _vramPanel;
 
     /// <summary>
     /// The VRAM pie at the top right is shown (Shift+F12 in the game), with the profiler chart or without it.
     /// </summary>
-    public bool ShowVram { get => _vramPanel.Show; set => _vramPanel.Show = value; }
+    public bool ShowVram
+    {
+        get => _vramPanel?.Show ?? false;
+        set
+        {
+            if (_vramPanel is not null) _vramPanel.Show = value;
+        }
+    }
 
     /// <summary>
     /// Writes what is in video memory now to <paramref name="path"/> (Ctrl+Shift+F12 in the game; <see cref="VramPanel.Dump"/>).
     /// </summary>
-    public void DumpVram(string path, Action<TextWriter>? more = null) => _vramPanel.Dump(path, more);
+    public void DumpVram(string path, Action<TextWriter>? more = null) => _vramPanel?.Dump(path, more);
 
     /// <summary>
     /// The VRAM pie at the top right, while <see cref="ShowVram"/>.
     /// </summary>
-    public void DrawVram(DebugOverlay overlay, int width, int height) => _vramPanel.Draw(overlay, width, height);
+    public void DrawVram(DebugOverlay overlay, int width, int height) => _vramPanel?.Draw(overlay, width, height);
 
     #endregion
 
     #region Spike log
 
     /// <summary>
-    /// --log-spikes: the frames' CPU side until their GPU times arrive, the spike reports and the run's summary (<see cref="SpikeRun"/>).
+    /// --log-spikes: the frames' CPU side until their GPU times arrive, the spike reports and the run's summary (<see cref="SpikeRun"/>); null
+    /// without Vulkan.
     /// </summary>
-    readonly SpikeRun _spikes;
+    readonly SpikeRun? _spikes;
 
     #endregion
 

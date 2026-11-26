@@ -511,8 +511,8 @@ the hover outline, move marker and navmesh debug overlay (Shift+F11).
 move the strategy camera; edge scrolling, left click/box select, right-click move orders and the HUD keys work;
 Ctrl+/ writes one frame's Metal capture (`.gputrace`), Alt+Enter toggles full screen. The view keys are the Controls page's bindings, as on Vulkan:
 `ToggleInterface` (F7) hides the interface, `Screenshot` (F8, Print Screen) saves the picture as `_screens/screenshot_<n>.png`
-([ui-input](game/ui-input.md) "Screenshots"), `ToggleStats` (F11) lists the frame, `CycleProfiler` (F12) shows the frame-rate lines (the profiler
-chart waits for Metal timestamps), `ToggleFps` (unbound; Shift+F9) the fps counter. Insert or Ctrl+` opens the dev console ([ui-input](game/ui-input.md)
+([ui-input](game/ui-input.md) "Screenshots"), `ToggleStats` (F11) lists the frame, `CycleProfiler` (F12) cycles the profiler chart (gpu, cpu, off;
+[metal-performance-memory](metal-performance-memory.md#metal-profiler)), `ToggleFps` (unbound; Shift+F9) the fps counter. Insert or Ctrl+` opens the dev console ([ui-input](game/ui-input.md)
 "Dev console"), and the F10 menu's Tools rows open the pick & collision inspector's menu (its hulls drawn by the shared frame) and the interior
 editor. The agent control channel (`--control-dir`, `--exec`, `--screenshot-after`, `screenshot`, `state`, `hud`) is polled each frame; its `mouse`
 and `click` need the window's pointer path and are not done. Full screen on macOS is native (`NSWindow toggleFullScreen:`, the window
@@ -818,7 +818,7 @@ other composite passes stay as the options set them. Where the picture is as lar
   `ShowPicture` copies it to the backbuffer (`PostComposite.Stretch`, one nearest pass) and the overlays draw on the backbuffer;
   otherwise the overlays draw into the picture and the present stretches it (`PresentPicture`). The present was already a nearest
   sample into the drawable. Screenshots read the target the interface was drawn into.
-- The stats lines (F11/F12) always read `render WxH  screen WxH`.
+- The stats lines (F11) always read `render WxH  screen WxH`.
 - Rows: the game's Display page (`Render resolution`, `Render UI in screen resolution`, via `SettingsMenu.DisplayRowShown`) and the
   launcher's (schema keys `metalUseUpscaling`, `metalUpscaler`, `metalRenderScale`, `metalRetinaResolution`, `metalRenderDivisor`,
   `metalUiAtScreenResolution`, [launcher](launcher.md)); `metalUpscaler` and `metalRenderScale` shown with the switch on, the last three with it off.
@@ -872,8 +872,8 @@ other composite passes stay as the options set them. Where the picture is as lar
   function detects the replacement, reattaches the Metal layer and restores the picture. Tested with a drag
   (1280x856 -> 900x600 -> back) and with AppKit's zoom; the zoom's restored frame/HUD was captured. A missing
   drawable sleeps 1 ms rather than spinning the main thread.
-- **Debug text scale.** The HUD scales with the screen; the fixed-pixel debug overlay (F11/F12) must be scaled by
-  framebuffer/points (2 on the Retina test display), or it is half size.
+- **Debug text scale.** The HUD scales with the screen; the fixed-pixel debug overlay (F11) must be scaled by
+  framebuffer/points (2 on the Retina test display), or it is half size. F12's chart draws with the debug face baked at 16 px times that.
 - **Far foliage.** The purple/red far trees are the impostor atlases (some assets are red, e.g.
   `FOLIAGE_DeadPineType-red`); the same view on Vulkan shows the same purple impostors. Impostors are enabled by
   default again; `MEITOU_METAL_NO_IMPOSTORS=1` is the diagnostic fallback.
@@ -919,7 +919,7 @@ other composite passes stay as the options set them. Where the picture is as lar
   can abort the Metal compiler with fast math enabled. A standalone Metal pipeline probe compiled when the shader selected the diffuse
   term first and called the shared lighting routine once. Both diffuse terms retain their original formulas.
 - UI shots: the Metal HUD is part of every screenshot. `--new-game --ui-panel inventory|stats|overview|menu`
-  opens a panel; `MEITOU_METAL_OVERLAY=1` adds the frame-stats lines at the top-left. The Vulkan HUD/panel still
+  opens a panel. The Vulkan HUD/panel still
   renders (verified with `--ui-panel inventory` after the shared changes).
 - Character shots: `--crowd 6 --no-population --at -50000,8000 --time 12 --distance 180 --pitch 18
   --no-objects --no-foliage --no-water --faithful clouds,cloudshadows --no-gi` (the open hillside; six characters).
@@ -961,7 +961,7 @@ DYLD_LIBRARY_PATH=/opt/homebrew/lib MTL_DEBUG_LAYER=1 dotnet run --project src/M
 ```
 
 Live check: `--renderer metal --new-game --time 12 --distance 250 --pitch 20 --faithful
-clouds,cloudshadows --no-gi` (WASD/arrows, Q/E, wheel, middle drag; F11 frame list, F12 fps). `--quit-after N`
+clouds,cloudshadows --no-gi` (WASD/arrows, Q/E, wheel, middle drag; F11 frame list, F12 profiler). `--quit-after N`
 prints the final camera and frame rate. Present/layer changes must also be seen in the live window: `--screenshot`
 reads the backbuffer and never exercises the drawable present.
 

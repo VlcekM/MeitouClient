@@ -25,6 +25,7 @@ using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Particles;
 using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
@@ -170,11 +171,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     DebugOverlay? _overlay;
 
     /// <summary>
-    /// The frame-rate lines start shown (not in a still unless MEITOU_METAL_OVERLAY=1).
-    /// </summary>
-    bool _showFrameStats;
-
-    /// <summary>
     /// The world's files read on a worker since <see cref="OpenDisplay"/>, when the host owns the scene (an interactive run; a still's is given).
     /// </summary>
     Task<WorldScene?>? _sceneRead;
@@ -204,7 +200,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // selection/order clicks), then to the session's bindings so the strategy camera pans, turns and zooms.
         using var input = OpenInput();
         ConnectClipboard();
-        _frameStatsVisible = _showFrameStats;
         HookInput();
         // The agent control channel (--control-dir, --exec, --screenshot-after) and the dev console's commands that read the settings dialog.
         host.AgentChannel.SettingsPanel = _settings;
@@ -438,10 +433,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         _openSettingsForStill = Environment.GetEnvironmentVariable("MEITOU_METAL_SETTINGS") is "1" or "true";
         Console.WriteLine($"metal     upscaler {_upscaling.Mode.ToString().ToLowerInvariant()} at {_ctx.RenderScale:0.00}");
-        // The text/quad painter, shared by the HUD and the optional frame-stats lines. It is created even for a screenshot:
-        // the game's HUD is part of the picture. MEITOU_METAL_OVERLAY=1 adds the stats lines to a still.
+        // The text/quad painter, shared by the HUD and the debug panels. It is created even for a screenshot: the game's HUD is part of the picture.
         _overlay = DebugOverlay.TryCreate(_ctx);
-        _showFrameStats = host.WorldOptions.Screenshot is null || Environment.GetEnvironmentVariable("MEITOU_METAL_OVERLAY") == "1";
+        if (_overlay is not null) host.DebugMenu.Profiler = new FrameProfiler(new MetalStageTimer(_ctx), ProfilerMemory);
+        _simProfile = new SimProfileWindow(host);
         CreateLoadingScreen();
 
         // Shown before the first loading frame (a still draws none): the layer of a window not shown yet gives no drawable, nor does it for the
@@ -586,6 +581,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Loading = null;
         _ctx.Finish();
         _hud?.DisposeUi();
+        host.DebugMenu.Profiler?.Dispose();
+        host.DebugMenu.Profiler = null;
+        _profilerFace?.Dispose();
         _overlay?.Dispose();
         host.TitleScreen.DisposeTitleScene();   // its particles' buffers are this context's, released before it goes (as on Vulkan)
         // The shared world owns terrain (and its textures), sky, weather surfaces, particles, lamps, objects, foliage,
@@ -1883,7 +1881,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     bool _shiftDown;
 
     /// <summary>
-    /// The last left press went to the debug menu, so its release is not the interface's.
+    /// The last left press went to the debug menu or the profiler's legend, so its release is not the interface's.
     /// </summary>
     bool _debugMenuClick;
 
@@ -1892,11 +1890,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// repeats here, to scroll its lists and edit its line: after 0.5 s, then 30 times a second (the Windows defaults). No other key repeats.
     /// </summary>
     (Silk.NET.Input.IKeyboard Keyboard, SilkKey Key, long Next)? _heldMenuKey;
-
-    /// <summary>
-    /// The CycleProfiler key (F12 by default): the frame-rate lines (the profiler chart waits for Metal timestamps).
-    /// </summary>
-    bool _frameStatsVisible;
 
     /// <summary>
     /// This frame's picture is saved (a screenshot key, the control channel's <c>screenshot</c>): the debug panels and the pointer stay out of it.
@@ -2256,6 +2249,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 return;
             }
             bool select = host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left;
+            // F12's legend opens and closes rows
+            if (select && host.DebugMenu.Profiler?.Click(at) == true)
+            {
+                _debugMenuClick = true;
+                return;
+            }
             if (_hud is { UiVisible: true } && select && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true)
                 return;
             if (_hud is { UiVisible: true } && select && host.Sandbox.SandboxToggleClick(at)) return;
@@ -2362,7 +2361,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (actions.Pressed(InputAction.Screenshot)) host.ScreenshotRequested = true;
         if (actions.Pressed(InputAction.ToggleStats)) host.DebugMenu.StatsVisible = !host.DebugMenu.StatsVisible;
         if (actions.Pressed(InputAction.ToggleFps)) host.DebugMenu.FpsVisible = !host.DebugMenu.FpsVisible;
-        if (actions.Pressed(InputAction.CycleProfiler)) _frameStatsVisible = !_frameStatsVisible;
+        if (actions.Pressed(InputAction.CycleProfiler) && host.DebugMenu.Profiler is { } profiler)
+            profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3);
         if (actions.Pressed(InputAction.QuickSave)) host.Saves.QuickSaveRequested = true;
         if (actions.Pressed(InputAction.QuickLoad)) host.Saves.QuickLoadRequested = true;
         if (actions.Pressed(InputAction.FloorUp)) host.Interiors.StepFloor(1);
@@ -2618,6 +2618,22 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     DebugOverlay.OverlayPass? _overlayPass;
 
     /// <summary>
+    /// F12's simulation row and its parts, from the world's tick profile.
+    /// </summary>
+    SimProfileWindow _simProfile = null!;
+
+    /// <summary>
+    /// The overlay F12's chart draws with: the debug face baked at <see cref="_profilerFacePixels"/> (made on first use, again when the scale
+    /// changes).
+    /// </summary>
+    DebugOverlay? _profilerFace;
+
+    /// <summary>
+    /// The size <see cref="_profilerFace"/>'s glyphs are baked at.
+    /// </summary>
+    float _profilerFacePixels;
+
+    /// <summary>
     /// The loop's clock.
     /// </summary>
     Stopwatch _clock = null!;
@@ -2794,6 +2810,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.ShotNoFrame = 0;
         (_shotFrame, host.ScreenshotRequested) = (host.ScreenshotRequested, false);
         _bench.FrameBegun();
+        if (!_bench.Active) host.DebugMenu.Profiler?.BeginFrame();   // the play benchmark runs the stage clock itself
         SettleBeforeDraw();
         long recordStart = Stopwatch.GetTimestamp();
         // The world draws into the picture: the backbuffer, or while it is stretched a target of the render size.
@@ -2820,6 +2837,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_overlay is not null) DrawOverlays(_overlay, size, dt, eye, view, aspect, shown, feedbackShot, pointerMouse, pointerAt);
         PresentFrame(gpuCapture, recordStart);
         _bench.FramePresented(_lastRecord);
+        if (!_bench.Active) host.DebugMenu.Profiler?.EndFrame();
         TrimManagedHeap(now);
         SavePictures(shown, feedbackShot);
         if (!CaptureStill(shown)) return false;
@@ -2972,15 +2990,22 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void AdvanceTicks(double dt)
     {
-        if (_bench.Active) host.Session.World.Profile.Enabled = true;
+        host.Session.World.Profile.Enabled = _bench.Active || host.DebugMenu.Profiler is { Showing: not FrameProfiler.Mode.Off };
         long started = Stopwatch.GetTimestamp();
 
         host.UpdateLoadingPause();
         if (!host.Covered) host.Session.Advance(dt);
         if (_hud is not null) host.Duel.DuelHoldClock();
 
-        _bench.Updated(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        double ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        _bench.Updated(ms);   // before SimProfile, which clears the world's tick profile
+        if (host.DebugMenu.Profiler is { } profiler) _simProfile.SimProfile(profiler, ms);   // F12's sim row and its parts
     }
+
+    /// <summary>
+    /// The profiler header's video memory: Metal's allocated size against the game's GPU budget.
+    /// </summary>
+    (ulong Used, ulong Budget) ProfilerMemory() => ((ulong)_ctx.Device.CurrentAllocatedSize, _memoryBudget);
 
     /// <summary>
     /// The tour or the rig moves the camera, the editors and the title stage it, and the focus follows.
@@ -3298,6 +3323,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         overlay.Target = target;
         // One overlay pass: the HUD, the direct HUD lines and the stats/settings text would otherwise each load/store the whole backbuffer.
         DrawOverlayPass(overlay, size, dt, eye, view, aspect, feedbackShot, pointerMouse, pointerAt);
+        // F12's chart flushes the overlay itself: after the pass, never in a saved picture.
+        if (!feedbackShot && !_shotFrame) DrawProfiler(target, size);
         // The scene changes use the same Kenshi loading screen as Vulkan; it covers the world until the sky arrival is done.
         if (host.Loading is not null && (host.ActiveSceneLoad is not null || host.Loading.Exiting))
         {
@@ -3305,6 +3332,26 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.Loading.Draw(size.X, size.Y);
         }
         else host.Loading?.ReleaseWhenGone();
+    }
+
+    /// <summary>
+    /// F12's chart (it flushes on its own: after the overlay pass) in <see cref="_profilerFace"/>, at the debug text's scale.
+    /// </summary>
+    void DrawProfiler(GpuTexture target, Vector2D<int> size)
+    {
+        if (host.DebugMenu.Profiler is not { Showing: not FrameProfiler.Mode.Off } profiler) return;
+
+        // The framebuffer is 2x the window's points on a Retina display: the chart lays itself out by its face's size, baked at the scale.
+        float pixels = 16 * MathF.Max(1, size.X / (float)Math.Max(_window.Size.X, 1));
+        if (_profilerFace is null || _profilerFacePixels != pixels)
+        {
+            _profilerFace?.Dispose();
+            (_profilerFace, _profilerFacePixels) = (DebugOverlay.TryCreate(_ctx, pixelHeight: pixels), pixels);
+        }
+        if (_profilerFace is not { } face) return;
+
+        face.Target = target;
+        profiler.Draw(face, size.X, size.Y);
     }
 
     /// <summary>
@@ -3375,13 +3422,6 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (host.DebugMenu.StatsVisible)
         {
             panelsBottom = DrawStatsPanel(overlay, size, dt, panelsBottom, textScale);
-            wrote = true;
-        }
-        if (_frameStatsVisible)
-        {
-            overlay.TextScaled("Meitou - Metal", 16 * textScale, 16 * textScale, DebugOverlay.TextColour, textScale);
-            overlay.TextScaled($"{_frames + 1} frames  {_fpsText}  {dt * 1000:0.00} ms  {ResolutionText()}", 16 * textScale,
-                (16 + overlay.LineHeight) * textScale, DebugOverlay.TextColour, textScale);
             wrote = true;
         }
         if (DrawToolPanels(overlay, overlayPass, size, panelsBottom, textScale)) wrote = true;

@@ -355,7 +355,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     static bool TryGpuSpan(MetalFrame frame, out double start, out double end)
     {
         (start, end) = (0, 0);
-        var scene = frame.SceneCommand;
+        var scene = frame.FirstSceneCommand;
         var last = frame.Command;
         if (scene.NativePtr == IntPtr.Zero || last.Status != MTLCommandBufferStatus.Completed) return false;
 
@@ -363,6 +363,59 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         end = Time_objc_msgSend(last.NativePtr, GpuEndTime.SelPtr);
         return end > start;
     }
+
+    /// <summary>
+    /// <paramref name="command"/>'s GPU start and end in seconds once it has completed; false before then or when it reported no time.
+    /// </summary>
+    internal static bool TryGpuTimes(MTLCommandBuffer command, out double start, out double end)
+    {
+        (start, end) = (0, 0);
+        if (command.NativePtr == IntPtr.Zero || command.Status != MTLCommandBufferStatus.Completed) return false;
+
+        start = Time_objc_msgSend(command.NativePtr, GpuStartTime.SelPtr);
+        end = Time_objc_msgSend(command.NativePtr, GpuEndTime.SelPtr);
+        return end >= start && start > 0;
+    }
+
+    /// <summary>
+    /// <c>objc_retain</c> on <paramref name="command"/>, for a holder that releases it with <c>Dispose</c> once done with it.
+    /// </summary>
+    internal static void Retain(MTLCommandBuffer command) => Retain_objc_retain(command.NativePtr);
+
+    /// <summary>
+    /// The frame's commands so far committed as a command buffer of their own, recording going on in a new one (the profiler's GPU stage times,
+    /// <see cref="MetalStageTimer"/>): the separate pre-frame recorded so far, committed first (default: none), and the scene's part, which the
+    /// frame keeps; both default when the frame cannot be split now (none open, or a pass or native segment open: its work then goes with the
+    /// next split).
+    /// </summary>
+    internal (MTLCommandBuffer Pre, MTLCommandBuffer Scene) SplitFrame()
+    {
+        if (_slot < 0 || !Frame.Open || _guest is not null) return default;
+
+        // Inside the host pass (between its guests) the rendering is ended and opened again on the new command buffer, loading what it stored
+        // (StoreAll); another native segment may hold an encoder of its list, so it is not split.
+        var frame = Frame;
+        bool inPass = PassOpen;
+        if (inPass ? !ReferenceEquals(_passList, frame.Commands) || !StoreAll : _segment is not null) return default;
+
+        var rendering = inPass ? frame.Commands.SuspendRendering() : default;
+        var pre = frame.CommitPreFrameSoFar();
+        var done = frame.SceneCommand;
+        var next = Queue.CommandBuffer();
+        Retain_objc_retain(next.NativePtr);
+        next.Label = (NSString)$"Meitou frame {frame.Number} (split)";
+        frame.Split(next);
+        frame.States.AssumeFullBarrier();
+        done.Commit();
+        if (inPass) frame.Commands.ResumeRendering(rendering);
+        return (pre, done);
+    }
+
+    /// <summary>
+    /// Every render attachment is stored, those the frame does not read later too (the profiler's GPU chart: a split inside a rendering ends it
+    /// and loads its attachments back, <see cref="SplitFrame"/>).
+    /// </summary>
+    internal bool StoreAll { get; set; }
 
     /// <summary>
     /// Tells <see cref="OnGpuFrame"/> the GPU time of the frame a slot held, before the slot takes the next frame (the slot wait has seen its
@@ -627,6 +680,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// </summary>
     internal MTLStoreAction StoreActionFor(GpuView view, bool depth)
     {
+        if (StoreAll) return MTLStoreAction.Store;
+
         var of = _views[view.Index]!.Of;
         bool albedo = !StoreSurface && _albedo is { } a && ReferenceEquals(of, _textures[a.Index]);
         bool unresolvedDepth = depth && of.Desc.Samples > 1;
