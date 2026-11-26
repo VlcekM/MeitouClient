@@ -19,7 +19,8 @@ public sealed record UiScreenWidget(string Name, string Type, string Caption, st
 /// <summary>
 /// What an extension changes on one of a screen's own widgets (<see cref="UiRegistration.AddScreenOverrides"/>): each member left null keeps the
 /// screen's own. <see cref="Caption"/> replaces its text (inline <c>#RRGGBB</c> tags colour it, as the game's texts), <see cref="TextColour"/> its
-/// text colour (0 to 1 each), <see cref="Visible"/> false leaves the widget out (not drawn, not clicked), and <see cref="Bounds"/> places it.
+/// text colour (0 to 1 each), <see cref="Visible"/> false leaves the widget out (not drawn, not clicked), <see cref="Bounds"/> places it, and
+/// <see cref="PortraitOf"/> makes it show a live character's portrait.
 /// </summary>
 public sealed record UiWidgetOverride
 {
@@ -43,6 +44,12 @@ public sealed record UiWidgetOverride
     /// move with its top-left corner; its child widgets are widgets of their own. It keeps the clip its parent gives it.
     /// </summary>
     public UiRect? Bounds { get; init; }
+
+    /// <summary>
+    /// The live character whose portrait the widget shows instead of its own picture (current look, gear and pose, as the squad bar draws it); a
+    /// character not in the snapshot, or past the free portrait cells, shows nothing. Null keeps the widget's picture.
+    /// </summary>
+    public Meitou.Simulation.CharacterId? PortraitOf { get; init; }
 }
 
 /// <summary>
@@ -197,15 +204,30 @@ sealed class ScreenOverrides
     }
 
     /// <summary>
-    /// <paramref name="c"/> with <paramref name="over"/>'s rectangle, caption and colour (the colour also as its <c>TextColour</c> property, which
-    /// comes before a skin's).
+    /// <paramref name="c"/> with <paramref name="over"/>'s rectangle, portrait, caption and colour (the colour also as its <c>TextColour</c> property,
+    /// which comes before a skin's).
     /// </summary>
     static UiControl Changed(UiControl c, UiWidgetOverride over)
     {
         c = c with { Bounds = over.Bounds ?? c.Bounds };
+        if (over.PortraitOf is { } live) c = Portrait(c, live);
         if (over.TextColour is not { } colour) return c with { Caption = over.Caption ?? c.Caption };
 
         var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { ["TextColour"] = UiHost.Format(colour) };
         return c with { Caption = over.Caption ?? c.Caption, TextColour = colour, Properties = properties };
+    }
+
+    /// <summary>
+    /// <paramref name="c"/> showing <paramref name="character"/>'s live portrait: its own picture taken off and the portrait property set, which the
+    /// interface gives a cell of the portrait atlas when it arranges the frame (<see cref="RecordPortraits"/>).
+    /// </summary>
+    static UiControl Portrait(UiControl c, Meitou.Simulation.CharacterId character)
+    {
+        var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal);
+        foreach (string key in (ReadOnlySpan<string>)["ImageTexture", "ImageRect", "ImageResource", "ImageGroup", "ImageName", RecordPortraits.Property])
+            properties.Remove(key);
+
+        properties[RecordPortraits.LiveProperty] = character.ToString();
+        return c with { Properties = properties };
     }
 }

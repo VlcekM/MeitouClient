@@ -210,6 +210,10 @@ static class BuildingLodShaders
             """);
         f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", ScaffoldFunctions + "\nvoid main()\n{");
 
+        // A site takes no dust: the game builds its parts' material without DUST (docs/formats/runtime-materials.md, buildings under construction).
+        f = Literal(f, "if (((uSurface & 1u) != 0u || ((uSurface & 16u) != 0u && uWeatherDust.w > 0.5)) && dustAmount > 0.0)",
+            "if ((((uSurface & 1u) != 0u && vScaffold < 2.0) || ((uSurface & 16u) != 0u && uWeatherDust.w > 0.5)) && dustAmount > 0.0)");
+
         return f;
     }
 

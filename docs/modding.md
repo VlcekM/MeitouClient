@@ -992,6 +992,17 @@ holds refuses the second mod.
   `IWorldReady` run, an NPC when its platoon is made. A character the save does not write loses its id, which is never given again. An import starts
   with none. Until a mod asks (or a save with ids loads) nothing is held, hashed or written; then the ids enter the state hash. Engine API, not in
   the original.
+- **Character tags:** `world.CharacterTags` (`CharacterTags`) keeps one free string per mod id on a character, so several mods mark one
+  character without overwriting each other (a rival, a war leader, the mod that named a character). `Set(character, context.Id, tag)` sets it
+  (null or empty removes it; an empty mod id throws; false for a character not in the world) and gives the character its lasting id (Character
+  ids, above) when it has none, so it runs where `GetOrGive` may and throws where `GetOrGive` would. Tags are kept by lasting id, so a tag goes
+  where the id goes (saves and loads, squad moves, renames, an NPC's platoon leaving the world and coming back), and a new character in a reused
+  slot starts with none. `Get(character or LastingId, mod)` reads one (null: none) and `Of(character or LastingId)` every mod's, by mod id in
+  ordinal order; reads run in any phase, and the `LastingId` forms also for a character out of the world. `Find(mod, tag)` is the character in
+  the world with that mod's tag (the lowest lasting id when several have it; none when none in the world has), `FindIds(mod, tag)` the lasting ids
+  of all, in or out of the world (`LastingIds.KeptIds` tells which are gone for good); both scan every tagged character, so call them at a load or
+  an event, not per character per tick. Saved with the ids in `meitou-mods/character-ids.json` ([save](formats/save.md#character-ids)); the tags
+  of living characters in the world enter the state hash once any tag is set or loaded. Engine API, not in the original.
 - **Character save fields:** `world.SaveFields` (`CharacterSaveFields`, `Meitou.Simulation.Saving`) keeps a mod's per-character values in
   the vanilla save, under keys of its choosing (an original plugin's own, so a save taken to the original keeps them):
   `SetInt`/`SetFloat`/`SetBool`/`SetString(character, CharacterSaveRecord, key, value)` and `Remove`, read back with `Int`/`Float`/`Bool`/
@@ -1046,7 +1057,9 @@ holds refuses the second mod.
   `Tint` (RGBA, each 0 to 1) is multiplied into a node's picture (image, portrait) and skin, as MyGUI's `Widget::setColour`; its text keeps
   `TextColour`. `PortraitOf = characterId` on an image node draws that character's live portrait as the squad bar does (current gear and
   pose): the cell the host already draws it in (squad bar, squads screen, character trade row), else a free one after those and before the
-  conversation's; a character not in the snapshot or past the free cells shows nothing. A root of `UiSlots.Overlay` picks its layer with
+  conversation's; a character not in the snapshot or past the free cells shows nothing. The overlay, screen controls and screen overrides
+  (`UiWidgetOverride.PortraitOf`) share the cells each frame: one cell per character however many ask, and a cell no one asks for is free the
+  next frame. A root of `UiSlots.Overlay` picks its layer with
   `Layer` (`UiOverlayLayer`): `Hud` (default: over the HUD, under the windows), `Back` (under the HUD and windows, over the name tags,
   floaters and speech; the original's `Back` layer) or `Popup` (over the windows, under the right-click menu and tooltips); input follows the
   drawing order. `UiFrameContext.Measure(text, font, scale)` (also `UiScreenContext.Frame`) answers a caption's size in pixels as the painter
@@ -1111,7 +1124,9 @@ holds refuses the second mod.
   screen controls, the source is asked for each arranged widget whose name matches `widgetPattern` (exact, or `*` and `?` wildcards; at most
   512 widgets per source and frame), with `UiScreenContext` (`Widget` the widget, `AnchorWidget`/`Anchor` its name and rectangle, `Item` for an
   item cell, `Character` for a portrait or the screen's) and answers a `UiWidgetOverride` (null: no change): `Caption` (its text, at most 4096
-  characters, inline `#RRGGBB` tags as in the game's texts), `TextColour` (RGBA, each 0 to 1, before the skin's) or `Visible` false (left out:
+  characters, inline `#RRGGBB` tags as in the game's texts), `TextColour` (RGBA, each 0 to 1, before the skin's), `PortraitOf` (a
+  `CharacterId`: the widget's own picture is replaced by that character's live portrait, cells shared as for an image node's `PortraitOf`
+  under "Interface", so a layout's image box shows a recruit's own face) or `Visible` false (left out:
   not drawn, not clicked; its children are widgets of their own). Sources apply in registration order, each seeing the last one's changes.
   `UiScreenContext.State` is what a screen keeps to itself, by key: the stats window's `selected` (the stat its description shows: a stat's
   number as in its rows' `stat:N` actions, a mod skill's `mod:N`, empty for none) and `race-bonus-line` (the race XP bonus paragraph its

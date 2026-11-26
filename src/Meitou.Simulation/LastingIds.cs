@@ -171,7 +171,8 @@ public sealed class LastingIds(World world)
 
     /// <summary>
     /// Takes a loaded save's ids (<see cref="SaveLastingIds.Read"/>) before its characters are made: each entry whose handle names a character of
-    /// <paramref name="save"/> made from the entry's record. The counter goes past every id the file holds, kept or not, so none is given again.
+    /// <paramref name="save"/> made from the entry's record, with its tags (<see cref="CharacterTags"/>). The counter goes past every id the file
+    /// holds, kept or not, so none is given again.
     /// </summary>
     internal void Load(SaveLastingIds.Contents contents, SaveGame save)
     {
@@ -185,7 +186,8 @@ public sealed class LastingIds(World world)
         _bySave = [];
         foreach (var e in contents.Entries)
         {
-            if (byHand.TryGetValue(e.Hand, out var sc) && sc.RecordId == e.Record) _bySave.TryAdd(e.Hand, new SavedId(new LastingId(e.Id), e.Record));
+            if (!byHand.TryGetValue(e.Hand, out var sc) || sc.RecordId != e.Record) continue;
+            if (_bySave.TryAdd(e.Hand, new SavedId(new LastingId(e.Id), e.Record))) world.CharacterTags.Load(new LastingId(e.Id), e.Tags);
         }
     }
 
@@ -202,7 +204,8 @@ public sealed class LastingIds(World world)
     /// The file for a save just captured (null when no id was given or loaded): each character written with an id under the handle it was written
     /// with (<paramref name="written"/>), then the loaded save's entries whose characters the new save still holds unchanged (an NPC platoon never
     /// made, a dead player character kept as it was) with the same record. An entry whose character the save no longer has is dropped; an id and a
-    /// handle are written once. The counter and the prefix are always written, so an id given before the capture is never given again.
+    /// handle are written once. Each entry carries its character's tags (<see cref="CharacterTags"/>). The counter and the prefix are always
+    /// written, so an id given before the capture is never given again.
     /// </summary>
     internal byte[]? Write(SaveGame game, IReadOnlyDictionary<CharacterCold, Hand> written)
     {
@@ -213,8 +216,8 @@ public sealed class LastingIds(World world)
         var ids = new HashSet<LastingId>();
         var hands = new HashSet<Hand>();
         foreach (var (cold, hand) in written)
-            if (!cold.LastingId.IsNone) AddEntry(entries, ids, hands, byHand, cold.LastingId, hand, null);
-        foreach (var (hand, saved) in _bySave ?? []) AddEntry(entries, ids, hands, byHand, saved.Id, hand, saved.Record);
+            if (!cold.LastingId.IsNone) AddEntry(entries, ids, hands, byHand, cold.LastingId, hand, null, world.CharacterTags);
+        foreach (var (hand, saved) in _bySave ?? []) AddEntry(entries, ids, hands, byHand, saved.Id, hand, saved.Record, world.CharacterTags);
 
         return SaveLastingIds.Write(entries, _prefix, _next);
     }
@@ -233,17 +236,17 @@ public sealed class LastingIds(World world)
 
     /// <summary>
     /// Adds the entry of <paramref name="id"/> under <paramref name="hand"/> when the save has a character there (made from
-    /// <paramref name="record"/>, when given) and neither the id nor the handle has an entry yet.
+    /// <paramref name="record"/>, when given) and neither the id nor the handle has an entry yet, with the id's tags.
     /// </summary>
     static void AddEntry(List<SaveLastingIds.Entry> entries, HashSet<LastingId> ids, HashSet<Hand> hands, Dictionary<Hand, SaveCharacter> byHand,
-        LastingId id, Hand hand, string? record)
+        LastingId id, Hand hand, string? record, CharacterTags tags)
     {
         if (!byHand.TryGetValue(hand, out var sc) || record is not null && sc.RecordId != record) return;
         if (ids.Contains(id) || hands.Contains(hand)) return;
 
         ids.Add(id);
         hands.Add(hand);
-        entries.Add(new SaveLastingIds.Entry(hand, id.Value, sc.RecordId));
+        entries.Add(new SaveLastingIds.Entry(hand, id.Value, sc.RecordId, tags.ForSave(id)));
     }
 
     /// <summary>

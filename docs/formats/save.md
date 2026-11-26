@@ -264,9 +264,11 @@ Meitou only (optional "Blood on weapons and gear", [blood-decals.md](../game/blo
 
 Meitou only ([modding](../modding.md#registration-surface) "Character ids"): `meitou-mods/character-ids.json`, written with the other files
 (`SaveLastingIds`, `SaveGame.LastingIds`) only once a code mod asked for a character's id or the loaded save had the file; not a field of any
-original file. UTF-8 JSON `{ "format": 1, "prefix": p, "next": n, "characters": [ { "hand": [type, C, CS, I, S], "id", "record" } ] }`: `hand` the
-character's handle in this save, `id` its lasting id, `record` the string id of the CHARACTER record it was made from, `prefix` the high half of new
-ids and `next` the counter their low half continues from. The capture writes each character with an id under the handle it just wrote it with (a
+original file. UTF-8 JSON `{ "format": 1, "prefix": p, "next": n, "characters": [ { "hand": [type, C, CS, I, S], "id", "record", "tags" } ] }`:
+`hand` the character's handle in this save, `id` its lasting id, `record` the string id of the CHARACTER record it was made from, `tags` (only when
+it has some) an object of the code mods' tags on it, mod id to tag in ordinal order ([modding](../modding.md#registration-surface) "Character
+tags"; on read a tag that is not a non-empty string, or has an empty mod id, is dropped alone), `prefix` the high half of new ids and `next` the
+counter their low half continues from. The capture writes each character with an id under the handle it just wrote it with (a
 character that changed squads has a new handle), then the loaded file's entries whose characters the save keeps unchanged with the same record (an
 NPC platoon never made, a dead player character kept as read); an entry whose handle the save no longer holds is dropped, an id or handle appears
 once, and the prefix and counter are always written. On load an entry is taken only when its handle names a character of the save made from its

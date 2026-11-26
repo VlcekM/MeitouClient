@@ -229,6 +229,7 @@ public sealed partial class World : IDisposable
         GameHours = settings.StartHours;
         Walkability = walkability;
         LastingIds = new LastingIds(this);
+        CharacterTags = new CharacterTags(this);
         SaveFields = new Saving.CharacterSaveFields(this);
         this._systems = [.. systems ?? []];
         foreach (var system in this._systems) ModFaults.Add(system);
@@ -693,6 +694,10 @@ public sealed partial class World : IDisposable
     /// The characters' lasting ids, which code mods key their data per character by (docs/modding.md "Character ids").
     /// </summary>
     public LastingIds LastingIds { get; }
+    /// <summary>
+    /// The code mods' tags on characters, one per mod, kept by lasting id (docs/modding.md "Character tags").
+    /// </summary>
+    public CharacterTags CharacterTags { get; }
     /// <summary>
     /// The code mods' per-character fields in the vanilla save (docs/modding.md "Character save fields").
     /// </summary>
@@ -1584,6 +1589,9 @@ public sealed partial class World : IDisposable
 
         // only once a mod asked for a character id or a save held some
         ("lasting ids", static (World w, ref StateHasher h) => { if (w.LastingIds.Any) w.LastingIds.Hash(ref h); }),
+
+        // only once a mod set a character tag or a save held some
+        ("character tags", static (World w, ref StateHasher h) => { if (w.CharacterTags.Any) w.CharacterTags.Hash(ref h); }),
 
         // only once a code mod set a character save field
         ("save fields", static (World w, ref StateHasher h) => { if (w.SaveFields.Any) w.SaveFields.Hash(ref h); }),

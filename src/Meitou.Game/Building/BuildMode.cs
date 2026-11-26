@@ -1574,7 +1574,7 @@ sealed class BuildMode(PlayerInterface player)
     /// <summary>
     /// The verbs the selection has for a site (the original's building branch, docs/game/ui-input.md "Context menu verbs"): Build (2) for an
     /// unfinished one (the quick order); finished, a machine's Use (87) or an automatic machine's Auto-Haul (152), a storage's Auto-Haul (124, the
-    /// "Hauling to" job) and Inventory (26), a furnace's Inventory, a turret's Man Turret (146); Dismantle (96); Meitou's Cancel for a site nothing
+    /// "Hauling to" job) and Inventory (26), any other machine's Inventory when it has one, a turret's Man Turret (146); Dismantle (96); Meitou's Cancel for a site nothing
     /// has been delivered to and the building panel's door buttons. Repair (95) shares construction work; town ruins start rebuilding only on an
     /// explicit order.
     /// </summary>
@@ -1602,8 +1602,8 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// A finished machine's verbs: a storage's Auto-Haul and Inventory, a furnace's and a research bench's Inventory, a corpse machine's Corpse
-    /// Disposal, a turret's Man Turret.
+    /// A finished machine's verbs: a storage's Auto-Haul and Inventory, any other machine's Inventory when it has an inventory, a corpse machine's
+    /// Corpse Disposal, a turret's Man Turret.
     /// </summary>
     void AddMachineVerbs(List<(string, Action)> verbs, BuildingSnapshot site, IReadOnlyList<CharacterId> selection,
         Simulation.Production.MachineSnapshot machine, bool own)
@@ -1628,10 +1628,10 @@ sealed class BuildMode(PlayerInterface player)
                     OpenStorage(site);
             }));
         }
-        else if (machine.Function == MachineData.ItemFurnaceFunction) verbs.Add(("Inventory", () => OpenStorage(site)));
-        // A research bench's Use (87) is followed by Inventory (26), as for every building with an inventory (FUN_1407a6bc0, Verified): the
-        // research cost is paid from the benches' inventories only (#1342).
-        else if (ProductionWindows.MachineScreen(machine) == "bench") verbs.Add(("Inventory", () => OpenStorage(site)));
+        // Any other machine with an inventory (its inputs, output or storage grid: a mine, farm, well, refinery, crafting or research bench,
+        // furnace, fuel generator or rain collector) has Inventory (26) after its Use, as FUN_1407a6bc0 adds 26 to every building with an
+        // inventory (Verified, #1456); a research cost is paid from the benches' inventories only (#1342).
+        else if (HasInventory(machine)) verbs.Add(("Inventory", () => OpenStorage(site)));
 
         // A corpse machine (function 11) offers Corpse Disposal (136): with Shift the Corpse disposal job (137 and its finder 138), else order 136
         // for every selected character, its queue cleared (FUN_1407fa650 → FUN_1407f9e20).
@@ -1646,6 +1646,14 @@ sealed class BuildMode(PlayerInterface player)
                     { Tick = player.Session.World.Tick }
                 : new Simulation.Production.UseTurretOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
     }
+
+    /// <summary>
+    /// Whether a machine has an inventory the Inventory (26) row opens: input sections, an output section, a storage grid or a crafting bench's
+    /// output (a cooking stove has no inputs; a wind generator, battery, light, turret or training dummy has none).
+    /// </summary>
+    internal static bool HasInventory(Simulation.Production.MachineSnapshot machine) =>
+        machine.Inputs.Count > 0 || machine.Output is not null || machine.HasStorage
+        || machine.Function == CraftBench.CraftingFunction;
 
     /// <summary>
     /// The rows of the code mods' job offers for a site (docs/modding.md "Mod jobs"), shown after its verbs (<see cref="ContextMenuWindow.Menu"/>):

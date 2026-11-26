@@ -270,6 +270,9 @@ static class CharacterShaders
             // bit 18 + p it carries (the vertex's limb bits 0-3, part bits from 4: CharacterContent.MarkBody); the fragments discard where it is above 0.
             uint marks = uint(aColour.y + 0.5);
             vHidden = ((marks & (aInstanceData.z >> 12) & 15u) | ((marks >> 4) & (aInstanceData.z >> 18) & 1023u) | ((marks >> 14) & (aInstanceData.z >> 28) & 1u)) != 0u ? 1.0 : 0.0;
+            // A body vertex (bit 22) of a hand (bits 20-21) the instance hides (bits 16-17, the body's hidden hands; Meitou's: CharacterContent.HandShift).
+            bool bodyVertex = (marks & {{CharacterContent.BodyMark}}u) != 0u;
+            if (bodyVertex && ((marks >> {{CharacterContent.HandShift}}) & (aInstanceData.z >> 16) & 3u) != 0u) vHidden = 1.0;
             if ((aInstanceData.z & {{HeadOnly}}u) != 0u) vHidden = (marks & {{CharacterContent.HeadBit}}u) == 0u ? 1.0 : 0.0;   // a cut-off head: its vertices only
             // The part of the vertex (bits 16-19: its index + 1, CharacterContent.MarkBody) and its blood amount (the instance: part k in byte k & 1 of the w of row k / 2).
             uint bloodPart = (marks >> 16) & 15u;
@@ -308,7 +311,7 @@ static class CharacterShaders
             gl_Position = view.viewProjection * p;
             // Boots over one prosthetic leg (COLLAPSE_SIDE): flags bits 16-17, 1 collapses the x >= 0 half, 2 the x < 0 half.
             uint hideSide = (aInstanceData.z >> 16) & 3u;
-            if ((hideSide == 1u && aPosition.x >= 0.0) || (hideSide == 2u && aPosition.x < 0.0)) gl_Position *= 0.0;
+            if (!bodyVertex && ((hideSide == 1u && aPosition.x >= 0.0) || (hideSide == 2u && aPosition.x < 0.0))) gl_Position *= 0.0;
             //MOTION_BODY
             //ROW_BODY
         }

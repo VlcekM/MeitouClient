@@ -961,7 +961,7 @@ sealed partial class PlayerInterface
             [UiSlots.Squad] = FaithfulSlot("SquadPanel"),
         };
         var overlay = hud ? _uiHost.Arrange(UiMode, Width, Height, b, slots).ToList() : [];
-        var layers = RecordPortraits.Resolve(overlay).ToLookup(UiHost.LayerOf);
+        var layers = overlay.ToLookup(UiHost.LayerOf);
         controls.InsertRange(0, layers[UiOverlayLayer.Back]);
         controls.AddRange(layers[UiOverlayLayer.Hud]);
         PortraitBar.SquadBarRow = 0;
@@ -978,7 +978,9 @@ sealed partial class PlayerInterface
 
         // After the screens: a mod's text box may lie in one (screen controls) as well as on the overlay.
         FaithfulScreens.ArrangeOverlayEdits(controls);
-        return controls;
+
+        // Last: the portraits the overlay, the screens' extension controls and the screen overrides ask for share the atlas cells.
+        return [.. RecordPortraits.Resolve(controls)];
     }
 
     /// <summary>

@@ -1057,6 +1057,13 @@ internal sealed class CharacterContent : IDisposable
     internal const int HeadLimb = 4, HeadBit = 1 << 14;
 
     /// <summary>
+    /// A body vertex's marks (Meitou's): <see cref="HandShift"/> + h for a vertex of hand h's bones (0 left, 1 right: <c>Bip01 L/R Hand</c> and its
+    /// fingers), which the instance's hidden hands hide; <see cref="BodyMark"/> on every body vertex, so the shader reads the instance's bits 16-17
+    /// as hidden hands on the body and as the boots' collapsed side elsewhere.
+    /// </summary>
+    internal const int HandShift = 20, BodyMark = 1 << 22;
+
+    /// <summary>
     /// The thickness a <see cref="MarkThickness"/> ray looks for: anything thicker lets no light through.
     /// </summary>
     const float MaxThickness = 2;
@@ -1070,7 +1077,7 @@ internal sealed class CharacterContent : IDisposable
     /// Which bone handle belongs to which limb slot (-1: none; <see cref="HeadLimb"/> the head) and the bind-pose heights below which a limb's
     /// vertices are its hideable part.
     /// </summary>
-    internal sealed record LimbHide(int[] LimbOfBone, float ArmBelow, float LegBelow, int[] PartOfBone);
+    internal sealed record LimbHide(int[] LimbOfBone, float ArmBelow, float LegBelow, int[] PartOfBone, int[] HandOfBone);
 
     /// <summary>
     /// The limb map of a person's body (<c>read_part_map</c> <c>FUN_140075600</c>, docs/characters.md "Hidden body parts"): each LOCATIONAL_DAMAGE of
@@ -1128,7 +1135,28 @@ internal sealed class CharacterContent : IDisposable
             }
         }
 
-        return new LimbHide(map, c.Female ? 14.1f : 13.83f, 8.6f, partMap);
+        return new LimbHide(map, c.Female ? 14.1f : 13.83f, 8.6f, partMap, HandsOf(bones, byHandle, map.Length));
+    }
+
+    /// <summary>
+    /// Each bone's hand: 0 for <c>Bip01 L Hand</c> and the bones below it, 1 for <c>Bip01 R Hand</c>'s, -1 for the rest.
+    /// </summary>
+    static int[] HandsOf(IReadOnlyList<OgreBone> bones, Dictionary<int, OgreBone> byHandle, int count)
+    {
+        var hands = new int[count];
+        Array.Fill(hands, -1);
+        foreach (var b in bones)
+        {
+            for (var x = b; x is not null; x = x.Parent is { } p && byHandle.TryGetValue(p, out var parent) ? parent : null)
+            {
+                int hand = x.Name switch { "Bip01 L Hand" => 0, "Bip01 R Hand" => 1, _ => -1 };
+                if (hand < 0) continue;
+
+                hands[b.Handle] = hand;
+                break;
+            }
+        }
+        return hands;
     }
 
     /// <summary>
@@ -1165,7 +1193,8 @@ internal sealed class CharacterContent : IDisposable
     /// <summary>
     /// Writes each body vertex's hide bits into its colour's Y (<c>FUN_140071f90</c>): bits 0 to 3 the limb of its heaviest bone, when the vertex
     /// lies below that limb's height (bit 14 for a head bone's vertex, Meitou's: <see cref="HeadBit"/>); from bit 4 the part-map bit of the texel
-    /// under its UV (texel floor(size × uv), clamped; an exact colour of the table, alpha above 0; any other colour marks nothing).
+    /// under its UV (texel floor(size × uv), clamped; an exact colour of the table, alpha above 0; any other colour marks nothing); Meitou's hand
+    /// bits (<see cref="HandShift"/>) and <see cref="BodyMark"/>.
     /// </summary>
     static void MarkBody(Model model, LimbHide? hide, RgbaImage? partMap)
     {
@@ -1197,6 +1226,10 @@ internal sealed class CharacterContent : IDisposable
                     // The part of the heaviest bone (the blood amounts are the first 8 parts', FUN_140530b30): bits 16 to 19, its index + 1.
                     int owner = (uint)bone < (uint)hide.PartOfBone.Length ? hide.PartOfBone[bone] : -1;
                     if ((uint)owner < 8) bits |= (owner + 1) << 16;
+
+                    // A hand's vertices, which a worn unarmed weapon may hide (Meitou's).
+                    int hand = (uint)bone < (uint)hide.HandOfBone.Length ? hide.HandOfBone[bone] : -1;
+                    if (hand >= 0) bits |= 1 << (HandShift + hand);
                 }
                 if (partMap is not null)
                 {
@@ -1205,7 +1238,7 @@ internal sealed class CharacterContent : IDisposable
                     var (r, g, b, a) = partMap[x, y];
                     if (a > 0) bits |= PartBit(r << 16 | g << 8 | b) << 4;
                 }
-                v.Colour.Y = bits;
+                v.Colour.Y = bits | BodyMark;
             }
         }
     }

@@ -222,7 +222,7 @@ above it ([construction look](game/buildings-production.md#construction-look)). 
 `scaffolding tex scale`)) over its two flag bits (`BuildingLodShaders.PackSite`). The vertex shader passes mesh y / top; the
 fragment samples `construction.dds` (bindless index + 1 in the push spare's bits 8+) at the tiled mesh coordinates x the tiling,
 discards above `1.2 f` unless grid alpha > 0.7, and blends the grid over the albedo below `1 - 5 (f - 0.8)`. The shadow pass
-clips the same. Until the texture is resident a procedural world-space grid stands in. Not done: the grid's gloss 0.4 and
+clips the same. A site takes no weather dust (the game's construction material has no DUST, [runtime materials](formats/runtime-materials.md)): the dust test skips `vScaffold > 2`. Until the texture is resident a procedural world-space grid stands in. Not done: the grid's gloss 0.4 and
 normal blend. Sites always use the fading (discard-capable) batch.
 
 **Ghost.** `WorldObjectRenderer.SetGhosts(GhostDraw[])` draws a building's parts (laid out once at the origin, exterior
