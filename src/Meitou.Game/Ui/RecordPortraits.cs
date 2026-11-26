@@ -106,18 +106,35 @@ sealed class RecordPortraits(PlayerInterface player)
         int next = members.Count + trade.Count;
         int end = snapshot.Conversation is null ? PortraitBar.PortraitCells : PortraitBar.DialogueNpcCell;
         var ids = controls.Select(c => c.Properties.GetValueOrDefault(LiveProperty)).OfType<string>().ToHashSet(StringComparer.Ordinal);
-        foreach (var c in snapshot.Characters)
-        {
-            string key = c.Id.ToString();
-            if (!ids.Contains(key)) continue;
+        var byKey = new Dictionary<string, CharacterId>(StringComparer.Ordinal);
+        foreach (var c in snapshot.Characters) byKey.TryAdd(c.Id.ToString(), c.Id);
 
-            if (drawn.TryGetValue(key, out int cell)) _liveCells[key] = cell;
-            else if (next < end)
-            {
-                _liveCells[key] = next;
-                _live.Add((c.Id, next++));
-            }
+        foreach (var (key, cell, own) in AssignLive(byKey.Keys, ids, drawn, next, end))
+        {
+            _liveCells[key] = cell;
+            if (own) _live.Add((byKey[key], cell));
         }
+    }
+
+    /// <summary>
+    /// The cell of each character of <paramref name="present"/> (in that order) that <paramref name="asked"/> names: the one it is already drawn in
+    /// (<paramref name="drawn"/>, <c>Own</c> false), else the next of <paramref name="next"/> up to <paramref name="end"/> (<c>Own</c> true: the host
+    /// draws it there), else none. Each character takes one cell however many controls ask for it, so two windows never share a cell between two
+    /// characters; the cells are given anew each arrangement, so one no control asks for any more is free again.
+    /// </summary>
+    internal static List<(string Key, int Cell, bool Own)> AssignLive(IEnumerable<string> present, IReadOnlySet<string> asked,
+        IReadOnlyDictionary<string, int> drawn, int next, int end)
+    {
+        var cells = new List<(string, int, bool)>();
+        foreach (string key in present)
+        {
+            if (!asked.Contains(key)) continue;
+
+            if (drawn.TryGetValue(key, out int cell)) cells.Add((key, cell, false));
+            else if (next < end) cells.Add((key, next++, true));
+        }
+
+        return cells;
     }
 
     /// <summary>
