@@ -627,7 +627,8 @@ Description box (`DescriptionText`): the BUILDING's `Description`, capitalised u
 `gamedata.base`, `Newwworld.mod` and `rebirth.mod` carries `Description`; 18 also a lowercase one, empty on all but one). 25 of the 228
 research-unlocked base buildings leave it empty (walls and gates II-IV, indoor farms, medical desks, tables, storage barrels, Battery Bank, Wind
 Generator II, Oil Silo, Rain Collector, Storm_House_07); Meitou shows its own translated text for those, and a mod that sets their `Description`
-replaces it (`BuildingDescriptions`).
+replaces it (`BuildingDescriptions`). Meitou ends the box with a blank line and `Mod: {1}` / `Mods: {1}` when mods define or change the record
+(`BuildingDescriptions.WithMods`, as the item tooltip's last row, [ui-screens.md](ui-screens.md#tooltips)).
 Opening the menu pauses the game (a normal pause, the speed buttons resume) and closes the inventory windows
 (**Observed**, in-game).
 

@@ -45,6 +45,20 @@ public static class BuildingDescriptions
     };
 
     /// <summary>
+    /// The build window's text for the BUILDING <paramref name="stringId"/>: its description (<see cref="Of"/>), then a blank line and the mods
+    /// the record comes from (<see cref="Ui.RecordModsText"/>) when any defines or changes it; empty when it is not loaded.
+    /// </summary>
+    public static string WithMods(GameDatabase db, string stringId)
+    {
+        if (db.Find(stringId) is not { } record) return "";
+
+        string description = Of(record);
+        string mods = Ui.RecordModsText.Of(db.ModsOf(record));
+        if (mods.Length == 0) return description;
+        return description.Length == 0 ? mods : description + "\n\n" + mods;
+    }
+
+    /// <summary>
     /// <paramref name="record"/>'s description for the build window, translated and as the mods' text sources show it; empty when it has none.
     /// </summary>
     public static string Of(GameRecord? record)

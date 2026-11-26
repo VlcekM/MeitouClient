@@ -5876,3 +5876,11 @@ msgstr "Бросать из добычи"
 #. machine-translated
 msgid "An item dragged out of a knocked-out or dead character's inventory onto the ground drops there, as a take from that character: it can be seen as theft, and a body whose meat or parts are dropped is butchered. In the game it goes back to the body."
 msgstr "Предмет, перетащенный из инвентаря персонажа без сознания или мёртвого на землю, падает туда, как взятый у этого персонажа: это могут счесть кражей, а тело, чьё мясо или части брошены, разделывается. В игре он возвращается к телу."
+
+#. machine-translated
+msgid "Mod: {1}"
+msgstr "Мод: {1}"
+
+#. machine-translated
+msgid "Mods: {1}"
+msgstr "Моды: {1}"

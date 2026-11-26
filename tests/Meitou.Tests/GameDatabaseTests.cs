@@ -41,6 +41,44 @@ public class GameDatabaseTests
     }
 
     [Fact]
+    public void A_record_names_every_mod_that_defines_or_changes_it_once_in_load_order()
+    {
+        var db = new GameDatabase();
+        db.Apply(File(Record("1-gamedata.base", New), Record("2-a.mod", New)), "gamedata.base");
+        db.Apply(File(Record("1-gamedata.base", Modified), Record("3-a.mod", New)), "a.mod");
+        db.Apply(File(Record("1-gamedata.base", Modified), Record("3-a.mod", New)), "b.mod");
+        db.Change(Record("1-gamedata.base", Modified), "a.mod");
+        db.Change(Record("3-a.mod", Modified), "c.mod");
+
+        Assert.Equal(["a", "b"], db.ModsOf(db.Find("1-gamedata.base")!));
+        Assert.Equal(["a", "b", "c"], db.ModsOf(db.Find("3-a.mod")!));
+        Assert.Empty(db.ModsOf(db.Find("2-a.mod")!));
+    }
+
+    [Fact]
+    public void A_translation_is_not_a_mod_of_the_records_it_translates()
+    {
+        string dir = Directory.CreateTempSubdirectory("meitou-mods-of-").FullName;
+        try
+        {
+            var translation = File(Record("1-gamedata.base", Renamed, name: "Ding"));
+            string path = Path.Combine(dir, "de.translation");
+            FcsWriter.WriteFile(translation, path);
+
+            var db = new GameDatabase();
+            db.Apply(File(Record("1-gamedata.base", New)), "gamedata.base");
+            db.LoadTranslation(path);
+
+            Assert.Equal("Ding", db.Find("1-gamedata.base")!.Name);
+            Assert.Empty(db.ModsOf(db.Find("1-gamedata.base")!));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void References_are_added_overwritten_and_removed_per_target()
     {
         var baseRecord = Record("1-a.mod", New);

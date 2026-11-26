@@ -386,7 +386,7 @@ sealed class BuildingSync(GameHost host)
         {
             Menu = new Building.BuildMenu([.. BuildData().Values]),
             ItemName = id => db.Find(id)?.Name ?? id,
-            Description = id => Building.BuildingDescriptions.Of(db.Find(id)),
+            Description = id => Building.BuildingDescriptions.WithMods(db, id),
             Parts = id =>
             {
                 if (parts.TryGetValue(id, out var cached)) return cached;

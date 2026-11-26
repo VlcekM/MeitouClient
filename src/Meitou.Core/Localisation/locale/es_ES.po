@@ -5873,3 +5873,11 @@ msgstr "Soltar desde el saqueo"
 #. machine-translated
 msgid "An item dragged out of a knocked-out or dead character's inventory onto the ground drops there, as a take from that character: it can be seen as theft, and a body whose meat or parts are dropped is butchered. In the game it goes back to the body."
 msgstr "Un objeto arrastrado desde el inventario de un personaje inconsciente o muerto al suelo cae allí, como si se lo quitaras a ese personaje: puede verse como robo, y un cuerpo cuya carne o piezas se sueltan queda despedazado. En el juego vuelve al cuerpo."
+
+#. machine-translated
+msgid "Mod: {1}"
+msgstr "Mod: {1}"
+
+#. machine-translated
+msgid "Mods: {1}"
+msgstr "Mods: {1}"

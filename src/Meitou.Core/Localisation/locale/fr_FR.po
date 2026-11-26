@@ -5873,3 +5873,11 @@ msgstr "Lâcher depuis le butin"
 #. machine-translated
 msgid "An item dragged out of a knocked-out or dead character's inventory onto the ground drops there, as a take from that character: it can be seen as theft, and a body whose meat or parts are dropped is butchered. In the game it goes back to the body."
 msgstr "Un objet glissé de l'inventaire d'un personnage inconscient ou mort vers le sol y tombe, comme pris à ce personnage : cela peut être vu comme un vol, et un corps dont la viande ou les pièces sont lâchées est dépecé. Dans le jeu, il retourne au corps."
+
+#. machine-translated
+msgid "Mod: {1}"
+msgstr "Mod : {1}"
+
+#. machine-translated
+msgid "Mods: {1}"
+msgstr "Mods : {1}"

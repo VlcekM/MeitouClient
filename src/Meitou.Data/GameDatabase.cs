@@ -73,6 +73,25 @@ public sealed class GameDatabase
     public IEnumerable<GameRecord> OfType(FcsRecordType type) => _records.Values.Where(r => r.Type == type);
 
     /// <summary>
+    /// The mods whose data files (or data phase, which counts as the mod's <c>.mod</c> file) define or change <paramref name="record"/>, by name
+    /// (the file without <c>.mod</c>), each once, in load order; empty for a base-game record no mod changed. The core files
+    /// (<see cref="LoadOrder.BaseFiles"/>) and translation files are not mods.
+    /// </summary>
+    public IReadOnlyList<string> ModsOf(GameRecord record)
+    {
+        var mods = new List<string>();
+        foreach (var file in record.ModifiedBy.Prepend(record.DefinedBy))
+        {
+            if (LoadOrder.BaseFiles.Contains(file) || Translations.Contains(file)) continue;
+
+            string name = file.EndsWith(".mod", StringComparison.OrdinalIgnoreCase) ? file[..^4] : file;
+            if (!mods.Contains(name)) mods.Add(name);
+        }
+
+        return mods;
+    }
+
+    /// <summary>
     /// Translation files applied, by file name, in order (not in <see cref="Files"/>: they are not data files a save depends on).
     /// </summary>
     public List<string> Translations { get; } = [];
