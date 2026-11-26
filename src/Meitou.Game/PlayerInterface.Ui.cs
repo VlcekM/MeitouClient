@@ -465,9 +465,10 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// A press on an extension's control in a faithful screen (<see cref="UiHost.DispatchScreen"/>); false for the screen's own controls.
+    /// A press on an extension's control in a faithful screen (<see cref="UiHost.DispatchScreen(string, string, Vector2)"/>, with the pointer);
+    /// false for the screen's own controls.
     /// </summary>
-    internal bool ModScreenAction(MyGuiEvent e) => _uiHost.HasScreenControls && _uiHost.DispatchScreen(e.Screen, e.Widget);
+    internal bool ModScreenAction(MyGuiEvent e) => _uiHost.HasScreenControls && _uiHost.DispatchScreen(e.Screen, e.Widget, Mouse);
 
     /// <summary>
     /// What <paramref name="screen"/> shows, for the extensions' controls: its kind, character, machine and item cells.

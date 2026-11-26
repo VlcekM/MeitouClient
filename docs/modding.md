@@ -1106,7 +1106,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   `anchorWidget` by `UiAnchorPlacement`: `Inside` its rectangle (clipped to it), or in a rectangle of its size just `Above`, `Below`, `Left` or
   `Right` of it (clipped to the screen only, so it may lie outside the window). The node's `Placement`, flow and styles work as in the overlay; it
   is drawn over the screen after its own controls, and a node's `Action` names an action of `RegisterAction`, run on a click (the screen's
-  click sound first). A node (or a parent) asking `Pointer` `Release` or `Drag` holds a left press as on the overlay: its press runs at the
+  click sound first) with the pointer as `Position` and `Start` (screen pixels; earlier builds left a click's `Position` zero). A node (or a
+  parent) asking `Pointer` `Release` or `Drag` holds a left press as on the overlay: its press runs at the
   button's down without the click sound, then each move (`Delta`) and the release reach the holder wherever the pointer goes (`Over` names
   overlay nodes only), and the screen sees none of it (no window drag); `Buttons` works as on the overlay. The wheel, hover and a scroll view's
   bar are the overlay's only. `UiScreens.ItemCells` as the anchor builds once per item cell of a character window (inventory, bag, limbs, loot), at
