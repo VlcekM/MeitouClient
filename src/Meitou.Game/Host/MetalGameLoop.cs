@@ -715,7 +715,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             return;
         }
 
-        _worldGpu.ProbeGi = new MetalProbeGi(_ctx) { Enabled = host.WorldOptions.GiProbes, InteriorEnabled = host.WorldOptions.InteriorGi };
+        var probes = new MetalProbeGi(_ctx) { Enabled = host.WorldOptions.GiProbes, InteriorEnabled = host.WorldOptions.InteriorGi };
+        _worldGpu.ProbeGi = probes;
+        _postChain.Probes = probes;
         Console.WriteLine($"gi        {_worldGpu.ProbeGi.Describe()}");
     }
 

@@ -1800,8 +1800,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <summary>
     /// Clear pipelines by attachment formats, sample count and what they write (<see cref="MakeClearPipeline"/>), made on first use.
     /// </summary>
-    readonly Dictionary<(MTLPixelFormat Colour, MTLPixelFormat Extra, MTLPixelFormat Depth, ulong Samples, bool WritesColour, bool WritesDepth),
-        MTLRenderPipelineState> _clearPipelines = [];
+    readonly Dictionary<(MTLPixelFormat Colour, MTLPixelFormat Extra, MTLPixelFormat Extra2, MTLPixelFormat Depth, ulong Samples, bool WritesColour,
+        bool WritesDepth), MTLRenderPipelineState> _clearPipelines = [];
     /// <summary>
     /// The compiled clear shaders (<c>ClearMsl</c>), compiled on first use.
     /// </summary>
@@ -1924,11 +1924,12 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
 
         var colourFormat = colourTexture.NativePtr != IntPtr.Zero ? colourTexture.PixelFormat : MTLPixelFormat.Invalid;
         var extraFormat = desc.Extra.IsNull ? MTLPixelFormat.Invalid : ViewTexture(desc.Extra.View).PixelFormat;
+        var extra2Format = desc.Extra2.IsNull ? MTLPixelFormat.Invalid : ViewTexture(desc.Extra2.View).PixelFormat;
         var depthFormat = depthTexture.NativePtr != IntPtr.Zero ? depthTexture.PixelFormat : MTLPixelFormat.Invalid;
         ulong samples = Math.Max(1ul, colourTexture.NativePtr != IntPtr.Zero ? colourTexture.SampleCount : depthTexture.SampleCount);
-        var key = (colourFormat, extraFormat, depthFormat, samples, colour, depth);
+        var key = (colourFormat, extraFormat, extra2Format, depthFormat, samples, colour, depth);
         if (!_clearPipelines.TryGetValue(key, out var pipeline))
-            _clearPipelines[key] = pipeline = MakeClearPipeline(colourFormat, extraFormat, depthFormat, samples, colour, depth);
+            _clearPipelines[key] = pipeline = MakeClearPipeline(colourFormat, (extraFormat, extra2Format), depthFormat, samples, colour, depth);
 
         encoder.SetRenderPipelineState(pipeline);
         if (depth) encoder.SetDepthStencilState(DepthState(true, true, DepthFunction.Always));
@@ -1962,8 +1963,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     /// <summary>
     /// A pipeline drawing a clear rectangle into the given attachment formats, writing colour, depth or both.
     /// </summary>
-    MTLRenderPipelineState MakeClearPipeline(MTLPixelFormat colour, MTLPixelFormat extra, MTLPixelFormat depth, ulong samples, bool writesColour,
-        bool writesDepth)
+    MTLRenderPipelineState MakeClearPipeline(MTLPixelFormat colour, (MTLPixelFormat First, MTLPixelFormat Second) extras, MTLPixelFormat depth,
+        ulong samples, bool writesColour, bool writesDepth)
     {
         NSError error = default;
         var library = _clearLibrary ??= Device.NewLibrary((NSString)ClearMsl, new MTLCompileOptions(), ref error);
@@ -1985,13 +1986,15 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             d.ColorAttachments.SetObject(attachment, 0);
         }
 
-        if (extra != MTLPixelFormat.Invalid)
+        // The further colour targets (the GI surface, the traced sun's term): the clear never writes them, but the pass's pipeline must name them.
+        foreach (var (format, index) in (ReadOnlySpan<(MTLPixelFormat, ulong)>)[(extras.First, 1), (extras.Second, 2)])
         {
-            // The second colour target (the GI mask): the clear never writes it, but the pass's pipeline must name it.
-            var attachment = d.ColorAttachments.Object(1);
-            attachment.PixelFormat = extra;
+            if (format == MTLPixelFormat.Invalid) continue;
+
+            var attachment = d.ColorAttachments.Object(index);
+            attachment.PixelFormat = format;
             attachment.WriteMask = MTLColorWriteMask.None;
-            d.ColorAttachments.SetObject(attachment, 1);
+            d.ColorAttachments.SetObject(attachment, index);
         }
 
         if (depth != MTLPixelFormat.Invalid)

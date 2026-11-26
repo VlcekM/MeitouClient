@@ -132,6 +132,46 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     int _interiorLevel;
 
     /// <summary>
+    /// The lamps of the last update, for a later pass that shades ray hits as the trace does (<see cref="Cache"/>).
+    /// </summary>
+    WorldLamps? _lastLamps;
+
+    /// <summary>
+    /// The traced scene (the radiance cache traces it too).
+    /// </summary>
+    internal MetalGiScene Scene => _scene;
+
+    /// <summary>
+    /// The last update's constants (the radiance cache's trace takes them).
+    /// </summary>
+    internal GiProbes.Constants LastConstants { get; private set; }
+
+    /// <summary>
+    /// Whether the probes were updated this frame (the radiance cache shades its hits with this update's inputs).
+    /// </summary>
+    internal bool UpdatedThisFrame => _updated && _updatedFrame == _ctx.Frame.Number;
+
+    /// <summary>
+    /// The frame of the last update.
+    /// </summary>
+    long _updatedFrame = -1;
+
+    /// <summary>
+    /// The hybrid GI's radiance cache over these probes (made on first use).
+    /// </summary>
+    internal MetalGiCache Cache => _cache ??= new MetalGiCache(_ctx, this);
+
+    /// <summary>
+    /// See <see cref="Cache"/>.
+    /// </summary>
+    MetalGiCache? _cache;
+
+    /// <summary>
+    /// Binds what a ray hit is shaded with (the probes, the sky, the ground, the lamps and the clouds) for <paramref name="program"/>.
+    /// </summary>
+    internal void BindHitInputs(MTLComputeCommandEncoder e, MetalProgram program) => BindHitImages(e, program, _lastLamps);
+
+    /// <summary>
     /// The frame slot of the last update, and whether the probes were updated (the shaders read them only then).
     /// </summary>
     int _slot;
@@ -253,6 +293,54 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     public bool Relocate { get; set; }
 
     /// <summary>
+    /// True while the main view's opaque scene draws with the traced sun (<c>uGiParams.z</c> bit 4, with <see cref="Resolve"/>).
+    /// </summary>
+    public bool Traced { get; set; }
+
+    /// <summary>
+    /// The scene's casters for the traced sun (<see cref="MetalGiScene.Casters"/>).
+    /// </summary>
+    public void SetCasters(bool casters, float range, float pixelsPerRadian)
+    {
+        _scene.Casters = casters;
+        _scene.Range = range;
+        _scene.PixelsPerRadian = pixelsPerRadian;
+    }
+
+    /// <summary>
+    /// Whether the traced scene has a top level this frame.
+    /// </summary>
+    public bool TracedReady => _scene.Top is not null;
+
+    /// <summary>
+    /// NDC, as the frame's projection jittered it, to the position relative to the eye.
+    /// </summary>
+    public Matrix4x4 SceneToEye { get; set; }
+
+    /// <summary>
+    /// The traced sun over <paramref name="post"/>'s opaque scene (<see cref="MetalPostChain.RunTracedSun"/>).
+    /// </summary>
+    public void TraceSun(Post.IWorldPostChain post, Vector3 toSun)
+    {
+        if (post is MetalPostChain chain) chain.RunTracedSun(_scene, SceneToEye, toSun);
+    }
+
+    /// <summary>
+    /// The shadow pass's sun map from the traced scene (<see cref="MetalTracedSun.RunVolume"/>).
+    /// </summary>
+    public void TraceSunVolume(Shadows.ShadowPass shadow) => Sun.RunVolume(_scene, shadow);
+
+    /// <summary>
+    /// The traced sun's kernels and targets (made on first use).
+    /// </summary>
+    internal MetalTracedSun Sun => _sun ??= new MetalTracedSun(_ctx);
+
+    /// <summary>
+    /// See <see cref="Sun"/>.
+    /// </summary>
+    MetalTracedSun? _sun;
+
+    /// <summary>
     /// Rays each probe traces per update (32 or 64, the "GI 64 probe rays" row).
     /// </summary>
     public int Rays { get; set; } = GiProbes.DefaultRays;
@@ -289,9 +377,10 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     public int Listed { get; private set; }
 
     /// <summary>
-    /// <c>uGiParams</c>: x on and filled, y the strength, z bit 1 the resolve, w the indoor gain (0 bypasses indoor GI).
+    /// <c>uGiParams</c>: x on and filled, y the strength, z bits 1 the resolve and 4 the traced sun, w the indoor gain (0 bypasses indoor GI).
     /// </summary>
-    Vector4 Params => new(Enabled && Active && Shade && _updated ? 1 : 0, Strength, Resolve ? 1 : 0, InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
+    Vector4 Params => new(Enabled && Active && Shade && _updated ? 1 : 0, Strength, (Resolve ? 1 : 0) + (Resolve && Traced ? 4 : 0),
+        InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
 
     /// <summary>
     /// Cascade <paramref name="cascade"/>'s spacing across, up and rays' length: the interior grid's for the first while it is placed.
@@ -328,8 +417,9 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
 
         Dispatch(moved, lamps);
         _updated = true;
+        _updatedFrame = _ctx.Frame.Number;
         Updates++;
-        if (Updates % 600 == 1 && Environment.GetEnvironmentVariable("MEITOU_METAL_GI_LOG") == "1") Console.WriteLine($"gi        {Describe()}");
+        if (Updates % 200 == 1 && Environment.GetEnvironmentVariable("MEITOU_METAL_GI_LOG") == "1") Console.WriteLine($"gi        {Describe()}");
     }
 
     /// <summary>
@@ -446,6 +536,7 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
             Sun = Read<Vector4>(g, "uAtmoSun"),
         };
         *(GiProbes.Constants*)_constants[_slot].Contents = constants;
+        (LastConstants, _lastLamps) = (constants, lamps);
     }
 
     /// <summary>
@@ -547,7 +638,7 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// <summary>
     /// The samplers a hit reads (bindings 4 to 12, 15 and 16, 18): the probes, the sky, the ground, the lamps and their tiles, the clouds.
     /// </summary>
-    void BindHitImages(MTLComputeCommandEncoder e, MetalProgram program, WorldLamps? lamps)
+    internal void BindHitImages(MTLComputeCommandEncoder e, MetalProgram program, WorldLamps? lamps)
     {
         var bases = new SampledTexture(_nearest, _bases[_slot].View());
         BindSampled(e, program, 4, new SampledTexture(_linear, _irradiance.View()));
@@ -697,6 +788,8 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     /// </summary>
     public void Dispose()
     {
+        _cache?.Dispose();
+        _sun?.Dispose();
         _scene.Dispose();
         _ctx.ReleaseTexture(_irradiance);
         _ctx.ReleaseTexture(_distance);

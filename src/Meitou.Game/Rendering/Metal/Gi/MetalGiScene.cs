@@ -56,7 +56,42 @@ internal sealed unsafe class MetalGiScene : IDisposable
     /// the terrain grid's top) as the front, as Vulkan does: with its counter-clockwise option every object's outside was a back face to the
     /// probes, dark and counted as inside (the dark patches on a roof), and the grid was culled from above (**Verified**, ray statistics).
     /// </summary>
-    const uint NoCulling = 1, Opaque = 4;
+    const uint NoCulling = 1, Opaque = 4, NotOpaque = 8;
+
+    /// <summary>
+    /// The small foliage the traced sun adds: from this radius, at most this many instances (<see cref="GiScene"/>'s).
+    /// </summary>
+    const float SmallFoliageMinSize = 6;
+
+    /// <summary>
+    /// See <see cref="SmallFoliageMinSize"/>.
+    /// </summary>
+    const int SmallFoliageInstances = 5000;
+
+    /// <summary>
+    /// The objects' share of the instances: the rest is the foliage's, small foliage included.
+    /// </summary>
+    const int ObjectInstances = MaxInstances - FoliageReserve - SmallFoliageInstances;
+
+    /// <summary>
+    /// True while the sun is traced: the scene holds the casters too (the objects to <see cref="Range"/>, the small foliage, the cut parts' maps).
+    /// </summary>
+    public bool Casters { get; set; }
+
+    /// <summary>
+    /// How far the objects are traced while <see cref="Casters"/> (the shadows' range; at least the probes').
+    /// </summary>
+    public float Range { get; set; } = GiScene.ProbeRange;
+
+    /// <summary>
+    /// The frame's lens: pixels per radian at the render height (small casters count by their size on screen).
+    /// </summary>
+    public float PixelsPerRadian { get; set; } = 1080 / (2 * MathF.Tan(25 * MathF.PI / 180));
+
+    /// <summary>
+    /// The angle a small caster's bounds must span (<see cref="GiScene.CasterPixels"/> pixels at the frame's lens).
+    /// </summary>
+    float CasterAngle => 3f / (2 * MathF.Max(PixelsPerRadian, 1));
 
     /// <summary>
     /// The backend.
@@ -226,9 +261,10 @@ internal sealed unsafe class MetalGiScene : IDisposable
         var snapped = new Vector3(MathF.Round(eye.X / SelectionSnap), MathF.Round(eye.Y / SelectionSnap), MathF.Round(eye.Z / SelectionSnap))
             * SelectionSnap;
 
-        foreach (var inst in objects.RayInstances(snapped, GiScene.ProbeRange + SelectionSnap * 0.87f))
+        float range = Casters ? MathF.Max(Range, GiScene.ProbeRange) : GiScene.ProbeRange;
+        foreach (var inst in objects.RayInstances(snapped, range + SelectionSnap * 0.87f))
         {
-            if (_instances.Count >= MaxInstances - FoliageReserve) break;
+            if (_instances.Count >= ObjectInstances) break;
 
             var entry = ObjectEntry(inst.Gpu!);
             if (entry is null) continue;
@@ -255,6 +291,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
         uint first = (uint)_records.Count;
         uint interior = (objects.RayInterior(inst) ? 1u : 0u) | (objects.RayHidden(inst) ? 2u : 0u);
         uint emitter = lamps?.Emitter(inst.Placed.PlacementId) ?? 0;
+        bool cut = false;
 
         for (int k = 0; k < entry.Records.Length; k++)
         {
@@ -262,10 +299,13 @@ internal sealed unsafe class MetalGiScene : IDisposable
             record.Texture = objects.RayTexture(inst.Materials!, entry.Parts[k]);
             record.Emitter = emitter;
             record.Interior = interior;
+            if (Casters) (record.SunMap, record.SunCut) = objects.RayCut(inst.Materials!, entry.Parts[k]);
+            cut |= record.SunCut > 0;
             _records.Add(record);
         }
 
-        Add(entry, world, TracedSunShaders.Objects, NoCulling, first);
+        // A part its material cuts makes the instance report candidates, whose records hold the map for the sun.
+        Add(entry, world, TracedSunShaders.Objects, cut ? NoCulling | NotOpaque : NoCulling, first);
     }
 
     /// <summary>
@@ -390,7 +430,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
     /// <summary>
     /// The foliage block: rebuilt now and then (the foliage does not move), not every frame (the walk over every zone is not cheap).
     /// </summary>
-    readonly List<(MetalBottomLevel Entry, Matrix4x4 World, FoliageRayMesh Mesh)> _foliage = [];
+    readonly List<(MetalBottomLevel Entry, Matrix4x4 World, FoliageRayMesh Mesh, byte Mask)> _foliage = [];
 
     /// <summary>
     /// The candidates of a rebuild.
@@ -403,6 +443,11 @@ internal sealed unsafe class MetalGiScene : IDisposable
     (Vector3 Eye, long Frame, int Generation, bool Complete) _foliageState = (default, long.MinValue / 2, -1, false);
 
     /// <summary>
+    /// Whether the block was gathered with <see cref="Casters"/>, and the caster angle its small foliage was chosen with.
+    /// </summary>
+    (bool Casters, float Angle) _foliageCasters;
+
+    /// <summary>
     /// The foliage block's instances, with this frame's textures in their records (rebuilt when stale: every 120 updates, when the eye moved 250
     /// units, when the foliage changed, soon after a block that lacked meshes).
     /// </summary>
@@ -410,16 +455,17 @@ internal sealed unsafe class MetalGiScene : IDisposable
     {
         var s = _foliageState;
         bool stale = _frame - s.Frame >= 120 || Vector3.DistanceSquared(eye, s.Eye) > 250f * 250f || foliage.RayGeneration != s.Generation
-            || !s.Complete && _frame - s.Frame >= 2;
+            || !s.Complete && _frame - s.Frame >= 2 || _foliageCasters.Casters != Casters
+            || Casters && MathF.Abs(CasterAngle - _foliageCasters.Angle) > 0.15f * _foliageCasters.Angle;
         if (stale) RebuildFoliage(eye, foliage);
 
         int count = 0;
-        foreach (var (entry, world, mesh) in _foliage)
+        foreach (var (entry, world, mesh, mask) in _foliage)
         {
             if (_instances.Count >= MaxInstances || _records.Count + entry.Records.Length > MaxRecords) break;
 
             entry.LastUsed = _frame;
-            AddFoliage(entry, world, mesh, foliage);
+            AddFoliage(entry, world, mesh, mask, foliage);
             count++;
         }
 
@@ -429,7 +475,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
     /// <summary>
     /// One foliage instance and its records with this frame's textures (a texture may unload or move in the table between rebuilds).
     /// </summary>
-    void AddFoliage(MetalBottomLevel entry, Matrix4x4 world, FoliageRayMesh mesh, FoliageRenderer foliage)
+    void AddFoliage(MetalBottomLevel entry, Matrix4x4 world, FoliageRayMesh mesh, byte mask, FoliageRenderer foliage)
     {
         uint first = (uint)_records.Count;
         foliage.RefreshRayTextures(mesh);
@@ -442,7 +488,7 @@ internal sealed unsafe class MetalGiScene : IDisposable
         }
 
         world.Translation -= Origin;
-        Add(entry, world, TracedSunShaders.Foliage, NoCulling, first);
+        Add(entry, world, mask, NoCulling, first);
     }
 
     /// <summary>
@@ -452,13 +498,37 @@ internal sealed unsafe class MetalGiScene : IDisposable
     {
         _foliage.Clear();
         _rayFoliage.Clear();
-        foliage.RayInstances(eye, FoliageRange, FoliageMinSize, _rayFoliage);
+
+        // The traced sun's trees reach as far as its shadows, nearest first while the budget lasts; the probes' rays are shorter than either.
+        float range = Casters ? MathF.Max(FoliageRange, Range) : FoliageRange;
+        foliage.RayInstances(eye, range, FoliageMinSize, _rayFoliage);
         _rayFoliage.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+        bool complete = GatherFoliage(TracedSunShaders.Foliage, FoliageReserve);
+
+        // The foliage the probes leave out, for the sun alone (a bush casts a shadow as a tree does): the largest on screen first.
+        if (Casters)
+        {
+            _rayFoliage.Clear();
+            foliage.RayInstances(eye, MathF.Max(Range, FoliageRange), SmallFoliageMinSize, _rayFoliage, FoliageMinSize, CasterAngle);
+            _rayFoliage.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            complete &= GatherFoliage(TracedSunShaders.SmallFoliage, FoliageReserve + SmallFoliageInstances);
+        }
+
+        _foliageState = (eye, _frame, foliage.RayGeneration, complete);
+        _foliageCasters = (Casters, CasterAngle);
+    }
+
+    /// <summary>
+    /// The candidates of <see cref="_rayFoliage"/> into the block under <paramref name="mask"/> while it holds fewer than <paramref name="room"/>;
+    /// false when a mesh's structure was not built yet.
+    /// </summary>
+    bool GatherFoliage(byte mask, int room)
+    {
         bool complete = true;
 
         foreach (var (mesh, transform, _) in _rayFoliage)
         {
-            if (_foliage.Count >= FoliageReserve) break;
+            if (_foliage.Count >= room) break;
 
             var entry = FoliageEntry(mesh);
             if (entry is null)
@@ -469,10 +539,10 @@ internal sealed unsafe class MetalGiScene : IDisposable
 
             var world = transform;
             world.M14 = 0;
-            _foliage.Add((entry, world, mesh));
+            _foliage.Add((entry, world, mesh, mask));
         }
 
-        _foliageState = (eye, _frame, foliage.RayGeneration, complete);
+        return complete;
     }
 
     /// <summary>

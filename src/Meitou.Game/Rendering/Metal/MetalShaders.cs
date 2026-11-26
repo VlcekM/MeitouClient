@@ -494,7 +494,10 @@ public sealed class MetalShaders : IGpuShaders
     {
         bool bindless = extraSets.Any(s => s.IsBindless);
         var code = Compiler.CompileCompute(bindless ? RewriteBindless(glsl) : glsl);
-        if (bindless) code = SpirvPatch.BindlessFetchImages(code, Frame.NativeShaders.BindlessSet, TableTotal);
+
+        // The table's ids are the flattened ones the graphics stages use (set x SetStride + binding: MetalTableLayout finds its arrays by them); set 0's
+        // bindings stay as they are.
+        if (bindless) code = SpirvPatch.BindlessFetchImages(SpirvPatch.RemapBindings(code, 0, 0, SetStride), Frame.NativeShaders.BindlessSet, TableTotal);
 
         var r = SpirvReflection.Parse(code);
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);

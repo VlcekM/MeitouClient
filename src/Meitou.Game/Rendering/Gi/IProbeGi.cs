@@ -1,6 +1,8 @@
 using System.Numerics;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
 
@@ -46,6 +48,38 @@ internal interface IProbeGi : IDisposable
     /// True: the probes move out of geometry (the <c>gihybrid</c> switch's relocation; needs <see cref="Resolve"/>).
     /// </summary>
     bool Relocate { get; set; }
+
+    /// <summary>
+    /// True while the main view's opaque scene draws with the traced sun: the lit fragments leave the sun out and write it apart (<c>uGiParams.z</c>
+    /// bit 4; docs/render-shadows.md "Traced sun").
+    /// </summary>
+    bool Traced { get; set; }
+
+    /// <summary>
+    /// The traced scene holds the sun's casters (while the sun is traced): the objects to <paramref name="range"/>, the small foliage by its size on
+    /// screen at <paramref name="pixelsPerRadian"/>.
+    /// </summary>
+    void SetCasters(bool casters, float range, float pixelsPerRadian);
+
+    /// <summary>
+    /// Whether the traced scene is ready for the sun's rays this frame.
+    /// </summary>
+    bool TracedReady { get; }
+
+    /// <summary>
+    /// NDC, as the frame's projection jittered it, to the position relative to the eye (the traced shadows' reconstruction).
+    /// </summary>
+    Matrix4x4 SceneToEye { get; set; }
+
+    /// <summary>
+    /// The traced sun over the opaque scene of <paramref name="post"/> (its pass closed): the rays, the penumbra and the sun they let through added.
+    /// </summary>
+    void TraceSun(IWorldPostChain post, Vector3 toSun);
+
+    /// <summary>
+    /// The shadow pass's sun map for what draws no traced pixel (<see cref="ShadowPass.TracedVolume"/>), after the traced scene's update.
+    /// </summary>
+    void TraceSunVolume(ShadowPass shadow);
 
     /// <summary>
     /// Rays each probe traces per update (the "GI 64 probe rays" row).

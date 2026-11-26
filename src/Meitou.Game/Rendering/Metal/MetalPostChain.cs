@@ -287,7 +287,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         }
 
         // The scene targets are Metal's own depth and albedo (the GI resolve is off, but the lit programs always write albedo).
-        SceneTargets = PassTargets.Of(_sceneColour, _ctx.Depth, _ctx.Albedo);
+        SceneTargets = PassTargets.Of(_sceneColour, _ctx.Depth, _ctx.Albedo, EnsureTracedTerm(sceneWidth, sceneHeight));
 
         // The full-size particles draw after the GI resolve and were built without the albedo attachment on Metal.
         SceneTargetsForParticles = PassTargets.Of(_sceneColour, _ctx.Depth);
@@ -350,7 +350,118 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _giResolved = true;
         _giResolve ??= new Gi.MetalGiResolve(_ctx);
         var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
-        _giResolve.Run(_sceneColour, _ctx.Depth, _ctx.Albedo, view, GiResolve, Options.GiRelocating);
+        var cache = Options.GiCaching ? RunGiCache(view) : null;
+        _giResolve.Run(_sceneColour, _ctx.Depth, _ctx.Albedo, view, GiResolve, Options.GiRelocating, cache);
+    }
+
+    /// <summary>
+    /// This frame's sun is traced (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the scene targets carry the sun term's target.
+    /// </summary>
+    public bool TracedSun { get; set; }
+
+    /// <summary>
+    /// The sun term the lit fragments write while the sun is traced (RGBA32F: the alpha packs three levels, <see cref="Gi.MetalGiResolve"/>'s
+    /// shaders read it back), made on the first frame that wants it.
+    /// </summary>
+    GpuTexture? _tracedTerm;
+
+    /// <summary>
+    /// The traced sun's add pass and its samplers (made on first use).
+    /// </summary>
+    (Gi.MetalGiResolve.Pass Pass, SamplerSlot Term, SamplerSlot Mask)? _tracedAdd;
+
+    /// <summary>
+    /// The sun term's target at the scene's size, while the sun is traced and the resolve runs (else null).
+    /// </summary>
+    GpuTexture? EnsureTracedTerm(int width, int height)
+    {
+        if (!TracedSun || GiResolve <= 0) return null;
+        if (_tracedTerm is { } made && made.Desc.Width == width && made.Desc.Height == height) return made;
+
+        _tracedTerm?.Dispose();
+        _tracedTerm = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba32F, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled,
+            Name: "traced sun term"));
+        return _tracedTerm;
+    }
+
+    /// <summary>
+    /// The traced sun over the opaque scene (docs/render-shadows.md "Traced sun"): the rays and the penumbra filter over the scene's depth, surface
+    /// and sun term, then term x mask x the haze's multiplier added. <paramref name="sceneToEye"/>: NDC to the position relative to the eye.
+    /// </summary>
+    internal void RunTracedSun(Gi.MetalGiScene scene, Matrix4x4 sceneToEye, Vector3 toSun)
+    {
+        if (_tracedTerm is not { } term || _sceneColour is null || !TracedSun || GiResolve <= 0) return;
+
+        // The kernels compute NDC with row 0 at the bottom (Vulkan's targets); Metal's row 0 is the top: y turned round before the inverse.
+        var inverse = Matrix4x4.CreateScale(1, -1, 1) * sceneToEye;
+        int width = _sceneColour.Desc.Width, height = _sceneColour.Desc.Height;
+        float pixelSlope = 2 * MathF.Tan(_fov * 0.5f) / height;
+        var sun = ((Gi.MetalProbeGi)Probes!).Sun;
+        sun.Run(scene, _ctx.Depth, _ctx.Albedo, term, inverse, _eye, toSun, pixelSlope);
+        if (sun.Filtered is not { } filtered) return;
+
+        _giResolve ??= new Gi.MetalGiResolve(_ctx);
+        var add = _tracedAdd ??= MakeTracedAdd(_giResolve);
+        var view = new Gi.MetalGiResolve.View(_eye, _view, _fov, _aspect, _nearPlane, _farPlane);
+        _giResolve.SetView(add.Pass, _ctx.Depth, _ctx.Albedo, view, width, height, 1);
+        add.Pass.P.Bind(add.Term, new SampledTexture(_giResolve.Point, term.View()));
+        add.Pass.P.Bind(add.Mask, new SampledTexture(_giResolve.Point, filtered.View()));
+        add.Pass.P.ApplyGlobals();
+        var cmd = (MetalCommandList)_ctx.BeginNative("traced sun add");
+        _giResolve.Fullscreen(cmd, add.Pass.P, _sceneColour, blend: true);
+        if (TracedDebug)
+        {
+            var dbg = _tracedDebug ??= MakeTracedDebug(_giResolve);
+            _giResolve.SetView(dbg.Pass, _ctx.Depth, _ctx.Albedo, view, width, height, 1);
+            dbg.Pass.P.Bind(dbg.Term, new SampledTexture(_giResolve.Point, term.View()));
+            dbg.Pass.P.Bind(dbg.Mask, new SampledTexture(_giResolve.Point, sun.Mask!.View()));
+            _giResolve.Fullscreen(cmd, dbg.Pass.P, _sceneColour, blend: false, load: true);
+        }
+        _ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The traced sun's add pass (<see cref="Gi.TracedSunShaders.Add"/>) and its samplers.
+    /// </summary>
+    /// <summary>
+    /// The traced sun's debug view (<c>--debug-shadows 4</c>) and its samplers (made on first use).
+    /// </summary>
+    (Gi.MetalGiResolve.Pass Pass, SamplerSlot Term, SamplerSlot Mask)? _tracedDebug;
+
+    /// <summary>
+    /// <c>--debug-shadows 4</c>: the traced share and the rays' mask drawn over the scene (<see cref="Gi.TracedSunShaders.Debug"/>).
+    /// </summary>
+    public bool TracedDebug { get; set; }
+
+    /// <summary>
+    /// The traced sun's debug view (<see cref="Gi.TracedSunShaders.Debug"/>) and its samplers.
+    /// </summary>
+    static (Gi.MetalGiResolve.Pass, SamplerSlot, SamplerSlot) MakeTracedDebug(Gi.MetalGiResolve resolve)
+    {
+        var pass = resolve.Program(Rendering.Gi.TracedSunShaders.Debug, "metal traced sun debug");
+        return (pass, pass.P.Sampler("uTerm"), pass.P.Sampler("uMask"));
+    }
+
+    static (Gi.MetalGiResolve.Pass, SamplerSlot, SamplerSlot) MakeTracedAdd(Gi.MetalGiResolve resolve)
+    {
+        var pass = resolve.Program(Rendering.Gi.TracedSunShaders.Add, "metal traced sun add");
+        return (pass, pass.P.Sampler("uTerm"), pass.P.Sampler("uMask"));
+    }
+
+    /// <summary>
+    /// The probes the GI resolve's radiance cache traces with (null: no GI).
+    /// </summary>
+    internal Gi.MetalProbeGi? Probes { get; set; }
+
+    /// <summary>
+    /// The radiance cache for this frame's resolve (the <c>gihybrid</c> switch's <c>cache</c> part): its gathered light, or null.
+    /// </summary>
+    GpuTexture? RunGiCache(in Gi.MetalGiResolve.View view)
+    {
+        if (Probes is not { } probes || _sceneColour is null) return null;
+
+        var cacheView = Gi.MetalGiResolve.CacheView(view, _sceneColour.Desc.Width, _sceneColour.Desc.Height, GiResolve);
+        return probes.Cache.Run(_ctx.Depth, _ctx.Albedo, cacheView, Options.GiRelocating, Options.GiCloudShadowing);
     }
 
     /// <summary>
@@ -560,6 +671,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     {
         _depthOfField?.Dispose();
         _giResolve?.Dispose();
+        _tracedTerm?.Dispose();
         _sceneColour?.Dispose();
         foreach (var low in _lowTargets)
         {

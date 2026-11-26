@@ -122,9 +122,20 @@ public static unsafe class MslTranslator
             msl = PushBlock.Replace(msl, $"constant Push& $1 [[buffer({PushConstantBinding})]]");
 
             // A ray query's ray is spirv-cross's bare `ray(...)`, which a GLSL local of that name (the probe trace's ray index) hides.
-            return RayConstructor.Replace(msl, "raytracing::ray(");
+            msl = RayConstructor.Replace(msl, "raytracing::ray(");
+
+            // A scalar buffer reference's one vector (the hit fetches' Position, TexCoord, Triangle) is read at any 4-byte offset (a 44-byte vertex
+            // stride, 12-byte triangles), but spirv-cross gives it the aligned vector type: the loads were misaligned and read other bytes (every
+            // cut-out candidate was rejected). Packed vectors take 4-byte alignment.
+            return ReferenceVector.Replace(msl, "struct $1\n{\n    packed_$2 v;\n};");
         }
     }
+
+    /// <summary>
+    /// A struct of one vector member <c>v</c> in the generated MSL: what a GLSL scalar buffer reference to one vector becomes.
+    /// </summary>
+    static readonly System.Text.RegularExpressions.Regex ReferenceVector =
+        new(@"struct (\w+)\n\{\n    ((?:float|uint|int)[234]) v;\n\};", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
     /// A bare <c>ray(</c> constructor in the generated MSL (not a member or an already qualified one).

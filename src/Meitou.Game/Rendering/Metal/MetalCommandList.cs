@@ -239,6 +239,18 @@ public sealed class MetalCommandList : IGpuCommandList
             attachments.SetObject(extra, 1);
         }
 
+        if (!d.Extra2.IsNull)
+        {
+            // The third colour target (the traced sun's term, docs/render-shadows.md "Traced sun").
+            var attachments = descriptor.ColorAttachments;
+            var extra2 = attachments.Object(2);
+            extra2.Texture = _ctx.ViewTexture(d.Extra2.View);
+            extra2.LoadAction = LoadAction(d.Extra2.Load);
+            extra2.StoreAction = _ctx.StoreActionFor(d.Extra2.View, depth: false);
+            extra2.ClearColor = new MTLClearColor { red = d.Extra2.Clear.R, green = d.Extra2.Clear.G, blue = d.Extra2.Clear.B, alpha = d.Extra2.Clear.A };
+            attachments.SetObject(extra2, 2);
+        }
+
         if (!d.Depth.IsNull)
         {
             var depth = descriptor.DepthAttachment;

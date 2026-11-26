@@ -238,7 +238,7 @@ static partial class WorldFrame
 
         // Everything is drawn into the post-processing chain's HDR framebuffer (before the reflection pass, which restores whatever is bound).
         bool giResolve = PrepareGiResolve(gpu, post);
-        PrepareTracedSun(gpu, giResolve);
+        PrepareTracedSun(gpu, post, giResolve);
         post.Begin(f.Width, f.Height);
         if (post is PostProcess { Unallocated: true })
         {
@@ -302,7 +302,7 @@ static partial class WorldFrame
     /// <summary>
     /// Whether this frame traces the sun (<see cref="WorldGpu.Traced"/>), told to the post chain and the traced scene, and the casters' sides.
     /// </summary>
-    static void PrepareTracedSun(WorldGpu gpu, bool giResolve)
+    static void PrepareTracedSun(WorldGpu gpu, IWorldPostChain post, bool giResolve)
     {
         // Faithful shadows: the floor view's hidden parts cast nothing, as in the game.
         if (gpu.Objects is { } casters) casters.HiddenFloorsCast = casters.CastersBothSides = gpu.Shadow is { Meitou: true };
@@ -318,8 +318,15 @@ static partial class WorldFrame
 
         if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;
 
+        // Metal's probes: the same rule over their own scene; the post chain carries the sun term's target while traced.
+        if (gpu.ProbeGi is not null)
+        {
+            gpu.Traced = giResolve && post.Options.TracedSun && gpu.Shadow is { Enabled: true, Meitou: true };
+            (post.TracedSun, post.TracedDebug) = (gpu.Traced, gpu.DebugShadows == 4);
+        }
+
         // Without the probes the GI's parameters stay the published zeros (no GI, traced or contact sun); with the shadow pass off its term is 1.
-        LeanLighting.Active = LeanLighting.Enabled && gpu.Probes is null && gpu.Shadow is not { Enabled: true };
+        LeanLighting.Active = LeanLighting.Enabled && gpu.Probes is null && gpu.ProbeGi is null && gpu.Shadow is not { Enabled: true };
     }
 
     #endregion
@@ -632,10 +639,12 @@ static partial class WorldFrame
             probeGi.Active = gpu.GiActive;
             probeGi.Rays = f.Post.Options.GiMoreRays ? GiProbes.MaxRays : GiProbes.DefaultRays;
             probeGi.CloudShadows = f.Post.Options.GiCloudShadowing;
+            probeGi.SetCasters(gpu.Traced, GiCasterRange(ref f), f.Render.TerrainPixelScale);
             if (gpu.GiActive)
             {
                 var foliage = gpu.Foliage is { Enabled: true } shown ? shown : null;
                 probeGi.Update(f.Eye, gpu.Terrain.Snapshot(), objects, foliage, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
+                if (gpu.Traced && gpu.Shadow is { TracedVolume: not null } volumeShadow) probeGi.TraceSunVolume(volumeShadow);
                 StageClock.Sub("gi metal");
             }
         }
@@ -1026,6 +1035,14 @@ static partial class WorldFrame
         // What the rays take over leaves the colours (kenshiLight) from here to TraceSun: the main view's opaque scene.
         bool traced = gpu.Traced && gpu.Gi is { Top: not null } && gpu.Shadow is { TracedCascades: > 0 } && gpu.Probes is not null;
         if (traced) gpu.Probes!.Traced = true;
+
+        // Metal's probes: their own scene and flag.
+        if (gpu.Traced && gpu.ProbeGi is { TracedReady: true } probeGi && gpu.Shadow is { TracedCascades: > 0 })
+        {
+            probeGi.Traced = true;
+            traced = true;
+        }
+
         if (gpu.DebugShadows == 4 && s_tracedLogs++ % 120 == 0) LogTraced(ref f, traced);
         return traced;
     }
@@ -1077,6 +1094,16 @@ static partial class WorldFrame
     static void TraceSun(ref FrameState f, in SceneView s)
     {
         var gpu = f.Gpu;
+        if (gpu.ProbeGi is { } probeGi)
+        {
+            probeGi.Traced = false;
+            f.Host.Close();
+            probeGi.TraceSun(f.Post, f.Light.SunDirection);
+            f.Host.Open(9, f.Post.SceneTargets);
+            StageClock.Lap(14, "traced sun");
+            return;
+        }
+
         var post = gpu.Post!;
         gpu.Probes!.Traced = false;
         f.Host.Close();
@@ -1108,7 +1135,11 @@ static partial class WorldFrame
         var s = new SceneView(near, far, projection, jittered, viewProjection, WorldCamera.FrustumPlanes(viewProjection));
 
         // the traced shadows' reconstruction
-        if (f.Gpu.Post is { } tracedPost && Matrix4x4.Invert(f.Rotation * jittered, out var toEye)) tracedPost.SceneToEye = toEye;
+        if (Matrix4x4.Invert(f.Rotation * jittered, out var toEye))
+        {
+            if (f.Gpu.Post is { } tracedPost) tracedPost.SceneToEye = toEye;
+            if (f.Gpu.ProbeGi is { } probeGi) probeGi.SceneToEye = toEye;
+        }
         AttachMotion(ref f, s.ViewProjection, f.View * projection, s.Frustum, f.RelativeRotation * jittered, f.RelativeRotation * projection);
         return s;
     }

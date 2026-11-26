@@ -23,9 +23,9 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     static readonly BlendState AddBlend = new(true, BlendingFactor.One, BlendingFactor.One);
 
     /// <summary>
-    /// The resolve programs by relocation, and the apply.
+    /// The resolve programs by relocation (1) and the radiance cache (2), and the apply.
     /// </summary>
-    readonly Pass?[] _resolves = new Pass?[2];
+    readonly Pass?[] _resolves = new Pass?[4];
 
     /// <summary>
     /// See <see cref="_resolves"/>.
@@ -53,14 +53,33 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     public readonly record struct View(Vector3 Eye, Matrix4x4 ViewMatrix, float FieldOfView, float Aspect, float Near, float Far);
 
     /// <summary>
-    /// The resolve and the apply over <paramref name="scene"/> for <paramref name="view"/>, at 1/<paramref name="divisor"/> of its size.
+    /// The radiance cache's view of <paramref name="view"/> over a scene of <paramref name="width"/> x <paramref name="height"/> resolved at
+    /// 1/<paramref name="divisor"/> (the low target's size).
     /// </summary>
-    public void Run(GpuTexture scene, GpuTexture depth, GpuTexture surface, in View view, int divisor, bool relocate)
+    public static GiCache.View CacheView(in View view, int width, int height, int divisor)
+    {
+        float tanY = MathF.Tan(view.FieldOfView * 0.5f);
+        var rot = view.ViewMatrix with { M41 = 0, M42 = 0, M43 = 0 };
+        var right = new Vector3(rot.M11, rot.M21, rot.M31);
+        var up = new Vector3(rot.M12, rot.M22, rot.M32);
+        var back = ViewWindow.BackFor(rot, view.FieldOfView, view.Aspect);
+        var tan = ViewWindow.Tan(tanY * view.Aspect, tanY);
+        int w = (width + divisor - 1) / divisor, h = (height + divisor - 1) / divisor;
+        return new GiCache.View(view.Eye, right, up, back, tan, new Vector2(view.Near, view.Far), w, h, divisor, width, height, tanY);
+    }
+
+    /// <summary>
+    /// The resolve and the apply over <paramref name="scene"/> for <paramref name="view"/>, at 1/<paramref name="divisor"/> of its size; with
+    /// <paramref name="cache"/> the radiance cache's light in place of the probes' where it holds.
+    /// </summary>
+    public void Run(GpuTexture scene, GpuTexture depth, GpuTexture surface, in View view, int divisor, bool relocate, GpuTexture? cache)
     {
         int width = scene.Desc.Width, height = scene.Desc.Height;
         EnsureTargets(width, height, divisor);
 
-        var r = _resolves[relocate ? 1 : 0] ??= new Pass(ctx, Flip(GiResolveShaders.ResolveFor(relocate, cache: false)), "metal gi resolve");
+        int variant = (relocate ? 1 : 0) | (cache is null ? 0 : 2);
+        var r = _resolves[variant] ??= new Pass(ctx, Flip(GiResolveShaders.ResolveFor(relocate, cache is not null)), "metal gi resolve");
+        if (cache is not null) r.P.Bind(r.Cache, new SampledTexture(_point, cache.View()));
         var a = _apply ??= new Pass(ctx, Flip(GiResolveShaders.Apply), "metal gi apply");
         foreach (var p in (ReadOnlySpan<Pass>)[r, a]) SetView(p, depth, surface, view, width, height, divisor);
 
@@ -82,7 +101,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     /// <summary>
     /// <paramref name="shader"/> with its reconstruction's y turned round for top-down targets.
     /// </summary>
-    static string Flip(string shader)
+    internal static string Flip(string shader)
     {
         if (!shader.Contains(NdcLine, StringComparison.Ordinal)) throw new InvalidOperationException("MetalGiResolve: no NDC line");
 
@@ -92,7 +111,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     /// <summary>
     /// What both passes read of the depth, the surface and the camera.
     /// </summary>
-    void SetView(Pass p, GpuTexture depth, GpuTexture surface, in View view, int width, int height, int divisor)
+    internal void SetView(Pass p, GpuTexture depth, GpuTexture surface, in View view, int width, int height, int divisor)
     {
         float tanY = MathF.Tan(view.FieldOfView * 0.5f);
         var rot = view.ViewMatrix with { M41 = 0, M42 = 0, M43 = 0 };
@@ -131,7 +150,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/>; <paramref name="blend"/> adds it to the target's red,
     /// green and blue.
     /// </summary>
-    void Fullscreen(MetalCommandList cmd, LegacyProgram program, GpuTexture target, bool blend)
+    internal void Fullscreen(MetalCommandList cmd, LegacyProgram program, GpuTexture target, bool blend, bool load = false)
     {
         int w = target.Desc.Width, h = target.Desc.Height;
         var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);
@@ -143,8 +162,8 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
             _pipelines[key] = desc = state.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles, formats, program.Name);
         }
 
-        var load = blend ? LoadOp.Load : LoadOp.DontCare;
-        cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), load, default), default, w, h));
+        var loadOp = blend || load ? LoadOp.Load : LoadOp.DontCare;
+        cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), loadOp, default), default, w, h));
         cmd.SetViewport(new PixelViewport(0, 0, w, h, 0, 1));
         cmd.SetScissor(new PixelRect(0, 0, (uint)w, (uint)h));
         cmd.SetRaster(CullMode.None, FrontFaceDirection.Ccw);
@@ -177,9 +196,19 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
     }
 
     /// <summary>
+    /// A fullscreen GI pass of <paramref name="fragment"/> (its reconstruction's y turned round), for passes over the GI surfaces beside the resolve.
+    /// </summary>
+    internal Pass Program(string fragment, string name) => new(ctx, Flip(fragment), name);
+
+    /// <summary>
+    /// The nearest clamped sampler the passes read their inputs with.
+    /// </summary>
+    internal GpuSampler Point => _point;
+
+    /// <summary>
     /// A resolve program and its handles (the shared reconstruction's, the resolve's part and the apply's inputs).
     /// </summary>
-    sealed class Pass
+    internal sealed class Pass
     {
         /// <summary>
         /// The program.
@@ -189,7 +218,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
         /// <summary>
         /// The samplers: the scene depth, the surface, the two low targets (the apply's).
         /// </summary>
-        public readonly SamplerSlot NearDepth, Albedo, Low, LowSky;
+        public readonly SamplerSlot NearDepth, Albedo, Low, LowSky, Cache;
 
         /// <summary>
         /// The uniforms of the reconstruction, the resolve's part and the apply's low size.
@@ -203,6 +232,7 @@ sealed class MetalGiResolve(MetalContext ctx) : IDisposable
         {
             P = LegacyProgram.Create(ctx, Post.PostProcessShaders.Vertex, fragment, name);
             (NearDepth, Albedo, Low, LowSky) = (P.Sampler("uNearDepth"), P.Sampler("uAlbedo"), P.Sampler("uLow"), P.Sampler("uLowSky"));
+            Cache = P.Sampler("uGiCache");
             (NearPlanes, Tan, Right, Up, Back) = (P.Uniform("uNearPlanes"), P.Uniform("uTan"), P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"));
             (Eye, FullSize, Div, Part, LowSize) = (P.Uniform("uGiEye"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uPart"),
                 P.Uniform("uLowSize"));

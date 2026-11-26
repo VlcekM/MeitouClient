@@ -84,6 +84,16 @@ interface IWorldPostChain
     int GiResolve { get; set; }
 
     /// <summary>
+    /// This frame's sun is traced (set before <see cref="Begin"/>; needs <see cref="GiResolve"/>): the scene targets carry the sun term's target.
+    /// </summary>
+    bool TracedSun { get; set; }
+
+    /// <summary>
+    /// <c>--debug-shadows 4</c>: the traced share and the rays' mask drawn over the scene.
+    /// </summary>
+    bool TracedDebug { get; set; }
+
+    /// <summary>
     /// The sky's exposure band, read by the composite's exposure adaptation.
     /// </summary>
     (float Min, float Max)? AutoExposure { get; set; }
