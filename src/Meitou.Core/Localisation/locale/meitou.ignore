@@ -943,6 +943,7 @@ Datapanel
 Debug
 Disarm
 Disguises
+Dodge back
 Drifter's Boots
 Drifter's Leather Pants
 Durability
@@ -1136,7 +1137,11 @@ max squad size
 max squads
 meitou world states
 npc range
+run lower
+run upper
 town panel line 
+walk lower
+walk upper
 world Y pos
 yyyy-MM-dd HH:mm
 Extra Inventory Sections Plugin

@@ -41,6 +41,9 @@ sealed class TitleSpacing(int pairs) : ITickSystem
     /// </summary>
     static void Separate(World world, int a, int b, ref Vector2 axis)
     {
+        // A pair the title's Beak Thing struck down lies where it fell (TitleAmbush).
+        if (world.Characters.Cold(a)?.Medical is { Incapacitated: true } || world.Characters.Cold(b)?.Medical is { Incapacitated: true }) return;
+
         var next = world.Characters.Next;
         var offset = new Vector2(next[b].Position.X - next[a].Position.X, next[b].Position.Z - next[a].Position.Z);
         float distance = offset.Length();
