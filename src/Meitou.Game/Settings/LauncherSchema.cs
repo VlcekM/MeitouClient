@@ -68,9 +68,17 @@ static class LauncherSchema
             ShownWhen = new() { Key = WorldFrame.UpscalerSliders[0], Value = 5 },   // anti-aliasing at DLSS
             Renderer = VulkanRenderer,
         },
+        Graphics(WorldFrame.SmaaQualitySlider, 0, PostOptions.MaxSmaaQuality, 1, 2) with
+        {
+            Labels = [.. LowMediumHigh, "Ultra"],
+            ShownWhen = new() { Key = WorldFrame.UpscalerSliders[0], Value = 2 },   // anti-aliasing at SMAA
+            Renderer = VulkanRenderer,
+        },
+        // The render scale with an upscaler or none (plain scaling); FXAA and SMAA render at native size.
         Graphics(WorldFrame.UpscalerSliders[1], 0.33f, 1, 0.01f, Percent(UpscaleOptions.DefaultScale)) with
-            { Scale = 100, Suffix = " %", Modes = RenderScaleModes(), Renderer = VulkanRenderer },
-        Graphics(WorldFrame.UpscalerSliders[2], 0, 1, 0.01f, 0.5f) with { Format = "0.00", Renderer = VulkanRenderer },
+            { Scale = 100, Suffix = " %", Modes = RenderScaleModes(), ShownWhen = AntiAliasingNot(1, 2), Renderer = VulkanRenderer },
+        Graphics(WorldFrame.UpscalerSliders[2], 0, 1, 0.01f, 0.5f) with
+            { Format = "0.00", ShownWhen = AntiAliasingNot(0, 1, 2), Renderer = VulkanRenderer },   // the upscalers' sharpening
         // World
         Graphics(WorldFrame.ObjectDistanceSlider, 1000, 400000, 100, Enhancements.MeitouObjectDistance) with { Logarithmic = true },
         Graphics(WorldFrame.LandmarkDistanceSlider, 1000, 400000, 100, Enhancements.MeitouLandmarkDistance) with { Logarithmic = true },
@@ -165,10 +173,19 @@ static class LauncherSchema
     [
         new() { Name = "Ultra performance", Value = Percent(1 / 3f) },
         new() { Name = "Performance", Value = Percent(0.5f) },
-        new() { Name = "Normal", Value = Percent(1 / 1.7f) },
+        new() { Name = "Balanced", Value = Percent(1 / 1.7f) },
         new() { Name = "Quality", Value = Percent(1 / 1.5f) },
         new() { Name = "Ultra quality", Value = Percent(UpscaleOptions.UltraQualityScale) },
-        new() { Name = "DLAA", Value = 1 },
+        new()
+        {
+            Name = "Native",
+            Value = 1,
+            NamesWhen =
+            [
+                new() { When = new() { Key = WorldFrame.UpscalerSliders[0], Value = 5 }, Name = "DLAA" },
+                new() { When = new() { Key = WorldFrame.UpscalerSliders[0], Value = 4 }, Name = "Native AA" },
+            ],
+        },
     ];
 
     /// <summary>
@@ -214,6 +231,18 @@ static class LauncherSchema
                 : On("Hybrid GI") ? 2
                 : 1,
         };
+    }
+
+    /// <summary>
+    /// The anti-aliasing choice at none of <paramref name="values"/> (an older launcher, which knows no Not, shows the row).
+    /// </summary>
+    static SettingCondition AntiAliasingNot(params int[] values)
+    {
+        SettingCondition? condition = null;
+        foreach (int v in values.Reverse())
+            condition = new SettingCondition { Key = WorldFrame.UpscalerSliders[0], Value = v, Not = true, And = condition };
+
+        return condition!;
     }
 
     /// <summary>

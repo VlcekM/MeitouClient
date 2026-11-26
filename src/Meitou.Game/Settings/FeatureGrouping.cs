@@ -29,7 +29,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
     internal static readonly FeatureGroup[] FeatureGroups =
     [
         // Display
-        new("Upscaling", WorldFrame.UpscalerSliders[0], [WorldFrame.UpscalerSliders[1], WorldFrame.UpscalerSliders[2], WorldFrame.DlssPresetSlider]),
+        new("Upscaling", WorldFrame.UpscalerSliders[0], [WorldFrame.UpscalerSliders[1], WorldFrame.UpscalerSliders[2], WorldFrame.DlssPresetSlider,
+            WorldFrame.SmaaQualitySlider]),
         new("HDR output", "hdr", ["hdrPaperNits", "hdrPeakNits"]),
 
         // Lighting: the shadows first (the sun's switch heads them; the lamps' and the contact shadows are inside)

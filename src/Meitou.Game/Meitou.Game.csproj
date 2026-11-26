@@ -77,6 +77,9 @@
     <EmbeddedResource Include="../../assets/high-cirrus.png" LogicalName="high-cirrus.png" Link="Assets/high-cirrus.png" />
     <!-- How soft each ground texture is, for the ground trails (GroundSoftness). -->
     <EmbeddedResource Include="../../assets/ground-softness.cfg" LogicalName="ground-softness.cfg" Link="Assets/ground-softness.cfg" />
+    <!-- SMAA's area and search lookup tables (SmaaLookup; MIT, assets/smaa/LICENSE.txt). -->
+    <EmbeddedResource Include="../../assets/smaa/AreaTex.rg8" LogicalName="smaa-area.rg8" Link="Assets/smaa-area.rg8" />
+    <EmbeddedResource Include="../../assets/smaa/SearchTex.r8" LogicalName="smaa-search.r8" Link="Assets/smaa-search.r8" />
   </ItemGroup>
 
   <Target Name="ReadBuildRevision" BeforeTargets="GetAssemblyAttributes">

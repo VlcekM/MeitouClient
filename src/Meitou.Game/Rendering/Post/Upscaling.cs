@@ -88,6 +88,10 @@ public sealed class UpscaleOptions
     /// DLSS's render preset for every mode, Streamline's and NGX's number (0 their default, 10 = J .. 13 = M; <see cref="DlssPresets"/>).
     /// </summary>
     public uint DlssPreset;
+    /// <summary>
+    /// FXAA or SMAA is the anti-aliasing setting's choice: no upscaler, and the render scale (shown only with an upscaler or none) is not applied.
+    /// </summary>
+    public bool Spatial;
 
     /// <summary>
     /// The DLSS presets the settings offer: the defaults (K at Quality, Balanced and DLAA, M at Performance, L at Ultra Performance) and the
@@ -106,9 +110,10 @@ public sealed class UpscaleOptions
     /// </summary>
     public bool Temporal => Kind != UpscalerKind.Off;
     /// <summary>
-    /// The render scale; with Off too (FXAA then runs on the plainly scaled-up picture: no jitter, no history).
+    /// The render scale; with Off too (FXAA then runs on the plainly scaled-up picture: no jitter, no history), except native when the setting
+    /// chose FXAA or SMAA (<see cref="Spatial"/>).
     /// </summary>
-    public float EffectiveScale => Scale ?? (Temporal ? DefaultScale : 1);
+    public float EffectiveScale => !Temporal && Spatial ? 1 : Scale ?? (Temporal ? DefaultScale : 1);
 
     /// <summary>
     /// A render scale from <c>--render-scale</c>: a mode's name or a number from 0.25 to 1.
@@ -137,11 +142,12 @@ public sealed class UpscaleOptions
     }
 
     /// <summary>
-    /// Copies the kind, the preferred kind, the scale, the sharpness and the DLSS preset from <paramref name="other"/>.
+    /// Copies the kind, the preferred kind, the scale, the sharpness, the DLSS preset and <see cref="Spatial"/> from <paramref name="other"/>.
     /// </summary>
     public void CopyFrom(UpscaleOptions other)
     {
         (Kind, Preferred, Scale, Sharpness, DlssPreset) = (other.Kind, other.Preferred, other.Scale, other.Sharpness, other.DlssPreset);
+        Spatial = other.Spatial;
     }
 
     /// <summary>

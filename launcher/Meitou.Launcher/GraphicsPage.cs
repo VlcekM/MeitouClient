@@ -317,11 +317,15 @@ public sealed partial class MainWindow
     /// </summary>
     void ShowWhen(Control row, SettingCondition when)
     {
-        float? ValueOf(string key) => _settingByKey.TryGetValue(key, out var other) ? CurrentValue(other) : null;
         void Check() => row.IsVisible = when.Holds(ValueOf);
         _rowMarks.Add(Check);
         Check();
     }
+
+    /// <summary>
+    /// A setting's current value by key; null when the page has no such setting.
+    /// </summary>
+    float? ValueOf(string key) => _settingByKey.TryGetValue(key, out var other) ? CurrentValue(other) : null;
 
     /// <summary>
     /// The column left of a row: a feature's fold arrow (a chevron, turned down while open), else empty.
@@ -1139,8 +1143,8 @@ public sealed partial class MainWindow
     Border ModesRow(SettingDescription s)
     {
         var modes = s.Modes!;
-        var names = modes.Select(m => Tr(m.Name)).Append(Tr("Custom")).ToList();
-        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = names };
+        List<string> Names() => [.. modes.Select(m => Tr(m.NameFor(ValueOf))), Tr("Custom")];
+        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = Names() };
         var custom = SliderRow(s with { Name = "Custom value", Description = "", Impact = null });
         custom.Margin = new(GutterWidth, 0, 0, 0);
         bool loading = false, customChosen = false;
@@ -1148,11 +1152,13 @@ public sealed partial class MainWindow
         void Show()
         {
             loading = true;
+            box.ItemsSource = Names();   // a mode's name can follow another setting (render scale's 100 %: DLAA under DLSS)
             box.SelectedIndex = Index();
             custom.IsEnabled = box.SelectedIndex == modes.Count;
             loading = false;
         }
         Show();
+        _rowMarks.Add(Show);   // the names again after any change (render scale's 100 % follows the anti-aliasing)
         var row = SettingFrame(s, box, 260, Show);
         box.SelectionChanged += (_, _) =>
         {

@@ -1445,16 +1445,18 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// SMAA (Jimenez et al., "SMAA: Enhanced Subpixel Morphological Antialiasing") on the final LDR picture, Meitou's alternative to the game's FXAA
-    /// (docs/render-post.md "SMAA"), pass 1 of 3: luma edges. R marks a pixel's left edge, G its top edge, where the luma step to that neighbour
-    /// passes the threshold and is at least half of the largest step round it (SMAA's local contrast adaptation).
+    /// SMAA 1x (Jimenez et al., "SMAA: Enhanced Subpixel Morphological Antialiasing"; MIT, THIRD_PARTY_NOTICES.md) on the final LDR picture, Meitou's
+    /// alternative to the game's FXAA (docs/render-post.md "SMAA"), pass 1 of 3: luma edges. R marks a pixel's left edge, G its top edge, where the
+    /// luma step to that neighbour passes the threshold (<c>uThreshold</c>, <see cref="PostOptions.SmaaThreshold"/>) and is at least half of the
+    /// largest step round it (SMAA's local contrast adaptation).
     /// </summary>
     public const string SmaaEdges = """
         #version 330 core
         in vec2 vUv;
         out vec4 fragColour;
         uniform sampler2D uImage;
-        const float THRESHOLD = 0.1, CONTRAST_ADAPTATION = 2.0;
+        uniform float uThreshold;
+        const float CONTRAST_ADAPTATION = 2.0;
         ivec2 size;
 
         float luma(ivec2 p) { return dot(texelFetch(uImage, clamp(p, ivec2(0), size - 1), 0).rgb, vec3(0.2126, 0.7152, 0.0722)); }
@@ -1465,7 +1467,7 @@ static class PostProcessShaders
             ivec2 p = ivec2(vUv * vec2(size));
             float l = luma(p), left = luma(p + ivec2(-1, 0)), top = luma(p + ivec2(0, -1));
             vec2 delta = abs(l - vec2(left, top));
-            vec2 edges = step(THRESHOLD, delta);
+            vec2 edges = step(uThreshold, delta);
             if (edges.x + edges.y == 0.0) { fragColour = vec4(0.0); return; }
             vec2 maxDelta = max(delta, abs(l - vec2(luma(p + ivec2(1, 0)), luma(p + ivec2(0, 1)))));
             maxDelta = max(maxDelta, abs(vec2(left, top) - vec2(luma(p + ivec2(-2, 0)), luma(p + ivec2(0, -2)))));
@@ -1475,102 +1477,114 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// SMAA pass 2: blending weights, orthogonal patterns (as SMAA's low and medium presets: no diagonal or corner patterns). For each edge of a
-    /// pixel the run of that edge is searched both ways (up to 16 pixels) until it ends or a crossing edge breaks it; the crossing edges at the two
-    /// ends give the shape (L, U or Z), revectorized as SMAA's area texture is (lines through the ends' half-pixel steps, U shapes smoothed when
-    /// short), with the areas computed exactly here instead of from the lookup textures. The area under the line on the pixel's own side is how much
-    /// it takes of its neighbour, the area on the other side how much the neighbour takes of it: R / G for the top edge (this pixel, the one above),
-    /// B / A for the left edge (this pixel, the one to the left).
+    /// SMAA pass 2: blending weights from the orthogonal patterns (no diagonal or corner patterns, as SMAA's low and medium presets). Each edge of a
+    /// pixel is searched both ways, two pixels a step (one bilinear fetch of the edges reads two), up to <c>uMaxSteps</c> steps
+    /// (<see cref="PostOptions.SmaaSearchSteps"/>); SearchTex turns the last fetch
+    /// into the exact end. The crossing edges at the two ends (read bilinearly, so 0, ¼, ½, ¾ or 1 code which side they lie on) and the square
+    /// roots of the two distances index AreaTex, which holds the coverage SMAA's revectorized L, Z and U shapes give the pixel: R / G for the top
+    /// edge (this pixel, the one above), B / A for the left edge (this pixel, the one to the left). uEdges is sampled bilinearly.
     /// </summary>
     public const string SmaaWeights = """
         #version 330 core
         in vec2 vUv;
         out vec4 fragColour;
-        uniform sampler2D uEdges;
-        const int MAX_SEARCH = 16;
-        const float SMOOTH_DISTANCE = 32.0;
-        ivec2 size;
+        uniform sampler2D uEdges, uArea, uSearch;
+        uniform float uMaxSteps;
+        const float AREA_MAX_DISTANCE = 16.0;
+        const vec2 AREA_PIXEL = 1.0 / vec2(160.0, 560.0), SEARCH_SIZE = vec2(66.0, 33.0), SEARCH_PACKED_SIZE = vec2(64.0, 16.0);
+        vec4 metrics;   // 1 / size, size
 
-        vec2 edge(ivec2 p) { return any(lessThan(p, ivec2(0))) || any(greaterThanEqual(p, size)) ? vec2(0.0) : texelFetch(uEdges, p, 0).rg; }
-
-        // The crossing edges (channel 1 - c) at the boundary stored in b: bit 0 on the run's own row / column, bit 1 on the neighbour's (b + n).
-        int crossing(ivec2 b, ivec2 n, int c) { return int(edge(b)[1 - c]) | (int(edge(b + n)[1 - c]) << 1); }
-
-        // The run of the edge in channel c (0 left, 1 top) from p back along -u: the pixels it goes on for, and the crossing edges at its end.
-        ivec2 searchBack(ivec2 p, ivec2 u, ivec2 n, int c)
+        // How far past the edge's end the last fetch e of a search landed, as SearchTex stores it (offset 0 left / up, 0.5 right / down).
+        float searchLength(vec2 e, float offset)
         {
-            int k = 0;
-            for (; k < MAX_SEARCH; k++)
-            {
-                ivec2 b = p - k * u;
-                if (crossing(b, n, c) != 0 || edge(b - u)[c] == 0.0) break;
-            }
-            return ivec2(k, crossing(p - k * u, n, c));
+            vec2 scale = SEARCH_SIZE * vec2(0.5, -1.0) + vec2(-1.0, 1.0);
+            vec2 bias = SEARCH_SIZE * vec2(offset, 1.0) + vec2(0.5, -0.5);
+            return textureLod(uSearch, (scale * e + bias) / SEARCH_PACKED_SIZE, 0.0).r;
         }
 
-        // The same forward along +u: the boundary past pixel p + k u is stored in the next pixel.
-        ivec2 searchForward(ivec2 p, ivec2 u, ivec2 n, int c)
+        // The four searches: while the fetched pair still holds the edge (g > 0.8281: both texels have it) and no crossing edge (r == 0).
+        float searchXLeft(vec2 t, float end)
         {
-            int k = 0;
-            for (; k < MAX_SEARCH; k++)
+            vec2 e = vec2(0.0, 1.0);
+            while (t.x > end && e.g > 0.8281 && e.r == 0.0)
             {
-                ivec2 b = p + (k + 1) * u;
-                if (crossing(b, n, c) != 0 || edge(b)[c] == 0.0) break;
+                e = textureLod(uEdges, t, 0.0).rg;
+                t.x -= 2.0 * metrics.x;
             }
-            return ivec2(k, crossing(p + (k + 1) * u, n, c));
+            return metrics.x * (3.25 - (255.0 / 127.0) * searchLength(e, 0.0)) + t.x;
         }
 
-        // The area between the line p1-p2 and the edge (y = 0) over the pixel [x, x + 1], within the line's span: x where the line runs on the
-        // pixel's own side (y < 0), y where it runs on the neighbour's.
-        vec2 lineArea(vec2 p1, vec2 p2, float x)
+        float searchXRight(vec2 t, float end)
         {
-            float a = max(x, p1.x), b = min(x + 1.0, p2.x);
-            if (b <= a) return vec2(0.0);
-            float slope = (p2.y - p1.y) / (p2.x - p1.x);
-            float ya = p1.y + slope * (a - p1.x), yb = p1.y + slope * (b - p1.x);
-            vec2 s = vec2(0.5 * (ya + yb) * (b - a), 0.0);
-            if (ya * yb < 0.0)
+            vec2 e = vec2(0.0, 1.0);
+            while (t.x < end && e.g > 0.8281 && e.r == 0.0)
             {
-                float z = a + (b - a) * ya / (ya - yb);   // where the line crosses the edge: a triangle on each side
-                s = vec2(0.5 * ya * (z - a), 0.5 * yb * (b - z));
+                e = textureLod(uEdges, t, 0.0).rg;
+                t.x += 2.0 * metrics.x;
             }
-            return vec2(max(-s.x, 0.0) + max(-s.y, 0.0), max(s.x, 0.0) + max(s.y, 0.0));
+            return t.x - metrics.x * (3.25 - (255.0 / 127.0) * searchLength(e, 0.5));
         }
 
-        vec2 smoothArea(float d, vec2 a) { return mix(sqrt(2.0 * a) * 0.5, a, clamp(d / SMOOTH_DISTANCE, 0.0, 1.0)); }
-
-        // The pixel `near` pixels from the run's start and `far` from its end, with crossing codes e1 / e2 at the start / end (1 own side, 2 the
-        // neighbour's, 3 both): an end with one crossing edge pulls the line half a pixel to that side, an end with none or both leaves it on the edge.
-        vec2 area(int e1, int e2, float near, float far)
+        float searchYUp(vec2 t, float end)
         {
-            float d = near + far + 1.0, h = 0.5 * d;
-            float y1 = e1 == 1 ? -0.5 : 0.5, y2 = e2 == 1 ? -0.5 : 0.5;
-            bool one1 = e1 == 1 || e1 == 2, one2 = e2 == 1 || e2 == 2;
-            if (one1 && one2 && e1 == e2)   // U: the halves of a step out and back
-                return smoothArea(d, lineArea(vec2(0.0, y1), vec2(h, 0.0), near)) + smoothArea(d, lineArea(vec2(h, 0.0), vec2(d, y2), near));
-            if (one1 && one2) return lineArea(vec2(0.0, y1), vec2(d, y2), near);   // Z
-            if (one1 && e2 == 3) return lineArea(vec2(0.0, y1), vec2(d, -y1), near);   // Z, the end with both taken as the other side
-            if (e1 == 3 && one2) return lineArea(vec2(0.0, -y2), vec2(d, y2), near);
-            if (one1 && e2 == 0) return lineArea(vec2(0.0, y1), vec2(h, 0.0), near);   // L: only the half nearer the step
-            if (e1 == 0 && one2) return lineArea(vec2(h, 0.0), vec2(d, y2), near);
-            return vec2(0.0);
+            vec2 e = vec2(1.0, 0.0);
+            while (t.y > end && e.r > 0.8281 && e.g == 0.0)
+            {
+                e = textureLod(uEdges, t, 0.0).rg;
+                t.y -= 2.0 * metrics.y;
+            }
+            return metrics.y * (3.25 - (255.0 / 127.0) * searchLength(e.gr, 0.0)) + t.y;
+        }
+
+        float searchYDown(vec2 t, float end)
+        {
+            vec2 e = vec2(1.0, 0.0);
+            while (t.y < end && e.r > 0.8281 && e.g == 0.0)
+            {
+                e = textureLod(uEdges, t, 0.0).rg;
+                t.y += 2.0 * metrics.y;
+            }
+            return t.y - metrics.y * (3.25 - (255.0 / 127.0) * searchLength(e.gr, 0.5));
+        }
+
+        // AreaTex's coverage for the square-rooted distances to the two ends and their crossing-edge codes.
+        vec2 area(vec2 dist, float e1, float e2)
+        {
+            vec2 t = AREA_MAX_DISTANCE * round(4.0 * vec2(e1, e2)) + dist;
+            return textureLod(uArea, AREA_PIXEL * t + 0.5 * AREA_PIXEL, 0.0).rg;
         }
 
         void main()
         {
-            size = textureSize(uEdges, 0);
-            ivec2 p = ivec2(vUv * vec2(size));
-            vec2 e = edge(p);
+            vec2 size = vec2(textureSize(uEdges, 0));
+            metrics = vec4(1.0 / size, size);
+            vec2 pixel = floor(vUv * size), uv = (pixel + 0.5) * metrics.xy, pixcoord = pixel + 0.5;
+            vec2 e = texelFetch(uEdges, ivec2(pixel), 0).rg;
+
+            // The searches start a quarter pixel in, so each bilinear fetch reads the edge of two pixels and the crossing edge beside them.
+            vec4 off0 = metrics.xyxy * vec4(-0.25, -0.125, 1.25, -0.125) + uv.xyxy;
+            vec4 off1 = metrics.xyxy * vec4(-0.125, -0.25, -0.125, 1.25) + uv.xyxy;
+            vec4 off2 = metrics.xxyy * vec4(-2.0, 2.0, -2.0, 2.0) * uMaxSteps + vec4(off0.xz, off1.yw);
             vec4 w = vec4(0.0);
+
+            // The top edge: searched left and right.
             if (e.g > 0.0)
             {
-                ivec2 a = searchBack(p, ivec2(1, 0), ivec2(0, -1), 1), b = searchForward(p, ivec2(1, 0), ivec2(0, -1), 1);
-                w.rg = area(a.y, b.y, float(a.x), float(b.x));
+                vec3 c = vec3(searchXLeft(off0.xy, off2.x), off1.y, searchXRight(off0.zw, off2.y));
+                vec2 d = abs(round(metrics.zz * c.xz - pixcoord.xx));
+                float e1 = textureLod(uEdges, c.xy, 0.0).r;
+                float e2 = textureLodOffset(uEdges, c.zy, 0.0, ivec2(1, 0)).r;
+                w.rg = area(sqrt(d), e1, e2);
             }
+
+            // The left edge: searched up and down.
             if (e.r > 0.0)
             {
-                ivec2 a = searchBack(p, ivec2(0, 1), ivec2(-1, 0), 0), b = searchForward(p, ivec2(0, 1), ivec2(-1, 0), 0);
-                w.ba = area(a.y, b.y, float(a.x), float(b.x));
+                vec3 c = vec3(off0.x, searchYUp(off1.xy, off2.z), searchYDown(off1.zw, off2.w));
+                vec2 d = abs(round(metrics.ww * c.yz - pixcoord.yy));
+                float e1 = textureLod(uEdges, c.xy, 0.0).g;
+                float e2 = textureLodOffset(uEdges, c.xz, 0.0, ivec2(0, 1)).g;
+                w.ba = area(sqrt(d), e1, e2);
             }
             fragColour = w;
         }

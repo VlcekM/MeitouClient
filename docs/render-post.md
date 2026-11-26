@@ -447,13 +447,25 @@ grain 0.6 together darken the corners, tint the picture and show the grain.
 
 ## SMAA
 
-Meitou's non-temporal alternative to FXAA (`--smaa`, or anti-aliasing "SMAA" in settings). It runs on the
-composite's LDR picture instead of FXAA, before the heat haze, and only when no upscaler runs. Passes
-(`PostProcessShaders.Smaa*`): luma edges (threshold 0.1, local contrast adaptation 2); blending weights;
-neighbourhood blend. The weights use SMAA 1x's orthogonal L/U/Z revectorization (16-pixel search per side,
-U shapes smoothed below 32 pixels). Unlike reference SMAA, it computes areas analytically instead of using
-AreaTex/SearchTex. It has no diagonal or corner patterns, as SMAA's low/medium presets.
-**Observed**: 0.6 ms at 1280×720 on the low-end laptop; smooths the stair-steps on The Hub's walls and ridges.
+Meitou's non-temporal alternative to FXAA (`--smaa`, or anti-aliasing "SMAA" in settings): SMAA 1x as
+reference SMAA computes it, ported from the Dust framework's D3D11 passes. It runs on the composite's LDR
+picture instead of FXAA, before the heat haze, and only when no upscaler runs. Passes
+(`PostProcessShaders.Smaa*`, lookup textures in `SmaaLookup`):
+- edges: luma (Rec. 709 weights) steps to the left and top neighbour of at least the quality's threshold
+  and at least half the largest step round the pixel (local contrast adaptation 2);
+- weights: each edge searched both ways, 2 pixels per bilinear fetch, up to the quality's fetches; SearchTex
+  (64×16 R8) corrects the last fetch to the edge's end, AreaTex (160×560 RG8, orthogonal part, subsample row 0)
+  gives the coverage from the two ends' crossing edges and the square-rooted distances. No diagonal or corner
+  patterns. The edges target is sampled bilinearly here;
+- neighbourhood blend: the axis with the larger weight, two bilinear taps moved by the weights.
+"SMAA quality" (`PostOptions.SmaaQuality`, shown only while SMAA is chosen) takes SMAA's presets' threshold
+and search length: Low 0.15 / 4, Medium 0.1 / 8, High 0.1 / 16 (default), Ultra 0.05 / 32. Dust ships 0.05;
+on The Hub it changed 9.1 % of the pixels against 6.4 % at 0.1, the extra ones ground-texture blur
+(**Observed**, viewer at 2560×1440). With FXAA or SMAA chosen the picture renders at native size
+(`UpscaleOptions.Spatial`): the render scale and sharpness rows show only with an upscaler (render scale also
+with no anti-aliasing, as plain scaling).
+The tables are the bytes of SMAA's `AreaTex.h` / `SearchTex.h` (MIT), embedded from `assets/smaa`; the
+engine has no RG8 format, so AreaTex is widened to RGBA8 on upload.
 
 ## Tried: UI depth stamp (removed)
 
