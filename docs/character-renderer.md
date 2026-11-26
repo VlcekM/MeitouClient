@@ -276,6 +276,8 @@ are the colour shader at fog distance -5, returning after its cut-outs. The map 
 interior-cut fields (`cutPad`, `cutVolumes`, `cutRanges[0]`, `cutPlanes[0..3]`), which characters never read. The sun: portraits from the camera's
 right and front, 35 degrees above the level (the camera is at the head's height: the way to it already climbs); the stage fixed to the character (the shadows stay while the editor's camera turns round it): from the right of its first
 view (yaw 0, its front), to the side and about 55 up.
+When the driver has no memory for the shadow and sky maps (made on first use), the previews are drawn without the studio and the maps tried
+again 5 s later (`StudioMapsReady`); before, a 2 GB GTX 965M at 99% of its budget stopped on the sky atlas (**Observed**, #1477 log).
 The stage's platform (`WorldObjectRenderer.DrawStageProp`, the objects' shader, `StudioShaders`) takes the same view: lit by the studio's sun, it
 receives the character's shadow and the sky's occlusion round the feet (its `cutVolumes` left 0: the objects read it as their shadow cut; the
 centre made eye-relative like its positions). The platform casts too: the host's `StageCasters` draws it

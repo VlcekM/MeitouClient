@@ -670,7 +670,7 @@ public sealed unsafe class GpuAllocator : IDisposable
                 {
                     return AllocateFrom(type, req.Size, Math.Max(req.Alignment, 1), optimal, streamed, ownMemory);
                 }
-                catch (VulkanException e) when (e.Result is Result.ErrorOutOfDeviceMemory or Result.ErrorOutOfHostMemory)
+                catch (VulkanException e) when (e.OutOfMemory)
                 {
                     last = e;
                 }
@@ -781,7 +781,36 @@ public sealed unsafe class GpuAllocator : IDisposable
 
             // No room: a new block, made outside the lock so a slow vkAllocateMemory does not hold up the other threads' allocations.
             ulong blockSize = dedicated ? size : slot > 0 ? slot * Math.Max(SlotBlockBytes / slot, 1) : _blockSize;
-            fresh = CreateBlock(type, optimal, blockSize, dedicated, slot, streamed);
+            fresh = dedicated
+                ? CreateBlock(type, optimal, blockSize, true, slot, streamed)
+                : CreateBlockOrSmaller(type, optimal, blockSize, size, slot, streamed);
+        }
+    }
+
+    /// <summary>
+    /// The smallest block <see cref="CreateBlockOrSmaller"/> halves a regular one down to (a request larger than this gets a block of its own size).
+    /// </summary>
+    const ulong MinBlockBytes = 1UL << 20;
+
+    /// <summary>
+    /// A new shared block of <paramref name="blockSize"/> bytes; when the driver is out of memory, of half that, and so on down to the smallest that
+    /// holds <paramref name="need"/> bytes (a slot pool's: one slot). Observed on a 2 GB GTX 965M (#1477): at 99% of the budget a 64 MB block
+    /// was refused for a 19 MB image, and the game stopped.
+    /// </summary>
+    MemoryBlock CreateBlockOrSmaller(uint type, bool optimal, ulong blockSize, ulong need, ulong slot, bool streamed)
+    {
+        ulong floor = slot > 0 ? slot : Math.Max(AlignUp(need, MinBlockBytes), MinBlockBytes);
+
+        while (true)
+        {
+            try
+            {
+                return CreateBlock(type, optimal, blockSize, false, slot, streamed);
+            }
+            catch (VulkanException e) when (e.OutOfMemory && blockSize > floor)
+            {
+                blockSize = slot > 0 ? slot * Math.Max(blockSize / 2 / slot, 1) : Math.Max(blockSize / 2, floor);
+            }
         }
     }
 

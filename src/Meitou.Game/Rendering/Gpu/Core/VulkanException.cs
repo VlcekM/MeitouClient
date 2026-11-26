@@ -13,6 +13,11 @@ public sealed class VulkanException(string message, Result result = Result.Error
     public Result Result { get; } = result;
 
     /// <summary>
+    /// Whether the driver refused the call for want of memory (device or host).
+    /// </summary>
+    public bool OutOfMemory => Result is Result.ErrorOutOfDeviceMemory or Result.ErrorOutOfHostMemory;
+
+    /// <summary>
     /// Throws a <see cref="VulkanException"/> naming <paramref name="what"/> unless <paramref name="r"/> is success.
     /// </summary>
     public static void Check(Result r, string what)

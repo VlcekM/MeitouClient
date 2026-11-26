@@ -266,7 +266,7 @@ internal sealed unsafe partial class CharacterRenderer
         var constants = new ViewConstants { ViewProjection = pose.View * pose.Projection, Eye = pose.Eye, LightDir = pose.Light };
 
         // The studio (previewsun): its sun from the front on the camera's right, 35 degrees up, its shadow and occlusion drawn first.
-        if (StudioOn) constants = PortraitStudioView(index, in pose, constants.ViewProjection, size);
+        if (StudioOn && StudioMapsReady()) constants = PortraitStudioView(index, in pose, constants.ViewProjection, size);
 
         var cmd = Gpu.BeginNative("portrait");
         var target = PassTargets.Of(_portraitHdr, _portraitHdrDepth);

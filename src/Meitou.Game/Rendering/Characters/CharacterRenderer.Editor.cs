@@ -172,11 +172,12 @@ internal sealed unsafe partial class CharacterRenderer
         var perspective = Matrix4x4.CreatePerspectiveFieldOfView(r.FieldOfView, r.Width / (float)r.Height, 0.5f, 400);
         var projection = perspective * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
         var light = Vector3.Normalize(Vector3.TransformNormal(StageLight, l.World));
+        bool studio = StudioOn && StudioMapsReady();
 
         // The studio (previewsun): the stage's light raised to a sun, its shadow and occlusion drawn first.
         // The studio's sun, fixed to the character (the editor's camera turns round it, the shadows stay): as seen from the editor's first view
         // (yaw 0, in front: the character's +z), from the right, about 55 degrees up (a brim shades the face under it).
-        if (StudioOn) light = Vector3.Normalize(Vector3.TransformNormal(PreviewStudio.StageSun, l.World));
+        if (studio) light = Vector3.Normalize(Vector3.TransformNormal(PreviewStudio.StageSun, l.World));
 
         Matrix4x4.Decompose(l.World, out _, out var facing, out _);
         StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
@@ -186,7 +187,7 @@ internal sealed unsafe partial class CharacterRenderer
         _studioCasters = StageCasters;
         try
         {
-            constants = StudioOn
+            constants = studio
                 ? StudioView(index, view * projection, perspective, eye, light, _stageHdr!, _stageHdrDepth!, target.Width, target.Height)
                 : new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 };
         }
@@ -195,7 +196,7 @@ internal sealed unsafe partial class CharacterRenderer
             _studioCasters = null;
         }
 
-        if (StudioOn) StageStudio = constants;
+        if (studio) StageStudio = constants;
         return constants;
     }
 

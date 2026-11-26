@@ -1,7 +1,9 @@
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Post;
+using System.Diagnostics;
 using System.Numerics;
 using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 
 namespace Meitou.Game.Rendering.Characters;
 
@@ -127,9 +129,42 @@ internal sealed unsafe partial class CharacterRenderer
     Action<Matrix4x4, Vector3>? _studioCasters;
 
     /// <summary>
+    /// Seconds after the driver refused the studio's maps before they are tried again (<see cref="StudioMapsReady"/>).
+    /// </summary>
+    const double StudioRetrySeconds = 5;
+
+    /// <summary>
+    /// When the driver last refused the studio's maps (a <see cref="Stopwatch"/> timestamp; 0: never).
+    /// </summary>
+    long _studioRefusedAt;
+
+    /// <summary>
     /// The previews are drawn in the studio.
     /// </summary>
     bool StudioOn => _look.Enhanced && _look.Studio;
+
+    /// <summary>
+    /// Whether the studio's shadow and sky maps exist, made on first use. When the driver has no memory for them (a 2 GB card near its budget,
+    /// #1477) none is kept and the previews are drawn without the studio, the maps tried again <see cref="StudioRetrySeconds"/> later.
+    /// </summary>
+    bool StudioMapsReady()
+    {
+        if (_studioShadowDepth is not null && _studioSkyDepth is not null) return true;
+        if (_studioRefusedAt != 0 && Stopwatch.GetElapsedTime(_studioRefusedAt).TotalSeconds < StudioRetrySeconds) return false;
+
+        try
+        {
+            MakeStudioShadow();
+            MakeStudioSky();
+            return true;
+        }
+        catch (VulkanException e) when (e.OutOfMemory)
+        {
+            DisposeStudioMaps();
+            _studioRefusedAt = Stopwatch.GetTimestamp();
+            return false;
+        }
+    }
 
     /// <summary>
     /// What else casts into the stage's studio maps (the editor's platform, <c>WorldObjectRenderer.RecordStagePropDepth</c>): called inside each
@@ -340,18 +375,27 @@ internal sealed unsafe partial class CharacterRenderer
     void DisposeStudio()
     {
         DisposeImprints();
-        if (_studioShadowDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioShadowIndex);
+        DisposeStudioMaps();
         if (_studioAo is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioAoIndex);
+
+        _studioAo?.Dispose();
+        _studioAoPass?.Dispose();
+        (_studioAo, _studioAoPass) = (null, null);
+    }
+
+    /// <summary>
+    /// Frees the shadow and sky maps, their carriers and their bindless slots (a map half made by a refused <see cref="StudioMapsReady"/> too).
+    /// </summary>
+    void DisposeStudioMaps()
+    {
+        if (_studioShadowDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioShadowIndex);
         if (_studioSkyDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, _studioSkyIndex);
 
         _studioSkyColour?.Dispose();
         _studioSkyDepth?.Dispose();
-        (_studioSkyColour, _studioSkyDepth) = (null, null);
         _studioShadowColour?.Dispose();
         _studioShadowDepth?.Dispose();
-        _studioAo?.Dispose();
-        _studioAoPass?.Dispose();
-        (_studioShadowColour, _studioShadowDepth, _studioAo, _studioAoPass) = (null, null, null, null);
+        (_studioSkyColour, _studioSkyDepth, _studioShadowColour, _studioShadowDepth) = (null, null, null, null);
     }
 }
 
