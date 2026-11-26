@@ -173,7 +173,7 @@ public sealed record PlacedEffect(
 
 /// <summary>
 /// An <c>is node</c> BUILDING instance of a placed building (such as <c>Node Light Mount</c> or <c>Node Turret</c>), in world or building-local
-/// space: its node record id, position (unscaled by the building's <c>scale</c>, <b>Verified</b> <c>0x140388e10</c>) and orientation.
+/// space: its node record id, position (its offset times the building's <c>scale</c>, <b>Verified</b> <c>0x140553fbd</c>) and orientation.
 /// </summary>
 public readonly record struct PlacedSnapNode(string Record, Vector3 Position, Quaternion Rotation);
 
@@ -790,10 +790,11 @@ public static class WorldObjectLayout
                 a.Random.Next();
                 if (a.SnapNodes is { } snapNodes)
                 {
-                    // A node building's offset is rotated by its holder's turn and added to its origin without scaling (Verified, 0x140388e10).
+                    // A node building's offset times the building's scale is rotated by its holder's turn and added to its origin (Verified,
+                    // 0x140553fbd: offset x `scale`, then 0x140388e10: parent turn x offset + parent position).
                     Matrix4x4.Decompose(holderNode, out _, out var turn, out var origin);
                     var normalized = Normalized(turn);
-                    var position = origin + Vector3.Transform(instance.Position, normalized);
+                    var position = origin + Vector3.Transform(instance.Position * a.Scale, normalized);
                     var orientation = Normalized(normalized * Normalized(instance.Rotation));
                     snapNodes.Add(new PlacedSnapNode(target.StringId, position, orientation));
                 }
