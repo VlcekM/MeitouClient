@@ -595,8 +595,8 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
 - **Validity**: every piece runs the ordinary checks (footprint, slope as its own pitch: `rot x Y` within `max slope` of
   up, `FUN_140429510`); one failure refuses the line, pieces are drawn by their own result.
 - **What a wall ghost passes** (**Verified**, `FUN_140428290` for buildings, `FUN_1404283e0` for ghosts, `FUN_140427b00`; constants read from
-  the exe): only walls ever pass. A ghost outside a line passes every wall when snapped, none when not. A piece of a line passes its line's other
-  pieces, connectors and wedges, and a wall with a link point nearer (3D) to the line's snapped start or snapped end than 20, or than the
+  the exe): only walls ever pass. A ghost outside a line passes every wall when snapped; unsnapped, only queued connector and wedge ghosts
+  (placed ones block it; Meitou passes neither). A piece of a line passes its line's other pieces, connectors and wedges, and a wall with a link point nearer (3D) to the line's snapped start or snapped end than 20, or than the
   shortest piece's length + 20 when that piece is a short (`link type` 4). At the start the pass holds for a piece whose run index is below the
   number of list entries, from the front, whose lengths (`link length` x `scale`) first sum to 120 or more; at the end for an index above the
   piece count - 1 minus the entries so taken from the back, or of 0. The list holds the start's bend pieces, the end's, then the run's; bend
