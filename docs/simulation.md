@@ -1339,7 +1339,9 @@ one starts with the order's provenance. The phases stay because Meitou's order s
 `IOrderSteps.Between`), and the duty goals' body act-outs (112 / 108 in `TownGoals`, 204's in `ArrestGoals`) start only from a mind's chosen goal (`DutyGoals.Ask`),
 which an order's hold refuses. The chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goal 204 is an [engine goal](#engine-goals) (below); goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
 - **Triggers**: a police-like witness that books a crime acts at once (`CrimeSystem.BookingsOf`, the witnessed-crime
-  events); every 15 ticks an awake NPC within 400 that sees a player character (`Visibility`/`SneakVisibility`) whose
+  events); every 15 ticks an awake NPC within 400 that sees (`Visibility`/`SneakVisibility`) a player character, awake or down but neither carried nor
+  caged (`ArrestSystem.Spottable`: `FUN_140856f00`, called for every sensed character, tests no more, **Verified**; slave catching and the escapee's
+  arrest take awake ones only), whose
   bounty with its faction reaches its class threshold spots it while it wears no uniform piece (disguise level 0, `FUN_140856f00`) (not a looker in combat mode,
   melee or ranged, `ArrestSystem.InCombatMode`, which fills no meter, a disguise's included, nor one that regards the target as friendly,
   `CrimeSystem.RegardsFriendly`, slot 126 by real factions, squad love included; neither fires), at once while `RecentlyWanted` > 0 (250 game seconds after
@@ -1368,7 +1370,8 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   (cleared; refused with "My arm is broken!" when no arm works), his squad tagging the target TEMP_ENEMY first, so his mates join through their own attack-on-sight
   goals (`FUN_140674300`, **Verified**); no attack task tags anything, so a capture's (240) or goal 204's fight draws the mates only through their own goals
   (a protect goal once the target fights back, attack on sight). Without dialogue events (e.g.
-  headless tests) the engine gives the same orders where a spotting, an escapee seen or a booking witness would have fired its event; with them a booking witness is left to
+  headless tests) the engine gives the same orders where a spotting, an escapee seen or a booking witness would have fired its event, except that a down target it does not
+  capture gets only the TEMP_ENEMY tag (`EngineArrest`: the attack would drop it at once and, given every pass, clear the guard's queue); with them a booking witness is left to
   its witness event unless it is already fighting, then it is ordered at once. There is no engine fine: a fine is the dialogue's (DA 2's talk and its window).
 - **Town needs of 240** ([arrest chain](game/ai-tasks.md#arrest-and-prison-rows)): while the target stands in no town (113) the order waits queued, its task ended and the fight
   called off (the fighters the target does not fight back leave it), and the guard goes on with his package; while the guard stands in no home town (95) he leaves the fight
@@ -2697,7 +2700,7 @@ between repeated loads. QuickSaveTests checks carried fields and repeatable load
 save clock, so an entry does not lose an hour per save and load; `BountySave`), held state and sentence, the escaped flag, the recently-wanted
 and recognition timers (player platoon characters, written only while set), the locks of interior cages and containers (an imprisoned character stays locked in), and the homes a
 lock-up round locked (without the flag a loaded night's locks would never be undone). **Restarted, not saved** (engine choice; the guard, releaser and warden of each job is a
-town NPC the population makes again with a new id, so a saved link would dangle): arrests (a downed target lies where it fell, is spotted again once awake, the saved markers make
+town NPC the population makes again with a new id, so a saved link would dangle): arrests (a downed target lies where it fell and is spotted again there, the saved markers make
 that quick), cagings (the carry link is not saved: give the cage's Put in again), the gate guards' and wardens'
 act-outs (chosen again), the unreachable-cage memo (relearned by a failed walk), lock picking (an order), pending crimes
 (seconds long, victim id unsaveable). Spawn bounties are not saved: they are rolled when the population makes an NPC, never for a loaded character.

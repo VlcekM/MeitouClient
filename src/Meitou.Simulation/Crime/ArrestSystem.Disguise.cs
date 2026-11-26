@@ -101,7 +101,7 @@ public sealed partial class ArrestSystem
             if (!next[s].Alive || table.Cold(s) is not { } c || c.Faction != player || player < 0) continue;
             (c.DisguiseLevel, c.DisguiseFaction) = c.Medical is { Dead: true } ? (0, -1) : DisguiseOf(c.Inventory);
             if (c.DisguiseMarks is { } marks) for (int m = 0; m < marks.Length; m++) marks[m] = MathF.Max(0, marks[m] - seconds);
-            if (c.DisguiseFaction < 0 || c.DisguiseLevel <= DisguiseWorks || c.RecentlyWanted > 0 || !Suspect(world, s)) continue;
+            if (c.DisguiseFaction < 0 || c.DisguiseLevel <= DisguiseWorks || c.RecentlyWanted > 0 || !Spottable(world, s)) continue;
             var at = next[s].Position;
             var target = table.IdOf(s);
             var secure = SecureLocation(world, at);
@@ -187,7 +187,7 @@ public sealed partial class ArrestSystem
         {
             if (!FreeGuard(world, w)) return;
             if (Talks) Spotted(world, w, s, BountySpotted);
-            else OrderArrest(world, w, s, CapturesInTown(world, world.Characters.IdOf(w), c));
+            else EngineArrest(world, w, s, c);
             return;
         }
         c.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;

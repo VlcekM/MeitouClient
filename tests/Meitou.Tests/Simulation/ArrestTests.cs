@@ -282,16 +282,19 @@ public class ArrestTests
         var relations = data.Relations;
         int city = data.FactionIndex("50-a");
         var arrest = new ArrestSystem(new CrimeSystem(relations), BaseGame);
+        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), []);
         var guard = new Combatant().MakeCold();
         guard.Faction = city;
         var target = new Combatant().MakeCold();
         target.Faction = relations.PlayerFaction;
+        int g = world.Characters.Spawn(new CharacterHot(), guard, 0).Slot;
+        int t = world.Characters.Spawn(new CharacterHot(), target, 0).Slot;
 
-        Assert.False(arrest.PerceivedBounty(guard, target));
+        Assert.False(arrest.PerceivedBounty(world, g, guard, t, target));
 
         (target.Bounties = new BountyLedger()).Get(city, "city").Amount = 500;
         target.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;
 
-        Assert.True(arrest.PerceivedBounty(guard, target));
+        Assert.True(arrest.PerceivedBounty(world, g, guard, t, target));
     }
 }

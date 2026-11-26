@@ -90,7 +90,7 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
     {
         var table = st.World.Characters;
         if (v == st.Self || !table.Next[v].Alive || table.Cold(v) is not { Medical.Dead: false } tc || !Findable(tc)) return;
-        if (!WantedBy(st.World, st.Self, st.Guard, table.IdOf(v), tc)) return;
+        if (!WantedBy(st.World, st.Self, st.Guard, v, tc)) return;
 
         float d2 = Vector3.DistanceSquared(table.Next[st.Self].Position, table.Next[v].Position);
         if (d2 > st.BestD2 || d2 == st.BestD2 && v > st.Best) return;
@@ -106,14 +106,15 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
         && !arrests.Crimes.Factions.NotReal(tc.Faction);
 
     /// <summary>
-    /// Whether the guard goes after the target: a bounty it perceives, its squad's tag 7 on it, or the target's faction is its enemy.
+    /// Whether the guard goes after the target: a bounty it perceives, its squad's tag 7 on it, or it regards the target as an enemy (the full
+    /// enemy test, squad memory first: <see cref="ArrestSystem.Enemy"/>).
     /// </summary>
-    bool WantedBy(World world, int g, CharacterCold guard, CharacterId target, CharacterCold tc)
+    bool WantedBy(World world, int g, CharacterCold guard, int t, CharacterCold tc)
     {
-        if (arrests.PerceivedBounty(guard, tc)) return true;
-        if (arrests.Talk?.Memory.HasShort(world, guard.SquadId, target, Dialogue.MemoryTag.Criminal) == true) return true;
+        if (arrests.PerceivedBounty(world, g, guard, t, tc)) return true;
+        if (arrests.Talk?.Memory.HasShort(world, guard.SquadId, world.Characters.IdOf(t), Dialogue.MemoryTag.Criminal) == true) return true;
 
-        return arrests.Enemy(guard, tc);
+        return arrests.Enemy(world, g, guard, t, tc);
     }
 
     /// <summary>

@@ -658,7 +658,9 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   packages; **Verified** by probe): desire 1 when the cage finder finds a free cage, else 0 (AI slot 33 `FUN_140598a90`); target finder
   `FUN_14099bfc0`: the first sensed character (mask 0x400e/0x221) not carried, not of a `not real` faction, not an animal (slot `0x248`), not
   imprisoned, that has a perceived bounty with the guard (`FUN_140853fd0`: the entry for the guard's booking faction, visible while
-  `+0x110 > 0`, or when the target is down and an enemy), or that the guard's squad marks with flag 7, or regards as an enemy. Its effect
+  `+0x110 > 0`, or when the target is down and an enemy), or that the guard's squad marks with flag 7, or regards as an enemy. Both enemy tests
+  are the guard's vfunc `0x3e8` (`isEnemy`, `FUN_14079c950`) with 1, squad memory first ([combat](combat.md#enemy-test), **Verified**, decompile of both), so a
+  body the guard's squad tagged TEMP_ENEMY (DA 29's fight outside his town) is taken whatever the faction relation. Its effect
   129 leads the planner to 203 Arresting (list B: target down, unarmed, carried) and then the cage goals. 203's desire (AI slot 32
   `FUN_140598a40`) is 0 when the status town is unset and the ownership town is set, else 1; the fights' are 4's (AI slot 53, [combat](combat.md))
   and 262's (slot 54 `FUN_140598260`: 0 unless ranged mode is on, an arm works, not crippled and a crossbow sits at back or hip; 0.1 while meleed;
@@ -692,7 +694,8 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   literals 5, 40, 4, 0.6, 0.75 `data_values.txt`, **Verified**; the meter's own step, `FUN_140855e80`, **Observed** as for a sneaker,
   [perception](perception.md)). So a stealth-0 target in full view of an awake guard in his town takes 45 x 2.5 = 112.5 s. Meitou
   (`ArrestSettings.RecognitionSeconds` 45): one meter per suspect filling in 45 s while any looker sees it (engine); not while the target is
-  carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44) at every call, with no
+  carried or imprisoned, a down target included (`ArrestSystem.Spottable`; the function tests nothing else of the target, nor does its caller
+  `FUN_1408580d0`, which runs it for every sensed character, **Verified**, decompile). Recognition fires `EV_BOUNTY_SPOTTED` (44) at every call, with no
   timer, while the looker is not in combat mode (`FUN_140436610`), its squad does not love the target (`FUN_140599590`: long tags & 0xc) and it does not regard it as
   friendly (vfunc `0x3f0` = `FUN_1407923d0` with 0: real factions, its own test includes the love); a bounty below 1 sets the target's `+0x110` to 250 instead, under the same gates (**Verified**, decompile). The
   bounty branch itself (no uniform piece, `+0x100` <= 0) is taken only while the looker does not regard the target as friendly with the disguise read

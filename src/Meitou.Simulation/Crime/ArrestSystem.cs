@@ -554,14 +554,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// A target the police may go after: a living, awake player character, not carried or in a cage, not already being arrested or left to a
-    /// spotting's dialogue.
+    /// A target a booking witness goes after: a <see cref="Spottable"/> one that is awake.
     /// </summary>
-    bool Suspect(World world, int slot) =>
+    bool Suspect(World world, int slot) => Spottable(world, slot) && world.Characters.Cold(slot)!.Medical is not { Incapacitated: true };
+
+    /// <summary>
+    /// A target of the bounty spotting and the disguise pass: a living player character, not carried or in a cage, not already being arrested or
+    /// left to a spotting's dialogue. Down counts: <c>FUN_140856f00</c>, called for every sensed character (<c>FUN_1408580d0</c>), skips only a
+    /// carried (<c>+0x3d4</c>) or caged (<c>+0x2f8</c> 2) target (<b>Verified</b>, decompile), so a guard spots the bounty on a knocked-out body.
+    /// </summary>
+    bool Spottable(World world, int slot) =>
         world.Characters.Next[slot].Alive
-            && world.Characters.Cold(slot) is { IsPlayer: true, IsImprisoned: false, CarriedBy.IsNone: true, Medical.Incapacitated: false }
+            && world.Characters.Cold(slot) is { IsPlayer: true, IsImprisoned: false, CarriedBy.IsNone: true, Medical.Dead: false }
             && !Busy(world.Characters.IdOf(slot))
-        && !_spottings.Exists(p => p.Target == world.Characters.IdOf(slot));
+            && !_spottings.Exists(p => p.Target == world.Characters.IdOf(slot));
 
     /// <summary>
     /// A police-like witness booked a crime (the original's witnessed-crime dialogues): he deals with the culprit at once.
@@ -589,8 +595,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     internal static bool EscapeShows(CharacterCold c) => c.Escaped && (c.RecentlyWanted > 0 || c.DisguiseLevel <= 0);
 
     /// <summary>
-    /// The spotting pass over the suspects in slot order: slave catching, the recognition meter from the lookers that see the target, then event
-    /// 44 or the engine's arrest, the escapee's arrest without the sight pass, and a hunt for a seen bounty.
+    /// The spotting pass over the suspects in slot order (<see cref="Spottable"/>, down ones too): slave catching, the recognition meter from the
+    /// lookers that see the target, then event 44 or the engine's arrest, the escapee's arrest without the sight pass, and a hunt for a seen bounty.
+    /// Slave catching and the escapee's arrest, other functions than <c>FUN_140856f00</c>, take awake targets only.
     /// </summary>
     void Spot(World world, float seconds)
     {
@@ -601,10 +608,11 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         bool sight = SightSystem.Running(world);
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!Suspect(world, s)) continue;
+            if (!Spottable(world, s)) continue;
             var c = table.Cold(s)!;
             bool wanted = c.Bounties is { Any: true };
-            if (c.SlaveState != 0 && CatchSlave(world, s, c)) continue;
+            bool awake = c.Medical is not { Incapacitated: true };
+            if (awake && c.SlaveState != 0 && CatchSlave(world, s, c)) continue;
             if (!wanted && !c.Escaped)
             {
                 c.Recognition = 0;
@@ -630,7 +638,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 // a looker that sees through a working disguise recognises it (Disguise).
                 bool bare = c.DisguiseLevel <= 0;
                 bool spots = bare && bounty > 0 && bounty >= SpotThreshold(wc.NpcClass);
-                bool escapee = !sight && EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
+                bool escapee = awake && !sight && EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
                 bool hunts = bare && HuntsFor(wc, c);
 
                 // A looker in combat mode or that regards the target as friendly (slot 126, its love included) neither recognises nor fires
@@ -661,7 +669,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             if (recognised && best >= 0)
             {
                 if (Talks) Spotted(world, best, s, BountySpotted);
-                else OrderArrest(world, best, s, CapturesInTown(world, table.IdOf(best), c));
+                else EngineArrest(world, best, s, c);
             }
             if (recognised && hunter >= 0 && hunter != best) BeginHunt(world, hunter, s);
         }
@@ -864,6 +872,25 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// The town duties, whose cage errands reserve their cages (resolved on first use; null in a world without them).
     /// </summary>
     Kidnap.TownDutySystem? _townDuties;
+
+    /// <summary>
+    /// The engine's arrest of a recognised bounty where no dialogue says the line (<see cref="OrderArrest"/>). A down target the guard does not
+    /// capture gets only his squad's TEMP_ENEMY tag: the attack order's fight would drop it at once (combat.md "Target down or held"), and given at
+    /// every spotting pass the order would clear his queue each time; the tag is what lets goal 204 take the body (<see cref="Enemy"/>).
+    /// </summary>
+    void EngineArrest(World world, int g, int t, CharacterCold tc)
+    {
+        var table = world.Characters;
+        bool capture = CapturesInTown(world, table.IdOf(g), tc);
+        if (capture || tc.Medical is not { Incapacitated: true })
+        {
+            OrderArrest(world, g, t, capture);
+            return;
+        }
+
+        var gc = table.Cold(g)!;
+        if (gc.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, gc.SquadId, table.IdOf(t), Dialogue.MemoryTag.TempEnemy);
+    }
 
     /// <summary>
     /// The orders of <c>DA_ARREST_TARGET</c> (29, <c>FUN_140680560</c>, <b>Verified</b>), also the engine's arrest where no dialogue says the line:
