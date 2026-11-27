@@ -174,7 +174,9 @@ woke; 49 entering a town (no target); 50 squad broken (`FUN_1407a5be0`, on the p
 (move, follow, attack, talk tasks); 61-63 acid; 66 also from DA 56; 68 illegal player building; 73 town taken over; others from
 lock and prison code: 13 from `Task_PickLock`, `Task_CutShackles` and `Task_BruteForceShackles` (the freed character at the
 worker, when they differ); 31 `Contract_HiredAlly::vfunc_8` (betrayal); 36 the witness function and perception; 44 `FUN_140856f00`;
-70 / 71 losing a leg (limb slots 2, 3) / an arm (`FUN_14064edc0`, no target).
+70 / 71 losing a leg (limb slots 2, 3) / an arm (`FUN_14064edc0`, no target): fired inside the sever through the cut-in
+(`FUN_140685730`), before a leg's collapse knocks a standing character out, so the line is said (**Verified** by decompile). Meitou: `LimbCut`
+queues it for the next tick as a cut-in that takes the character as conscious when it was so at the cut.
 
 **Witnesses** (`FUN_140854d10`, **Observed**): a witness reacting to a crime fires an event at the criminal by the crime code
 (economy.md 11.2): Burglary 2 and Terrorism 7 → 43; Theft 3, Looting 10, Fencing 13 → 42, or 8 when the victim is in the witness's

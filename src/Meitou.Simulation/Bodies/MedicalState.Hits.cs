@@ -225,8 +225,8 @@ public sealed partial class MedicalState
     /// <summary>
     /// Cuts a limb off (<c>FUN_14064edc0</c>, <b>Verified</b>): the part becomes a stump (base HP 5), the character loses rand(5, 30) blood and gets
     /// a wound of strength <c>bleed rate</c> x 200. A leg's stump is down, so a character standing (posture 0) is knocked out by
-    /// <see cref="LegCollapse"/>, which the caller runs after its checks. The caller awards the toughness XP
-    /// (<see cref="XpService.ToughnessFromLimbLoss"/>) and spawns the severed limb item from the race's <c>severed limbs</c>.
+    /// <see cref="LegCollapse"/>, which the caller runs after its checks. The event's <see cref="MedicalEvent.Conscious"/> is the state before
+    /// that collapse. The rest of the original's sever (toughness XP, the look, the lost-limb line) is the event handler's, <see cref="LimbCut"/>.
     /// </summary>
     public void Sever(int part, in MedicalContext ctx, List<MedicalEvent>? events = null)
     {
@@ -235,7 +235,7 @@ public sealed partial class MedicalState
         p.Replacement = null;
         Blood -= 5 + 25 * NextRoll(ctx);
         _wounds.Add(ctx.Constants.BleedRate * 200);
-        events?.Add(new MedicalEvent(MedicalEventKind.PartSevered, part));
+        events?.Add(new MedicalEvent(MedicalEventKind.PartSevered, part) { Conscious = !Incapacitated });
     }
 
     /// <summary>

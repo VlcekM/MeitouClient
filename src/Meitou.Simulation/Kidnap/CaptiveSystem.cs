@@ -1626,23 +1626,16 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     };
 
     /// <summary>
-    /// What a medical update of a captive does outside the medical state: a death or knock-out stands it up, a lost limb is announced to the renderer
-    /// and the character cries event 70 (leg) or 71 (arm; none for a part of a type outside the four,
-    /// <see cref="Data.Gameplay.Dialogue.DialogueEvents.LostLimb"/>). The limb's item drops when <paramref name="limbDrops"/>: the rack's does
-    /// (<c>FUN_14029af90</c> severs with the item flag 1), an eaten one's does not (<c>FUN_140650370</c>: 0), <b>Verified</b> by decompile.
+    /// What a medical update of a captive does outside the medical state: a death or knock-out stands it up, a lost limb does what every cut does
+    /// (<see cref="LimbCut"/>). The limb's item drops when <paramref name="limbDrops"/>: the rack's does (<c>FUN_14029af90</c> severs with the item
+    /// flag 1), an eaten one's does not (<c>FUN_140650370</c>: 0), <b>Verified</b> by decompile.
     /// </summary>
-    static void ApplyBodyEvents(World world, CharacterId captive, int c, MedicalState medical, List<MedicalEvent> events, bool limbDrops)
+    void ApplyBodyEvents(World world, int c, MedicalState medical, List<MedicalEvent> events, bool limbDrops)
     {
         foreach (var e in events)
         {
             if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) TaskStart.Stand(world.Characters, c);
-            else if (e.Kind == MedicalEventKind.PartSevered)
-            {
-                var part = medical.Parts[e.Part].Template;
-                world.Characters.LimbsChanged.Enqueue((c, part.LimbSlot, limbDrops));
-                if (Data.Gameplay.Dialogue.DialogueEvents.LostLimb(part) is { } cry)
-                    world.Defer(new Dialogue.DialogueEvent(captive, CharacterId.None, cry) { Tick = world.Tick + 1 });
-            }
+            else if (e.Kind == MedicalEventKind.PartSevered) LimbCut.Apply(world, c, world.Characters.Cold(c)!, medical, e, _xp, limbDrops);
         }
     }
 
@@ -1672,7 +1665,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         HealthObservers.Before(world, c);
         bool eaten = medical.BeingEaten(rate, dt, ctx, data.BodyOptions.Dismemberment != Dismemberment.Never, events, vampiric);
         HealthObservers.After(world, c, HealthChangeKind.Eaten);
-        ApplyBodyEvents(world, j.Captive, c, medical, events, limbDrops: false);
+        ApplyBodyEvents(world, c, medical, events, limbDrops: false);
         if (!wasDead) DeathObservers.Report(world, c, j.Worker, DeathSite.Eaten);   // the eater's bite killed it
 
         // "{1} has been eaten alive." for the player's own (FUN_140856bc0: of the player's faction, or of a squad that is).

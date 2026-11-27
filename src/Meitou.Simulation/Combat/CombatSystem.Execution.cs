@@ -88,11 +88,7 @@ public sealed partial class CombatSystem
                     table.LimbsChanged.Enqueue((d, -1, false));
                     break;
                 case MedicalEventKind.PartSevered:
-                    var template = dc.Medical!.Parts[ev.Part].Template;
-                    _xp.ToughnessFromLimbLoss(dc.Stats!, dc.Race!);
-                    table.LimbsChanged.Enqueue((d, template.LimbSlot, true));
-                    if (Data.Gameplay.Dialogue.DialogueEvents.LostLimb(template) is { } cry)
-                        world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None, cry) { Tick = world.Tick + 1 });
+                    LimbCut.Apply(world, d, dc, dc.Medical!, ev, _xp, limbDrops: true);
                     break;
             }
         }

@@ -272,14 +272,32 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     public void Act(World world, Partition part, EffectBuffer effects)
     {
         List<MedicalEvent>? events = null;
-        for (int i = part.Start; i < part.End; i++) ActOn(world, i, ref events);
+        for (int i = part.Start; i < part.End; i++) ActOn(world, i, ref events, effects);
+    }
+
+    /// <summary>
+    /// The effect of a part a worsening wound cut off in the tick (<see cref="Effect.Arg"/> the part, <see cref="Effect.Amount"/> 1 when the
+    /// character was conscious at the cut), committed by <see cref="Apply"/>.
+    /// </summary>
+    const int SeveredEffect = 1;
+
+    /// <summary>
+    /// Commits a part a worsening wound cut off (<see cref="SeveredEffect"/>): what every cut does (<see cref="LimbCut"/>), the limb's item dropping
+    /// (the wound tick <c>FUN_14064f5c0</c> severs with the item flag 1, <b>Verified</b> by decompile).
+    /// </summary>
+    public void Apply(World world, in Effect effect)
+    {
+        if (effect.Kind != SeveredEffect || world.Characters.Cold(effect.Target) is not { Medical: { } medical } cold) return;
+
+        var cut = new MedicalEvent(MedicalEventKind.PartSevered, effect.Arg) { Conscious = effect.Amount > 0 };
+        LimbCut.Apply(world, effect.Target, cold, medical, cut, _xp, limbDrops: true);
     }
 
     /// <summary>
     /// One character's body step: its medical tick with the context of the moment, its speeds, the XP of moving and sneaking, and the stops a
-    /// knockout or death makes. <paramref name="events"/> is the reused list of the medical events.
+    /// knockout or death makes; a part cut off goes to <paramref name="effects"/>. <paramref name="events"/> is the reused list of the medical events.
     /// </summary>
-    void ActOn(World world, int i, ref List<MedicalEvent>? events)
+    void ActOn(World world, int i, ref List<MedicalEvent>? events, EffectBuffer effects)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -340,6 +358,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 if (cold.InSomething != Locks.HeldState.Bed) TaskStart.Stand(table, i);   // one in a bed stays in it
                 n.Velocity = Vector3.Zero;
             }
+            else if (e.Kind == MedicalEventKind.PartSevered) effects.Emit(i, i, SeveredEffect, e.Conscious ? 1 : 0, arg: e.Part);
         }
     }
 

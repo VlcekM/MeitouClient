@@ -27,7 +27,14 @@ public sealed partial class DialogueSystem
     /// <paramref name="Chained"/>: a line after the first, which the original runs on its speaker's own dialogue state (<c>FUN_140684720</c>); the
     /// first runs on the owner's (<c>FUN_140683f90</c>).
     /// </summary>
-    sealed record Bubble(Conversation C, DialogueNode Line, long DueTick, CharacterId Speaker, bool Chained = false);
+    sealed record Bubble(Conversation C, DialogueNode Line, long DueTick, CharacterId Speaker, bool Chained = false)
+    {
+        /// <summary>
+        /// The first line of an event fired with the speaker taken as conscious (<see cref="DialogueEvent.AwakeAtSource"/>): said even though the
+        /// speaker is out cold by now, as the original said it before the knock-out.
+        /// </summary>
+        public bool AwakeAtSource { get; init; }
+    }
 
     /// <summary>
     /// The speech-bubble conversations under way.
@@ -192,14 +199,16 @@ public sealed partial class DialogueSystem
     /// (<c>FUN_140684990</c>, <b>Verified</b>): refused while the event cools down, by the starter test (<see cref="StarterRefuses"/>), for a
     /// character asleep, out cold or caged, for one talking (any event: the interrupting set does not lift this) and for one in a building whose
     /// interior is not shown (<see cref="UnseenIndoors"/>); else a line is chosen from
-    /// the NPC's list for the event and said as a speech bubble, the rest of its chain after it. Returns whether a line was said.
+    /// the NPC's list for the event and said as a speech bubble, the rest of its chain after it. With <paramref name="awakeAtSource"/> the NPC is
+    /// not tested for being out cold (<see cref="DialogueEvent.AwakeAtSource"/>). Returns whether a line was said.
     /// </summary>
-    bool Fire(World world, CharacterId npc, CharacterId whom, int ev)
+    bool Fire(World world, CharacterId npc, CharacterId whom, int ev, bool awakeAtSource = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || !table.Next[n].Alive || CoolingDown(world, npc, ev)) return false;
         if (StarterRefuses(npc, ev) || UnseenIndoors(world, n, ev)) return false;
-        if (!Awake(table, n) || SleepsThrough(table, n, ev) || BubbleOf(npc)) return false;
+        bool awake = awakeAtSource ? table.Cold(n) is { IsImprisoned: false } : Awake(table, n);
+        if (!awake || SleepsThrough(table, n, ev) || BubbleOf(npc)) return false;
 
         var c = new Conversation { Npc = npc, Player = whom, Event = ev };
         if (Pick(world, c, SetOf(world, n).For(ev)) is not { } picked || picked.Speaker.IsNone || picked.Speaker == whom || Busy(picked.Speaker, c))
@@ -208,7 +217,7 @@ public sealed partial class DialogueSystem
         c.Root = picked.Root;
         _starters.Started(npc, whom);
         FaceOnce(world, n, whom);
-        _bubbles.Add(new Bubble(c, picked.Line, world.Tick, picked.Speaker));
+        _bubbles.Add(new Bubble(c, picked.Line, world.Tick, picked.Speaker) { AwakeAtSource = awakeAtSource && picked.Speaker == npc });
         StepBubbles(world);
         if (ev is 3 or 4 or SeeAnimalSquad or 66 or 67) _eventCooldown[(npc, ev)] = world.Tick + CooldownTicks(world);
         return true;
@@ -245,7 +254,8 @@ public sealed partial class DialogueSystem
     internal bool Free(CharacterId who) =>!BubbleOf(who) && _open?.Npc != who;
 
     /// <summary>
-    /// A crime event of the sight pass (<c>FUN_140685730</c> -> <c>FUN_140685660</c>, <b>Verified</b>: events 45, 36, 40, 17 and 9): fired as any
+    /// A crime event of the sight pass (<c>FUN_140685730</c> -> <c>FUN_140685660</c>, <b>Verified</b>: events 45, 36, 40, 17 and 9) or a lost limb's
+    /// line (<see cref="Bodies.LimbCut"/>): fired as any
     /// event when the looker is free; else, when the conversation it is in runs another event and it has a line for this one, that conversation
     /// ends (<c>FUN_140674830</c>) and the event fires; the same event again does nothing. Returns whether a line was said.
     /// </summary>
@@ -254,14 +264,28 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// <see cref="CutIn(World, int, int, int)"/> with a partner given by id, none for an event said to nobody (a slave's escape, 55).
     /// </summary>
-    internal bool CutIn(World world, int slot, CharacterId whom, int ev)
+    internal bool CutIn(World world, int slot, CharacterId whom, int ev, bool awakeAtSource = false)
     {
         var npc = world.Characters.IdOf(slot);
-        if (Free(npc)) return Fire(world, npc, whom, ev);
+        if (Free(npc)) return Fire(world, npc, whom, ev, awakeAtSource);
         if (RunningEvent(npc) == ev || SetOf(world, slot).For(ev).Count == 0) return false;
 
         EndTalkOf(world, npc);
-        return Fire(world, npc, whom, ev);
+        return Fire(world, npc, whom, ev, awakeAtSource);
+    }
+
+    /// <summary>
+    /// A queued <see cref="DialogueEvent"/> without a dialogue of its own: through the cut-in when it asks for one, else the plain fire.
+    /// </summary>
+    void FireQueued(World world, DialogueEvent e)
+    {
+        if (!e.CutIn)
+        {
+            Fire(world, e.Npc, e.Target, e.Event, e.AwakeAtSource);
+            return;
+        }
+
+        if (world.Characters.TryResolveNext(e.Npc, out int slot)) CutIn(world, slot, e.Target, e.Event, e.AwakeAtSource);
     }
 
     /// <summary>
@@ -487,7 +511,7 @@ public sealed partial class DialogueSystem
         {
             var current = _bubbles[k];
             if (world.Tick < current.DueTick) continue;
-            if (!world.Characters.TryResolveNext(current.Speaker, out int n) || !CanSpeak(world.Characters, n))
+            if (!world.Characters.TryResolveNext(current.Speaker, out int n) || !CanSpeak(world.Characters, n, current.AwakeAtSource))
             {
                 _bubbles.RemoveAt(k--);
                 continue;
@@ -585,10 +609,11 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// Whether the character at <paramref name="slot"/> can say a bubble line: alive and conscious. A caged one can (the original's step stops only
-    /// for a ragdolled owner).
+    /// Whether the character at <paramref name="slot"/> can say a bubble line: alive and conscious, or only alive when <paramref name="awakeAtSource"/>
+    /// (<see cref="Bubble.AwakeAtSource"/>). A caged one can (the original's step stops only for a ragdolled owner).
     /// </summary>
-    static bool CanSpeak(CharacterTable table, int slot) => table.Next[slot].Alive && table.Cold(slot) is { } c && c.Medical?.Incapacitated != true;
+    static bool CanSpeak(CharacterTable table, int slot, bool awakeAtSource = false) =>
+        table.Next[slot].Alive && table.Cold(slot) is { } c && (awakeAtSource || c.Medical?.Incapacitated != true);
 
     /// <summary>
     /// A bubble conversation's end (<c>FUN_140674830</c>): the event's counter and time, the owner's starter cleared; only an event-1 conversation

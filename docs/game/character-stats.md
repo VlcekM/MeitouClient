@@ -237,7 +237,10 @@ Death: vital h-s<-M, blood<=-capacity or hunger<=0. Preserve KO/coma/death disti
 **Verified** (decompile: `FUN_14064f300` blow, `FUN_14064f5c0` tick, `FUN_14064edc0` sever, `FUN_140644980` leg KO, `FUN_1409b1c10` roll):
 - A destroyed part that is not vital is cut off: a blow needs h-s+rig < -M, a tick h-s < -M (a worsening wound). A vital part kills instead.
 - Blow: Dismemberment >= Rare, a stats object, limb original or crushed. Tick: Frequent only, limb original only. A prosthetic is never cut off.
-- Sever: the part becomes a stump; blood -= (5 + 25 x U) after the KO below (the roll `FUN_1409b1c80(5, 30)`); toughness XP 300; LOST_LEG / LOST_ARM dialogue.
+- Sever: the part becomes a stump; blood -= (5 + 25 x U) after the KO below (the roll `FUN_1409b1c80(5, 30)`); toughness XP 300; LOST_LEG / LOST_ARM dialogue
+  (0x46 / 0x47 through the cut-in `FUN_140685730`, before the KO below: [dialogue](dialogue.md)). All of it is the sever's own, so every way a limb comes off
+  gets it: the blow `FUN_14064f300`, the wound tick `FUN_14064f5c0` and the rack `FUN_14029af90` (the limb item drops), the bite `FUN_140650370` (it does not).
+  Meitou: `LimbCut`, called on each path's `PartSevered` event.
 - **A leg going down in posture 0** (`PS_NORMAL`: conscious, not staying low, not crawling) knocks the character out for **3 s** of medical time,
   whether it is cut off, crushed, worn through or under the KO point. The collapse check `FUN_140649320` sets the crippled flag for a part at stage > 0 whose
   `collapse part` has a leg bit (stage of a leg, `FUN_140644450`: a stump 1, crushed or h - s under -M 2, h - s + b under the KO point 2), and when
@@ -255,7 +258,7 @@ Death: vital h-s<-M, blood<=-capacity or hunger<=0. Preserve KO/coma/death disti
   Meitou: `MedicalState.KoBlood`, used by `PutDownKoSeconds` ([carry-loot](carry-loot.md)).
 - The KO toughness XP (`FUN_1408c6720`) is paid only on the vital-part branch of `FUN_14064f300`, not for a leg or blood KO (**Verified**).
   Meitou pays it for every KO event: a gap.
-- **Unknown**: the notify codes 0x46 (leg) and 0x47 (arm) and vtable slot 0x410 that `FUN_14064edc0` calls; the fifth argument of
+- **Unknown**: vtable slot 0x410 that `FUN_14064edc0` calls after a leg's line; the fifth argument of
   `FUN_14064f300` (a blow is taken to sever under the setting rule).
 - Meitou: `MedicalState.ApplyHit`, `CheckPart`, `Sever`, `LegCollapse` (after a blow, the tick's part loop and a bite; `LegLossKoSeconds`), the posture of the last
   tick's end (`Standing` then; not saved, the live `Standing` before the first tick).

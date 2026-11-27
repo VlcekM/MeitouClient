@@ -60,7 +60,7 @@ public sealed partial class CaptiveSystem
             HealthObservers.Before(world, c);
             var stretch = cc.Medical.StretchLimbs(dt, ContextOf(world, c, cc), data.BodyOptions.Dismemberment != Dismemberment.Never, events);
             HealthObservers.After(world, c, HealthChangeKind.Rack);
-            ApplyBodyEvents(world, rack.Occupant, c, cc.Medical, events, limbDrops: true);
+            ApplyBodyEvents(world, c, cc.Medical, events, limbDrops: true);
             // the rack names no killer
             if (!wasDead) DeathObservers.Report(world, c, CharacterId.None, DeathSite.Rack);
             busy = stretch.Busy;

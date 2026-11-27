@@ -560,7 +560,8 @@ static class DebugCheats
                 TaskStart.Stand(table, slot);
                 table.Next[slot].Velocity = Vector3.Zero;
             }
-            else if (e.Kind == MedicalEventKind.PartSevered) table.LimbsChanged.Enqueue((slot, medical.Parts[e.Part].Template.LimbSlot, true));
+            else if (e.Kind == MedicalEventKind.PartSevered)
+                LimbCut.Apply(world, slot, table.Cold(slot)!, medical, e, new XpService(data.Bodies.Constants, data.BodyOptions), limbDrops: true);
             else if (e.Kind == MedicalEventKind.Decapitated) table.LimbsChanged.Enqueue((slot, -1, false));
         }
 
