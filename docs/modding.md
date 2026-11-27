@@ -1467,7 +1467,7 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   cut to 200 characters. A source that throws or gives a reply without a text or press is logged once and dropped; a press that throws is
   logged. Without a source the conversation window is as before. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
-  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
+  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen, Look)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page
   ([native UI](native-ui.md#settings)): `bool` an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a
   hundredth of the range otherwise), an enum or a `string` with Options a list, a `string` without Options a free text box (one line, at most
@@ -1483,7 +1483,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   they were, not snapped to the step (Restore defaults also drops every kept mod value). The page sets a changed property at once on the interface's
   thread, outside the tick, and raises the returned group's `Changed`; a throw from the setter or a handler is logged and shown as the page's
   notice. A value the mod sets itself with `ModSetting.Set` or `Reset` (a window's place, an in-game slider) raises `Changed` the same way and is
-  kept in `meitou.user.json` like the page's; call them on the interface's thread. A slider's arrow keys move one Step. A property of type `Action`
+  kept in `meitou.user.json` like the page's, the file written 2 s after the last change of a mod's setting or preset
+  (`GameMods.WriteModSettings`) and when the game closes; call them on the interface's thread. A slider's arrow keys move one Step. A property of type `Action`
   (a public get is enough) is a button row: its caption the attribute's `Button` (else the label), a click (or `ModSetting.Press()`) runs the
   delegate on the interface's thread, a throw logged and shown as the page's notice; it keeps no value and Reset passes it by. Named presets
   (`ModSettingsGroup`): `SavePreset(name)` keeps every value setting's value under a name (1 to 64 characters on one line, at most 64 presets;
@@ -1492,6 +1493,18 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   id, preset, key, text), not dropped by Restore defaults, and read once the game starts the mods (after `Initialize`). With buttons and a text
   setting for the name a mod builds its own preset slots. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
   `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group).
+- **Look presets:** `Look = true` on a `[Setting]` makes it part of the look ([native UI](native-ui.md#settings), `LookModSettings`): the
+  Graphics page's look presets hold its value (`mods` in the preset file and its share code: mod id, setting key, the saved text; only values
+  that are not the default), set it when a preset is chosen (through `ModSetting`'s own set, raising `Changed`; back to the default for a
+  preset that holds none, as Meitou; a held value that is no longer one of the setting's falls back to the default too), and count it among the
+  "unsaved changes" when it differs. A preset keeps the values of a mod that is not running when it is saved again. Faithful leaves the mods'
+  settings alone. A mod ships presets as files: `presets/*.json` in its folder (any enabled mod, with code or without; the look preset
+  format: `format`, `name`, `meitou`, `values` by the keys `meitou.user.json`'s `graphics` uses, optional `mods`), listed in the look
+  drop-down after the player's with the mod's name, in load order; a name a look already has is left out, and the player cannot save over
+  one (Save as makes a copy). A game older than `Look` fails reading the attribute, so a mod using it sets `gameVersion`; an older game or
+  launcher ignores `mods` in a preset. The launcher lists the player's presets only, applies their `values` and keeps their `mods` when it
+  saves or shares one. **Observed** (2026-11-27, local probe: capture, apply, count, the file and code round trip; the look drop-down drawn
+  with a scratch mod's preset, `--settings-showcase`).
 - **Translations:** `context.Language` is the game's locale code (`en_GB` for English, `ru_RU`, `zh_CN`, a translation mod's own; fixed for
   the process). `context.AddTranslations(domain, folder = null)` (in `Initialize`) reads the gettext catalogue
   `<folder>/locale/<language>/LC_MESSAGES/<domain>.mo` (else `.po`) of that language: the folder named by the code ignoring case, else the first

@@ -1687,6 +1687,7 @@ sealed partial class GameHost(
         Modding.UpdateModEffects();
         Modding.UpdateModTrails();
         Modding.UpdateModGlows();
+        Modding.WriteModSettings();
         Modding.UpdateModFaults();
         Rendering.Profiling.StageClock.Lap(Rendering.Profiling.StageClock.Blood, "blood marks");
 

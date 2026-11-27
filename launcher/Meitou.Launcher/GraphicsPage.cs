@@ -572,7 +572,7 @@ public sealed partial class MainWindow
         Action("Share", async () =>
         {
             if (GetTopLevel(this)?.Clipboard is not { } clipboard) return;
-            await clipboard.SetValueAsync(DataFormat.Text, LookPresetFile.ShareCode(new(active.Look.Name, MadeOf(active), active.Look.Values)));
+            await clipboard.SetValueAsync(DataFormat.Text, LookPresetFile.ShareCode(ShareData(active)));
             Status(Tr("{1}'s code is on the clipboard: paste it on Discord, or with Paste.", active.Look.Name));
         });
         Action("Paste", () => PasteLook(l, all, folder));
@@ -668,6 +668,18 @@ public sealed partial class MainWindow
             name.Focus();
             name.SelectAll();
         });
+    }
+
+    /// <summary>
+    /// What a look's share code holds: its values, the version it was made on and, for a preset on disk, the mods' values its file holds
+    /// (the launcher shows none of them, and passes them on).
+    /// </summary>
+    LookPresetData ShareData(LookChoice look)
+    {
+        var data = new LookPresetData(look.Look.Name, MadeOf(look), look.Look.Values);
+        bool onDisk = look.File is { } file && File.Exists(file);
+
+        return onDisk && LookPresetFile.Read(File.ReadAllText(look.File!)) is { } read ? data with { Mods = read.Mods } : data;
     }
 
     /// <summary>

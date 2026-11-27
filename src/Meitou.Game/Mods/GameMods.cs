@@ -81,6 +81,45 @@ sealed class GameMods(GameHost host)
     World? _trailsFor;
 
     /// <summary>
+    /// The enabled mods' names and folders, in load order, read once (<see cref="EnabledModFolders"/>).
+    /// </summary>
+    List<(string Name, string Folder)>? _modFolders;
+
+    /// <summary>
+    /// How long after the last change of a mod's setting the config is written: a slider dragged writes once.
+    /// </summary>
+    const double SettingsWriteSeconds = 2;
+
+    /// <summary>
+    /// When a mod's setting or preset last changed with the config not yet written (<see cref="System.Diagnostics.Stopwatch"/> ticks); 0: none.
+    /// </summary>
+    long _settingsChangedAt;
+
+    /// <summary>
+    /// The enabled mods (with code or without), each with its folder, in <c>mods.cfg</c> order: where the look bar finds the look presets
+    /// mods ship (docs/modding.md "Look presets"). Folders that cannot be read give none.
+    /// </summary>
+    internal IReadOnlyList<(string Name, string Folder)> EnabledModFolders()
+    {
+        if (_modFolders is not null) return _modFolders;
+
+        _modFolders = [];
+        try
+        {
+            var onDisk = Content.ModList.Discover(host.Install).ToDictionary(m => m.Name, StringComparer.Ordinal);
+            foreach (string name in Content.ModList.ReadEnabled(host.Install))
+            {
+                if (onDisk.GetValueOrDefault(name) is { } mod) _modFolders.Add((mod.Name, mod.Folder));
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return _modFolders;
+    }
+
+    /// <summary>
     /// Installs the enabled code mods' lighting hooks (docs/modding.md "Lighting hooks") from their manifests, before any lit shader is made:
     /// at the game's start, long before the mods' code runs. A hook that is left out is logged with the reason.
     /// </summary>
@@ -205,16 +244,37 @@ sealed class GameMods(GameHost host)
 
     /// <summary>
     /// Keeps a value a mod sets itself (ModSetting.Set, Reset) as the page's are, on either start path; the page's own change is kept twice, the
-    /// same value.
+    /// same value. Each change is also written to the file soon after (<see cref="WriteModSettings"/>).
     /// </summary>
     void KeepModSettings(ModHost mods)
     {
         foreach (var group in mods.Settings)
         {
             group.Changed += host.Config.KeepModSetting;
+            group.Changed += _ => NoteSettingsChanged();
+            group.PresetsChanged += _ => NoteSettingsChanged();
             group.UsePresets(host.Config.ModSettingPresets.GetValueOrDefault(group.ModId));
             group.PresetsChanged += host.Config.KeepModPresets;
         }
+    }
+
+    /// <summary>
+    /// Notes that a mod's setting or preset changed and the config holds a value its file does not.
+    /// </summary>
+    void NoteSettingsChanged() => Volatile.Write(ref _settingsChangedAt, System.Diagnostics.Stopwatch.GetTimestamp());
+
+    /// <summary>
+    /// Once a frame: writes <c>meitou.user.json</c> when a mod's setting changed and none has for <see cref="SettingsWriteSeconds"/>, so a
+    /// value a mod sets from its own window or key is on disk before the game closes (a crash loses no more than those seconds).
+    /// </summary>
+    internal void WriteModSettings()
+    {
+        long changed = Volatile.Read(ref _settingsChangedAt);
+        if (changed == 0 || System.Diagnostics.Stopwatch.GetElapsedTime(changed).TotalSeconds < SettingsWriteSeconds) return;
+
+        // A change since the read keeps its own time: the next frames write again.
+        Interlocked.CompareExchange(ref _settingsChangedAt, 0, changed);
+        host.Config.Save();
     }
 
     /// <summary>

@@ -26,9 +26,15 @@ sealed class LookPresets(SettingsMenu menu)
 
     /// <summary>
     /// A look preset: what it sets, by the keys the settings are saved under (a slider's label, "Meitou: " and a switch's label); everything else is
-    /// Meitou's.
+    /// Meitou's. Its source is "built in", "mine" (the player's file) or the name of the mod that ships it.
     /// </summary>
-    internal sealed record LookPreset(string Name, string Source, string Made, Dictionary<string, float> Values, string? File = null);
+    internal sealed record LookPreset(string Name, string Source, string Made, Dictionary<string, float> Values, string? File = null)
+    {
+        /// <summary>
+        /// The code mods' look settings it sets over their defaults, by mod id then setting key (<see cref="LookModSettings"/>).
+        /// </summary>
+        public Dictionary<string, Dictionary<string, string>> Mods { get; init; } = [];
+    }
 
     /// <summary>
     /// The built-in Meitou look: it sets nothing.
@@ -51,7 +57,7 @@ sealed class LookPresets(SettingsMenu menu)
     internal readonly HashSet<string> StuckSwitches = [];
 
     /// <summary>
-    /// The looks: Meitou and the player's presets; null until listed.
+    /// The looks: Meitou, the player's presets and the enabled mods'; null until listed.
     /// </summary>
     List<LookPreset>? _looks;
 
@@ -151,7 +157,7 @@ sealed class LookPresets(SettingsMenu menu)
     #region Preset files
 
     /// <summary>
-    /// The looks, listed once: Meitou and the player's presets (an unreadable folder adds none).
+    /// The looks, listed once: Meitou, the player's presets (an unreadable folder adds none) and those the enabled mods ship.
     /// </summary>
     List<LookPreset> Looks()
     {
@@ -165,9 +171,33 @@ sealed class LookPresets(SettingsMenu menu)
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+        AddModLooks();
 
         return _looks;
     }
+
+    /// <summary>
+    /// Adds the presets the enabled mods ship in their own <see cref="LookFolder"/> folder (docs/modding.md "Look presets"), in load order, marked
+    /// with the mod's name; a name a look already has is left out. They are the mod's files: the player saves a copy to change one.
+    /// </summary>
+    void AddModLooks()
+    {
+        foreach (var (mod, folder) in menu.ModFolders())
+        {
+            foreach (var (_, read) in global::Meitou.Settings.LookPresetFile.ReadFolder(Path.Combine(folder, LookFolder)))
+            {
+                if (_looks!.Any(l => l.Name.Equals(read.Name, StringComparison.OrdinalIgnoreCase))) continue;
+
+                _looks!.Add(new LookPreset(read.Name, mod, read.Made, read.Values) { Mods = read.Mods });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a name is a look the player cannot save over: Meitou's or a mod's (case ignored).
+    /// </summary>
+    internal bool IsFixedName(string name) =>
+        Looks().Any(l => l.Source != "mine" && l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Adds the presets the player saved in the presets folder, by file name.
@@ -192,12 +222,12 @@ sealed class LookPresets(SettingsMenu menu)
     /// <paramref name="source"/>; null when it is not one.
     /// </summary>
     static LookPreset? ReadLook(string json, string source) =>
-        global::Meitou.Settings.LookPresetFile.Read(json) is { } read ? new(read.Name, source, read.Made, read.Values) : null;
+        global::Meitou.Settings.LookPresetFile.Read(json) is { } read ? new(read.Name, source, read.Made, read.Values) { Mods = read.Mods } : null;
 
     /// <summary>
     /// The preset file data of <paramref name="look"/>.
     /// </summary>
-    static global::Meitou.Settings.LookPresetData Data(LookPreset look) => new(look.Name, look.Made, look.Values);
+    static global::Meitou.Settings.LookPresetData Data(LookPreset look) => new(look.Name, look.Made, look.Values) { Mods = look.Mods };
 
     /// <summary>
     /// <paramref name="look"/> as preset file JSON.
@@ -400,7 +430,8 @@ sealed class LookPresets(SettingsMenu menu)
         UnderSwitch(slider.Label) ? meitou : slider.Faithful ?? LabelGameValue(slider.Label) ?? meitou;
 
     /// <summary>
-    /// The look settings that differ from the game's (Faithful) or the active preset's (by key); a switch Low holds off is not a change.
+    /// The look settings that differ from the game's (Faithful) or the active preset's (by key); a switch Low holds off is not a change. Under a
+    /// preset the mods' look settings count too (<see cref="LookModSettings"/>); Faithful leaves them alone.
     /// </summary>
     internal HashSet<string> LookChanges()
     {
@@ -415,6 +446,7 @@ sealed class LookPresets(SettingsMenu menu)
             if (MathF.Abs(slider.Get() - BaseSlider(key, slider, meitou)) > 0.002f * (slider.Max - slider.Min))
                 changed.Add(key);
         }
+        if (!FaithfulLook) changed.UnionWith(menu.LookMods.Changes(ActiveLook.Mods));
 
         return changed;
     }
@@ -432,7 +464,7 @@ sealed class LookPresets(SettingsMenu menu)
 
     /// <summary>
     /// Applies <paramref name="look"/> with the Meitou look on and saves it as the choice (none for Meitou): its switches (one Low holds off stays
-    /// off) and sliders.
+    /// off) and sliders, and the mods' look settings.
     /// </summary>
     internal void ApplyLook(LookPreset look)
     {
@@ -449,6 +481,7 @@ sealed class LookPresets(SettingsMenu menu)
         {
             slider.Set(LookValue(look, key, meitou));
         }
+        menu.LookMods.Apply(look.Mods);
     }
 
     /// <summary>
@@ -572,7 +605,10 @@ sealed class LookPresets(SettingsMenu menu)
                 set[key] = MathF.Round(slider.Get(), 3);
         }
 
-        var saved = new LookPreset(name, "mine", MeitouVersion, set, Path.Combine(PresetFolder, MakeFileName(name)));
+        var saved = new LookPreset(name, "mine", MeitouVersion, set, Path.Combine(PresetFolder, MakeFileName(name)))
+        {
+            Mods = menu.LookMods.Capture(ActiveLook.Mods),
+        };
         if (!WritePreset(saved)) return null;
 
         var list = Looks();
@@ -626,22 +662,23 @@ sealed class LookPresets(SettingsMenu menu)
     internal void PasteLook()
     {
         if (global::Meitou.Settings.LookPresetFile.FromShareCode(menu.Player.ClipboardRead?.Invoke()) is not { } read
-            || new LookPreset(read.Name, "pasted", read.Made, read.Values) is not { } pasted)
+            || new LookPreset(read.Name, "pasted", read.Made, read.Values) { Mods = read.Mods } is not { } pasted)
         {
             menu.Notice = "The clipboard holds no preset code (MT1:…). Copy one with Share first.";
             return;
         }
 
-        if (SaveLookAs(FreeName(pasted.Name), pasted.Values, pasted.Made) is { } look)
+        if (SaveLookAs(pasted with { Name = FreeName(pasted.Name) }) is { } look)
             menu.Notice = $"{look.Name} pasted and loaded (made on Meitou {look.Made}).";
     }
 
     /// <summary>
-    /// Adds a preset of the player's and makes it the active one; null (the notice says why) when its file could not be written.
+    /// Adds <paramref name="preset"/> as a preset of the player's and makes it the active one; null (the notice says why) when its file could not
+    /// be written.
     /// </summary>
-    LookPreset? SaveLookAs(string name, Dictionary<string, float> set, string made)
+    LookPreset? SaveLookAs(LookPreset preset)
     {
-        var look = new LookPreset(name, "mine", made, set, Path.Combine(PresetFolder, MakeFileName(name)));
+        var look = preset with { Source = "mine", File = Path.Combine(PresetFolder, MakeFileName(preset.Name)) };
         if (!WritePreset(look)) return null;
 
         Looks().Add(look);

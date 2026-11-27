@@ -194,6 +194,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The look presets.
     /// </summary>
     internal LookPresets LookPresets => field ??= new(this);
+
+    /// <summary>
+    /// The code mods' settings that belong to the look, which the look presets hold and set.
+    /// </summary>
+    internal LookModSettings LookMods => field ??= new(() => ModSettings());
     /// <summary>
     /// The Graphics page's look and quality rows.
     /// </summary>
@@ -587,6 +592,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The registered settings; read each time the page is drawn, since mods load after the menu may be made.
     /// </summary>
     public Func<IReadOnlyList<ModSettingsGroup>> ModSettings { get; init; } = () => [];
+
+    /// <summary>
+    /// The enabled mods' names and folders, in load order: where the look bar finds the look presets mods ship.
+    /// </summary>
+    public Func<IReadOnlyList<(string Name, string Folder)>> ModFolders { get; init; } = () => [];
 
     #endregion
 

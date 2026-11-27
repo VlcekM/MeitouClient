@@ -8,11 +8,18 @@ namespace Meitou.Settings;
 /// <summary>
 /// A look preset as a file holds it: its name, the Meitou version that made it, and the <c>graphics</c> values it sets over Meitou's.
 /// </summary>
-public sealed record LookPresetData(string Name, string Made, Dictionary<string, float> Values);
+public sealed record LookPresetData(string Name, string Made, Dictionary<string, float> Values)
+{
+    /// <summary>
+    /// The code mods' look settings the preset sets over their defaults (<c>mods</c>: mod id, setting key, the value as the settings are saved,
+    /// invariant text); empty when it sets none. A game or launcher older than the key ignores it.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, string>> Mods { get; init; } = [];
+}
 
 /// <summary>
-/// The look preset files (<c>presets/&lt;name&gt;.json</c> beside <c>meitou.user.json</c>: <c>format</c>, <c>name</c>, <c>meitou</c>, <c>values</c>)
-/// and their share code (<c>MT1:</c> and the deflated JSON in base64), shared by the game's settings menu and the launcher so both read and write the
+/// The look preset files (<c>presets/&lt;name&gt;.json</c> beside <c>meitou.user.json</c>: <c>format</c>, <c>name</c>, <c>meitou</c>, <c>values</c>,
+/// optional <c>mods</c>) and their share code (<c>MT1:</c> and the deflated JSON in base64), shared by the game's settings menu and the launcher so both read and write the
 /// same presets (docs/native-ui.md "Settings").
 /// </summary>
 public static class LookPresetFile
@@ -21,6 +28,11 @@ public static class LookPresetFile
     /// The longest preset name: what the name box takes, and where a longer one (a pasted code's, a hand-edited file's) is cut.
     /// </summary>
     public const int MaxNameLength = 40;
+
+    /// <summary>
+    /// The most mods a preset holds values of, the most values of one mod, and the longest value; what is past them is left out.
+    /// </summary>
+    public const int MaxMods = 64, MaxModValues = 512, MaxModValueLength = 4096;
 
     /// <summary>
     /// The most a share code's JSON may inflate to; a code holding more is not a preset.
@@ -39,9 +51,36 @@ public static class LookPresetFile
             var values = new Dictionary<string, float>();
             foreach (var p in root.GetProperty("values").EnumerateObject()) values[p.Name] = p.Value.GetSingle();
             return new(CleanName(root.GetProperty("name").GetString()), root.TryGetProperty("meitou", out var m) ? m.GetString() ?? "?" : "?",
-                    values);
+                    values)
+            {
+                Mods = ReadMods(root),
+            };
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException) { return null; }
+    }
+
+    /// <summary>
+    /// The optional <c>mods</c> object: per mod id its setting keys and text values; anything else in it is left out.
+    /// </summary>
+    static Dictionary<string, Dictionary<string, string>> ReadMods(JsonElement root)
+    {
+        var mods = new Dictionary<string, Dictionary<string, string>>();
+        if (!root.TryGetProperty("mods", out var list) || list.ValueKind != JsonValueKind.Object) return mods;
+
+        foreach (var mod in list.EnumerateObject())
+        {
+            if (mod.Value.ValueKind != JsonValueKind.Object || mods.Count >= MaxMods) continue;
+
+            var values = new Dictionary<string, string>();
+            foreach (var value in mod.Value.EnumerateObject())
+            {
+                bool text = value.Value.ValueKind == JsonValueKind.String && value.Value.GetString()!.Length <= MaxModValueLength;
+                if (text && values.Count < MaxModValues) values[value.Name] = value.Value.GetString()!;
+            }
+            if (values.Count > 0) mods[mod.Name] = values;
+        }
+
+        return mods;
     }
 
     /// <summary>
@@ -56,7 +95,8 @@ public static class LookPresetFile
     }
 
     /// <summary>
-    /// The preset file's indented JSON: <c>format</c> 1, <c>name</c>, <c>meitou</c> (the version that made it) and <c>values</c>.
+    /// The preset file's indented JSON: <c>format</c> 1, <c>name</c>, <c>meitou</c> (the version that made it), <c>values</c> and, when the
+    /// preset sets any, <c>mods</c>.
     /// </summary>
     public static string Write(LookPresetData look)
     {
@@ -70,9 +110,25 @@ public static class LookPresetFile
             json.WriteStartObject("values");
             foreach (var (key, value) in look.Values) json.WriteNumber(key, value);
             json.WriteEndObject();
+            if (look.Mods.Count > 0) WriteMods(json, look.Mods);
             json.WriteEndObject();
         }
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    /// <summary>
+    /// The <c>mods</c> object: each mod's values under its id.
+    /// </summary>
+    static void WriteMods(Utf8JsonWriter json, Dictionary<string, Dictionary<string, string>> mods)
+    {
+        json.WriteStartObject("mods");
+        foreach (var (mod, values) in mods)
+        {
+            json.WriteStartObject(mod);
+            foreach (var (key, text) in values) json.WriteString(key, text);
+            json.WriteEndObject();
+        }
+        json.WriteEndObject();
     }
 
     /// <summary>
@@ -144,12 +200,15 @@ public static class LookPresetFile
     }
 
     /// <summary>
-    /// Writes a preset to <paramref name="folder"/> under its file name and returns the file's path.
+    /// Writes a preset to <paramref name="folder"/> under its file name and returns the file's path. A preset given without mod values keeps
+    /// those its file holds: the launcher saves the game's own settings and knows no mod's.
     /// </summary>
     public static string Save(string folder, LookPresetData look)
     {
         Directory.CreateDirectory(folder);
         string file = Path.Combine(folder, FileName(look.Name));
+        if (look.Mods.Count == 0 && File.Exists(file) && Read(File.ReadAllText(file)) is { Mods.Count: > 0 } kept)
+            look = look with { Mods = kept.Mods };
         AtomicFile.WriteAllText(file, Write(look));
         return file;
     }

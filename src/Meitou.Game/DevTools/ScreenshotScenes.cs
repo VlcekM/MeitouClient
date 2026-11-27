@@ -610,7 +610,7 @@ sealed class ScreenshotScenes(GameHost host)
         var menu = new SettingsMenu(host.Player, values, host.Session.Bindings, () => { },
             new Slider("Frame limit", 0, 360, () => 150, _ => { }, "0"),
             new UserConfig())
-        { NoDiskWrites = true };
+        { NoDiskWrites = true, ModFolders = host.Modding.EnabledModFolders };
         host.Player.SetUiMode(Data.Ui.UiMode.Meitou);
         int n = 0;
         void Shot(string name, int tab, Action? setup = null)
@@ -649,7 +649,8 @@ sealed class ScreenshotScenes(GameHost host)
         menu.ShowcaseSet("Heat haze strength (1 = game)", 0.5f);
         Shot("preset-changed", Tab("Colour"), () =>
         {
-            menu.LookPresets.ShowcaseLook(1);
+            // The showcase writes no file: the look with the heat haze set above is saved in the menu's list alone, then changed.
+            menu.LookPresets.SaveLook("Dry heat");
             menu.ShowcaseSet("Night grading strength (0 = game)", 0.8f);
         });
         Shot("preset-list", Tab("Colour"), menu.LookBar.ShowcaseOpenLooks);

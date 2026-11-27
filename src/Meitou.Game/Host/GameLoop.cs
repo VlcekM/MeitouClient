@@ -517,6 +517,7 @@ sealed class GameLoop(GameHost host)
             FrameGenerationStatus = () => FrameGenerationSetup.FrameGenerationState(_display, _frameGenerationLoaded,
                 host.Config.FrameGenerationMethod, _hdrAtStart),
             ModSettings = () => host.Modding.Mods?.Settings ?? [],
+            ModFolders = host.Modding.EnabledModFolders,
             AudioChanged = host.Sound.AudioSettingsChanged,
             GameplayChanged = host.Saves.ApplyGameplay,
             SkinRaceList = host.Scene.Database is { } raceDb ? CharacterRenderer.PersonRaces(raceDb) : [],
