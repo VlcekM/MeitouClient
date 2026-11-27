@@ -6347,3 +6347,11 @@ msgstr "Qualidade das texturas do terreno"
 #. machine-translated
 msgid "Object & foliage texture quality"
 msgstr "Qualidade das texturas de objetos e vegetação"
+
+#. machine-translated
+msgid "Armour clipping"
+msgstr "Sobreposição de armadura"
+
+#. machine-translated
+msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
+msgstr "Ajusta malhas de armadura apenas masculinas usadas por personagens femininas para não atravessarem o corpo e acomoda armaduras de pernas volumosas sob casacos longos quando não há malha de sobreposição. Aplica-se a personagens recém-carregados ou reequipados."

@@ -1763,6 +1763,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.FixPickUpTheft = true;
         PickUpTheftChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;
+        Config.FixArmourClipping = Rendering.Characters.ArmourClipFix.Enabled = false;
         Config.KeepInfoPanel = true;
         Player.FixLockpickLabel = Config.FixLockpickLabel = true;
         Config.FixRaidClocks = true;

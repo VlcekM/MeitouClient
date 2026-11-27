@@ -87,6 +87,7 @@ static class Program
         using var splash = showSplash ? SplashWindow.Show(install.DataDirectory) : null;
         var config = game.Benchmark is null ? UserConfig.Load() : UserConfig.ForBenchmark();
         Data.World.HeightmapRepair.Configure(install, config.FixGround);
+        Rendering.Characters.ArmourClipFix.Enabled = config.FixArmourClipping;
         Loc.Use(install);   // the language of settings.cfg: texts from locale/<code>/LC_MESSAGES/main.mo (docs/formats/localisation.md)
         Rendering.Ui.UiFontFallbacks.UseInstall(install.Root);   // Meitou mode draws Chinese, Japanese and Korean mod text (docs/formats/mygui.md)
         RestoreTextureQuality(args, game, world, config);

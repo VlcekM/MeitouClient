@@ -589,6 +589,10 @@ msgstr ""
 msgid "Apply the scene's colour and contrast adjustments."
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Armour clipping"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Armour plates shine as bare metal wherever they have any gloss. Off: dull, painted or rusty plate stays dull. An armour a mod gives its own metalness keeps it."
 msgstr ""
@@ -1891,6 +1895,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Finer shading of hair, cloth, skin, eyes and metal on characters. Each part has its own switch."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs

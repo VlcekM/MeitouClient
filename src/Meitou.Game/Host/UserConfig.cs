@@ -659,6 +659,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixHeadTurnBack { get; set; }
     /// <summary>
+    /// Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is
+    /// supplied (Fixes settings; off by default; <see cref="Rendering.Characters.ArmourClipFix"/>).
+    /// </summary>
+    public bool FixArmourClipping { get; set; }
+    /// <summary>
     /// The game's own heightmap has its holes filled and its needles lowered (Fixes settings; off: read as the file holds it, as the game does;
     /// read at start; <c>HeightmapRepair</c>, docs/formats/terrain.md "Holes and needles").
     /// </summary>

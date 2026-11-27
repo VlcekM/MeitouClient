@@ -591,9 +591,14 @@ internal sealed class CharacterContent : IDisposable
         foreach (var mesh in _meshes.Values)
             if (mesh is not null) ReleaseMesh(mesh);
 
+        foreach (var mesh in _fittedMeshes.Values)
+            if (mesh is not null) ReleaseMesh(mesh);
+
         _meshes.Clear();
+        _fittedMeshes.Clear();
         _loadedByGpu.Clear();
         _prepared.Clear();
+        _fittedPrepared.Clear();
         MeshBytes = 0;
         Textures.Dispose();
         Morphs.Dispose();
@@ -639,6 +644,11 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     readonly Dictionary<(string Path, int Bones, bool Close, string? PartMap, GearSway.Bake? Sway), LoadedMesh?> _meshes = [];
     /// <summary>
+    /// Uploaded armour meshes modified at load time (<see cref="ArmourClipFix"/>), by their base mesh key plus the applied fit.
+    /// </summary>
+    readonly Dictionary<(string Path, int Bones, bool Close, string? PartMap, GearSway.Bake? Sway, ArmourClipFix.Spec Fit), LoadedMesh?>
+        _fittedMeshes = [];
+    /// <summary>
     /// The mesh cache entries used by built assets.
     /// </summary>
     readonly Dictionary<GpuObjectMesh, LoadedMesh> _loadedByGpu = new(ReferenceEqualityComparer.Instance);
@@ -655,7 +665,7 @@ internal sealed class CharacterContent : IDisposable
     /// <summary>
     /// How many mesh files are loaded (including the ones that failed), for the statistics.
     /// </summary>
-    public int MeshCount => _meshes.Count;
+    public int MeshCount => _meshes.Count + _fittedMeshes.Count;
     /// <summary>
     /// The render's pixels per radian (<see cref="CharacterRenderer.SetView"/>) when a mesh loads: its generated levels are placed by it and keep
     /// their distances after a resize. Until the first view: 1080 rows at 50 degrees.
@@ -670,6 +680,11 @@ internal sealed class CharacterContent : IDisposable
     /// prepares it again.
     /// </summary>
     readonly ConcurrentDictionary<(string Path, int Bones, bool Close, string? PartMap, GearSway.Bake? Sway), Lazy<Prepared>> _prepared = new();
+    /// <summary>
+    /// Fitted armour meshes prepared or being prepared on workers, by the key of <see cref="_fittedMeshes"/>.
+    /// </summary>
+    readonly ConcurrentDictionary<(string Path, int Bones, bool Close, string? PartMap, GearSway.Bake? Sway, ArmourClipFix.Spec Fit),
+        Lazy<Prepared>> _fittedPrepared = new();
 
     /// <summary>
     /// A character mesh ready to draw: its GPU mesh, first material, bounding sphere, morphs, shadow and file levels, pick boxes, and neck
@@ -737,6 +752,35 @@ internal sealed class CharacterContent : IDisposable
                     () => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap, worn, sway)));
 
     /// <summary>
+    /// Like <see cref="Mesh"/>, for an armour mesh modified at load time by <paramref name="fit"/> (<see cref="ArmourClipFix"/>), kept in its own
+    /// cache so unmodified wearers keep the original mesh.
+    /// </summary>
+    LoadedMesh? FittedMesh(string path, int? boneCount, float lodScale, LimbHide? limbs, bool close, bool worn, GearSway.Bake? sway,
+        ArmourClipFix.Spec fit)
+    {
+        var key = (path.ToLowerInvariant(), boneCount ?? -1, close, (string?)null, sway, fit);
+        if (_fittedMeshes.TryGetValue(key, out var cached))
+        {
+            if (cached is not null) cached.LastUsed = Environment.TickCount64;
+
+            return cached;
+        }
+        var (ready, messages) = PrepareFitted(path, boneCount, lodScale, LodPixelsPerRadian, limbs, close, worn, sway, fit).Value;
+        _fittedPrepared[key] = new Lazy<Prepared>(Uploaded);
+        Messages.AddRange(messages);
+        return _fittedMeshes[key] = ready is null ? null : Upload(ready);
+    }
+
+    /// <summary>
+    /// The preparation of an armour mesh modified by <paramref name="fit"/>, made once (any thread).
+    /// </summary>
+    Lazy<Prepared> PrepareFitted(string path, int? boneCount, float lodScale, float pixelsPerRadian, LimbHide? limbs, bool close, bool worn,
+        GearSway.Bake? sway, ArmourClipFix.Spec fit) =>
+        _fittedPrepared.GetOrAdd((path.ToLowerInvariant(), boneCount ?? -1, close, null, sway, fit),
+                _ => new Lazy<Prepared>(
+                    () => PrepareMesh(path, boneCount, lodScale, false, pixelsPerRadian, limbs, close, false, null, worn, sway, fit)));
+
+    /// <summary>
     /// Reads a mesh file and makes its levels and index buffers (no GPU work, any thread): with its skinning weights for a skeleton of
     /// <paramref name="boneCount"/> bones (null: unskinned); its generated levels start <paramref name="lodScale"/> times farther than the rule
     /// gives. A <paramref name="close"/> mesh (the character editor's close-up) keeps only its full level: generating the others is nearly all of the
@@ -744,12 +788,13 @@ internal sealed class CharacterContent : IDisposable
     /// swing (<see cref="GearSway.BakeMesh"/>).
     /// </summary>
     static Prepared PrepareMesh(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs, bool close,
-        bool icon = false, string? partMap = null, bool worn = false, GearSway.Bake? sway = null)
+        bool icon = false, string? partMap = null, bool worn = false, GearSway.Bake? sway = null, ArmourClipFix.Spec? fit = null)
     {
         var messages = new List<string>();
         try
         {
             var mesh = OgreMeshReader.ReadFile(path);
+            if (fit is not null) ArmourClipFix.Apply(mesh, fit);
             if (MeshWeld.Enabled) OgreMeshWeld.Apply(mesh);
             var model = Model.Build(mesh, boneCount, gameBinormals: !icon, tangentSign: icon);
             var morphs = MeshMorphs.From(mesh, model, messages, Path.GetFileName(path));
@@ -903,6 +948,20 @@ internal sealed class CharacterContent : IDisposable
 
             ReleaseMesh(mesh);
         }
+
+        foreach (var (key, mesh) in _fittedMeshes.OrderBy(pair => pair.Value?.LastUsed).ToArray())
+        {
+            if (mesh is null) continue;
+
+            mesh.Owners.RemoveAll(owner => !owner.TryGetTarget(out _));
+            if (mesh.Owners.Count > 0) mesh.LastUsed = now;
+            if (now - mesh.LastUsed < idle) continue;
+
+            _fittedMeshes.Remove(key);
+            _loadedByGpu.Remove(mesh.Gpu);
+            _fittedPrepared.TryRemove(key, out _);
+            ReleaseMesh(mesh);
+        }
     }
 
     /// <summary>
@@ -1029,6 +1088,12 @@ internal sealed class CharacterContent : IDisposable
             if (key.Close && key.Bones != IconBones && !(lazy.IsValueCreated && ReferenceEquals(lazy.Value, Uploaded)))
                 _prepared.TryRemove(key, out _);
         }
+
+        foreach (var (key, lazy) in _fittedPrepared)
+        {
+            if (key.Close && !(lazy.IsValueCreated && ReferenceEquals(lazy.Value, Uploaded)))
+                _fittedPrepared.TryRemove(key, out _);
+        }
     }
 
     /// <summary>
@@ -1074,7 +1139,9 @@ internal sealed class CharacterContent : IDisposable
     /// Whether <paramref name="c"/>'s body and part meshes are all prepared (or uploaded) already.
     /// </summary>
     bool AllPrepared(CharacterAppearance c, bool close) =>
-        FindMesh(c.BodyMesh) is { } body && IsPrepared(body, close) && c.Parts.All(p => FindMesh(p.Mesh) is not { } path || IsPrepared(path, close));
+        FindMesh(c.BodyMesh) is { } body && IsPrepared(body, close)
+        && c.Parts.All(p => FindMesh(p.Mesh) is not { } path
+            || (ArmourClipFix.ForPart(c, p, FindMesh) is { } fit ? IsFittedPrepared(path, close, fit) : IsPrepared(path, close)));
 
     /// <summary>
     /// Whether a mesh file has been prepared (for any skeleton), as a close-up or with its levels.
@@ -1087,6 +1154,16 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>
+    /// Whether a fitted armour mesh has been prepared (for any skeleton), as a close-up or with its levels.
+    /// </summary>
+    bool IsFittedPrepared(string path, bool close, ArmourClipFix.Spec fit)
+    {
+        string key = path.ToLowerInvariant();
+        foreach (var (k, lazy) in _fittedPrepared) if (k.Path == key && k.Close == close && k.Fit == fit && lazy.IsValueCreated) return true;
+        return false;
+    }
+
+    /// <summary>
     /// Starts preparing <paramref name="c"/>'s skeleton and meshes on a worker; null when it has no body mesh.
     /// </summary>
     Task? Start(CharacterAppearance c, bool urgent, bool close)
@@ -1094,7 +1171,7 @@ internal sealed class CharacterContent : IDisposable
         var bodyPath = FindMesh(c.BodyMesh);
         if (bodyPath is null) return null;
         var parts = c.Parts.Select(p => (Path: FindMesh(p.Mesh), Shared: p.Mode == AttachMode.SharedSkeleton, Scale: PartLodScale(c,
-            p), Pack: PackSways(c, p))).Where(p => p.Path is not null).ToList();
+            p), Pack: PackSways(c, p), Fit: ArmourClipFix.ForPart(c, p, FindMesh))).Where(p => p.Path is not null).ToList();
         var partMap = PartMapPath(c);
         float pixels = LodPixelsPerRadian;
         Interlocked.Increment(ref _fetchesRunning);
@@ -1105,10 +1182,13 @@ internal sealed class CharacterContent : IDisposable
                 if (BodySkeletonName(bodyPath) is not { } name || Rig(name) is not { } rig) return true;
                 var limbs = LimbHideOf(c, rig);
                 _ = Prepare(bodyPath, rig.BoneCount, 1, true, pixels, limbs, close, partMap: partMap).Value;
-                foreach (var (path, shared, scale, pack) in parts)
+                foreach (var (path, shared, scale, pack, fit) in parts)
                 {
-                    _ = Prepare(path!, shared ? rig.BoneCount : null, scale, false, pixels, shared ? limbs : null, close, worn: shared,
-                        sway: pack ? PackBake(rig) : null).Value;
+                    var sway = pack ? PackBake(rig) : null;
+                    _ = (fit is not null
+                        ? PrepareFitted(path!, shared ? rig.BoneCount : null, scale, pixels, shared ? limbs : null, close, shared, sway, fit)
+                        : Prepare(path!, shared ? rig.BoneCount : null, scale, false, pixels, shared ? limbs : null, close, worn: shared,
+                            sway: sway)).Value;
                 }
             }
             catch (Exception)
@@ -1913,8 +1993,11 @@ internal sealed class CharacterContent : IDisposable
 
             // An animal's fur is a shell over the whole body (5.5k triangles on the bonedog, more than its body), not a few hair cards: it takes the
             // rule's own distances.
-            var loaded = Mesh(path, shared ? rig.BoneCount : null, PartLodScale(c, part), limbs: limbs, close: close, worn: shared,
-                sway: PackSways(c, part) ? PackBake(rig) : null);
+            var sway = PackSways(c, part) ? PackBake(rig) : null;
+            var fit = ArmourClipFix.ForPart(c, part, FindMesh);
+            var loaded = fit is not null
+                ? FittedMesh(path, shared ? rig.BoneCount : null, PartLodScale(c, part), limbs, close, shared, sway, fit)
+                : Mesh(path, shared ? rig.BoneCount : null, PartLodScale(c, part), limbs: limbs, close: close, worn: shared, sway: sway);
             if (loaded is null || loaded.Gpu.Parts.Count == 0) continue;
             var ap = new AssetPart
             {
