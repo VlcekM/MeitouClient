@@ -40,6 +40,12 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
     }
 
     /// <summary>
+    /// <c>lighting</c>: the mod's hook into the game's lighting shaders (docs/modding.md "Lighting hooks"); null when it has none. A game older
+    /// than the key ignores it.
+    /// </summary>
+    public CodeModLighting? Lighting { get; init; }
+
+    /// <summary>
     /// The declared dependencies, in manifest order; empty when the manifest has none.
     /// </summary>
     public IReadOnlyList<CodeModDependency> DependsOn => Dependencies ?? [];
@@ -103,6 +109,7 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
             LoadAfter = ReadLoadAfter(root, id),
             Incompatible = ReadIncompatible(root, id),
             GameVersion = ReadGameVersion(root),
+            Lighting = CodeModLighting.Read(root),
         };
     }
 

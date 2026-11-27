@@ -194,6 +194,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The look presets.
     /// </summary>
     internal LookPresets LookPresets => field ??= new(this);
+
+    /// <summary>
+    /// The code mods' settings that belong to the look, which the look presets hold and set.
+    /// </summary>
+    internal LookModSettings LookMods => field ??= new(() => ModSettings());
     /// <summary>
     /// The Graphics page's look and quality rows.
     /// </summary>
@@ -588,6 +593,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     public Func<IReadOnlyList<ModSettingsGroup>> ModSettings { get; init; } = () => [];
 
+    /// <summary>
+    /// The enabled mods' names and folders, in load order: where the look bar finds the look presets mods ship.
+    /// </summary>
+    public Func<IReadOnlyList<(string Name, string Folder)>> ModFolders { get; init; } = () => [];
+
     #endregion
 
     #region Rows
@@ -731,7 +741,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 or "Fog" or "Lit dust" or WorldFrame.WetWorldSwitch => "Sky & weather",
             "Tone map and grade" or "Adaptive exposure" or "Night grading" or "Dithering" => "Colour",
             "Heat haze" or WorldFrame.BloomSwitch or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch or WorldFrame.VignetteSwitch
-                or WorldFrame.FilmGrainSwitch => "Post FX",
+                or WorldFrame.FilmGrainSwitch or WorldFrame.LetterboxSwitch => "Post FX",
             "Skin" or "Character levels" or "Advanced materials" or "Blood on weapons and gear" or "Blood cells" or "Blood on surfaces"
                 or "Bolt tracers" or WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch or WorldFrame.MaterialSkinSwitch
                 or WorldFrame.MaterialEyesSwitch or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialPolishSwitch
@@ -760,7 +770,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             || WorldFrame.HighCloudSliders.Contains(label) || WorldFrame.ParticleSliders.Contains(label))
             return "Sky & weather";
         if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Adaptive exposure")) return "Colour";
-        if (S("Bloom") || S("Depth of field") || S("Heat haze") || S("Vignette") || S("Film grain")) return "Post FX";
+        if (S("Bloom") || S("Depth of field") || S("Heat haze") || S("Vignette") || S("Film grain") || S("Letterbox")) return "Post FX";
         if (label == WorldFrame.CharacterDistanceSlider) return "Characters";
 
         return "Objects";   // object, landmark and town distances, object LOD
@@ -938,6 +948,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             WorldFrame.DofApertureSlider or WorldFrame.CameraEffectsSwitch => SwitchOn(WorldFrame.DepthOfFieldSwitch),
             WorldFrame.VignetteStrengthSlider => SwitchOn(WorldFrame.VignetteSwitch),
             WorldFrame.GrainStrengthSlider => SwitchOn(WorldFrame.FilmGrainSwitch),
+            WorldFrame.LetterboxAspectSlider => SwitchOn(WorldFrame.LetterboxSwitch),
             _ => true,
         };
     }

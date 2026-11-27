@@ -119,6 +119,11 @@ static partial class NativeShaders
             uint atmoLayerTile;
             uint atmoLayerNormal;
             vec4 foliageNear;
+            vec4 modLight[32];
+            uint modTexture0;
+            uint modTexture1;
+            uint modTexture2;
+            uint modTexture3;
         } frame;
 
         """;
@@ -256,6 +261,9 @@ static partial class NativeShaders
         ["uFogVolumeEye"] = "frame.fogVolumeEye", ["uFogVolumeInfo"] = "frame.fogVolumeInfo", ["uFogVolumeData"] = "frame.fogVolumeData",
         ["uGrassRayReach"] = "frame.grassRayReach", ["uWetClock"] = "frame.wetClock", ["uWetWorld"] = "frame.wetWorld",
         ["uWetSplash"] = "frame.wetSplash", ["uFoliageNear"] = "frame.foliageNear",
+        ["uModLight"] = "frame.modLight",
+        ["uModTexture0"] = "textures2D[frame.modTexture0]", ["uModTexture1"] = "textures2D[frame.modTexture1]",
+        ["uModTexture2"] = "textures2D[frame.modTexture2]", ["uModTexture3"] = "textures2D[frame.modTexture3]",
         ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
         ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
         ["uLightGrid"] = "frame.lightGrid", ["uLightCells"] = "textures2D[frame.lightCells]", ["uLightIndex"] = "textures2D[frame.lightIndex]",
@@ -437,7 +445,7 @@ static partial class NativeShaders
 /// <summary>
 /// The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 8992)]
+[StructLayout(LayoutKind.Explicit, Size = 9520)]
 unsafe struct FrameConstants
 {
     /// <summary>
@@ -738,6 +746,31 @@ unsafe struct FrameConstants
     [FieldOffset(8976)] public Vector4 FoliageNear;
 
     /// <summary>
+    /// <c>uModLight[32]</c>: the code mods' lighting hooks' switches and parameters (<c>LightingHooks.Values</c>).
+    /// </summary>
+    [FieldOffset(8992)] public fixed float ModLight[128];
+
+    /// <summary>
+    /// The bindless indices of <c>uModTexture0</c> to <c>uModTexture3</c>, the lighting hooks' textures (<c>LightingHookTextures</c>).
+    /// </summary>
+    [FieldOffset(9504)] public uint ModTexture0;
+
+    /// <summary>
+    /// See <see cref="ModTexture0"/>.
+    /// </summary>
+    [FieldOffset(9508)] public uint ModTexture1;
+
+    /// <summary>
+    /// See <see cref="ModTexture0"/>.
+    /// </summary>
+    [FieldOffset(9512)] public uint ModTexture2;
+
+    /// <summary>
+    /// See <see cref="ModTexture0"/>.
+    /// </summary>
+    [FieldOffset(9516)] public uint ModTexture3;
+
+    /// <summary>
     /// The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.
     /// </summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -751,7 +784,7 @@ unsafe struct FrameConstants
         ("uGrassRayReach", 8696, 4), ("uWetClock", 8700, 4), ("uWetWorld", 8704, 4), ("uWetSplash", 8720, 128),
         ("uAtmoLayerLight", 8848, 16), ("uAtmoLayerSun", 8864, 16), ("uAtmoLayerWind", 8880, 16), ("uAtmoLayerMeitou", 8896, 16),
         ("uAtmoLayerKey", 8912, 16), ("uAtmoLayerKeyDir", 8928, 16), ("uAtmoLayerAmbient", 8944, 16),
-        ("uFoliageNear", 8976, 16),
+        ("uFoliageNear", 8976, 16), ("uModLight", 8992, Sky.LightingHooks.MaxVectors * 16),
     ];
 
     /// <summary>
@@ -770,6 +803,8 @@ unsafe struct FrameConstants
         ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692),
         ("uAtmoLayerClouds", BindlessKind.Texture2D, 8960), ("uAtmoLayerTile", BindlessKind.Texture2D, 8964),
         ("uAtmoLayerNormal", BindlessKind.Texture2D, 8968),
+        ("uModTexture0", BindlessKind.Texture2D, 9504), ("uModTexture1", BindlessKind.Texture2D, 9508),
+        ("uModTexture2", BindlessKind.Texture2D, 9512), ("uModTexture3", BindlessKind.Texture2D, 9516),
     ];
 }
 

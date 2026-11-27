@@ -174,6 +174,7 @@ static class LauncherSchema
         Graphics(WorldFrame.DofApertureSlider, 0.25f, 22, 0.05f, new PostOptions().DofAperture) with { Logarithmic = true, Format = "0.00" },
         Graphics(WorldFrame.VignetteStrengthSlider, 0, 1, 0.05f, new PostOptions().VignetteStrength) with { Format = "0.00" },
         Graphics(WorldFrame.GrainStrengthSlider, 0, 1, 0.05f, new PostOptions().GrainStrength) with { Format = "0.00" },
+        Graphics(WorldFrame.LetterboxAspectSlider, Letterbox.MinAspect, Letterbox.MaxAspect, 0.01f, Letterbox.DefaultAspect) with { Format = "0.00" },
     ];
 
     /// <summary>

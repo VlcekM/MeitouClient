@@ -44,8 +44,9 @@ rows above its tabs:
   look sliders at the game's value (the one the label names, "(0 = game)"), a strength under a switch kept. It is a starting
   point: changes from it are counted ("N changes from the game", Revert). It leaves the pure-performance switches alone (Mesh
   welding, Far impostors, Foliage levels, Character levels: `PerformanceSwitches`), which save memory or time without changing
-  the picture. Meitou shows the active **preset** (`lookPreset`): Meitou (built in), examples (Hot and dry, Vanilla colours),
-  the player's. A preset is Meitou plus the look values it sets, keyed as `meitou.user.json` saves them; changes from it are
+  the picture. Meitou shows the active **preset** (`lookPreset`): Meitou (built in), the player's and those the enabled mods ship
+  ([modding](modding.md), "Look presets"; marked with the mod's name, not saved over or deleted). A preset also holds the mods' look
+  settings (`mods`). A preset is Meitou plus the look values it sets, keyed as `meitou.user.json` saves them; changes from it are
   unsaved (Revert, Save for one's own; Save as, Delete). Files `presets/<name>.json` beside `meitou.user.json` (`format`,
   `name`, `meitou` = the build's tag, `values`); Share copies `MT1:` + base64 of the deflated JSON, Paste adds one (at most
   64 KiB inflated; names at most 40 characters, `LookPresetFile`, shared with the launcher). A preset whose file fails to write is

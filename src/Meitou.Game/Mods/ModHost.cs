@@ -241,6 +241,16 @@ public sealed class ModHost
     internal ModGlows Glows => _registry.Glows;
 
     /// <summary>
+    /// The mods' post passes (docs/modding.md "Post passes"), which the post chain runs each frame.
+    /// </summary>
+    internal ModPostPasses PostPasses => _registry.PostPasses;
+
+    /// <summary>
+    /// The mods' overrides of the look settings (docs/modding.md "Graphics overrides"), laid over the options while the world is drawn.
+    /// </summary>
+    internal Game.Rendering.Post.GraphicsOverrides Graphics => _registry.Graphics;
+
+    /// <summary>
     /// The mods' display-only ribbon trails (docs/modding.md "Trails"), sampled and handed to the particles by the host once a frame.
     /// </summary>
     internal ModTrails Trails => _registry.Trails;
@@ -805,12 +815,15 @@ public sealed class ModHost
     void Initialize(LoadedMod mod, ModHostOptions options)
     {
         var context = new ModContext(mod, _registry, options.Data, options.Population, options.World, options.SavedSettings?.Invoke(mod.Manifest.Id));
+        Game.Rendering.Sky.LightingHooks.Switch(context.Id, true);
         try
         {
             mod.Instance!.Initialize(context);
         }
         catch
         {
+            Game.Rendering.Sky.LightingHooks.Switch(context.Id, false);
+            _registry.Graphics.Drop(context.Id);
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
             _registry.Effects.Drop(context.Id);
             _registry.Glows.Drop(context.Id);

@@ -82,7 +82,7 @@ sealed class PresetNamingDialog(SettingsMenu menu)
     }
 
     /// <summary>
-    /// Saves the look under the name typed, unless it is empty or a built-in preset's.
+    /// Saves the look under the name typed, unless it is empty or the name of a look that is not the player's (Meitou's, a mod's).
     /// </summary>
     void Finish()
     {
@@ -93,7 +93,7 @@ sealed class PresetNamingDialog(SettingsMenu menu)
             return;
         }
 
-        if (IsBuiltInName(name))
+        if (menu.LookPresets.IsFixedName(name))
         {
             menu.Notice = $"{name} is a built-in preset: choose another name.";
             return;
@@ -102,13 +102,6 @@ sealed class PresetNamingDialog(SettingsMenu menu)
         Open = false;
         if (menu.LookPresets.SaveLook(name) is { } saved) menu.Notice = $"Saved as {saved.Name}.";
     }
-
-    /// <summary>
-    /// Whether a name is Meitou's look or one of the example looks (case ignored).
-    /// </summary>
-    static bool IsBuiltInName(string name) =>
-        name.Equals(LookPresets.MeitouLook.Name, StringComparison.OrdinalIgnoreCase)
-        || LookPresets.ExampleLooks.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The line naming the active look and how many of its settings were changed.

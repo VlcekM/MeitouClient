@@ -1379,6 +1379,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             RenderResolutionLabels = RenderResolutionLabels,
             GameplayChanged = host.Saves.ApplyGameplay,
             ModSettings = () => host.Modding.Mods?.Settings ?? [],
+            ModFolders = host.Modding.EnabledModFolders,
             AttackSlotsChanged = slots =>
             {
                 foreach (var combat in host.Session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots);

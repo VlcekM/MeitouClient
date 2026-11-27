@@ -86,7 +86,7 @@ the game ([Loading](#loading)). The Metal backend's types (macOS builds only) ar
   (`CodeModManifest`). `id`: letters, digits, `. _ -`, at most 64; it keys the mod's save data, Harmony instance and log lines.
   `assemblies`: DLL file names in the mod folder, loaded in order. `entry`: the full name of the `IMod` type. Comments and trailing
   commas are allowed. API 2 adds optional `version`, `dependencies`, `loadAfter`, `incompatible` and `gameVersion`
-  ([dependencies](modding-dependencies.md)).
+  ([dependencies](modding-dependencies.md)). Optional `lighting`: the mod's lighting hook ("Lighting hooks" below).
 - `ModInfo.HasCode` reports it beside `HasNativePlugin`; the launcher marks such mods.
 - Load set: the enabled mods of `mods.cfg` in order, filtered to those with a manifest. A disabled mod's DLL is never opened. Changes take
   effect at the next launch, like data mods.
@@ -325,6 +325,96 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   The original Elemental Enchantment's `SB_Prototype_Fire` kept on both duellists' `Weapon` (a katana: weapon length 21.15 world units,
   stretch 2.49) burned along each blade from near the hilt to the tip and stayed on it mid-swing; its `SB_Prototype_IceBlade` showed a
   faint cyan mist along a blade. Not seen: a `Worn` target, a `Building` anchor (no player or nest building in the duel).
+- **Post passes:** `AddPostPass(new PostPass(name, fragment) { Stage, Order, Prepare })` (`PostPass.cs`) adds a full-screen pass to the frame's
+  post chain; the game compiles it when it first runs, makes its pictures, binds its inputs and times it, so a mod patches nothing in
+  `PostProcess`. `Stage`: `PostStage.Scene` is the scene in linear HDR at the display size, after the upscaler and the depth of field and
+  before the exposure's measure, the bloom and the tone map; `PostStage.Picture` (the default) the finished picture after the tone map, grade,
+  anti-aliasing and heat haze, before the interface (0..1, above 1 in HDR output: `PostPassFrame.Hdr`). Passes of a stage run by `Order`, then
+  registration, each reading the one before; at most `PostPass.MaxPerMod` (32) a mod. `fragment` is whole GLSL as the game's post shaders:
+  `#version 330 core`, `in vec2 vUv;` (0..1 over the picture), one `out vec4`. Declared by these names the game binds `uniform sampler2D
+  uImage` (the picture so far, linear, clamped), `uniform sampler2D uDepth` (the scene's depth at the render size, nearest; read through
+  `PostPass.DepthGlsl`: `depthIsSky`, `depthViewZ(d, uPlanes)`, as the convention differs per backend) and `uniform sampler2D uNormal` (the
+  lit surfaces' normals, read through `PostPass.NormalGlsl`'s `meitouNormal(uv)`: world space, zero where none: the sky and
+  foliage cards; Vulkan. While a pass that declares it is on, from the frame after it first ran, the scene keeps its surface target and
+  every lit fragment stores its normal there (`uGiParams.z` bit 32), whether or not the indirect light's resolve or the reflections are on,
+  and the chain copies the normals out each frame before later passes reuse that target's memory, into two 16-bit channels at the render
+  size, 4 bytes a pixel: `PostProcess.CopySurfaceNormals`),
+  and sets `uniform vec2 uViewport` (pixels), `uniform vec2 uPlanes` (near, far) and
+  `uniform float uTime` (seconds, wrapped hourly). `Prepare(PostPassFrame)` runs on the render thread each frame the pass is on, before the
+  stage draws: it sets the pass's own uniforms by name (`Set`: float, int, vec2 to vec4, mat4; an unused name is ignored), reads the picture's
+  size, the scene camera (`FieldOfView`, `Aspect`, `Near`, `Far`, `View`, `Eye`), `Seconds`, `HasScene`, `HasNormals`, `Hdr`, `TopDown` (Metal:
+  `vUv.y` 0 is the top row), and may set `Skip` to leave the frame out. `PostPass.Enabled` turns a pass on and off at any time, from any thread.
+  With no pass on in a stage the chain draws as without mods: no picture is made, no pass added. A fragment that does not compile, or a
+  `Prepare` that throws, turns the pass off for the session (`PostPass.Fault`, one log line with the compiler's message). Not run in a tile of
+  a tiled screenshot (a pass works on the whole view). Both backends (`PostPassRunner`, called by `PostProcess` and `PostComposite`); Metal has
+  no normals and takes no GPU time for a pass, and is untested. **Verified** by `ModPostPassTests` (a Vulkan device, validation and
+  synchronization validation on): a scene pass, then two picture passes in order with a uniform from `Prepare`, the depth and the
+  stand-in normals, with and without TAA and FXAA; a broken fragment and a throwing `Prepare` turned off; every pass off draws the plain chain.
+  **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod in a new game, offscreen): a scene pass tinting the picture before the
+  tone map, a picture pass drawing depth outlines and the surfaces' normals under the interface, the normals also with the indirect light
+  and the reflections off, and with the sun shadows off as well (the lean lighting programs).
+- **Graphics overrides:** `context.Graphics` (`ModGraphics`) lays a mod's values over the player's look settings for as long as the mod
+  holds them, without changing what the player set: `Override(setting, value)` (clamped to the setting's range, a switch on from 0.5),
+  `Release(setting)`, `ReleaseAll()`, `Get(setting)` (the player's value, whatever is laid over it) and `Settings`, the keys: those of
+  `meitou.user.json`'s `graphics` and of the look presets, a slider's label or `Meitou: ` and a switch's. The settings are the post chain's
+  look (`GraphicsOverrides`): the sliders of tone map, grading, heat haze, bloom, vignette, film grain, depth of field aperture, night
+  grading and adaptive exposure, and the Letterbox aspect, and the switches `Bloom`, `Depth of field`, `Vignette`, `Film grain`,
+  `Letterbox`, `Camera effects in the strategy camera`, `Tone map and grade` and `Night grading`. The overrides are in the options only while the world is drawn (`GameHost.DrawWorld`
+  lays them on before and puts the player's values back after), so the settings menu shows the player's values, a change made there stays,
+  and nothing of a mod's reaches `meitou.user.json` or a preset. Of two mods overriding one setting the one that set its override last wins;
+  a mod that fails in `Initialize` loses its own. An override lasts until released, across a load. Call on the host's thread. Both
+  backends (the options are shared). **Verified** by `GraphicsOverridesTests` (laid on and taken back, the player's value read meanwhile,
+  the clamp, the order of two mods, release and drop). **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod, offscreen): the vignette and
+  the grain at 1 drawn over a new game while `Get` read the player's off and 0.35 and the settings file held nothing of it.
+- **Lighting hooks:** `"lighting": { "file": "toon.glsl", "params": { "strength": 1.0 }, "textures": { "ramp": "ramp.png" } }` in
+  `meitou.json` (`CodeModLighting`) puts a mod's
+  GLSL into `kenshiLight`, the one function every lit surface goes through (terrain, buildings, characters, foliage, grass, debris,
+  impostors; `AtmosphereShaders.Functions`), with no Harmony patch on the shader compiler. The file defines any of
+  `vec3 hookAlbedo(vec3 albedo)` (the surface colour before it is lit),
+  `vec3 hookLight(vec3 light, vec3 sun, vec3 sky, vec3 n, vec3 v)` (`light`: what the albedo is multiplied by, the diffuse light of the
+  sun, the sky or the probes and the lamps; `sun`: the sun as it reaches the point, shadowed, on a surface facing it; `sky`: the light with
+  no sun in it, the sky's or the probes' and the lamps', so `light` never exceeds `sun + sky`; `n` the shading normal, `v` towards the eye)
+  and `vec3 hookLit(vec3 lit, vec3 albedo, vec3 n, vec3 v, vec3 world)` (the lit colour with its speculars, before the haze). It also
+  reads `hookSunDirection` (towards the sun), `hookSunColour`, `hookWorld` (the lit point) and `hookSeconds` (the game clock, wrapping at
+  4096), set before the hooks run. Hooks of several mods run in load order, each behind its own switch. A parameter is read in the GLSL as
+  `PARAM_name` and set while the game runs: `context.Lighting` (`LightingHook`, null without an installed hook) has `Enabled`,
+  `Set(name, value)`, `Get(name)` and `Params`, from any thread, drawn from the next frame with no recompile. The switches and parameters
+  are one frame-global array (`uModLight[32]`: 128 numbers for every mod, one switch and at most 31 parameters each;
+  `FrameConstants.ModLight` in the native model, both backends). A texture is read in the GLSL as `TEXTURE_name`, a `sampler2D`
+  (`texture(TEXTURE_ramp, uv)`): `textures` names each image in the mod's folder, as its file (`"ramp": "ramp.png"`: the edge pixels go on
+  past the image) or as `{ "file": "noise.png", "repeat": true }` (it tiles); PNG, TGA, JPG or the top level of a DDS, kept as RGBA 8 bits a
+  channel as the file holds them (no colour conversion), with mip levels made from it, loaded once at the start. The hooks hold 4
+  textures together (`uModTexture0` to `3`, `LightingHookTextures`): frame globals, read through the bindless table by a native program
+  and as a sampler of its own by a legacy one (each is then one of the 16 direct samplers a Metal fragment stage has). A hook past the
+  fourth texture is left out; an image that cannot be loaded is logged and reads black. The hook is off until the mod's `Initialize` starts (so not over the
+  title) and off again when it throws; with every hook off the hooks' part of the shader is skipped whole.
+  The files are read from the manifests at the game's start (`GameMods.InstallLightingHooks`), before any lit program is compiled, because
+  the lighting text is made once: a file changed later takes effect at the next start (**Observed**, 2026-11-27: a tint changed in the file
+  while a hidden session ran kept its colour until the game was started again). Every name a file declares at file scope (function,
+  constant, struct, macro) gets a name of its own in the shaders (`LightingHookFile`: `meitouHook<n>_<name>`, every use renamed with it), so
+  a helper may have any name and two mods may share one. A file is left out, with a log line, when it holds `#version`, `#extension`,
+  `#include` or `#pragma`; `uniform`, `in`, `out` or `layout` at file scope (no input of its own beside the declared textures); `discard`, a
+  derivative or `gl_Frag*` (the grass lights its vertices); a declared name that reads as a swizzle (`xy`, `rgb`) or starts with `gl_`,
+  `meitou`, `PARAM_` or `TEXTURE_`; a declaration the check cannot read (the name must follow its type); or when the hooks so far plus this one do not compile
+  together in a scratch vertex and fragment stage. It sees its own names, its `PARAM_`s and `TEXTURE_`s and the four inputs above, not the game's functions
+  or uniforms. Without an installed hook the lighting text is the game's own, character for character.
+  What later passes add follows the hooks (`LightingHooks.BeforeReturn`): the traced sun's term is written as the hooked colour with the sun
+  less the hooked colour without it, so it is exact where a ray's mask is 0 or 1 and a straight line across a penumbra; the albedo the lit
+  fragments store for the indirect light's resolve, the reflections and the lamps' traced shadows is the hooked albedo times the gain the
+  hooks gave the light and the lit colour (clamped to 1), so those passes add and take back hooked light to the first order: a `hookLight`
+  that bands the light keeps the bands it made from the sky's ambient, and the probes' share changes them smoothly. `file`: a path inside the
+  mod's folder, at most 128 KiB; `params`: names of letters, digits and `_` (at most 32 characters) with the number each starts at. An older
+  game ignores the key.
+  **Verified** by `LightingHookTests`: the manifest's textures, their samplers in order and the refusal past the fourth; the file checks
+  and the renaming; two hooks with the same helper name installed and compiled
+  together, a broken one and one calling a game function refused, none taken once the text is made; the lighting text with the hooks in
+  compiles as a lit vertex stage and a lit fragment stage, and without a hook is the same text. `NativeShaderTests` checks the frame
+  block's layout with `modLight`.
+  **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod in a new game, offscreen): the hook installed at the start, every
+  program compiled; `hookLight` banding the ground's light by day with the cascades and with the traced sun, traced lamp shadows and
+  reflections on (the two pictures differ as the game's own two do, at the shadows' edges), the lamps' light kept at night; `hookAlbedo`
+  saturating and `hookLit` tinting every lit surface, each by its parameter; a clamped ramp image and a tiling hatch image read by
+  `hookLight` on the terrain, the buildings and the foliage; switched off, the picture is the same as without the mod, pixel for pixel.
 - **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
   blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
   armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim
@@ -1415,7 +1505,7 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   cut to 200 characters. A source that throws or gives a reply without a text or press is logged once and dropped; a press that throws is
   logged. Without a source the conversation window is as before. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
-  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
+  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen, Look)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page
   ([native UI](native-ui.md#settings)): `bool` an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a
   hundredth of the range otherwise), an enum or a `string` with Options a list, a `string` without Options a free text box (one line, at most
@@ -1431,7 +1521,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   they were, not snapped to the step (Restore defaults also drops every kept mod value). The page sets a changed property at once on the interface's
   thread, outside the tick, and raises the returned group's `Changed`; a throw from the setter or a handler is logged and shown as the page's
   notice. A value the mod sets itself with `ModSetting.Set` or `Reset` (a window's place, an in-game slider) raises `Changed` the same way and is
-  kept in `meitou.user.json` like the page's; call them on the interface's thread. A slider's arrow keys move one Step. A property of type `Action`
+  kept in `meitou.user.json` like the page's, the file written 2 s after the last change of a mod's setting or preset
+  (`GameMods.WriteModSettings`) and when the game closes; call them on the interface's thread. A slider's arrow keys move one Step. A property of type `Action`
   (a public get is enough) is a button row: its caption the attribute's `Button` (else the label), a click (or `ModSetting.Press()`) runs the
   delegate on the interface's thread, a throw logged and shown as the page's notice; it keeps no value and Reset passes it by. Named presets
   (`ModSettingsGroup`): `SavePreset(name)` keeps every value setting's value under a name (1 to 64 characters on one line, at most 64 presets;
@@ -1440,6 +1531,20 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   id, preset, key, text), not dropped by Restore defaults, and read once the game starts the mods (after `Initialize`). With buttons and a text
   setting for the name a mod builds its own preset slots. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
   `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group).
+- **Look presets:** `Look = true` on a `[Setting]` makes it part of the look ([native UI](native-ui.md#settings), `LookModSettings`): the
+  Graphics page's look presets hold its value (`mods` in the preset file and its share code: mod id, setting key, the saved text; only values
+  that are not the default), set it when a preset is chosen (through `ModSetting`'s own set, raising `Changed`; back to the default for a
+  preset that holds none, as Meitou; a held value that is no longer one of the setting's falls back to the default too), and count it among the
+  "unsaved changes" when it differs. A preset keeps the values of a mod that is not running when it is saved again. Faithful leaves the mods'
+  settings alone. A mod ships presets as files: `presets/*.json` in its folder (any enabled mod, with code or without; the look preset
+  format: `format`, `name`, `meitou`, `values` by the keys `meitou.user.json`'s `graphics` uses, optional `mods`), listed in the look
+  drop-down after the player's with the mod's name, in load order; a name a look already has is left out, and the player cannot save over
+  one (Save as makes a copy). A game older than `Look` fails reading the attribute, so a mod using it sets `gameVersion`; an older game or
+  launcher ignores `mods` in a preset. The launcher lists the mods' presets too and writes a chosen preset's `mods` values
+  ([launcher](launcher.md)). **Verified** by `LookModSettingsTests` (capture, apply, count; the file and code round trip, a save without mod values keeping the file's). **Observed** (2026-11-27: the look drop-down drawn
+  with a scratch mod's preset, `--settings-showcase`; with the mods' settings given to that menu for the run, choosing the mod's preset set its
+  look setting and the picture took the mod's tint, and Meitou or another preset put it back; a setting the mod changed itself was in
+  `meitou.user.json` 2 s later, the game still running).
 - **Translations:** `context.Language` is the game's locale code (`en_GB` for English, `ru_RU`, `zh_CN`, a translation mod's own; fixed for
   the process). `context.AddTranslations(domain, folder = null)` (in `Initialize`) reads the gettext catalogue
   `<folder>/locale/<language>/LC_MESSAGES/<domain>.mo` (else `.po`) of that language: the folder named by the code ignoring case, else the first

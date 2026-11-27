@@ -81,6 +81,11 @@ public sealed unsafe class SkyRenderer : IDisposable
     readonly SkyTextures _textures;
 
     /// <summary>
+    /// The code mods' lighting hooks' textures on this device (made with the frame globals).
+    /// </summary>
+    LightingHookTextures? _hookTextures;
+
+    /// <summary>
     /// Times the sky pass on the GPU.
     /// </summary>
     readonly PassTimer _skyTimer;
@@ -1229,6 +1234,8 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         var g = Gpu.Globals;
         bool Valid() => _state.Valid;
+        g.PublishUniformArray("uModLight", LightingHooks.Values, () => LightingHooks.Vectors);
+        _hookTextures = new LightingHookTextures(Gpu);
         g.Publish("uAtmoIrradiance", () => _state.Valid && _textures.Irradiance is { } t ? t.Sampled() : default);
         g.Publish("uAtmoSpecular", () => _state.Valid && _textures.Specular is { } t ? t.Sampled() : default);
         g.Publish("uAtmoAmbientMap", () => _state.Valid && _textures.Ambient is { } t ? t.Sampled() : default);
@@ -1515,6 +1522,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     public void Dispose()
     {
         if (Active == this) Active = null;
+        _hookTextures?.Dispose();
         _textures.Dispose();
         Clouds.Dispose();
         _simple.Dispose();

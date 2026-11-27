@@ -4,6 +4,7 @@ using Meitou.Game;
 using Meitou.Game.DevTools;
 using Meitou.Game.Effects;
 using Meitou.Game.Host;
+using Meitou.Game.Rendering.Sky;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Population;
@@ -80,6 +81,87 @@ sealed class GameMods(GameHost host)
     World? _trailsFor;
 
     /// <summary>
+    /// The enabled mods' names and folders, in load order, read once (<see cref="EnabledModFolders"/>).
+    /// </summary>
+    List<(string Name, string Folder)>? _modFolders;
+
+    /// <summary>
+    /// How long after the last change of a mod's setting the config is written: a slider dragged writes once.
+    /// </summary>
+    const double SettingsWriteSeconds = 2;
+
+    /// <summary>
+    /// When a mod's setting or preset last changed with the config not yet written (<see cref="System.Diagnostics.Stopwatch"/> ticks); 0: none.
+    /// </summary>
+    long _settingsChangedAt;
+
+    /// <summary>
+    /// The enabled mods (with code or without), each with its folder, in <c>mods.cfg</c> order: where the look bar finds the look presets
+    /// mods ship (docs/modding.md "Look presets"). Folders that cannot be read give none.
+    /// </summary>
+    internal IReadOnlyList<(string Name, string Folder)> EnabledModFolders()
+    {
+        if (_modFolders is not null) return _modFolders;
+
+        _modFolders = [];
+        try
+        {
+            var onDisk = Content.ModList.Discover(host.Install).ToDictionary(m => m.Name, StringComparer.Ordinal);
+            foreach (string name in Content.ModList.ReadEnabled(host.Install))
+            {
+                if (onDisk.GetValueOrDefault(name) is { } mod) _modFolders.Add((mod.Name, mod.Folder));
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return _modFolders;
+    }
+
+    /// <summary>
+    /// Installs the enabled code mods' lighting hooks (docs/modding.md "Lighting hooks") from their manifests, before any lit shader is made:
+    /// at the game's start, long before the mods' code runs. A hook that is left out is logged with the reason.
+    /// </summary>
+    internal void InstallLightingHooks()
+    {
+        var sources = new List<LightingHooks.Source>();
+        foreach (var mod in CodeMods().Enabled)
+        {
+            if (LightingSource(mod) is { } source) sources.Add(source);
+        }
+        if (sources.Count == 0) return;
+
+        foreach (var (id, reason) in LightingHooks.Install(sources))
+            Console.Error.WriteLine($"mod       {id}: lighting hook left out: {reason}");
+        Console.WriteLine($"mods      {LightingHooks.Installed.Count} lighting hook(s) in the lighting shaders");
+    }
+
+    /// <summary>
+    /// The lighting hook a mod's manifest declares, with its file's text; null without one. A manifest that cannot be read is reported when
+    /// the mod loads, a hook file that cannot here.
+    /// </summary>
+    static LightingHooks.Source? LightingSource(Content.ModInfo mod)
+    {
+        try
+        {
+            var manifest = Content.CodeModManifest.Read(Path.Combine(mod.Folder, Content.ModList.CodeManifestFile));
+            if (manifest.Lighting is not { } lighting) return null;
+
+            return new LightingHooks.Source(manifest.Id, lighting, File.ReadAllText(Path.Combine(mod.Folder, lighting.File)), mod.Folder);
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"mod       {mod.Name}: lighting hook left out: {e.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.
     /// </summary>
     internal void StartWarmup()
@@ -138,6 +220,8 @@ sealed class GameMods(GameHost host)
         LogEnabled(enabled.Count);
         Mods = ModHost.Load(Options(enabled, db, data, disabled));
         Mods.AudioModulations.Attach(host.Sound.Audio?.Player);
+        host.WorldOptions.Post.ModPasses = Mods.PostPasses;
+        Mods.Graphics.Bind(host.WorldOptions.Post);
 
         // No mod was found with a data phase, so an entry that is one anyway has it where the scan cannot see it.
         foreach (var mod in Mods.Mods.Where(m => m.Instance is IModDataPhase)) ModHost.NoteUnscannedDataPhase(mod);
@@ -155,21 +239,54 @@ sealed class GameMods(GameHost host)
         prepared.Start(Options(enabled, db, data));
         Mods = prepared;
         Mods.AudioModulations.Attach(host.Sound.Audio?.Player);
+        host.WorldOptions.Post.ModPasses = Mods.PostPasses;
+        Mods.Graphics.Bind(host.WorldOptions.Post);
         KeepModSettings(prepared);
     }
 
     /// <summary>
     /// Keeps a value a mod sets itself (ModSetting.Set, Reset) as the page's are, on either start path; the page's own change is kept twice, the
-    /// same value.
+    /// same value. Each change is also written to the file soon after (<see cref="WriteModSettings"/>).
     /// </summary>
     void KeepModSettings(ModHost mods)
     {
         foreach (var group in mods.Settings)
         {
             group.Changed += host.Config.KeepModSetting;
+            group.Changed += _ => NoteSettingsChanged();
+            group.PresetsChanged += _ => NoteSettingsChanged();
             group.UsePresets(host.Config.ModSettingPresets.GetValueOrDefault(group.ModId));
             group.PresetsChanged += host.Config.KeepModPresets;
         }
+    }
+
+    /// <summary>
+    /// Before the world is drawn: lays the mods' overrides of the look settings over the options (docs/modding.md "Graphics overrides").
+    /// </summary>
+    internal void ApplyGraphicsOverrides() => Mods?.Graphics.Apply();
+
+    /// <summary>
+    /// After the world is drawn: the options hold the player's values again.
+    /// </summary>
+    internal void RestoreGraphicsOverrides() => Mods?.Graphics.Restore();
+
+    /// <summary>
+    /// Notes that a mod's setting or preset changed and the config holds a value its file does not.
+    /// </summary>
+    void NoteSettingsChanged() => Volatile.Write(ref _settingsChangedAt, System.Diagnostics.Stopwatch.GetTimestamp());
+
+    /// <summary>
+    /// Once a frame: writes <c>meitou.user.json</c> when a mod's setting changed and none has for <see cref="SettingsWriteSeconds"/>, so a
+    /// value a mod sets from its own window or key is on disk before the game closes (a crash loses no more than those seconds).
+    /// </summary>
+    internal void WriteModSettings()
+    {
+        long changed = Volatile.Read(ref _settingsChangedAt);
+        if (changed == 0 || System.Diagnostics.Stopwatch.GetElapsedTime(changed).TotalSeconds < SettingsWriteSeconds) return;
+
+        // A change since the read keeps its own time: the next frames write again.
+        Interlocked.CompareExchange(ref _settingsChangedAt, 0, changed);
+        host.Config.Save();
     }
 
     /// <summary>

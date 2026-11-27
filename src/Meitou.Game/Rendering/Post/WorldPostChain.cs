@@ -106,6 +106,12 @@ interface IWorldPostChain
     bool SsrSurfaces { get; set; }
 
     /// <summary>
+    /// Whether a code mod's post pass reads the surfaces' normals this frame (docs/modding.md "Post passes"): the lit fragments then store
+    /// theirs whatever else is on. A chain without the passes' normals never asks.
+    /// </summary>
+    bool SurfaceNormalsWanted => false;
+
+    /// <summary>
     /// The sky's exposure band, read by the composite's exposure adaptation.
     /// </summary>
     (float Min, float Max)? AutoExposure { get; set; }

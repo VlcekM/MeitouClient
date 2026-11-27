@@ -6758,3 +6758,23 @@ msgstr "护甲穿模修复"
 #. machine-translated
 msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
 msgstr "调整女性角色穿戴的仅男性护甲网格以避免与身体穿模，并在未提供重叠网格时将长外套下的厚重腿甲向内收拢。适用于新加载或重新装备的角色。"
+
+#. machine-translated
+msgid "Letterbox"
+msgstr "黑边遮幅"
+
+#. machine-translated
+msgid "Letterbox aspect"
+msgstr "黑边画面比例"
+
+#. machine-translated
+msgid "black bars"
+msgstr "黑边"
+
+#. machine-translated
+msgid "Frame the world between black bars at the chosen picture shape, as a cinema screen, in every camera."
+msgstr "按所选画面比例用黑边框住世界画面，如同电影银幕，在所有镜头中。"
+
+#. machine-translated
+msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
+msgstr "原版游戏的画面铺满屏幕；Meitou 可以按黑边画面比例（默认 2.39:1，电影宽银幕）用黑边框住世界画面，绘制在界面之下，适用于所有相机（docs/render-post.md \"Letterbox\"）"

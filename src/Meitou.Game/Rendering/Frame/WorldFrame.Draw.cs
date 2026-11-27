@@ -293,6 +293,7 @@ static partial class WorldFrame
         {
             giProbes.Resolve = giResolve;
             giProbes.Reflections = reflections;
+            giProbes.SurfaceNormals = post.SurfaceNormalsWanted;
             giProbes.Relocate = giResolve && post.Options.GiRelocating;
             giProbes.CloudShadows = post.Options.GiCloudShadowing;
             giProbes.Rays = post.Options.GiMoreRays ? GiProbes.MaxRays : GiProbes.DefaultRays;

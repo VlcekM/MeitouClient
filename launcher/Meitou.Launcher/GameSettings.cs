@@ -137,6 +137,27 @@ sealed class GameSettings
     }
 
     /// <summary>
+    /// Saves a code mod's setting as the game keeps it (<c>modSettings</c>: mod id, setting key, the value's text), or removes it (null) so the
+    /// mod's default applies; a mod left without a value is removed too.
+    /// </summary>
+    public void SetModSetting(string mod, string key, string? text)
+    {
+        if (_root["modSettings"] is not JsonObject mods)
+        {
+            if (text is null) return;
+            _root["modSettings"] = mods = [];
+        }
+        if (mods[mod] is not JsonObject values)
+        {
+            if (text is null) return;
+            mods[mod] = values = [];
+        }
+        if (text is not null) values[key] = text;
+        else values.Remove(key);
+        if (values.Count == 0) mods.Remove(mod);
+    }
+
+    /// <summary>
     /// Removes a top-level key, so the game takes its default.
     /// </summary>
     public void Remove(string key) => _root.Remove(key);

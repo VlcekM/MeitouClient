@@ -1,3 +1,5 @@
+using Meitou.Data.Ui;
+
 namespace Meitou.Game.Settings;
 
 /// <summary>
@@ -6,9 +8,14 @@ namespace Meitou.Game.Settings;
 sealed class LookBar(SettingsMenu menu)
 {
     /// <summary>
+    /// Where the look drop-down is drawn, and its list opens from.
+    /// </summary>
+    UiRect LookDropDown => menu.Canvas.R(474, 99, 150, 28);
+
+    /// <summary>
     /// For the screenshot scenes: the look drop-down opened.
     /// </summary>
-    internal void ShowcaseOpenLooks() => menu.OpenChoice(menu.LookPresets.LookChoice, menu.Canvas.R(474, 99, 200, 28));
+    internal void ShowcaseOpenLooks() => menu.OpenChoice(menu.LookPresets.LookChoice, LookDropDown);
 
     /// <summary>
     /// For the screenshot scenes: the naming dialog opened.
@@ -59,20 +66,24 @@ sealed class LookBar(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The active look's drop-down and beside it its unsaved changes with Revert, or where the look comes from.
+    /// The active look's drop-down and beside it its unsaved changes with Revert, or where the look comes from. Revert sits left of the
+    /// player's own preset's Save, each with its own place: a changed preset of the player's shows both.
     /// </summary>
     void DrawNamedLook()
     {
+        // Save as, Share and Paste keep the row's right end; a preset of the player's has Save or Delete before them.
+        const float x = 872, ownWidth = 64, noteLeft = 632, revertWidth = 64, gap = 6;
         var look = menu.LookPresets.ActiveLook;
-        var at = menu.Canvas.R(474, 99, 200, 28);
+        var at = LookDropDown;
         menu.Canvas.DropDown(look.Name, at, () => menu.OpenChoice(menu.LookPresets.LookChoice, at));
         int changes = menu.LookPresets.LookChanges().Count;
         bool mine = look.Source == "mine";
+        float revertLeft = (mine ? x - ownWidth : x) - gap - revertWidth;
         if (changes > 0)
         {
             string count = changes == 1 ? "1 unsaved change" : $"{changes} unsaved changes";
-            menu.Canvas.Text(count, menu.Canvas.R(684, 98, 120, 30), 12, SettingsCanvas.Brass);
-            menu.Canvas.Button("Revert", menu.Canvas.R(800, 100, 66, 26), () =>
+            menu.Canvas.Text(count, menu.Canvas.R(noteLeft, 98, revertLeft - gap - noteLeft, 30), 12, SettingsCanvas.Brass);
+            menu.Canvas.Button("Revert", menu.Canvas.R(revertLeft, 100, revertWidth, 26), () =>
             {
                 menu.LookPresets.ApplyLook(look);
                 menu.Notice = $"Back to {look.Name}.";
@@ -80,11 +91,10 @@ sealed class LookBar(SettingsMenu menu)
         }
         else
         {
-            string source = look.Source == "built in" ? "Built in" : look.Source == "example" ? "Example" : $"Mine · Meitou {look.Made}";
-            menu.Canvas.Text(source, menu.Canvas.R(684, 98, 120, 30), 12, SettingsCanvas.MutedInk);
+            string source = look.Source == "built in" ? "Built in" : mine ? $"Mine · Meitou {look.Made}" : look.Source;
+            menu.Canvas.Text(source, menu.Canvas.R(noteLeft, 98, x - ownWidth - gap - gap - noteLeft, 30), 12, SettingsCanvas.MutedInk);
         }
 
-        const float x = 872;
         if (mine && changes > 0)
         {
             menu.Canvas.Button("Save", menu.Canvas.R(x - 64, 100, 58, 26), () =>

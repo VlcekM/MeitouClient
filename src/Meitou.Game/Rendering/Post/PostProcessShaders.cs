@@ -33,6 +33,58 @@ static class PostProcessShaders
         StringComparison.Ordinal);
 
     /// <summary>
+    /// The letterbox's bars over the finished picture (<see cref="Post.Letterbox"/>): black where a pixel is nearer an edge than <c>uBars</c>
+    /// (x: the share of the height the top and bottom bars take each, y: the share of the width the side bars take each), the picture left
+    /// as it is elsewhere.
+    /// </summary>
+    public const string Letterbox = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform vec2 uBars;
+        void main()
+        {
+            vec2 edge = min(vUv, 1.0 - vUv);
+            if (edge.y >= uBars.x && edge.x >= uBars.y) discard;
+            fragColour = vec4(0.0, 0.0, 0.0, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// The lit surfaces' normals out of the surface target into two 16-bit channels (<c>PostProcess.CopySurfaceNormals</c>): the shading normal's
+    /// octahedral position the lit fragments store for the GI resolve (the first two channels of <c>giAlbedoOut</c>,
+    /// <see cref="Sky.AtmosphereShaders"/>), moved up by one step so that 0 says nothing is stored there (the sky, a surface that stores none).
+    /// </summary>
+    public const string SurfaceNormalCopy = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform usampler2D uSurface;
+        void main()
+        {
+            uvec4 s = texelFetch(uSurface, ivec2(gl_FragCoord.xy), 0);
+            fragColour = s.xyz == uvec3(0u) ? vec4(0.0) : vec4((vec2(s.xy) * (65534.0 / 65535.0) + 1.0) / 65535.0, 0.0, 0.0);
+        }
+        """;
+
+    /// <summary>
+    /// <c>vec3 meitouNormal(vec2 uv)</c> for a mod's post pass (<see cref="Meitou.Modding.PostPass.NormalGlsl"/>), after its
+    /// <c>uniform sampler2D uNormal;</c>: the world-space shading normal <see cref="SurfaceNormalCopy"/> kept (decoded as <c>giOctDir</c>), or
+    /// zero where nothing is stored, as the stand-in of a frame without normals reads.
+    /// </summary>
+    public const string SurfaceNormal = "\n" + """
+        vec3 meitouNormal(vec2 uv)
+        {
+            vec2 s = texelFetch(uNormal, ivec2(uv * vec2(textureSize(uNormal, 0))), 0).rg;
+            if (s.x <= 0.0 && s.y <= 0.0) return vec3(0.0);
+            vec2 p = (s * 65535.0 - 1.0) / 65534.0 * 2.0 - 1.0;
+            vec3 d = vec3(p.x, 1.0 - abs(p.x) - abs(p.y), p.y);
+            if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
+            return normalize(d);
+        }
+        """ + "\n";
+
+    /// <summary>
     /// One lookup of <c>uImage</c> at <c>vUv</c>: with a nearest sampler, the picture stretched to the target's size with the nearest pixel.
     /// </summary>
     public const string Stretch = """

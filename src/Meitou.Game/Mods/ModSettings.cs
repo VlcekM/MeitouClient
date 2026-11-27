@@ -61,6 +61,12 @@ public sealed class SettingAttribute(string label) : Attribute
     /// A button's caption (an <see cref="System.Action"/> setting); empty: the label.
     /// </summary>
     public string Button { get; init; } = "";
+
+    /// <summary>
+    /// Whether the setting is part of the look (docs/modding.md "Settings"): the Graphics page's look presets then hold its value, set it when
+    /// chosen (back to its default for a preset that holds none) and count it when it differs.
+    /// </summary>
+    public bool Look { get; init; }
 }
 
 /// <summary>
@@ -141,6 +147,7 @@ public sealed class ModSetting
         Button = about.Button.Length > 0 ? about.Button : about.Label;
         SubGroup = about.SubGroup.Trim();
         VisibleWhen = about.VisibleWhen.Trim();
+        Look = about.Look;
         var type = property.PropertyType;
         Kind = KindOf(property, type, about);
         _options = type.IsEnum ? Enum.GetNames(type) : about.Options;
@@ -182,6 +189,11 @@ public sealed class ModSetting
     /// The name of the property <see cref="Visible"/> reads (empty: always shown).
     /// </summary>
     public string VisibleWhen { get; }
+
+    /// <summary>
+    /// Whether the setting is part of the look: the look presets hold and set it (<see cref="SettingAttribute.Look"/>).
+    /// </summary>
+    public bool Look { get; }
     /// <summary>
     /// Whether the page shows the setting now: its <see cref="VisibleWhen"/> property is true, or it has none; a throw from that property is logged
     /// once and the setting stays shown.
@@ -282,6 +294,12 @@ public sealed class ModSetting
         Set(value);
         return true;
     }
+
+    /// <summary>
+    /// Whether the value now is the one <see cref="Restore"/> would set from <paramref name="text"/> (a number clamped and snapped as it is
+    /// set); false for a text that is not a value of this setting.
+    /// </summary>
+    internal bool Holds(string text) => Kind != ModSettingKind.Action && Parse(text) is { } value && Equals(Convert(value), Get());
 
     /// <summary>
     /// Sets the property and tells the group's <see cref="ModSettingsGroup.Changed"/>; nothing when the value is the same.

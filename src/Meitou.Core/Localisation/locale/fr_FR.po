@@ -5928,3 +5928,23 @@ msgstr "Chevauchement d'armure"
 #. machine-translated
 msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
 msgstr "Adapte les maillages d'armure uniquement masculins portés par des personnages féminins pour qu'ils ne traversent pas le corps et rentre les armures de jambes volumineuses sous les longs manteaux lorsqu'aucun maillage de chevauchement n'est fourni. S'applique aux personnages nouvellement chargés ou rééquipés."
+
+#. machine-translated
+msgid "Letterbox"
+msgstr "Bandes noires"
+
+#. machine-translated
+msgid "Letterbox aspect"
+msgstr "Format des bandes noires"
+
+#. machine-translated
+msgid "black bars"
+msgstr "bandes noires"
+
+#. machine-translated
+msgid "Frame the world between black bars at the chosen picture shape, as a cinema screen, in every camera."
+msgstr "Encadre le monde entre des bandes noires au format d'image choisi, comme un écran de cinéma, dans toutes les caméras."
+
+#. machine-translated
+msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
+msgstr "l'image du jeu remplit l'écran ; Meitou peut encadrer le monde entre des bandes noires au Format des bandes noires (2,39:1, le format large du cinéma, sauf changement), sous l'interface, dans toutes les caméras (docs/render-post.md \"Letterbox\")"

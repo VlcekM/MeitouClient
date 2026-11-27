@@ -537,6 +537,7 @@ sealed partial class GameHost(
     public int Run()
     {
         CreateFeatures();
+        Modding.InstallLightingHooks();
         ActionLogs.Scope = WorldOptions.ActionLog;
         try
         {
@@ -1604,9 +1605,26 @@ sealed partial class GameHost(
     float _frameAspect = 16f / 9;
 
     /// <summary>
-    /// Draws one frame of the world: the title's, the character editor's scene, or the world with its clocks and per-frame effects.
+    /// Draws one frame of the world with the mods' overrides of the look settings laid over the options for the time of the draw alone
+    /// (docs/modding.md "Graphics overrides").
     /// </summary>
     internal void DrawWorld(int width, int height)
+    {
+        Modding.ApplyGraphicsOverrides();
+        try
+        {
+            DrawWorldFrame(width, height);
+        }
+        finally
+        {
+            Modding.RestoreGraphicsOverrides();
+        }
+    }
+
+    /// <summary>
+    /// Draws one frame of the world: the title's, the character editor's scene, or the world with its clocks and per-frame effects.
+    /// </summary>
+    void DrawWorldFrame(int width, int height)
     {
         SyncPreviewLook();
         if (!Player.CharacterEditor.EditorOpen) CharacterEditor.Bar.ClearEditorBar();
@@ -1686,6 +1704,7 @@ sealed partial class GameHost(
         Modding.UpdateModEffects();
         Modding.UpdateModTrails();
         Modding.UpdateModGlows();
+        Modding.WriteModSettings();
         Modding.UpdateModFaults();
         Rendering.Profiling.StageClock.Lap(Rendering.Profiling.StageClock.Blood, "blood marks");
 

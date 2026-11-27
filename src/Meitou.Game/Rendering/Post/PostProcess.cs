@@ -7,6 +7,7 @@ using Meitou.Game.Rendering.Gpu.Core;
 using Meitou.Game.Rendering.Particles;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Sky;
+using Meitou.Modding;
 using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Vk = Silk.NET.Vulkan;
 
@@ -126,6 +127,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _upscaleExposure.Dispose();
         _bloom.Dispose();
         _depthOfField?.Dispose();
+        _modPasses?.Dispose();
+        _modNormalsProgram?.Dispose();
+        _letterboxProgram?.Dispose();
         DisposeGtao();
         DisposeLampShadows();
         Hiz?.Dispose();
@@ -776,7 +780,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 _fogRate.Distance, _fogRate.Image, _fogRate.Neutral, _giAlbedo, _giLow, _giLowSky, _ssrLowSky, _shafts.Injected, _shafts.Light,
                 _shafts.Scatter, _shafts.Raw, _shafts.History, _gtaoPacked, _terrainResolve, _lampLost, _ssrHit, _ssrLow, _tracedTerm, _tracedMask,
                 _tracedScratch, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1, _characterVisibility, _characterGatherLast,
-                _characterGatherPooled, _roomMask }
+                _characterGatherPooled, _roomMask, _modNormals }
             .OfType<Target2D>();
 
     /// <summary>
@@ -792,7 +796,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _gtaoPacked = _terrainResolve = null;
         _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = l.AccumFar = l.DepthFar = l.SoftFar = null;
-        _giAlbedo = _giLow = _giLowSky = _ssrLowSky = _softDepth = null;
+        _giAlbedo = _giLow = _giLowSky = _ssrLowSky = _softDepth = _modNormals = null;
         _tracedTerm = _tracedMask = _tracedScratch = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = null;
         _lampLost = _ssrHit = _ssrLow = null;
         _characterVisibility = _characterGatherLast = _characterGatherPooled = _roomMask = null;
@@ -1213,6 +1217,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     Target2D _postColour = null!;
 
     /// <summary>
+    /// The letterbox's program (<see cref="PostProcessShaders.Letterbox"/>), made the first frame it draws.
+    /// </summary>
+    LegacyProgram? _letterboxProgram;
+
+    /// <summary>
     /// The depth of field, made the first time it runs (<see cref="DepthOfField"/>).
     /// </summary>
     DepthOfField? _depthOfField;
@@ -1261,7 +1270,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var l in _lowTargets) l.Drawn = l.Late = false;
         _softDepthReady = false;
         CloudMotion = null;   // WorldFrame.Draw sets this frame's; a sky-only frame has none
-        _sceneMarked = _aoApplied = _contactSunRan = _giResolved = false;
+        _sceneMarked = _aoApplied = _contactSunRan = _giResolved = _modNormalsCopied = false;
         Stamp("start");
         _frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(_frameIndex, JitterPhases) : Vector2.Zero;
@@ -1317,6 +1326,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (RoomMaskNow is { } roomPixels && _sceneColour is not null) _merged.InteriorGain(roomPixels, _sceneColour);
 
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
+        CopySurfaceNormals();
         Gpu.BeginTransientPhase(TransientPhase.PostUpscale);
         _postColour = _sceneColour!;
         if (Temporal)
@@ -1326,6 +1336,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
         else ActiveUpscaler = Options.Smaa ? "SMAA" : Options.Fxaa ? "FXAA" : "off";
         _postColour = RunDepthOfField(_postColour);
+        _postColour = RunScenePasses(_postColour);
         bool auto = AutoExposure is not null && _luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
@@ -1341,9 +1352,28 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// The composite to the target, or to the LDR picture that FXAA (or SMAA) and / or the heat haze then read on their way to it.
+    /// The composite and the passes after it into <paramref name="final"/>, then the mods' picture passes when any is on: the game's passes
+    /// then end in a picture of the display's size that the mods' read, and the last of theirs draws into <paramref name="final"/>.
     /// </summary>
     void RunCompositeChain(PostOptions o, PassTargets final, bool ao, bool auto, Target2D? bloom)
+    {
+        var format = o.HdrPeak > 1 ? InternalFormat.Rgba16F : InternalFormat.Rgba8;
+        if (BeginModPasses(PostStage.Picture, _displayWidth, _displayHeight, format) == 0)
+        {
+            RunPictureChain(o, final, ao, auto, bloom);
+            return;
+        }
+
+        var input = _modPasses!.PictureInput;
+        RunPictureChain(o, PassTargets.Of(input, null), ao, auto, bloom);
+        _modFinal = final;
+        _modPasses.Run(PostStage.Picture, input, ModView, toTarget: true, _modDraw ??= DrawModPass);
+    }
+
+    /// <summary>
+    /// The composite to the target, or to the LDR picture that FXAA (or SMAA) and / or the heat haze then read on their way to it.
+    /// </summary>
+    void RunPictureChain(PostOptions o, PassTargets final, bool ao, bool auto, Target2D? bloom)
     {
         // Composite: to the target, or to the LDR picture FXAA (or SMAA) and / or the heat haze then read (the game's order: FXAA, HeatHaze).
         MakeLdrTargets(o.Smaa && !Temporal, o.Fxaa && !Temporal, HeatHazeWanted);
@@ -1372,6 +1402,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             picture = _ldrFxaa;
         }
         if (haze) RunHeatHaze(picture!, final);
+        DrawLetterbox(o, final);
+    }
+
+    /// <summary>
+    /// The letterbox's bars over the finished picture in <paramref name="final"/> (<see cref="Letterbox"/>); nothing while it has none.
+    /// </summary>
+    void DrawLetterbox(PostOptions o, PassTargets final)
+    {
+        bool whole = _haveScene && ViewWindow.Current.IsWhole && !o.CameraEffectsHeld;
+        var bars = Letterbox.Bars(o, whole, _displayWidth, _displayHeight);
+        if (bars == Vector2.Zero) return;
+
+        _letterboxProgram ??= LegacyProgram.Create(Gpu, PostProcessShaders.Vertex, PostProcessShaders.Letterbox, "post letterbox");
+        _letterboxProgram.Set(_letterboxProgram.Uniform("uBars"), bars);
+        DrawFinal(_letterboxProgram, final);
+        Stamp("letterbox");
     }
 
     /// <summary>
@@ -1494,6 +1540,123 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (haze) Draw(s.Blend, _ldrFxaa!);
         else DrawFinal(s.Blend, final);
         Stamp("smaa");
+    }
+
+    #endregion
+
+    #region Mod passes (PostPassRunner)
+
+    /// <summary>
+    /// The code mods' post passes (docs/modding.md "Post passes"), made the first frame a mod has any.
+    /// </summary>
+    PostPassRunner? _modPasses;
+
+    /// <summary>
+    /// The scene after the mods' scene passes, as a target the rest of the chain reads (made again only when the picture last written changes).
+    /// </summary>
+    Target2D? _modScene;
+
+    /// <summary>
+    /// The frame's target the last picture pass draws into (<see cref="DrawModPass"/>).
+    /// </summary>
+    PassTargets? _modFinal;
+
+    /// <summary>
+    /// <see cref="DrawModPass"/> as the runner calls it, made once.
+    /// </summary>
+    PostPassDraw? _modDraw;
+
+    /// <summary>
+    /// The lit surfaces' normals copied out for the mods' passes (<see cref="CopySurfaceNormals"/>), made when a pass first reads them; null
+    /// until then.
+    /// </summary>
+    Target2D? _modNormals;
+
+    /// <summary>
+    /// Whether <see cref="_modNormals"/> holds this frame's normals.
+    /// </summary>
+    bool _modNormalsCopied;
+
+    /// <summary>
+    /// The copy's program (<see cref="PostProcessShaders.SurfaceNormalCopy"/>) and its sampler, made with the target.
+    /// </summary>
+    LegacyProgram? _modNormalsProgram;
+
+    /// <summary>
+    /// The scene and the camera the mods' passes get this frame; no depth or normals in a frame without a scene, and the normals only when
+    /// they were copied this frame.
+    /// </summary>
+    PostPassView ModView => new(_haveScene ? _sceneDepth?.Texture : null, _modNormalsCopied ? _modNormals?.Texture : null, _eyeNow,
+        _viewRotation, _fovNow, _aspectNow, _planes.X, _planes.Y, _haveScene, Options.HdrPeak > 1);
+
+    /// <summary>
+    /// Whether a mod's pass that is on reads the surfaces' normals: the scene then keeps its surface target and every lit fragment stores its
+    /// normal there (<c>uGiParams.z</c> bit 32), with or without the indirect light's resolve and the reflections.
+    /// </summary>
+    public bool SurfaceNormalsWanted => _modPasses?.WantsNormals == true;
+
+    /// <summary>
+    /// Copies the lit surfaces' normals into a target of their own (two 16-bit channels at the render size) while a mod's pass that is on reads
+    /// them: once a frame, after the scene's last reader of the surface target and before the particles' and the post chain's targets take its
+    /// memory (<see cref="TransientLifetime"/>). Nothing without such a pass or a scene.
+    /// </summary>
+    void CopySurfaceNormals()
+    {
+        if (_modNormalsCopied || !SurfaceNormalsWanted || !_haveScene || GiAlbedoTarget is null || _giAlbedo is null) return;
+
+        _modNormalsProgram ??= LegacyProgram.Create(Gpu, PostProcessShaders.Vertex, PostProcessShaders.SurfaceNormalCopy, "post mod normals");
+        if (_modNormals is null || _modNormals.Width != _width || _modNormals.Height != _height)
+        {
+            _modNormals?.Texture.Dispose();
+            using var batch = Gpu.Uploads.Begin();
+            _modNormals = Make(batch, _width, _height, InternalFormat.Rg16, TextureMinFilter.Nearest, "post mod normals");
+        }
+        Bind(_modNormalsProgram, _modNormalsProgram.Sampler("uSurface"), _giAlbedo);
+        Draw(_modNormalsProgram, _modNormals);
+        Stamp("mod normals");
+        _modNormalsCopied = true;
+    }
+
+    /// <summary>
+    /// Readies the mods' passes of a stage for a picture of the size and format; how many draw this frame. None in a tile of a larger picture
+    /// (a pass works on the whole view, as the vignette does).
+    /// </summary>
+    int BeginModPasses(PostStage stage, int width, int height, InternalFormat format)
+    {
+        if (Options.ModPasses is not { } passes || !ViewWindow.Current.IsWhole) return 0;
+
+        _modPasses ??= new PostPassRunner(Gpu, PostProcessShaders.Vertex, topDown: false);
+        return _modPasses.Begin(stage, passes, ModView, width, height, format);
+    }
+
+    /// <summary>
+    /// The scene after the mods' scene passes, or <paramref name="scene"/> when none is on.
+    /// </summary>
+    Target2D RunScenePasses(Target2D scene)
+    {
+        if (BeginModPasses(PostStage.Scene, scene.Width, scene.Height, scene.Format) == 0) return scene;
+
+        var picture = _modPasses!.Run(PostStage.Scene, scene.Texture, ModView, toTarget: false, _modDraw ??= DrawModPass)!;
+        if (_modScene?.Texture != picture) _modScene = new Target2D(picture, TextureMinFilter.Linear, TextureMagFilter.Linear);
+
+        return _modScene;
+    }
+
+    /// <summary>
+    /// One mod pass drawn into its picture, or into the frame's target (<paramref name="target"/> null), and timed.
+    /// </summary>
+    void DrawModPass(LegacyProgram p, GpuTexture? target, string stamp)
+    {
+        if (target is null)
+        {
+            DrawFinal(p, _modFinal!);
+            Stamp(stamp);
+            return;
+        }
+
+        var desc = target.Desc;
+        Draw(p, new RenderTarget(target.Attachment()), desc.Format, desc.Width, desc.Height, desc.Width, desc.Height);
+        Stamp(stamp);
     }
 
     #endregion
@@ -2536,7 +2699,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// The albedo target the scene writes while the GI resolve is on, else null.
     /// </summary>
-    GpuTexture? GiAlbedoTarget => GiResolve > 0 || SsrSurfaces ? _giAlbedo?.Texture : null;
+    GpuTexture? GiAlbedoTarget => GiResolve > 0 || SsrSurfaces || SurfaceNormalsWanted ? _giAlbedo?.Texture : null;
 
     /// <summary>
     /// The radiance cache to run before the resolve, set before <see cref="RunGiResolve"/>'s frame by the frame (null: none; the <c>gihybrid</c>
@@ -2622,7 +2785,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     void EnsureGi()
     {
-        int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces ? 2 : 0;
+        int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces || SurfaceNormalsWanted ? 2 : 0;
         if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor)) return;
 
         _giAlbedo?.Texture.Dispose();
@@ -2725,6 +2888,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             low.SoftFar = Make(batch, lw, lh, InternalFormat.R32F, TextureMinFilter.Nearest, $"post particle soft depth far 1/{div}",
                 transient: lowLife);
         }
+        CopySurfaceNormals();
         CloseSegment();
         Gpu.BeginTransientPhase(TransientPhase.Particles);
         var d = _particleDepthPass;
@@ -2761,6 +2925,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             _softDepth = Make(batch, _width, _height, InternalFormat.R32F, TextureMinFilter.Nearest, "post particle soft depth",
                 transient: TransientLifetime.Single(TransientPhase.Particles));
         }
+        CopySurfaceNormals();
         CloseSegment();
         Gpu.BeginTransientPhase(TransientPhase.Particles);
         Bind(_particleSoftDepthPass.P, _particleSoftDepthPass.Depth, _sceneDepth);

@@ -372,7 +372,7 @@ desert 1.4x too.
 ## Bloom
 
 An optional effect (`PostOptions.Bloom`, Off | On), off in the Meitou look as in the game (magnitude 0), with its strength under it, 0..0.25 (0.13 by
-default; KenshiNative's 0.04); the example look "Hot and dry" turns it on. `--bloom <s>` sets the strength and turns it on for one run.
+default; KenshiNative's 0.04). `--bloom <s>` sets the strength and turns it on for one run.
 Port of KenshiNative's `docs/features/bloom-rewrite.md`, which has the derivation and its checks.
 `Bloom.cs` runs after the upscaler on the picture the composite reads; no history.
 The composite mixes, `lerp(scene, psf ⊗ scene, strength)`, in linear light before exposure, so a
@@ -388,7 +388,7 @@ at 0.25, frame mean linear luminance within 2.5% of off; GPU 0.07 ms on the run'
 
 ## Camera effects order
 
-Upscaler, depth of field, exposure, bloom, composite. A lens acts on the light before the sensor responds, so the depth of field runs on the
+Upscaler, depth of field, the mods' scene passes, exposure, bloom, composite. A lens acts on the light before the sensor responds, so the depth of field runs on the
 HDR picture and comes before the exposure's measure, which then reads the frame the player sees. Bloom is the glare of what reached the sensor, so
 it comes after, and a defocused light keeps its glow.
 Each writes its own target: the upscaler's output is the next frame's history. The world's overlays (UI, panels) draw later in their own layer.
@@ -396,6 +396,25 @@ Each writes its own target: the upscaler's output is the next frame's history. T
 It runs only in a whole view of a scene (`PostOptions.CameraEffectsHeld`, `ViewWindow`), in the free camera, on a camera the cinema holds, with its editor (F6) open
 or recording (`PostOptions.CinematicView`, set per frame by the game), never over the title. "Camera effects in the strategy camera" (`CameraEffectsEverywhere`, off)
 adds that camera. Both backends run the depth of field, the vignette, the grain and photo mode's filter.
+
+## Letterbox
+
+An optional effect (`PostOptions.Letterbox`, the `letterbox` switch, Off | On; off in both looks), ours, not the game's: black bars leave the
+world's picture the shape of "Letterbox aspect" (`LetterboxAspect`, 1.33 to 2.76, 2.39 by default), above and below for a shape wider than
+the picture, at the sides for a narrower one (`Letterbox.Bars`). It is the chain's last pass (`PostProcessShaders.Letterbox`: a full-screen
+draw that discards the picture's pixels), after the anti-aliasing and the heat haze so the bars' edges stay straight, before the mods'
+picture passes and under the interface; only in a whole view of a scene, in every camera. Photo mode's frame and the cinema's clean picture
+keep their own bars. Both backends; Metal untested. **Observed** (2026-11-27, Windows, Vulkan, offscreen, 1600 x 900): bars of 115 rows,
+the picture between them 2.388 to 1; off, the picture is unchanged.
+
+## Mod passes
+
+Code mods add full-screen passes at two places ([modding](modding.md), "Post passes"; `PostPassRunner`): `Scene` after the depth of field
+and before the exposure's measure, so the exposure, bloom and tone map see what a pass wrote; `Picture` after the heat haze, the game's own
+last pass then drawing into a display-size picture (RGBA8, RGBA16F in HDR output) instead of the frame's target, and the last mod pass into
+the target. Each stage keeps at most two pictures, made when a pass first runs. A pass that reads the surfaces' normals gets a copy
+(RG16 at the render size) taken before the particles' and the post chain's targets reuse the surface target's memory. `PostProcess.RunCompositeChain` keeps its name and
+parameters: mods that patched it to get the same place still bind.
 
 ## Depth of field
 

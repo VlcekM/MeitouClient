@@ -464,6 +464,7 @@ static partial class WorldFrame
         DofApertureSlider = "Depth of field aperture (f-number)",
         VignetteStrengthSlider = "Vignette strength",
         GrainStrengthSlider = "Film grain strength",
+        LetterboxAspectSlider = "Letterbox aspect",
         NightGradeStrengthSlider = "Night grading strength (0 = game)",
         AdaptiveExposureSlider = "Adaptive exposure strength (max x)",
         ShaftStrengthSlider = "Light shafts strength",
@@ -478,6 +479,7 @@ static partial class WorldFrame
         DepthOfFieldSwitch = "Depth of field",
         VignetteSwitch = "Vignette",
         FilmGrainSwitch = "Film grain",
+        LetterboxSwitch = "Letterbox",
         CameraEffectsSwitch = "Camera effects in the strategy camera",
         // The ground relief's Faithful / Meitou switches (Enhancements "parallax", "displace"), by name.
         GroundParallaxSwitch = "Ground parallax",
@@ -1094,7 +1096,7 @@ static partial class WorldFrame
     /// Ours, not the game's (docs/render-post.md "Tone map and grading"): the Meitou tone curve (the tone map switch's Faithful side is the game's
     /// clamp), the saturation / contrast grade, scales on the heat haze, bloom and night grade, and the light shafts.
     /// </summary>
-    static void AddLookSliders(List<Slider> sliders, PostOptions options)
+    internal static void AddLookSliders(List<Slider> sliders, PostOptions options)
     {
         static float Round20(float v) => MathF.Round(v * 20) / 20;
 
@@ -1116,6 +1118,8 @@ static partial class WorldFrame
             "0.000", Faithful: 0));
         sliders.Add(new Slider(VignetteStrengthSlider, 0, 1, () => options.VignetteStrength, v => options.VignetteStrength = Round20(v), "0.00"));
         sliders.Add(new Slider(GrainStrengthSlider, 0, 1, () => options.GrainStrength, v => options.GrainStrength = Round20(v), "0.00"));
+        sliders.Add(new Slider(LetterboxAspectSlider, Letterbox.MinAspect, Letterbox.MaxAspect, () => options.LetterboxAspect,
+            v => options.LetterboxAspect = MathF.Round(v * 100) / 100, "0.00", Step: 0.01f));
         sliders.Add(new Slider(DofApertureSlider, 0.25f, 22, () => options.DofAperture, v => options.DofAperture = MathF.Round(v * 20) / 20, "0.00",
             Logarithmic: true));
         sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => options.NightGradeStrength, v => options.NightGradeStrength = Round20(v),
