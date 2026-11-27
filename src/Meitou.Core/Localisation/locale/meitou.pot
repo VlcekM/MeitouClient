@@ -1025,6 +1025,10 @@ msgstr ""
 msgid "Cascades past traced shadows"
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildSearchBar.cs
+msgid "Categories"
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Censorship"
 msgstr ""
@@ -4745,6 +4749,10 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildSearchBar.cs
+msgid "Search buildings"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "Search mods"
 msgstr ""
@@ -5331,6 +5339,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/WorkshopSubscribeRunner.cs
 msgid "Subscribing could not be started."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildSearchBar.cs
+msgid "Subtypes"
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs

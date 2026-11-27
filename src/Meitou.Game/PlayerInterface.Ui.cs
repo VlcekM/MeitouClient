@@ -1555,6 +1555,7 @@ sealed partial class PlayerInterface
             _cameraGrid = !_cameraGrid;
             return true;
         }
+        if (key == Key.Escape && Build.Search.Escape()) return true;
         if (key == Key.Escape && LevelEditorPanel.LevelEscape()) return true;
         if (key == Key.Escape) return EscapeKey();
         if (FaithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;

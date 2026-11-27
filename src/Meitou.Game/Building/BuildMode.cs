@@ -57,6 +57,10 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     string? _buildCategory;
     /// <summary>
+    /// The search row over the window, which filters the lists.
+    /// </summary>
+    internal readonly BuildSearchBar Search = new(player);
+    /// <summary>
     /// The index of the chosen group in its category's list.
     /// </summary>
     int _buildGroup;
@@ -267,14 +271,26 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The menu's categories with something unlocked (sorted by name while the level editor builds).
+    /// The menu's categories with something unlocked (sorted by name while the level editor builds) that the search keeps.
     /// </summary>
     IReadOnlyList<string> BuildCategories()
     {
         if (Services?.Menu.Categories(Unlocked()) is not { } categories) return [];
 
-        return player.LevelEditorPanel.LevelBuild ? [.. categories.Order(StringComparer.Ordinal)] : categories;
+        if (player.LevelEditorPanel.LevelBuild) categories = [.. categories.Order(StringComparer.Ordinal)];
+        return Search.Filter.Categories(categories, ShownCategory, AllGroups, ShownGroup, ShownMember);
     }
+
+    /// <summary>
+    /// Category <paramref name="category"/>'s groups with something unlocked, before the search.
+    /// </summary>
+    IReadOnlyList<BuildGroup> AllGroups(string category) => Services is { } host ? host.Menu.Groups(category, Unlocked()) : [];
+
+    /// <summary>
+    /// Category <paramref name="category"/>'s groups that the search keeps, matching members first (<see cref="BuildMenuSearch.Groups"/>).
+    /// </summary>
+    IReadOnlyList<BuildGroup> ShownGroups(string category) =>
+        Search.Filter.Groups(AllGroups(category), Search.Filter.CategoryHit(ShownCategory(category)), ShownGroup, ShownMember);
 
     /// <summary>
     /// The chosen category, or none until one is chosen or when it is no longer unlocked.
@@ -286,10 +302,9 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The chosen category's groups with something unlocked.
+    /// The chosen category's groups with something unlocked that the search keeps.
     /// </summary>
-    IReadOnlyList<BuildGroup> BuildGroups() =>
-        CurrentCategory() is { } category && Services is { } host ? host.Menu.Groups(category, Unlocked()) : [];
+    IReadOnlyList<BuildGroup> BuildGroups() => CurrentCategory() is { } category ? ShownGroups(category) : [];
 
     /// <summary>
     /// The chosen group; null without groups or after a right click dropped the held building.
@@ -312,13 +327,12 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     internal IReadOnlyList<Modding.UiBuildEntry> ModEntries()
     {
-        if (!Active || Services is not { } services) return [];
+        if (!Active || Services is null) return [];
 
-        var unlocked = Unlocked();
         var list = new List<Modding.UiBuildEntry>();
         foreach (var category in BuildCategories())
         {
-            var groups = services.Menu.Groups(category, unlocked);
+            var groups = ShownGroups(category);
             for (int g = 0; g < groups.Count; g++)
             {
                 foreach (var member in groups[g].Members) list.Add(new(member.Id, member.Name, category, groups[g].Name, g));
@@ -339,9 +353,10 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     internal bool ModChoose(string building)
     {
+        // A building the search hides is shown again by emptying the query.
+        if (Active && Search.Filter.Active && ModEntries().All(e => e.Building != building)) Search.Clear();
         if (ModEntries().FirstOrDefault(e => e.Building == building) is not { } entry) return false;
-        if (Services!.Menu.Groups(entry.Category, Unlocked())[entry.GroupIndex].Members.FirstOrDefault(m => m.Id == building) is not { } member)
-            return false;
+        if (ShownGroups(entry.Category)[entry.GroupIndex].Members.FirstOrDefault(m => m.Id == building) is not { } member) return false;
 
         _buildCategory = entry.Category;
         BuildDiscarded = false;
@@ -980,6 +995,7 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     void Hold(QueuedGhost ghost)
     {
+        if (!ShownGroups(ghost.Building.Category).Any(g => g.Members.Contains(ghost.Building))) Search.Clear();
         _buildCategory = ghost.Building.Category;
         BuildDiscarded = false;
         _buildGroup = Math.Max(0, BuildGroups().ToList().FindIndex(g => g.Members.Contains(ghost.Building)));
@@ -1269,6 +1285,8 @@ sealed class BuildMode(PlayerInterface player)
     internal void AddBuildContent(List<UiControl> controls)
     {
         if (Services is not { } host) return;
+
+        AddSearchRow(controls);
         if (CurrentBuilding() is { } building)
         {
             var lines = BuildMenu.Stats(building, host.ShownName).Select(l => new PlayerInterface.HudLine(l.Label, l.Value)).ToList();
@@ -1303,6 +1321,12 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     internal void BuildAction(MyGuiEvent e)
     {
+        if (BuildSearchBar.Owns(e))
+        {
+            SearchAction(e);
+            return;
+        }
+
         switch (e.Widget, e.Action)
         {
             case ("CategoriesList", "select"):
@@ -1347,6 +1371,29 @@ sealed class BuildMode(PlayerInterface player)
                 player.Floor?.Step(-1);
                 break;
         }
+    }
+
+    /// <summary>
+    /// An event of the search row; when it changed the filter, the chosen group stays chosen while the lists still show it (else the first group),
+    /// and its member goes back to the default pick, the first that matches.
+    /// </summary>
+    void SearchAction(MyGuiEvent e)
+    {
+        string? kept = CurrentGroup()?.Name;
+        if (!Search.Action(e)) return;
+
+        _buildGroup = Math.Max(0, BuildGroups().ToList().FindIndex(g => g.Name == kept));
+        BuildMember = null;
+        _ghostLift = 0;
+        FollowChoiceInLists(category: true);
+    }
+
+    /// <summary>
+    /// The search row over the window's main panel (the layout's <c>MainPanel</c>, the lists and the building's details).
+    /// </summary>
+    void AddSearchRow(List<UiControl> controls)
+    {
+        if (controls.FirstOrDefault(c => c.Name == "MainPanel") is { } panel) Search.AddRow(controls, panel.Bounds);
     }
 
     #endregion
@@ -1593,6 +1640,11 @@ sealed class BuildMode(PlayerInterface player)
         !ShownText.Any ? group.Name
             : group.Name == group.Default.Name ? ShownText.Record(group.Default.Id, group.Name)
             : ShownText.Record(group.Default.Id, group.Name, BuildingBuildData.GroupField);
+
+    /// <summary>
+    /// A group member's name as the window shows it when the arrows reach it.
+    /// </summary>
+    static string ShownMember(BuildingBuildData member) => ShownText.Record(member.Id, member.Name);
 
     /// <summary>
     /// The verbs the selection has for a site (the original's building branch, docs/game/ui-input.md "Context menu verbs"): Build (2) for an

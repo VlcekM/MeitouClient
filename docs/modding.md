@@ -1086,8 +1086,9 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   on later frames, or while an editor or a modal screen is open), `Overview` (tab `target.Tab`: 0 map, 1 faction, 2 research, 3 crafting, 4
   squads) or `Build` (build mode, as B); `IsOpen(kind)` and `ScreenBounds(kind)` (the window's last placed rectangle in pixels, null while
   closed) read them; `BuildEntries()` lists the build window's buildings in its own order (`UiBuildEntry`: BUILDING id, name, category, group,
-  group index; none while it is closed), `BuildChoice` is the building it holds chosen and `ChooseBuild(id)` chooses one as clicks on its
-  category, group and variant (false when the window is closed or does not list it). A call off the host's thread or without an interface
+  group index; none while it is closed; only what its search row keeps), `BuildChoice` is the building it holds chosen and `ChooseBuild(id)` chooses
+  one as clicks on its category, group and variant, emptying the search when it hides that building (false when the window is closed or does not
+  list it). A call off the host's thread or without an interface
   answers false, empty or null and is logged once per mod and problem. Display state only: nothing enters the state hash or a save. New
   `ModScreen` kinds are added at the end. Engine API, not in the original.
 - **Game speed:** `context.Interface` also sets the game clock through the speed buttons' and pause key's own path, on the host's thread as
