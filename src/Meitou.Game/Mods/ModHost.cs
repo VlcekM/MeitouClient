@@ -810,12 +810,14 @@ public sealed class ModHost
     void Initialize(LoadedMod mod, ModHostOptions options)
     {
         var context = new ModContext(mod, _registry, options.Data, options.Population, options.World, options.SavedSettings?.Invoke(mod.Manifest.Id));
+        Game.Rendering.Sky.LightingHooks.Switch(context.Id, true);
         try
         {
             mod.Instance!.Initialize(context);
         }
         catch
         {
+            Game.Rendering.Sky.LightingHooks.Switch(context.Id, false);
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
             _registry.Effects.Drop(context.Id);
             _registry.Glows.Drop(context.Id);

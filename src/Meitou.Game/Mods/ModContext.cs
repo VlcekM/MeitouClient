@@ -661,6 +661,13 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// The mod's hook in the game's lighting shaders (docs/modding.md "Lighting hooks"): its switch and the parameters its GLSL reads, set while
+    /// the game runs. Null when the manifest declares no <c>lighting</c>, or the game left the hook out (its file is missing or does not pass
+    /// the checks: the log says why).
+    /// </summary>
+    public LightingHook? Lighting => field ??= Game.Rendering.Sky.LightingHooks.Of(Id) is { } hook ? new LightingHook(hook) : null;
+
+    /// <summary>
     /// Adds a full-screen pass to the frame's post chain (docs/modding.md "Post passes"): <paramref name="pass"/>'s fragment shader reads the
     /// picture so far at its <see cref="PostPass.Stage"/> and writes the picture the next pass gets. The game compiles it when it first runs and
     /// makes its targets; the mod turns it on and off with <see cref="PostPass.Enabled"/> and sets its uniforms in

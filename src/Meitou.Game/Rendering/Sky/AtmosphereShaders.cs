@@ -94,9 +94,10 @@ static class AtmosphereShaders
         """;
 
     /// <summary>
-    /// What every world shader includes (fragment stage, or the grass's vertex stage).
+    /// What every world shader includes (fragment stage, or the grass's vertex stage), with the code mods' lighting hooks in <c>kenshiLight</c>
+    /// when any is installed (<see cref="LightingHooks"/>).
     /// </summary>
-    public static readonly string Functions = $$"""
+    public static readonly string Functions = LightingHooks.Apply($$"""
 
         const float ATMO_PI = 3.14159265358979;
         uniform vec4 uAtmoSun;        // xyz: direction to the sun (its real height)
@@ -961,5 +962,5 @@ static class AtmosphereShaders
             }
             atmoPhysicalHazeCoefficients(eye, d, dist, mul, add);
         }
-        """;
+        """);
 }

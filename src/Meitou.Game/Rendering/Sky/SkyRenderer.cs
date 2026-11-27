@@ -1229,6 +1229,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     {
         var g = Gpu.Globals;
         bool Valid() => _state.Valid;
+        g.PublishUniformArray("uModLight", LightingHooks.Values, () => LightingHooks.Vectors);
         g.Publish("uAtmoIrradiance", () => _state.Valid && _textures.Irradiance is { } t ? t.Sampled() : default);
         g.Publish("uAtmoSpecular", () => _state.Valid && _textures.Specular is { } t ? t.Sampled() : default);
         g.Publish("uAtmoAmbientMap", () => _state.Valid && _textures.Ambient is { } t ? t.Sampled() : default);

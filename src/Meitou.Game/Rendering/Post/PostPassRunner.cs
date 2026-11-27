@@ -83,6 +83,22 @@ sealed class PostPassRunner(IGpuContext ctx, string vertex, bool topDown) : IDis
     readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>
+    /// Whether a pass that is on reads the lit surfaces (<c>uSurface</c>): the chain then keeps their target until the passes ran.
+    /// </summary>
+    public bool WantsSurface
+    {
+        get
+        {
+            foreach (var (pass, compiled) in _compiled)
+            {
+                if (compiled.Surface.IsValid && pass.Enabled && pass.Fault is null) return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Readies <paramref name="stage"/>'s passes for a picture of <paramref name="width"/> x <paramref name="height"/> in
     /// <paramref name="format"/>: compiles the new ones, calls each <see cref="PostPass.Prepare"/> and makes the pictures they draw between.
     /// Returns how many draw this frame (0: the chain runs as without mods).

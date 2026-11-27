@@ -202,8 +202,8 @@ public sealed class PostPassFrame
     public bool HasScene { get; internal set; }
 
     /// <summary>
-    /// Whether <c>uSurface</c> holds this frame's surfaces (<see cref="PostPass.NormalGlsl"/>): only while the scene keeps them (the indirect
-    /// light or the reflections on, Vulkan), else every lookup is none.
+    /// Whether <c>uSurface</c> holds this frame's surfaces (<see cref="PostPass.NormalGlsl"/>): only while the scene stores them (the indirect
+    /// light or the reflections on, Vulkan) and from the frame after a pass that reads them first ran, else every lookup is none.
     /// </summary>
     public bool HasSurface { get; internal set; }
 

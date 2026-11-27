@@ -1543,10 +1543,17 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     PostPassDraw? _modDraw;
 
     /// <summary>
-    /// The scene and the camera the mods' passes get this frame; no depth or surfaces in a frame without a scene.
+    /// Whether the lit surfaces' target is kept until the end of the chain for a mod's pass (<see cref="EnsureGi"/>); else its memory is
+    /// other passes' by then, and the mods' passes get none.
     /// </summary>
-    PostPassView ModView => new(_haveScene ? _sceneDepth?.Texture : null, _haveScene ? GiAlbedoTarget : null, _eyeNow, _viewRotation,
-        _fovNow, _aspectNow, _planes.X, _planes.Y, _haveScene, Options.HdrPeak > 1);
+    bool _giSurfaceKept;
+
+    /// <summary>
+    /// The scene and the camera the mods' passes get this frame; no depth or surfaces in a frame without a scene, and the surfaces only once
+    /// their target is kept for them (the frame after a pass that reads them first ran).
+    /// </summary>
+    PostPassView ModView => new(_haveScene ? _sceneDepth?.Texture : null, _haveScene && _giSurfaceKept ? GiAlbedoTarget : null, _eyeNow,
+        _viewRotation, _fovNow, _aspectNow, _planes.X, _planes.Y, _haveScene, Options.HdrPeak > 1);
 
     /// <summary>
     /// Readies the mods' passes of a stage for a picture of the size and format; how many draw this frame. None in a tile of a larger picture
@@ -2717,12 +2724,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void EnsureGi()
     {
         int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces ? 2 : 0;
-        if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor)) return;
+        bool kept = _modPasses?.WantsSurface == true;
+        if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor && _giSurfaceKept == kept)) return;
 
         _giAlbedo?.Texture.Dispose();
         _giLow?.Texture.Dispose();
         _giLowSky?.Texture.Dispose();
-        _giDivisor = divisor;
+        (_giDivisor, _giSurfaceKept) = (divisor, kept);
         using var batch = Gpu.Uploads.Begin();
 
         // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the
@@ -2730,7 +2738,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, _width, _height,
             Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")
         {
-            Transient = new TransientLifetime(TransientPhase.OpaqueScene, TransientPhase.FogAndAo),
+            // Its memory goes to later passes once the fog and the occlusion are done, unless a mod's post pass reads the surfaces.
+            Transient = new TransientLifetime(TransientPhase.OpaqueScene, kept ? TransientPhase.PostUpscale : TransientPhase.FogAndAo),
         }),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         _giLow = Make(batch, (_width + _giDivisor - 1) / _giDivisor, (_height + _giDivisor - 1) / _giDivisor, InternalFormat.Rgba16F,

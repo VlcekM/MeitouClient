@@ -4,6 +4,7 @@ using Meitou.Game;
 using Meitou.Game.DevTools;
 using Meitou.Game.Effects;
 using Meitou.Game.Host;
+using Meitou.Game.Rendering.Sky;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Population;
@@ -78,6 +79,48 @@ sealed class GameMods(GameHost host)
     /// The world the mods' trails were kept for; a new world drops them.
     /// </summary>
     World? _trailsFor;
+
+    /// <summary>
+    /// Installs the enabled code mods' lighting hooks (docs/modding.md "Lighting hooks") from their manifests, before any lit shader is made:
+    /// at the game's start, long before the mods' code runs. A hook that is left out is logged with the reason.
+    /// </summary>
+    internal void InstallLightingHooks()
+    {
+        var sources = new List<LightingHooks.Source>();
+        foreach (var mod in CodeMods().Enabled)
+        {
+            if (LightingSource(mod) is { } source) sources.Add(source);
+        }
+        if (sources.Count == 0) return;
+
+        foreach (var (id, reason) in LightingHooks.Install(sources))
+            Console.Error.WriteLine($"mod       {id}: lighting hook left out: {reason}");
+        Console.WriteLine($"mods      {LightingHooks.Installed.Count} lighting hook(s) in the lighting shaders");
+    }
+
+    /// <summary>
+    /// The lighting hook a mod's manifest declares, with its file's text; null without one. A manifest that cannot be read is reported when
+    /// the mod loads, a hook file that cannot here.
+    /// </summary>
+    static LightingHooks.Source? LightingSource(Content.ModInfo mod)
+    {
+        try
+        {
+            var manifest = Content.CodeModManifest.Read(Path.Combine(mod.Folder, Content.ModList.CodeManifestFile));
+            if (manifest.Lighting is not { } lighting) return null;
+
+            return new LightingHooks.Source(manifest.Id, lighting, File.ReadAllText(Path.Combine(mod.Folder, lighting.File)));
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"mod       {mod.Name}: lighting hook left out: {e.Message}");
+            return null;
+        }
+    }
 
     /// <summary>
     /// Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.

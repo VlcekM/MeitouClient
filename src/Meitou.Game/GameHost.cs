@@ -537,6 +537,7 @@ sealed partial class GameHost(
     public int Run()
     {
         CreateFeatures();
+        Modding.InstallLightingHooks();
         ActionLogs.Scope = WorldOptions.ActionLog;
         try
         {
