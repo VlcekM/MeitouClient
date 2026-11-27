@@ -256,7 +256,7 @@ public sealed partial class LockSystem
             }
 
             next[s].Goal = stand;
-            next[s].Mode = SpeedMode.Free;
+            next[s].Mode = c.RunSpeed;
             next[s].Flags |= (ushort)MoveFlags.NeedPath;
             c.BashTime = -1;   // asked once; arriving resets it
         }

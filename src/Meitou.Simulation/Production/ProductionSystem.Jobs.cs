@@ -1078,7 +1078,7 @@ public sealed partial class ProductionSystem
         ref var n = ref table.Next[slot];
         TaskStart.Stand(table, slot);
         n.Task = (byte)CharacterTask.Haul;
-        n.Mode = SpeedMode.Free;
+        n.Mode = cold.RunSpeed;
         n.TaskTime = 0;
         bool carries = cold.Inventory is { } inv && Delivered(world, cold, inv, store, ditch).Any();
         cold.HaulTo = storage.Id;
@@ -1238,7 +1238,7 @@ public sealed partial class ProductionSystem
 
         n.Goal = new Vector2(loose.Position.X, loose.Position.Z);
         (cold.GoalHeight, cold.GoalHeightAt) = (loose.Position.Y, n.Goal);
-        n.Mode = SpeedMode.Free;
+        n.Mode = cold.RunSpeed;
         n.Flags |= (ushort)MoveFlags.NeedPath;
         n.TaskTime = PursuitSystem.RepathSeconds;
     }

@@ -83,7 +83,7 @@ public sealed partial class LockSystem
                 }
 
                 n.Goal = new Vector2(wall.Position.X, wall.Position.Z);
-                n.Mode = SpeedMode.Free;
+                n.Mode = c.RunSpeed;
                 n.Flags |= (ushort)MoveFlags.NeedPath;
                 c.BashTime = -1;
             }

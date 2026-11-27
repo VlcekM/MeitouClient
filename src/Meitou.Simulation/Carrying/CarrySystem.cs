@@ -807,7 +807,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         ref var n = ref table.Next[slot];
         TaskStart.Stand(table, slot);
         n.Task = (byte)task;
-        n.Mode = SpeedMode.Free;
+        n.Mode = cold.RunSpeed;
         n.TaskTime = 0;
         cold.CarryTarget = target;
         cold.LiftTime = -1;
@@ -890,7 +890,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
             n.Goal = goal;
             (cold.GoalHeight, cold.GoalHeightAt) = (spot.Y, goal);
-            n.Mode = SpeedMode.Free;
+            n.Mode = cold.RunSpeed;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;
         }

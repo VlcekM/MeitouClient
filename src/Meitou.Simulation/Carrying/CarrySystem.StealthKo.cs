@@ -244,7 +244,7 @@ public sealed partial class CarrySystem
             if (asking || !stale || n.TaskTime > 0) continue;
             n.Goal = goal;
             (cold.GoalHeight, cold.GoalHeightAt) = (aim.Y, goal);   // the target's floor, not the attacker's (#292)
-            n.Mode = SpeedMode.Free;
+            n.Mode = cold.RunSpeed;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;
         }
