@@ -21,7 +21,7 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - Guards no longer juggle corpses, and intruder carry-outs resume after a fight (#1426, #1480)
 - Shops lock up before bed and keep open doors passable; refused trades say so (#1506, #1512, #1521)
 - Navmesh fixes: ruins, watershed slopes, uncovered tiles and Admag's longhouse stair are meshed; zone 14.35 no longer hangs loads (#1430, #1474, #1495)
-- Move orders to ground off the navmesh walk there instead of being dropped (#1421)
+- Move orders to ground off the navmesh walk there instead of being dropped; jobs and tasks respect the character's run speed (#1421, #1541)
 - Buildings: basements, tall buildings and multi-shape interiors clip floors cleanly; shared beds take several sleepers; turrets stand on wall walkways (#1444, #1498, #1500, #1536)
 - Building: wall lines and snaps follow the original, wall ramps get built, sloping-floor placement works, outposts extend past their radius (#1432, #1447, #1522, #1523)
 - Builders, operators and machine outputs take materials and goods sensibly (#1481, #1484, #1487)
@@ -31,7 +31,7 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - Craft tab lists only your and your allies' stations; Offer Inventory on every own machine with one (#1445)
 - Items dragged out of a loot window can drop on the ground (Advanced setting); ground bags offer Pick Up, Steal and Loot (#1470, #1489)
 - Inventory pauses its character while open; tooltips name the mods a record comes from
-- UI: squad frames reorder by drag again; numpad keybinds work; CJK mod text shows (#1435, #1443, #1455, #1515, #1516, #1520)
+- UI: squad frames reorder by drag again; numpad keybinds work; CJK mod text shows; F10 Items lists research blueprints (#1435, #1443, #1455, #1515, #1516, #1520, #1539)
 - Container and cage panels show lock state and complexity (#1502)
 - Body skeletons follow their animation links, so mod finger skeletons and carried bodies animate; off-screen animation keeps 5x pace; legacy body files load (#1418, #1436, #1535)
 - Worn items keep mesh LODs twice as far as the body; optional load-time armour clipping fixes on the Fixes page (#1524, #1531)
