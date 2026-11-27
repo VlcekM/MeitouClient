@@ -1713,7 +1713,7 @@ msgstr ""
 msgid "Every tutorial can show again, the ones already seen included."
 msgstr ""
 
-#: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/LookBar.cs
+#: launcher/Meitou.Launcher/GraphicsPage.cs
 msgid "Example"
 msgstr ""
 
@@ -2439,10 +2439,6 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Hostile squads that meet far from your squads fight it out by strength; the loser is wiped out. In the game nothing happens far away."
-msgstr ""
-
-#: src/Meitou.Game/Settings/LookPresets.cs
-msgid "Hot and dry"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -6167,10 +6163,6 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "VERSIONS"
-msgstr ""
-
-#: src/Meitou.Game/Settings/LookPresets.cs
-msgid "Vanilla colours"
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs

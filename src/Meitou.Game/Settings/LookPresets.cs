@@ -36,25 +36,6 @@ sealed class LookPresets(SettingsMenu menu)
     internal static readonly LookPreset MeitouLook = new("Meitou", "built in", MeitouVersion, []);
 
     /// <summary>
-    /// Example looks, each far from the others (docs/native-ui.md "Settings"); everything they do not set is Meitou's.
-    /// </summary>
-    internal static readonly LookPreset[] ExampleLooks =
-    [
-        new("Hot and dry", "example", MeitouVersion, new()
-        {
-            [SettingsMenu.SwitchKey(WorldFrame.BloomSwitch)] = 1,
-            [WorldFrame.BloomStrengthSlider] = 0.13f,
-            [WorldFrame.HeatHazeStrengthSlider] = 0.8f,
-        }),
-        new("Vanilla colours", "example", MeitouVersion, new()
-        {
-            [SettingsMenu.SwitchKey("Tone map and grade")] = 0,
-            [SettingsMenu.SwitchKey("Night grading")] = 0,
-            [SettingsMenu.SwitchKey("Dithering")] = 0,
-        }),
-    ];
-
-    /// <summary>
     /// The folder of the player's look presets, beside <c>meitou.user.json</c>.
     /// </summary>
     internal const string LookFolder = "presets";
@@ -70,7 +51,7 @@ sealed class LookPresets(SettingsMenu menu)
     internal readonly HashSet<string> StuckSwitches = [];
 
     /// <summary>
-    /// The looks: Meitou, the examples and the player's presets; null until listed.
+    /// The looks: Meitou and the player's presets; null until listed.
     /// </summary>
     List<LookPreset>? _looks;
 
@@ -117,11 +98,11 @@ sealed class LookPresets(SettingsMenu menu)
     string PresetFolder => Path.Combine(Path.GetDirectoryName(menu.Config.Path) is { Length: > 0 } dir ? dir : ".", LookFolder);
 
     /// <summary>
-    /// The built-in looks, Meitou first (saved as no <see cref="UserConfig.LookPreset"/>), with what each sets; the player's are in <see
+    /// The built-in looks with what each sets: Meitou alone (saved as no <see cref="UserConfig.LookPreset"/>); the player's are in <see
     /// cref="LookFolder"/>.
     /// </summary>
     internal static IReadOnlyList<(string Name, IReadOnlyDictionary<string, float> Values)> BuiltInLooks =>
-        [.. new[] { MeitouLook }.Concat(ExampleLooks).Select(l => (l.Name, (IReadOnlyDictionary<string, float>)l.Values))];
+        [(MeitouLook.Name, MeitouLook.Values)];
 
     #endregion
 
@@ -170,13 +151,13 @@ sealed class LookPresets(SettingsMenu menu)
     #region Preset files
 
     /// <summary>
-    /// The looks, listed once: Meitou, the examples and the player's presets (an unreadable folder adds none).
+    /// The looks, listed once: Meitou and the player's presets (an unreadable folder adds none).
     /// </summary>
     List<LookPreset> Looks()
     {
         if (_looks is not null) return _looks;
 
-        _looks = [MeitouLook, .. ExampleLooks];
+        _looks = [MeitouLook];
         try
         {
             AddDiskLooks();

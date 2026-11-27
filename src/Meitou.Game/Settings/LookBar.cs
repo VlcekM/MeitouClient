@@ -80,7 +80,7 @@ sealed class LookBar(SettingsMenu menu)
         }
         else
         {
-            string source = look.Source == "built in" ? "Built in" : look.Source == "example" ? "Example" : $"Mine · Meitou {look.Made}";
+            string source = look.Source == "built in" ? "Built in" : $"Mine · Meitou {look.Made}";
             menu.Canvas.Text(source, menu.Canvas.R(684, 98, 120, 30), 12, SettingsCanvas.MutedInk);
         }
 

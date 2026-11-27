@@ -104,11 +104,9 @@ sealed class PresetNamingDialog(SettingsMenu menu)
     }
 
     /// <summary>
-    /// Whether a name is Meitou's look or one of the example looks (case ignored).
+    /// Whether a name is Meitou's look (case ignored).
     /// </summary>
-    static bool IsBuiltInName(string name) =>
-        name.Equals(LookPresets.MeitouLook.Name, StringComparison.OrdinalIgnoreCase)
-        || LookPresets.ExampleLooks.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    static bool IsBuiltInName(string name) => name.Equals(LookPresets.MeitouLook.Name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The line naming the active look and how many of its settings were changed.

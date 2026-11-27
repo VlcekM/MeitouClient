@@ -44,7 +44,7 @@ rows above its tabs:
   look sliders at the game's value (the one the label names, "(0 = game)"), a strength under a switch kept. It is a starting
   point: changes from it are counted ("N changes from the game", Revert). It leaves the pure-performance switches alone (Mesh
   welding, Far impostors, Foliage levels, Character levels: `PerformanceSwitches`), which save memory or time without changing
-  the picture. Meitou shows the active **preset** (`lookPreset`): Meitou (built in), examples (Hot and dry, Vanilla colours),
+  the picture. Meitou shows the active **preset** (`lookPreset`): Meitou (built in) and
   the player's. A preset is Meitou plus the look values it sets, keyed as `meitou.user.json` saves them; changes from it are
   unsaved (Revert, Save for one's own; Save as, Delete). Files `presets/<name>.json` beside `meitou.user.json` (`format`,
   `name`, `meitou` = the build's tag, `values`); Share copies `MT1:` + base64 of the deflated JSON, Paste adds one (at most
