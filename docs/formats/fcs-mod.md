@@ -291,6 +291,7 @@ the second is one int field per type (names from the editor's built-in enums, **
 | ARMOUR | `slot` (`AttachSlot`, `fcs_enums.def`; default 5 Body) | 0 Weapon, 1 Back, 2 Hair, 3 Hat, 4 Eyes, 5 Body, 6 Legs, 7 None, 8 Shirt, 9 Boots, 10 Gloves, 11 Neck, 12 Backpack, 13 Beard, 14 Belt |
 | ITEM | `item function` (`ItemFunction`) | 0 none, 1 first aid, 2 med rigging (splints), 3 food, 4 container, 5 weapon, 6 clothing, 7 unused, 8 narcotic, 9 tool, 10 anything, 11 blueprint, 12 robot repair, 13 book, 14 money, 15 restricted food (raw meat), 16 ammo, 17 severed limb |
 | LIMB_REPLACEMENT | `slot` (`LimbSlot`) | 50 left arm, 51 right arm, 52 left leg, 53 right leg |
+| RESEARCH (Blueprints) | `category` (string) | the research's category name (`Other` when blank); `RESEARCH_TEMPLATE` and blank blueprint look-template ITEMs (`item function` 11) are excluded |
 
-CONTAINER, CROSSBOW, BLUEPRINT and MAP_ITEM have no such field. Quality (`DebugGiveItem.QualityTypes`): armour, crossbows and limbs are graded 5 / 20 /
+CONTAINER, CROSSBOW and MAP_ITEM have no such field. Quality (`DebugGiveItem.QualityTypes`): armour, crossbows and limbs are graded 5 / 20 /
 40 / 60 / 80 / 95 (Prototype to Masterwork, `ArmourTooltip.GradeNames`); a weapon is graded by a MATERIAL_SPECS_WEAPON model that a WEAPON_MANUFACTURER lists in `weapon models` (value 0 = level; **Observed** on the vanilla install with Rebirth: the player's `PLAYER_WEAPONS` maker lists levels 5 to 80, and the Meitou grade, level 100, is only in a Rebirth maker's list).

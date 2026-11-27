@@ -9,7 +9,8 @@ namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// One item record the debug menu's item picker offers: its string id, name, record type, category (by record type) and sub-category (by the
-/// record's own data: a weapon's skill category, an armour's slot, an item's function, a limb's slot; empty for none).
+/// record's own data: a weapon's skill category, an armour's slot, an item's function, a limb's slot, a blueprint's research category; empty for
+/// none).
 /// </summary>
 sealed record DebugItemEntry(string Id, string Name, FcsRecordType Type, string Group, string Sub)
 {
@@ -34,14 +35,30 @@ sealed class DebugItemCatalog
     #region Categories
 
     /// <summary>
-    /// The categories in the order shown, by the record types they hold.
+    /// The categories in the order shown, by the record types they hold. Blueprints come from <see cref="FcsRecordType.Research"/> because no
+    /// <see cref="FcsRecordType.Blueprint"/> record exists in the data (<see cref="Simulation.Items.ItemFactory.Blueprint"/>).
     /// </summary>
     static readonly (string Group, FcsRecordType Type)[] Groups =
     [
         ("Weapons", FcsRecordType.Weapon), ("Crossbows", FcsRecordType.Crossbow), ("Armour", FcsRecordType.Armour),
         ("Items", FcsRecordType.Item), ("Containers", FcsRecordType.Container), ("Limb replacements", FcsRecordType.LimbReplacement),
-        ("Blueprints", FcsRecordType.Blueprint), ("Maps", FcsRecordType.MapItem),
+        ("Blueprints", FcsRecordType.Research), ("Maps", FcsRecordType.MapItem),
     ];
+
+    /// <summary>
+    /// The record types offered by the picker (<see cref="Groups"/>).
+    /// </summary>
+    static readonly HashSet<FcsRecordType> GroupTypes = [.. Groups.Select(g => g.Type)];
+
+    /// <summary>
+    /// The <c>item function</c> of blank blueprint look-template ITEMs (<c>BLUEPRINT_ITEM</c>, etc.), excluded because they carry no research.
+    /// </summary>
+    const int BlueprintItemFunction = 11;
+
+    /// <summary>
+    /// The template RESEARCH record copied by <see cref="GameDatabase.AddGearBlueprints"/>, excluded from the blueprint list.
+    /// </summary>
+    const string ResearchTemplateId = "RESEARCH_TEMPLATE";
 
     /// <summary>
     /// The item function names (<c>ItemFunction</c> of the FCS editor), by value; one that is not listed is "Other".
@@ -72,6 +89,7 @@ sealed class DebugItemCatalog
         FcsRecordType.Armour => ArmourSlotName(r.GetInt("slot", (int)AttachSlot.Body)),
         FcsRecordType.Item => FunctionName(r.GetInt("item function")),
         FcsRecordType.LimbReplacement => LimbName(r.GetInt("slot")),
+        FcsRecordType.Research => ResearchCategoryName(r.GetString("category")),
         _ => "",
     };
 
@@ -105,6 +123,24 @@ sealed class DebugItemCatalog
     /// </summary>
     static string LimbName(int slot) => slot is >= 50 and < 54 ? LimbNames[slot - 50] : "Other";
 
+    /// <summary>
+    /// A research record's category name ("Other" when blank).
+    /// </summary>
+    static string ResearchCategoryName(string category) => category.Trim() is { Length: > 0 } name ? name : "Other";
+
+    /// <summary>
+    /// Whether <paramref name="r"/> is offered by the picker: one of <see cref="GroupTypes"/> with a name, leaving out
+    /// <see cref="ResearchTemplateId"/> and blank blueprint look-template ITEMs (<see cref="BlueprintItemFunction"/>).
+    /// </summary>
+    static bool Include(GameRecord r)
+    {
+        if (r.Name.Length == 0 || !GroupTypes.Contains(r.Type)) return false;
+        if (r.Type == FcsRecordType.Research) return r.StringId != ResearchTemplateId;
+        if (r.Type == FcsRecordType.Item && r.GetInt("item function") == BlueprintItemFunction) return false;
+
+        return true;
+    }
+
     #endregion
 
     #region Entries
@@ -133,7 +169,7 @@ sealed class DebugItemCatalog
 
         _database = db;
         _entries = [.. db.Records.Values
-            .Where(r => DebugGiveItem.ItemTypes.Contains(r.Type) && r.Name.Length > 0)
+            .Where(Include)
             .Select(r => new DebugItemEntry(r.StringId, r.Name, r.Type, GroupOf(r.Type), SubOf(r)))
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(e => e.Id, StringComparer.Ordinal)];
