@@ -543,6 +543,105 @@ SaveManager = {
     }
   end
 }
+
+-- Cooperative coroutine scheduler (Meitou.spawn / after / cancel / wait / waitFrames / waitUntil)
+local __kl_tasks = {}
+local __kl_task_next_id = 1
+local __kl_task_max = 64
+
+Meitou = {
+  spawn = function(fn)
+    if type(fn) ~= "function" then return nil end
+    if #__kl_tasks >= __kl_task_max then
+      KenshiLua.log("[error:task] task limit reached (" .. __kl_task_max .. ")")
+      return nil
+    end
+    local id = __kl_task_next_id
+    __kl_task_next_id = __kl_task_next_id + 1
+    __kl_tasks[#__kl_tasks + 1] = { id = id, co = coroutine.create(fn), wait = nil, dead = false }
+    return id
+  end,
+  after = function(seconds, fn)
+    if type(fn) ~= "function" then return nil end
+    local delay = tonumber(seconds) or 0
+    return Meitou.spawn(function()
+      if delay > 0 then Meitou.wait(delay) end
+      fn()
+    end)
+  end,
+  cancel = function(id)
+    for i = 1, #__kl_tasks do
+      if __kl_tasks[i].id == id and not __kl_tasks[i].dead then
+        __kl_tasks[i].dead = true
+        return true
+      end
+    end
+    return false
+  end,
+  wait = function(seconds)
+    local dur = tonumber(seconds) or 0
+    if dur < 0 then dur = 0 end
+    coroutine.yield({ kind = "time", rem = dur })
+  end,
+  waitFrames = function(frames)
+    local n = math.floor(tonumber(frames) or 1)
+    if n < 1 then n = 1 end
+    coroutine.yield({ kind = "frames", rem = n })
+  end,
+  waitUntil = function(pred)
+    if type(pred) ~= "function" then return end
+    while not pred() do
+      coroutine.yield({ kind = "frames", rem = 1 })
+    end
+  end,
+  taskCount = function()
+    local n = 0
+    for i = 1, #__kl_tasks do
+      if not __kl_tasks[i].dead then n = n + 1 end
+    end
+    return n
+  end,
+}
+
+function __kl_step_tasks(dt)
+  local stepDt = tonumber(dt) or 0.016
+  local i = 1
+  while i <= #__kl_tasks do
+    local t = __kl_tasks[i]
+    if t.dead or coroutine.status(t.co) == "dead" then
+      table.remove(__kl_tasks, i)
+    else
+      local ready = true
+      local w = t.wait
+      if w ~= nil then
+        if w.kind == "time" then
+          w.rem = w.rem - stepDt
+          if w.rem > 0 then ready = false end
+        elseif w.kind == "frames" then
+          w.rem = w.rem - 1
+          if w.rem > 0 then ready = false end
+        end
+      end
+      if ready then
+        t.wait = nil
+        local ok, yielded = coroutine.resume(t.co)
+        if not ok then
+          KenshiLua.log("[error:task] " .. tostring(yielded))
+          t.dead = true
+        elseif coroutine.status(t.co) == "dead" then
+          t.dead = true
+        elseif type(yielded) == "table" then
+          t.wait = yielded
+        end
+      end
+      if t.dead then
+        table.remove(__kl_tasks, i)
+      else
+        i = i + 1
+      end
+    end
+  end
+end
 """;
 
     /// <summary>
