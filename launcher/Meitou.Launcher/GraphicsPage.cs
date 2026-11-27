@@ -453,11 +453,6 @@ public sealed partial class MainWindow
     string? _namingLook;
 
     /// <summary>
-    /// A look the row offers: the schema's (Meitou first, then the examples) or one of the player's (its file).
-    /// </summary>
-    sealed record LookChoice(SettingsLook Look, string? File, string Source);
-
-    /// <summary>
     /// What the look row's actions read: the looks, every look offered (<see cref="AllLooks"/>), whether the look is Faithful, the active one,
     /// how many look settings differ from it, and the folder of the player's presets.
     /// </summary>
@@ -706,7 +701,7 @@ public sealed partial class MainWindow
         {
             if (look.Source == "built in") _game.Remove(l.PresetKey);
             else _game.Set(l.PresetKey, look.Look.Name);
-            ApplyLookMods(before, look);
+            LookChoices.ApplyMods(_game, before, look);
         }
         foreach (var (key, value) in faithful ? l.Faithful : LookValues(l, look.Look)) _game.SetGraphics(key, value);
         SaveGame();
@@ -733,7 +728,7 @@ public sealed partial class MainWindow
                 try
         {
             // The mods' values of the look saved from go with it (saved over itself, its file's are kept).
-            LookPresetFile.Save(folder, new(name, l.Made, values) { Mods = ModsOf(ActiveLook(l)) });
+            LookPresetFile.Save(folder, new(name, l.Made, values) { Mods = LookChoices.ModsOf(ActiveLook(l)) });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -779,38 +774,10 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// The schema's looks (Meitou built in, then an older game's examples), the player's files in the look folder beside the game's settings
-    /// file, then those the enabled mods ship in the same folder of their own, in load order and marked with the mod's name, as the game lists
-    /// them; a name a look already has is left out.
+    /// The looks the row offers (<see cref="LookChoices.All"/>): the schema's, the player's, then the enabled mods'.
     /// </summary>
-    List<LookChoice> AllLooks(SettingsLooks l)
-    {
-        var all = l.Presets.Select((look, i) => new LookChoice(look, null, i == 0 ? "built in" : "example")).ToList();
-        if (l.Folder.Length == 0) return all;
-
-        AddLooks(all, Path.Combine(LauncherConfig.DataDirectory, l.Folder), "mine");
-        foreach (var mod in _mods.Where(m => m.Enabled)) AddLooks(all, Path.Combine(mod.Mod.Folder, l.Folder), mod.Mod.Name);
-        return all;
-    }
-
-    /// <summary>
-    /// Adds a folder's preset files under <paramref name="source"/>, but those whose name a look already has.
-    /// </summary>
-    static void AddLooks(List<LookChoice> all, string folder, string source)
-    {
-        foreach (var (file, read) in LookPresetFile.ReadFolder(folder))
-        {
-            if (all.Any(x => x.Look.Name.Equals(read.Name, StringComparison.OrdinalIgnoreCase))) continue;
-
-            all.Add(new(new SettingsLook { Name = read.Name, Values = read.Values }, file, source));
-        }
-    }
-
-    /// <summary>
-    /// The code mods' settings a look's file holds (<c>mods</c>: mod id, setting key, text); none for a look without a file.
-    /// </summary>
-    static Dictionary<string, Dictionary<string, string>> ModsOf(LookChoice? look) =>
-        look?.File is { } file && File.Exists(file) && LookPresetFile.Read(File.ReadAllText(file)) is { } read ? read.Mods : [];
+    List<LookChoice> AllLooks(SettingsLooks l) =>
+        LookChoices.All(l, LauncherConfig.DataDirectory, _mods.Where(m => m.Enabled).Select(m => (m.Mod.Name, m.Mod.Folder)));
 
     /// <summary>
     /// The active look among those offered: the saved preset's, else Meitou's.
@@ -819,24 +786,6 @@ public sealed partial class MainWindow
     {
         var all = AllLooks(l);
         return all.FirstOrDefault(x => x.Look.Name == (_game.GetString(l.PresetKey) ?? l.Presets[0].Name)) ?? all[0];
-    }
-
-    /// <summary>
-    /// Writes the mods' settings a look holds into the game's saved ones and removes those the look before held and this one does not (back to
-    /// the mod's default). The launcher knows no other setting of a mod: one changed in the game stays, and the game counts it as a change.
-    /// </summary>
-    void ApplyLookMods(LookChoice before, LookChoice look)
-    {
-        var held = ModsOf(look);
-        foreach (var (mod, values) in ModsOf(before))
-        {
-            foreach (string key in values.Keys.Where(k => !(held.TryGetValue(mod, out var kept) && kept.ContainsKey(k))))
-                _game.SetModSetting(mod, key, null);
-        }
-        foreach (var (mod, values) in held)
-        {
-            foreach (var (key, text) in values) _game.SetModSetting(mod, key, text);
-        }
     }
 
     #endregion

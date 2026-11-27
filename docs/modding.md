@@ -389,7 +389,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   fourth texture is left out; an image that cannot be loaded is logged and reads black. The hook is off until the mod's `Initialize` starts (so not over the
   title) and off again when it throws; with every hook off the hooks' part of the shader is skipped whole.
   The files are read from the manifests at the game's start (`GameMods.InstallLightingHooks`), before any lit program is compiled, because
-  the lighting text is made once: a file changed later takes effect at the next start. Every name a file declares at file scope (function,
+  the lighting text is made once: a file changed later takes effect at the next start (**Observed**, 2026-11-27: a tint changed in the file
+  while a hidden session ran kept its colour until the game was started again). Every name a file declares at file scope (function,
   constant, struct, macro) gets a name of its own in the shaders (`LightingHookFile`: `meitouHook<n>_<name>`, every use renamed with it), so
   a helper may have any name and two mods may share one. A file is left out, with a log line, when it holds `#version`, `#extension`,
   `#include` or `#pragma`; `uniform`, `in`, `out` or `layout` at file scope (no input of its own beside the declared textures); `discard`, a

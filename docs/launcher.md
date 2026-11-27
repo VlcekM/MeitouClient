@@ -222,7 +222,10 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   `looks.meitou`, marked `looks.made`. A preset's `mods` values ([modding](modding.md), "Look presets") are written to `modSettings` when
   it is chosen, those the look before held and it does not removed (the mod's default); they go with the preset when it is saved or
   shared. The launcher shows no mod setting and knows none but those a preset holds: one changed in the game stays as it is, and the game
-  counts it as a change from the preset.
+  counts it as a change from the preset (`LookChoices`). **Observed** (2026-11-27, Windows, the Debug launcher on a 0.22.2 nightly's
+  schema, a preset file put in an enabled mod's folder): the picker listed Meitou, the schema's two examples, the player's preset and the
+  mod's; choosing the mod's showed the mod's name beside it with no Save or Delete, and wrote `lookPreset`, its `values` and its `mods`
+  values under `modSettings`; choosing Meitou took `lookPreset` and those mod values out again.
 - `looks` (null in older schemas: no row) is the Look row: Faithful (`faithfulLook` true) or a Meitou look preset (`lookPreset`: one of
   `looks.presets`, the first saved as no key, or a player's JSON file in `looks.folder` beside `meitou.user.json`, its `name` and
   `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou effect
