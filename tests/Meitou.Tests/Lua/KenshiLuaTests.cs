@@ -1,7 +1,12 @@
+using System.Numerics;
 using Meitou.Data.Ui;
+using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Ui;
 using Meitou.Lua;
 using Meitou.Modding;
+using Meitou.Simulation;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Combat;
 
 namespace Meitou.Tests.Lua;
 
@@ -221,6 +226,79 @@ public sealed class KenshiLuaTests
         hud.ClearMod("kl:Demo");
         overlay.SyncOpen(screens);
         Assert.False(screens.IsOpen(LuaHudOverlay.ScreenId));
+    }
+
+    /// <summary>
+    /// <see cref="LuaMods.CaptureCamera"/> converts the active <see cref="WorldCamera"/> into a <see cref="LuaCameraSnap"/>
+    /// that projects world targets onto screen coordinates through <see cref="SimulationLuaBridge.SetCamera"/>.
+    /// </summary>
+    [Fact]
+    public void CaptureCamera_And_BuildCombatHitEvent_FeedLuaProjectionAndOnCombatHit()
+    {
+        WorldCamera cam = new()
+        {
+            Target = new Vector3(0, 0, 0),
+            Yaw = 0f,
+            Pitch = 0f,
+            Distance = 100f,
+            FieldOfView = 50f * MathF.PI / 180f,
+        };
+        LuaCameraSnap snap = LuaMods.CaptureCamera(cam, 1920, 1080);
+        Assert.InRange(snap.FovY, 49.9, 50.1);
+        Assert.InRange(snap.Aspect, 1.77, 1.78);
+        Assert.True(snap.FwdZ < -0.99);
+
+        CombatHit hit = new(
+            Tick: 120,
+            Source: CombatHitSource.Melee,
+            Attacker: new CharacterId(1, 1),
+            Victim: new CharacterId(2, 1),
+            Sequence: 3,
+            Blow: 1,
+            Part: 1,
+            Damage: new HitDamage(Cut: 18.5f, Blunt: 6.5f, Pierce: 0f, ExtraStun: 2f),
+            Absorbed: default,
+            VictimPosition: new Vector3(0, 0, 0),
+            Travel: new Vector3(1, 0, 0),
+            VictimYaw: 0f,
+            CutDirection: 0,
+            LowStrike: false,
+            Intended: true,
+            VictimWasAlive: true,
+            VictimWasIncapacitated: false);
+        LuaGameEvent ev = LuaMods.BuildCombatHitEvent(null, hit);
+        Assert.Equal("hit", ev.Name);
+        Assert.Equal("melee", ev.Payload["source"]);
+        Assert.Equal(25.0, Convert.ToDouble(ev.Payload["damage"]));
+
+        string tmp = Path.Combine(Path.GetTempPath(), "meitou_lua_cam_" + Guid.NewGuid().ToString("N")[..8]);
+        string modDir = Path.Combine(tmp, "CamHitMod");
+        Directory.CreateDirectory(Path.Combine(modDir, "scripts", "init"));
+        File.WriteAllText(Path.Combine(modDir, "scripts", "init", "main.lua"), """
+            registerHandler('onCombatHit', function(e)
+              local p = getGameWorld():getCamera():project(e.x, e.y, e.z)
+              KenshiLua.log('HIT:' .. e.source .. ':' .. math.floor(e.damage) .. ':' .. math.floor(p.x * 100) .. ':' .. math.floor(p.y * 100) .. ':' .. tostring(p.visible))
+            end)
+            """);
+        try
+        {
+            SimulationLuaBridge bridge = new();
+            bridge.SetViewSize(1920, 1080);
+            bridge.SetCamera(snap);
+
+            List<string> logs = [];
+            KenshiLuaHost host = new(bridge, new LuaHudState(), log: logs.Add);
+            Assert.Equal(1, host.DiscoverEnabledMods([("CamHitMod", modDir)]));
+            Assert.Contains("CamHitMod", host.StartAll());
+
+            host.Tick([ev]);
+            Assert.Contains(logs, l => l.Contains("HIT:melee:25:50:50:true"));
+            host.StopAll();
+        }
+        finally
+        {
+            Directory.Delete(tmp, true);
+        }
     }
 
     /// <summary>

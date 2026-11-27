@@ -276,6 +276,12 @@ public sealed class SimulationLuaBridge : ILuaWorldBridge
     /// </summary>
     public void SetSelectedName(string? name) => _selected = name;
 
+    /// <summary>
+    /// Updates the live camera snapshot from the renderer/UI host so <c>worldToScreen</c> and <c>getCamera</c>
+    /// track the active frame camera even when <see cref="World.View"/> is not populated.
+    /// </summary>
+    public void SetCamera(LuaCameraSnap camera) => _camera = camera;
+
     /// <inheritdoc />
     public LuaGameDataRecord? LookupGameData(string name, int? kind)
     {
