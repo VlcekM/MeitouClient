@@ -223,7 +223,9 @@ Meitou (`TerrainRenderer.Resolve`, `IWorldPostChain.TerrainResolveTargets`: `Pos
 - Not in the reflection, the viewer's other views or with the wireframe: those draw the patches' colour as before (`ResolveInputs` null).
 - **Metal**: the same passes; its targets' row 0 is the top (`IGpuContext.RenderTargetsBottomUp` false), so the resolve's programs turn a pixel's clip y round
   (`RESOLVE_ROWS_DOWN`): unturned, every point was unprojected mirrored and the ground came out streaked and flat. **Verified** (M-series, `fps_issue` save, 1080p,
-  High, paused, zoom 31 and 300): against the patches' second pass, about 100 of 8.3 M pixels differ by more than 3 %.
+  High, paused, zoom 31 and 300): against the patches' second pass, about 100 of 8.3 M pixels differ by more than 3 %. The split's near rectangle
+  (`NearScissor`, the scissor of the relief pass and the near program) counts its rows from the top there too: counted from the bottom, a zoomed-out view
+  (where the split runs) showed the sky through the near ground, bounded by the march's distance (**Observed**, `big_squad` save, zoom 689; whole at 300 to 2000 after).
 - **Split at the march's distance** (`TerrainShaders.ResolvePart`, `TerrainRenderer.NearRect`, switch `TerrainResolveSplit`): with the ground parallax on, the
   resolve is two triangles. The far program is built without the march (`NO_MARCH`) and leaves out the pixels the march's own test takes
   (`uParallax > 0.0 && distance < uParallaxEnd`); the near program is the full one, drawn last, keeps those pixels and a unit more (so the two programs' rounding leaves

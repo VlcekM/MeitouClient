@@ -1005,7 +1005,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     /// <summary>
     /// The near side's rectangle of the split (<see cref="NearRect"/>) in <paramref name="targets"/>' pixels, four pixels wider, as the picture's passes
-    /// take NDC (LampShadowPass.PlanAreas); null when the march reaches no pixel.
+    /// take NDC (LampShadowPass.PlanAreas); null when the march reaches no pixel. Its rows counted from the top on targets whose row 0 is the top
+    /// (Metal: <see cref="IGpuContext.RenderTargetsBottomUp"/> false), where the rectangle from the bottom left the near ground undrawn in a zoomed-out view.
     /// </summary>
     PixelRect? NearScissor(PassTargets targets)
     {
@@ -1016,6 +1017,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         int x1 = Math.Min((int)MathF.Ceiling((near.Z + 1) * 0.5f * targets.Width) + 4, targets.Width);
         int y1 = Math.Min((int)MathF.Ceiling((near.W + 1) * 0.5f * targets.Height) + 4, targets.Height);
         if (x1 <= x0 || y1 <= y0) return null;
+        if (!_gpu.RenderTargetsBottomUp) (y0, y1) = (targets.Height - y1, targets.Height - y0);
 
         return new PixelRect(x0, y0, (uint)(x1 - x0), (uint)(y1 - y0));
     }
