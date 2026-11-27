@@ -230,7 +230,9 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   `looks.presets`, the first saved as no key, or a player's JSON file in `looks.folder` beside `meitou.user.json`, its `name` and
   `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou effect
   switch off but the performance ones, the look sliders at the game's value) or `looks.meitou` with the preset's own values over them (the quality tier's
-  switches are left to the tier). Choosing one writes them, so the rows show it at once and the game counts no change from it; at Low
+  switches are left to the tier). Faithful also caps the technique choices at `looks.faithfulCaps` (`WorldFrame.FaithfulChoices`: sun shadows 1, the
+  game's cascades; ambient occlusion type 0; global illumination 0), keeping one already below (shadows off stay off): the game reads a saved choice
+  over the switches it stands for, so without the cap a saved indirect light stayed on under Faithful. Choosing one writes them, so the rows show it at once and the game counts no change from it; at Low
   the game still holds the tier's look switches off at start unless kept on (`QualityTiers.ApplySavedPreset`). No `faithfulLook`
   reads Faithful when every switch Faithful turns off and Meitou turns on is saved off, as the game does (unsaved, not written back). A look slider's Default writes the look's value.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its

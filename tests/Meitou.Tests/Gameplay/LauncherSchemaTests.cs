@@ -84,6 +84,24 @@ public class LauncherSchemaTests
         Assert.Equal(Array.Empty<string>(), stale.ToArray());
     }
 
+    /// <summary>
+    /// The launcher's Faithful look caps the technique choices (docs/launcher.md "Graphics"), which the game reads over the switches they stand for:
+    /// a cap that is not the choice with every one of those switches on its Faithful side would leave the indirect light on, or turn the sun's
+    /// shadows off, where the game's own Faithful does not; and a choice below its cap (the shadows off) must stay.
+    /// </summary>
+    [Fact]
+    public void Faithful_caps_each_technique_choice_as_the_switches_it_stands_for_read_on_their_Faithful_side()
+    {
+        var looks = Schema.Looks!;
+        var choices = All.Where(s => WorldFrame.ChoiceSliders.Contains(s.Key)).Select(s => s.Key).Order();
+        Assert.Equal(choices, looks.FaithfulCaps.Keys.Order());
+        foreach (var (key, cap) in looks.FaithfulCaps) Assert.Equal(WorldFrame.ChoiceFromSwitches(key, _ => false, shadows: true), cap);
+
+        var above = looks.FaithfulCaps.ToDictionary(c => c.Key, c => c.Value + 1);
+        Assert.Equal(looks.FaithfulCaps.OrderBy(c => c.Key), looks.CappedChoices(key => above[key]).OrderBy(c => c.Key));
+        Assert.Empty(looks.CappedChoices(_ => 0));
+    }
+
     [Fact]
     public void Each_setting_is_unique_and_describes_its_values()
     {

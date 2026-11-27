@@ -228,20 +228,8 @@ static class LauncherSchema
     static float ChoiceDefault(string choice)
     {
         var on = WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).ToDictionary(e => e.Name, e => e.IsMeitou);
-        bool On(string name) => on.TryGetValue(name, out bool v) && v;
 
-        return choice switch
-        {
-            WorldFrame.SunShadowsChoice => On("Traced sun shadows") ? 3
-                : On("Shadows") ? 2
-                : 1,
-            WorldFrame.OcclusionChoice => !On("Ambient occlusion") ? 0
-                : On("Ground-truth occlusion") ? 2
-                : 1,
-            _ => !On("Indirect light") ? 0
-                : On("Hybrid GI") ? 2
-                : 1,
-        };
+        return WorldFrame.ChoiceFromSwitches(choice, name => on.TryGetValue(name, out bool v) && v, shadows: true);
     }
 
     /// <summary>
@@ -550,6 +538,7 @@ static class LauncherSchema
             PresetKey = Key(nameof(UserConfig.LookPreset)),
             Faithful = keys.ToDictionary(k => k,
                 k => IsSwitch(k) ? 0 : LookPresets.UnderSwitch(k) ? shown[k] : LookPresets.LabelGameValue(k) ?? shown[k]),
+            FaithfulCaps = WorldFrame.FaithfulChoices.Where(c => shown.ContainsKey(c.Key)).ToDictionary(c => c.Key, c => c.Value),
             Meitou = keys.Where(k => !tier.Contains(k)).ToDictionary(k => k, k => shown[k]),
             Presets = [.. LookPresets.BuiltInLooks.Select(l => new SettingsLook { Name = l.Name, Values = new(l.Values) })],
             Folder = LookPresets.LookFolder,

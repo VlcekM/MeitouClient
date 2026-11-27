@@ -502,6 +502,18 @@ static partial class WorldFrame
     public static readonly string[] ChoiceSliders = [SunShadowsChoice, OcclusionChoice, GiChoice];
 
     /// <summary>
+    /// Each choice's value with every switch it stands for on its Faithful side (<see cref="ChoiceFromSwitches"/>): the game's cascades (off when the
+    /// shadows are), no ambient occlusion, no indirect light. The launcher's Faithful look
+    /// caps the choices at these (SettingsLooks.FaithfulCaps).
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, float> FaithfulChoices = new Dictionary<string, float>
+    {
+        [SunShadowsChoice] = 1,
+        [OcclusionChoice] = 0,
+        [GiChoice] = 0,
+    };
+
+    /// <summary>
     /// The switches the <see cref="ChoiceSliders"/> replace on screen.
     /// </summary>
     public static readonly string[] ChoiceDrivenSwitches =
@@ -689,13 +701,27 @@ static partial class WorldFrame
     /// The <see cref="SunShadowsChoice"/> the switches stand for: 0 off, 1 Faithful cascades, 2 Meitou cascades, 3 traced, 4 traced near and
     /// cascades far.
     /// </summary>
-    static float SunShadowsMode(List<Toggle> toggles, ShadowPass shadow)
-    {
-        if (!shadow.Enabled) return 0;
-        if (ChoiceOn(toggles, "Traced sun shadows")) return ChoiceOn(toggles, TracedFarCascadesSwitch) ? 4 : 3;
+    static float SunShadowsMode(List<Toggle> toggles, ShadowPass shadow) =>
+        ChoiceFromSwitches(SunShadowsChoice, label => ChoiceOn(toggles, label), shadow.Enabled);
 
-        return ChoiceOn(toggles, "Shadows") ? 2 : 1;
-    }
+    /// <summary>
+    /// The value of the technique choice <paramref name="choice"/> the switches stand for (<paramref name="on"/>: a switch is on its Meitou side;
+    /// <paramref name="shadows"/>: the sun's shadows are drawn): sun shadows 0 off, 1 Faithful cascades, 2 Meitou cascades, 3 traced, 4 traced near
+    /// and cascades far; ambient occlusion 0 off, 1 SSAO, 2 GTAO; global illumination 0 off, 1 probes, 2 probes and hybrid.
+    /// </summary>
+    internal static float ChoiceFromSwitches(string choice, Func<string, bool> on, bool shadows) => choice switch
+    {
+        SunShadowsChoice => !shadows ? 0
+            : on("Traced sun shadows") ? on(TracedFarCascadesSwitch) ? 4 : 3
+            : on("Shadows") ? 2
+            : 1,
+        OcclusionChoice => !on("Ambient occlusion") ? 0
+            : on("Ground-truth occlusion") ? 2
+            : 1,
+        _ => !on("Indirect light") ? 0
+            : on("Hybrid GI") ? 2
+            : 1,
+    };
 
     /// <summary>
     /// Sets the switches and the shadow distance for the <see cref="SunShadowsChoice"/> <paramref name="mode"/>.
@@ -726,12 +752,7 @@ static partial class WorldFrame
     /// <summary>
     /// The <see cref="OcclusionChoice"/> the switches stand for: 0 off, 1 SSAO, 2 GTAO.
     /// </summary>
-    static float OcclusionMode(List<Toggle> toggles)
-    {
-        if (!ChoiceOn(toggles, "Ambient occlusion")) return 0;
-
-        return ChoiceOn(toggles, "Ground-truth occlusion") ? 2 : 1;
-    }
+    static float OcclusionMode(List<Toggle> toggles) => ChoiceFromSwitches(OcclusionChoice, label => ChoiceOn(toggles, label), shadows: true);
 
     /// <summary>
     /// Sets the switches for the <see cref="OcclusionChoice"/> <paramref name="mode"/>.
@@ -745,12 +766,7 @@ static partial class WorldFrame
     /// <summary>
     /// The <see cref="GiChoice"/> the switches stand for: 0 off, 1 probes, 2 probes and hybrid.
     /// </summary>
-    static float GiMode(List<Toggle> toggles)
-    {
-        if (!ChoiceOn(toggles, "Indirect light")) return 0;
-
-        return ChoiceOn(toggles, "Hybrid GI") ? 2 : 1;
-    }
+    static float GiMode(List<Toggle> toggles) => ChoiceFromSwitches(GiChoice, label => ChoiceOn(toggles, label), shadows: true);
 
     /// <summary>
     /// Sets the switches for the <see cref="GiChoice"/> <paramref name="mode"/>: off also leaves the traced sun.
