@@ -92,6 +92,11 @@ sealed class InteriorView(GameHost host)
     /// How far (units) outside the indoor hull a character still counts as inside (engine choice: the feet stand on the floor at the hull's bottom).
     /// </summary>
     internal const float InsideMargin = 2;
+    /// <summary>
+    /// How far (units) above a building's floor collision a raised navmesh surface may sit to count as that floor's deck (Recast rounds spans up by
+    /// up to a height cell; well under any storey step).
+    /// </summary>
+    const float DeckSurfaceMargin = 4;
 
     /// <summary>
     /// The viewed floor (the game's global floor): 0 at the start, stepped by PageUp / PageDown (<see cref="StepFloor"/>), and set to the
@@ -494,10 +499,30 @@ sealed class InteriorView(GameHost host)
     float? CameraFeature(float x, float z, float top) => host.ActiveObjects?.FeatureHeightBelow(x, z, top);
 
     /// <summary>
+    /// Whether <paramref name="at"/> lies on a hidden floor of a viewed or furnished building: an open deck or walkable roof whose trigger stops
+    /// below it so standing there counts as outdoors. Held-open buildings draw every floor, so their decks stay clickable.
+    /// </summary>
+    bool HiddenOpenedSurface(System.Numerics.Vector3 at) =>
+        HiddenOpenedSurface(_viewed, at) || HiddenOpenedSurface(_furnished, at);
+
+    /// <summary>
+    /// <see cref="HiddenOpenedSurface(System.Numerics.Vector3)"/> over one opened-building list.
+    /// </summary>
+    bool HiddenOpenedSurface(List<InteriorVolume> list, System.Numerics.Vector3 at)
+    {
+        foreach (var room in list)
+        {
+            if (!InteriorFloors.TryGetValue(room.PlacementId, out int shown) || shown >= room.TopFloor) continue;
+            if (room.SurfaceUnder(at) is { } hit && at.Y - hit.Y <= DeckSurfaceMargin && hit.Floor > shown) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Where a click ray first comes down onto a walkable navmesh surface clear of the terrain (a wall top, a ramp, a deck) within <paramref
     /// name="distance"/>; the terrain and room picks do not see those, so a click there went to the blocked ground under it. A surface inside a
-    /// building's rooms and under its ceiling is left to the room pick (it honours the viewed floor); an open deck or roof walk, though within the
-    /// interior's height, is not, unless the building is opened and that floor hidden. Null when there is none.
+    /// building's rooms and under its ceiling is left to the room pick (it honours the viewed floor); an open deck or roof walk, whether inside or
+    /// above its building's trigger hull, is picked here unless its building is opened and that floor hidden. Null when there is none.
     /// </summary>
     internal System.Numerics.Vector3? SurfaceMoveHit(System.Numerics.Vector3 origin, System.Numerics.Vector3 direction, float distance)
     {
@@ -516,9 +541,9 @@ sealed class InteriorView(GameHost host)
                 if (h > previousY + 0.5f || h < p.Y - 0.5f || h - host.Nav.Walkability.TerrainHeight(p.X, p.Z) <= 5) continue;
                 var at = new System.Numerics.Vector3(p.X, h, p.Z);
                 // Inside the rooms only under a ceiling: an open deck or roof walk is picked here, unless its building is opened with that floor
-                // hidden above the viewed one.
-                if (host.ActiveObjects?.InteriorAt(at, InsideMargin) is not { } room) return at;
-                if (!room.Covered(at) && !FloorHiddenAt(room, at)) return at;
+                // hidden above the viewed one (including a deck whose trigger stops under it so standing on it counts as outdoors).
+                if (host.ActiveObjects?.InteriorAt(at, InsideMargin) is { } room && (room.Covered(at) || FloorHiddenAt(room, at))) continue;
+                if (!HiddenOpenedSurface(at)) return at;
             }
             previousY = p.Y;
         }
