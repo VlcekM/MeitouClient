@@ -210,7 +210,9 @@ sealed class GameMods(GameHost host)
     /// </summary>
     internal void UpdateModHits()
     {
-        if (Mods is not { WantsCombatHits: true }) return;
+        bool wantsCode = Mods is { WantsCombatHits: true };
+        bool wantsLua = Lua is { HasRunningMods: true };
+        if (!wantsCode && !wantsLua) return;
         var world = host.Session.World;
         if (!ReferenceEquals(_hitsFor, world))
         {
@@ -221,7 +223,8 @@ sealed class GameMods(GameHost host)
         }
         _frameHits.Clear();
         while (_hitFeed.TryDequeue(out var hit)) _frameHits.Add(hit);
-        Mods.DeliverCombatHits(_frameHits);
+        if (wantsCode) Mods!.DeliverCombatHits(_frameHits);
+        if (wantsLua) Lua!.RecordCombatHits(world, _frameHits);
     }
 
     /// <summary>

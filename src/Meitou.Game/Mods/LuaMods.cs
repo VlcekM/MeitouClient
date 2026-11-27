@@ -1,10 +1,13 @@
+using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Game;
 using Meitou.Game.Host;
 using Meitou.Game.Host.Input;
+using Meitou.Game.Rendering.Frame;
 using Meitou.Lua;
 using Meitou.Simulation;
+using Meitou.Simulation.Combat;
 
 namespace Meitou.Modding;
 
@@ -14,6 +17,11 @@ namespace Meitou.Modding;
 /// </summary>
 sealed class LuaMods
 {
+    /// <summary>
+    /// The most combat hit events forwarded to Lua in a single frame.
+    /// </summary>
+    const int MaxHitsPerFrame = 64;
+
     /// <summary>
     /// The bridge the Lua mods read the simulation through and queue their actions on.
     /// </summary>
@@ -33,6 +41,11 @@ sealed class LuaMods
     /// The KenshiLua host running the mods.
     /// </summary>
     readonly KenshiLuaHost _host;
+
+    /// <summary>
+    /// Combat hit events collected since the last frame tick, cleared after dispatch.
+    /// </summary>
+    readonly List<LuaGameEvent> _pendingEvents = [];
 
     /// <summary>
     /// The world the bridge last stepped.
@@ -96,6 +109,20 @@ sealed class LuaMods
     }
 
     /// <summary>
+    /// Queues resolved combat hits from the current frame so <see cref="UpdateFrame"/> dispatches them as <c>onCombatHit</c>.
+    /// </summary>
+    public void RecordCombatHits(World world, IReadOnlyList<CombatHit> hits)
+    {
+        if (!_host.HasRunningMods || hits.Count == 0) return;
+
+        int take = Math.Min(hits.Count, MaxHitsPerFrame - _pendingEvents.Count);
+        for (int i = 0; i < take; i++)
+        {
+            _pendingEvents.Add(BuildCombatHitEvent(world, hits[i]));
+        }
+    }
+
+    /// <summary>
     /// Steps the simulation bridge (when a world is active) and dispatches per-frame Lua callbacks.
     /// </summary>
     public void UpdateFrame(GameHost host)
@@ -103,17 +130,101 @@ sealed class LuaMods
         if (!_host.HasRunningMods) return;
 
         StepWorld(host);
+        IReadOnlyList<LuaGameEvent>? events = _pendingEvents.Count > 0 ? _pendingEvents : null;
 
         if (host.Player is not { } ui)
         {
-            _host.Tick();
+            _host.Tick(events);
+            _pendingEvents.Clear();
             return;
         }
 
         _bridge.SetViewSize(ui.Width, ui.Height);
+        if (host.Camera is { } cam) _bridge.SetCamera(CaptureCamera(cam, ui.Width, ui.Height));
         _bridge.SetSelectedName(SelectedName(ui, host));
-        _host.Tick();
+        _host.Tick(events);
+        _pendingEvents.Clear();
         _overlay.SyncOpen(ui.FaithfulScreens);
+    }
+
+    /// <summary>
+    /// Captures a <see cref="LuaCameraSnap"/> from the active <see cref="WorldCamera"/> and viewport dimensions.
+    /// </summary>
+    internal static LuaCameraSnap CaptureCamera(WorldCamera cam, int width, int height)
+    {
+        Vector3 eye = cam.Eye;
+        Vector3 fwd = cam.Target - eye;
+        float len = fwd.Length();
+        fwd = len > 1e-5f ? fwd / len : new Vector3(0, 0, -1);
+
+        double yaw = ((Math.Atan2(fwd.X, fwd.Z) * 180.0 / Math.PI) + 360.0) % 360.0;
+        double pitch = Math.Asin(Math.Clamp((double)fwd.Y, -1.0, 1.0)) * 180.0 / Math.PI;
+        double fovDeg = float.IsFinite(cam.FieldOfView) && cam.FieldOfView > 0.05f
+            ? cam.FieldOfView * 180.0 / Math.PI
+            : 50.0;
+        double aspect = width > 0 && height > 0 ? (double)width / height : (16.0 / 9.0);
+
+        return new LuaCameraSnap(eye.X, eye.Y, eye.Z, fwd.X, fwd.Y, fwd.Z, yaw, pitch, fovDeg, aspect);
+    }
+
+    /// <summary>
+    /// Builds the read-only <see cref="LuaGameEvent"/> payload for one resolved <see cref="CombatHit"/>.
+    /// </summary>
+    internal static LuaGameEvent BuildCombatHitEvent(World? world, in CombatHit hit)
+    {
+        double cut = hit.Damage.Cut;
+        double blunt = hit.Damage.Blunt;
+        double pierce = hit.Damage.Pierce;
+
+        Dictionary<string, object?> payload = new(20)
+        {
+            ["tick"] = hit.Tick,
+            ["source"] = hit.Source.ToString().ToLowerInvariant(),
+            ["attackerSlot"] = hit.Attacker.Slot,
+            ["attackerGen"] = hit.Attacker.Generation,
+            ["attackerName"] = ResolveCharacterName(world, hit.Attacker),
+            ["victimSlot"] = hit.Victim.Slot,
+            ["victimGen"] = hit.Victim.Generation,
+            ["victimName"] = ResolveCharacterName(world, hit.Victim),
+            ["part"] = hit.Part,
+            ["partName"] = ResolvePartName(world, hit.Victim, hit.Part),
+            ["cut"] = cut,
+            ["blunt"] = blunt,
+            ["pierce"] = pierce,
+            ["stun"] = (double)hit.Damage.ExtraStun,
+            ["damage"] = cut + blunt + pierce,
+            ["x"] = (double)hit.VictimPosition.X,
+            ["y"] = (double)hit.VictimPosition.Y,
+            ["z"] = (double)hit.VictimPosition.Z,
+            ["intended"] = hit.Intended,
+            ["lowStrike"] = hit.LowStrike,
+        };
+        return new LuaGameEvent("hit", payload);
+    }
+
+    /// <summary>
+    /// The character's name when it resolves in <paramref name="world"/>; empty otherwise.
+    /// </summary>
+    static string ResolveCharacterName(World? world, CharacterId id)
+    {
+        if (world is null || id.IsNone) return "";
+        if (!world.Characters.TryResolveNext(id, out int slot)) return "";
+
+        return world.Characters.Cold(slot)?.Name ?? "";
+    }
+
+    /// <summary>
+    /// The body part string id of <paramref name="partIndex"/> on <paramref name="victim"/>; empty when unavailable.
+    /// </summary>
+    static string ResolvePartName(World? world, CharacterId victim, int partIndex)
+    {
+        if (world is null || victim.IsNone || partIndex < 0) return "";
+        if (!world.Characters.TryResolveNext(victim, out int slot)) return "";
+
+        var parts = world.Characters.Cold(slot)?.Medical?.Parts;
+        if (parts is null || partIndex >= parts.Count) return "";
+
+        return parts[partIndex].Template?.StringId ?? "";
     }
 
     /// <summary>
@@ -165,7 +276,11 @@ sealed class LuaMods
     {
         if (host.Session?.World is not { } world) return;
 
-        if (!ReferenceEquals(_lastWorld, world)) _lastWorld = world;
+        if (!ReferenceEquals(_lastWorld, world))
+        {
+            _lastWorld = world;
+            _pendingEvents.Clear();
+        }
         _bridge.StepWorld(world);
     }
 
