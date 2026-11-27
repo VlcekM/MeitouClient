@@ -169,7 +169,7 @@ replacements (`WorldTextureCache.AwaitedCount`: the finer image is drawn until o
 textures upload and appearances build for up to 16 ms a frame instead of the play budgets.
 A game's loading screen waits for every look within `LoadingReach` (3000) of the camera's focus, so those are built whatever the eye's draw reach
 and tiny-cull; building only the eye's reach left looks waited for but never built (the screen stayed up).
-Generated four-level reductions are always enabled; their index lists are cached on disk (`%LOCALAPPDATA%\Meitou\charlods`, keyed by the parts'
+Worn items on the body's skeleton start their levels twice as far as the body (`WornLodScale`), so the body does not show through cloth at range (#1524; **Observed** report, not tested in game). Generated four-level reductions are always enabled; their index lists are cached on disk (`%LOCALAPPDATA%\Meitou\charlods`, keyed by the parts'
 vertices and indices, radius and settings; `--no-load-cache` bypasses it), as building them is most of a mesh's preparation; with 100+ characters drawn in the world, pose rates fall with the character's size on screen
 (its diameter in pixels at the view's projection, so resolution and field of view count and big animals keep their rate farther): 100 px and more every
 frame, then at most 30/15/7.5 poses/s below 100/50/25 px (in time, the game's animation clock, each on its own phase); at most 48 characters, the largest first,

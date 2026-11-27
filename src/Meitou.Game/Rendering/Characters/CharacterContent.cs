@@ -1781,10 +1781,21 @@ internal sealed class CharacterContent : IDisposable
     const int LodVersion = 1;
 
     /// <summary>
-    /// How much farther a part's generated levels start (<see cref="HairLodScale"/> for a person's hair and beard).
+    /// How much farther the levels of an item worn on the body's skeleton start: cloth hugs the body within a pixel at range, so levels
+    /// reduced alike let the body's foot or arm show through tabi or rags; the cloth stays finer than the body under it (#1524).
     /// </summary>
-    static float PartLodScale(CharacterAppearance c,
-        CharacterPart part) => part.Record.Type == FcsRecordType.Attachment && c.Animal is null ? HairLodScale : 1;
+    internal const float WornLodScale = 2;
+
+    /// <summary>
+    /// How much farther a part's generated levels start (<see cref="HairLodScale"/> for a person's hair and beard, <see cref="WornLodScale"/> for
+    /// worn items on the body's skeleton).
+    /// </summary>
+    static float PartLodScale(CharacterAppearance c, CharacterPart part)
+    {
+        if (part.Record.Type == FcsRecordType.Attachment && c.Animal is null) return HairLodScale;
+
+        return part.Mode == AttachMode.SharedSkeleton && c.Animal is null ? WornLodScale : 1;
+    }
 
     /// <summary>
     /// A mesh's own triangles, its full level.
