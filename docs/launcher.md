@@ -215,12 +215,14 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - A section's `groups` (null in older schemas: flat rows) are the menu's features (`FeatureGrouping.FeatureGroups`): one row headed by
   a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
   open while the launcher runs), named without the feature's name they repeat, as in the game. The Display section has two: the upscaler (render scale and its custom value, sharpness, DLSS preset) and HDR output (white and peak brightness).
-- The Look row is the game's look bar, without the mods' part (their presets and their settings: a preset's `mods` values are kept
-  when it is saved or shared here, and set when it is chosen in the game): Faithful | Meitou, the preset (`looks.presets`, then the player's
-  files), the changes from it
+- The Look row is the game's look bar: Faithful | Meitou, the preset (`looks.presets`, then the player's files, then the enabled mods'
+  `presets/*.json`, marked with the mod's name and not saved over or deleted), the changes from it
   (`looks.keys`, the look tabs' settings: Revert; Save for the player's own), Save as (a name), Share (an `MT1:` code on the clipboard),
   Paste, Delete (two clicks). Files and codes are the game's (`LookPresetFile`, Meitou.Core); a saved preset holds what differs from
-  `looks.meitou`, marked `looks.made`.
+  `looks.meitou`, marked `looks.made`. A preset's `mods` values ([modding](modding.md), "Look presets") are written to `modSettings` when
+  it is chosen, those the look before held and it does not removed (the mod's default); they go with the preset when it is saved or
+  shared. The launcher shows no mod setting and knows none but those a preset holds: one changed in the game stays as it is, and the game
+  counts it as a change from the preset.
 - `looks` (null in older schemas: no row) is the Look row: Faithful (`faithfulLook` true) or a Meitou look preset (`lookPreset`: one of
   `looks.presets`, the first saved as no key, or a player's JSON file in `looks.folder` beside `meitou.user.json`, its `name` and
   `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou effect

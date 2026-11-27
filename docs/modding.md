@@ -1516,8 +1516,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   format: `format`, `name`, `meitou`, `values` by the keys `meitou.user.json`'s `graphics` uses, optional `mods`), listed in the look
   drop-down after the player's with the mod's name, in load order; a name a look already has is left out, and the player cannot save over
   one (Save as makes a copy). A game older than `Look` fails reading the attribute, so a mod using it sets `gameVersion`; an older game or
-  launcher ignores `mods` in a preset. The launcher lists the player's presets only, applies their `values` and keeps their `mods` when it
-  saves or shares one. **Observed** (2026-11-27, local probe: capture, apply, count, the file and code round trip; the look drop-down drawn
+  launcher ignores `mods` in a preset. The launcher lists the mods' presets too and writes a chosen preset's `mods` values
+  ([launcher](launcher.md)). **Observed** (2026-11-27, local probe: capture, apply, count, the file and code round trip; the look drop-down drawn
   with a scratch mod's preset, `--settings-showcase`; with the mods' settings given to that menu for the run, choosing the mod's preset set its
   look setting and the picture took the mod's tint, and Meitou or another preset put it back; a setting the mod changed itself was in
   `meitou.user.json` 2 s later, the game still running).

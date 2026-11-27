@@ -508,7 +508,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// The Meitou preset: the built-in, the examples and the player's own; choosing one applies it.
+    /// The Meitou preset: the built-in, an older game's examples, the player's own and the enabled mods'; choosing one applies it.
     /// </summary>
     ComboBox LookPicker(SettingsLooks l, List<LookChoice> all, LookChoice active)
     {
@@ -532,7 +532,9 @@ public sealed partial class MainWindow
             ? changes == 0 ? "" : changes == 1 ? Tr("1 change from the game") : Tr("{1} changes from the game", changes)
             : changes > 0 ? changes == 1 ? Tr("1 unsaved change") : Tr("{1} unsaved changes", changes)
             : active.Source == "mine" ? Tr("Mine · Meitou {1}", MadeOf(active))
-                : active.Source == "built in" ? Tr("Built in") : Tr("Example");
+                : active.Source == "built in" ? Tr("Built in")
+                : active.Source == "example" ? Tr("Example")
+                : active.Source;   // a mod's preset: the mod's name
         var statusText = new TextBlock
         {
             Classes = { "desc" }, Text = status, VerticalAlignment = VerticalAlignment.Center, Margin = new(6, 0, 6, 0),
@@ -615,16 +617,17 @@ public sealed partial class MainWindow
             return;
         }
         var saved = pasted with { Name = LookPresetFile.FreeName(pasted.Name, all.Select(x => x.Look.Name)) };
+        string file;
         try
         {
-            LookPresetFile.Save(folder, saved);
+            file = LookPresetFile.Save(folder, saved);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Status(Tr("Could not write the preset: {1}", e.Message));
             return;
         }
-        ApplyLook(l, false, new LookChoice(new SettingsLook { Name = saved.Name, Values = saved.Values }, null, "mine"));
+        ApplyLook(l, false, new LookChoice(new SettingsLook { Name = saved.Name, Values = saved.Values }, file, "mine"));
         Status(Tr("{1} pasted and loaded (made on Meitou {2}).", saved.Name, saved.Made));
     }
 
@@ -640,6 +643,9 @@ public sealed partial class MainWindow
         {
             string chosen = (name.Text ?? "").Trim();
             _namingLook = null;
+            // A look that is not the player's (Meitou's, a mod's) keeps its name to itself: the preset is saved under a free one.
+            bool taken = AllLooks(l).Any(x => x.Source != "mine" && x.Look.Name.Equals(chosen, StringComparison.OrdinalIgnoreCase));
+            if (taken) chosen = LookPresetFile.FreeName(chosen, AllLooks(l).Select(x => x.Look.Name));
             if (keep && chosen.Length > 0) SaveLook(l, chosen, folder);
             else ShowGraphics();
         }
@@ -690,15 +696,17 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Makes a look the active one and writes its values: Faithful's, or Meitou's with the preset's own over them (Faithful keeps the preset to go
-    /// back to).
+    /// back to, and leaves the mods' settings alone, as the game does).
     /// </summary>
     void ApplyLook(SettingsLooks l, bool faithful, LookChoice look)
     {
+        var before = ActiveLook(l);
         _game.Set(l.FaithfulKey, faithful);
         if (!faithful)
         {
             if (look.Source == "built in") _game.Remove(l.PresetKey);
             else _game.Set(l.PresetKey, look.Look.Name);
+            ApplyLookMods(before, look);
         }
         foreach (var (key, value) in faithful ? l.Faithful : LookValues(l, look.Look)) _game.SetGraphics(key, value);
         SaveGame();
@@ -724,7 +732,8 @@ public sealed partial class MainWindow
         }
                 try
         {
-            LookPresetFile.Save(folder, new(name, l.Made, values));
+            // The mods' values of the look saved from go with it (saved over itself, its file's are kept).
+            LookPresetFile.Save(folder, new(name, l.Made, values) { Mods = ModsOf(ActiveLook(l)) });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -770,16 +779,64 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// The schema's looks (Meitou built in, then the examples), then the player's files in the look folder beside the game's settings file.
+    /// The schema's looks (Meitou built in, then an older game's examples), the player's files in the look folder beside the game's settings
+    /// file, then those the enabled mods ship in the same folder of their own, in load order and marked with the mod's name, as the game lists
+    /// them; a name a look already has is left out.
     /// </summary>
-    static List<LookChoice> AllLooks(SettingsLooks l)
+    List<LookChoice> AllLooks(SettingsLooks l)
     {
         var all = l.Presets.Select((look, i) => new LookChoice(look, null, i == 0 ? "built in" : "example")).ToList();
         if (l.Folder.Length == 0) return all;
-        foreach (var (file, read) in LookPresetFile.ReadFolder(Path.Combine(LauncherConfig.DataDirectory, l.Folder)))
-            if (!all.Any(x => x.Look.Name == read.Name))
-                all.Add(new(new SettingsLook { Name = read.Name, Values = read.Values }, file, "mine"));
+
+        AddLooks(all, Path.Combine(LauncherConfig.DataDirectory, l.Folder), "mine");
+        foreach (var mod in _mods.Where(m => m.Enabled)) AddLooks(all, Path.Combine(mod.Mod.Folder, l.Folder), mod.Mod.Name);
         return all;
+    }
+
+    /// <summary>
+    /// Adds a folder's preset files under <paramref name="source"/>, but those whose name a look already has.
+    /// </summary>
+    static void AddLooks(List<LookChoice> all, string folder, string source)
+    {
+        foreach (var (file, read) in LookPresetFile.ReadFolder(folder))
+        {
+            if (all.Any(x => x.Look.Name.Equals(read.Name, StringComparison.OrdinalIgnoreCase))) continue;
+
+            all.Add(new(new SettingsLook { Name = read.Name, Values = read.Values }, file, source));
+        }
+    }
+
+    /// <summary>
+    /// The code mods' settings a look's file holds (<c>mods</c>: mod id, setting key, text); none for a look without a file.
+    /// </summary>
+    static Dictionary<string, Dictionary<string, string>> ModsOf(LookChoice? look) =>
+        look?.File is { } file && File.Exists(file) && LookPresetFile.Read(File.ReadAllText(file)) is { } read ? read.Mods : [];
+
+    /// <summary>
+    /// The active look among those offered: the saved preset's, else Meitou's.
+    /// </summary>
+    LookChoice ActiveLook(SettingsLooks l)
+    {
+        var all = AllLooks(l);
+        return all.FirstOrDefault(x => x.Look.Name == (_game.GetString(l.PresetKey) ?? l.Presets[0].Name)) ?? all[0];
+    }
+
+    /// <summary>
+    /// Writes the mods' settings a look holds into the game's saved ones and removes those the look before held and this one does not (back to
+    /// the mod's default). The launcher knows no other setting of a mod: one changed in the game stays, and the game counts it as a change.
+    /// </summary>
+    void ApplyLookMods(LookChoice before, LookChoice look)
+    {
+        var held = ModsOf(look);
+        foreach (var (mod, values) in ModsOf(before))
+        {
+            foreach (string key in values.Keys.Where(k => !(held.TryGetValue(mod, out var kept) && kept.ContainsKey(k))))
+                _game.SetModSetting(mod, key, null);
+        }
+        foreach (var (mod, values) in held)
+        {
+            foreach (var (key, text) in values) _game.SetModSetting(mod, key, text);
+        }
     }
 
     #endregion
