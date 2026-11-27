@@ -786,6 +786,11 @@ sealed class GamePages(SettingsMenu menu)
             "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. "
             + "In the game the head stays turned until the next thing it looks at.",
             Toggle: new("Head turns back", () => menu.Config.FixHeadTurnBack, v => menu.Config.FixHeadTurnBack = v, Remaster: true, OnOff: true)));
+        result.Add(new("Armour clipping",
+            "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap "
+            + "mesh is supplied. Applies to newly loaded or re-equipped characters.",
+            Toggle: new("Armour clipping", () => menu.Config.FixArmourClipping,
+                v => menu.Config.FixArmourClipping = Rendering.Characters.ArmourClipFix.Enabled = v, Remaster: true, OnOff: true)));
         result.Add(new("Information panel stays open",
             "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. "
             + "The game starts it collapsed every time.",

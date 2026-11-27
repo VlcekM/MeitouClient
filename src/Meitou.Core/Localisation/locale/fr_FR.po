@@ -5920,3 +5920,11 @@ msgstr "Qualité des textures du terrain"
 #. machine-translated
 msgid "Object & foliage texture quality"
 msgstr "Qualité des textures des objets et du feuillage"
+
+#. machine-translated
+msgid "Armour clipping"
+msgstr "Chevauchement d'armure"
+
+#. machine-translated
+msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
+msgstr "Adapte les maillages d'armure uniquement masculins portés par des personnages féminins pour qu'ils ne traversent pas le corps et rentre les armures de jambes volumineuses sous les longs manteaux lorsqu'aucun maillage de chevauchement n'est fourni. S'applique aux personnages nouvellement chargés ou rééquipés."
