@@ -148,9 +148,15 @@ is independent. A scene with no nearby water can skip water work, with conservat
 
 Grid rings in view (`WaterRenderer.GridRange`, switch `RingsInView`): the grid's indices run ring by ring from the farthest in, so one
 index run draws the rings between the nearest and the farthest ground distance at which the picture's rays (5 % wider) cross the slab the
-surface stays in (water level ± 200 units: the waves at the strongest wind, breakers, ripples, twice over). The steepest ray gives the
-nearest distance, the flattest the farthest (no cut when it does not go down); nothing is cut sideways; the whole grid when the eye is
-within 200 units above the level or under it. Same triangles in the same order, so the picture is the same. **Verified** (2026-11-16,
+surface stays in (water level ± the reach, `GridReach`: twice the sum of the shown ocean's significant height (`OceanSpectrum.SignificantHeight`:
+4 √(2 Σ |h0|²), the larger of the two spectra while one blends in) times the choppiness, the breakers' largest hump (3.65 × `Shore.W`: 1.92 the largest
+wave size, 1.9 the build-up; or the run-up, 1.92 × `Shore.Y`) and the ripples' clamp (4); at most 200, the fixed reach it replaced). The steepest ray
+gives the nearest distance, the flattest the farthest (no cut when it does not go down); nothing is cut sideways; the whole grid when the eye is
+within the reach above the level or under it. Same triangles in the same order, so the picture is the same. **Verified** (logged): the significant
+height is 21.1 units at the strongest wind (20 m/s) and 6.5 at 5.7 m/s, where the reach came to 50.8 (breakers 14.9). **Verified** (M6, Metal, Bark, paused,
+8 views from 8° to 70° pitch, 200 to 2000 zoom, the reach against a fixed 200): no difference on the water; 0.01 to 0.05 % of pixels differ, on object
+and shadow edges, between the two launches. **Observed** (M6, `fps_issue` save, 1080p High, the eye 67 units over the water level, no water in
+sight): 61.2 -> 63.8 frames a second at zoom 31, 74.4 -> 78.5 at zoom 300; the Xcode trace gave the grid's vertex stage 11 % of the frame before. **Verified** (2026-11-16,
 siwa-test6, paused, 5 views from 20° to 88° pitch with water in view, rings on against off: differences at the same-state noise floor).
 **Observed** (RTX 4090, 2560x1440): the whole grid (1.46 M vertices) cost 0.33 ms whatever the view; a town view with no water in
 sight draws 25 to 33 % of the indices, 0.14 to 0.16 ms; about 0.1 ms of the pass is not the grid.

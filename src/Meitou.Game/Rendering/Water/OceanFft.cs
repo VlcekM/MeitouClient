@@ -236,6 +236,11 @@ public sealed unsafe class OceanWaves : IDisposable
     uint _from, _to = 1;
 
     /// <summary>
+    /// The significant wave height of the spectrum in each slot (units; <see cref="OceanSpectrum.SignificantHeight"/>).
+    /// </summary>
+    readonly float[] _slotHeights = new float[2];
+
+    /// <summary>
     /// When the current blend began (game seconds; negative infinity: none, fully blended).
     /// </summary>
     double _blendStart = double.NegativeInfinity;
@@ -366,6 +371,14 @@ public sealed unsafe class OceanWaves : IDisposable
     /// A spectrum has been uploaded: before that the textures are undefined and the water must stay flat.
     /// </summary>
     public bool Ready { get; private set; }
+
+    /// <summary>
+    /// The significant wave height of what is shown (units): the larger of the two spectra while one blends into the other; 0 before the first
+    /// transform.
+    /// </summary>
+    public float SignificantHeight => !Ready ? 0
+        : BlendAt(_seconds) >= 1 ? _slotHeights[_to]
+        : MathF.Max(_slotHeights[_from], _slotHeights[_to]);
 
     /// <summary>
     /// For tests: the packed output (per texture, per cascade, Size² texels of four halves; displacement first).
@@ -584,6 +597,7 @@ public sealed unsafe class OceanWaves : IDisposable
     /// </summary>
     void Write(uint slot, Vector4[][] s)
     {
+        _slotHeights[slot] = OceanSpectrum.SignificantHeight(s);
         using var batch = _ctx.Uploads.Begin();
         for (int c = 0; c < Cascades; c++)
             batch.Write(_spectrum, ((ulong)slot * Cascades + (ulong)c) * _texels * 16, MemoryMarshal.AsBytes(s[c].AsSpan()));

@@ -1483,10 +1483,25 @@ public sealed unsafe class WaterRenderer : IDisposable
     public static bool RingsInView { get; set; } = true;
 
     /// <summary>
-    /// How far the surface is taken to stand from its undisplaced place at most, up, down or sideways (units): the ocean's waves at the strongest
-    /// wind (<see cref="OceanSpectrum.MaxWind"/>: a significant height near 90 units), the breakers and the ripples, twice over.
+    /// The most <see cref="GridReach"/> can be (units), the fixed reach it replaced. The strongest wind (<see cref="OceanSpectrum.MaxWind"/>: a
+    /// significant height of 21 units) with the strongest breakers (20) and the ripples comes to about 90.
     /// </summary>
-    const float GridReach = 200;
+    const float MaxGridReach = 200;
+
+    /// <summary>
+    /// How far the surface can stand from its undisplaced place now, up, down or sideways (units), twice over: the ocean's significant height
+    /// (<see cref="OceanWaves.SignificantHeight"/>, both spectra while one blends in) with its sideways part (<see cref="OceanWaves.Choppiness"/>),
+    /// the breakers' largest hump (the shader's <c>breakerScale</c>: the breaker height × 1.92, the largest wave size, × 1.9, the build-up) or
+    /// run-up (× 1.92), and the ripples' clamp (4); at most <see cref="MaxGridReach"/>.
+    /// </summary>
+    float GridReach()
+    {
+        float ocean = _ocean is { } waves ? waves.SignificantHeight * MathF.Max(1, waves.Choppiness) : 0;
+        var shore = _waves.Shore;
+        float breakers = MathF.Max(1.92f * 1.9f * shore.W, 1.92f * shore.Y);
+
+        return MathF.Min(2 * (ocean + breakers + 4), MaxGridReach);
+    }
 
     /// <summary>
     /// The water's maps: colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order
@@ -1881,7 +1896,7 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <summary>
     /// The grid's index range for a view: the rings between the nearest and the farthest ground distance at which the picture's rays cross the
-    /// slab the surface stays in (the water level, <see cref="GridReach"/> either side), the indices being the rings from the farthest in
+    /// slab the surface stays in (the water level, <see cref="GridReach"/>'s either side), the indices being the rings from the farthest in
     /// (<see cref="PolarGrid"/>), so one run of them. A ray going down by angle a meets depth h under the eye at h / tan a from the point under
     /// the eye: the steepest ray of the picture gives the nearest distance, the flattest the farthest (none when it does not go down). Sideways
     /// nothing is left out. The whole grid when the eye is within the slab or under it, or the matrix cannot be inverted.
@@ -1889,8 +1904,8 @@ public sealed unsafe class WaterRenderer : IDisposable
     (uint First, uint Count) GridRange(Matrix4x4 relativeViewProjection, Vector3 eye, float extent)
     {
         var whole = (0u, _gridIndexCount);
-        float depth = eye.Y - WorldWater.Height;
-        if (!RingsInView || _gridRadii.Length < 2 || depth <= GridReach || !Matrix4x4.Invert(relativeViewProjection, out var inverse)) return whole;
+        float depth = eye.Y - WorldWater.Height, reach = GridReach();
+        if (!RingsInView || _gridRadii.Length < 2 || depth <= reach || !Matrix4x4.Invert(relativeViewProjection, out var inverse)) return whole;
 
         // The picture's corner rays, a twentieth wider than it (the jitter, and a margin): each from two points of its line, so what the matrix
         // has left of the eye's place cancels.
@@ -1913,8 +1928,8 @@ public sealed unsafe class WaterRenderer : IDisposable
         {
             return (0, 0);   // no ray goes down: the slab is under the eye
         }
-        double near = steepest >= 1 ? 0 : (depth - GridReach) * Math.Sqrt(1 - (double)steepest * steepest) / steepest - GridReach;
-        double far = flattest <= 0 ? double.PositiveInfinity : (depth + GridReach) * Math.Sqrt(1 - (double)flattest * flattest) / flattest + GridReach;
+        double near = steepest >= 1 ? 0 : (depth - reach) * Math.Sqrt(1 - (double)steepest * steepest) / steepest - reach;
+        double far = flattest <= 0 ? double.PositiveInfinity : (depth + reach) * Math.Sqrt(1 - (double)flattest * flattest) / flattest + reach;
 
         // A ring pair holds a point at ground distance d only if its outer ring is at least that far and its inner one no farther, to within a
         // segment's sag (a 50th is far more).

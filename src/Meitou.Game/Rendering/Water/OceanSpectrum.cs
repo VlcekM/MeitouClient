@@ -49,6 +49,20 @@ public static class OceanSpectrum
     public static float WindMetres(float windSpeed) => Math.Clamp(windSpeed / 10f, MinWind, MaxWind);
 
     /// <summary>
+    /// The significant wave height (units) of a spectrum <see cref="Build"/> gave: 4 √m0, m0 the height's variance. A wave and its mirror make a
+    /// cosine of twice h0's amplitude (OceanTests), so each texel's h0 adds 2 |h0|² to m0.
+    /// </summary>
+    public static float SignificantHeight(Vector4[][] spectrum)
+    {
+        double sum = 0;
+        foreach (var cascade in spectrum)
+            foreach (var t in cascade)
+                sum += (double)t.X * t.X + (double)t.Y * t.Y;
+
+        return (float)(4 * Math.Sqrt(2 * sum));
+    }
+
+    /// <summary>
     /// The wave number range a cascade keeps (rad per unit): [lo, hi).
     /// </summary>
     public static (float Lo, float Hi) Band(int cascade)
