@@ -2590,7 +2590,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// <summary>
     /// The factor on a character's step time: <see cref="OffViewTime"/> out of view.
     /// </summary>
-    static float OffViewTimeFactor(World world, Vector3 at) => world.View is { } view && !MedicalClock.OnScreen(view, at) ? OffViewTime : 1;
+    internal static float OffViewTimeFactor(World world, Vector3 at) => world.View is { } view && !MedicalClock.OnScreen(view, at) ? OffViewTime : 1;
 
     /// <summary>
     /// The solid radius of a body: <see cref="BodyShare"/> of its footprint (a human's when it has no race data).

@@ -619,7 +619,8 @@ public sealed class AnimationSystem(
         {
             if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
 
-            float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
+            // a far character's step covers the ticks since its last (the far cadence, World.StepTicks); one off screen runs on twice the time, as its movement does
+            float dt = world.StepSeconds(i) * MovementSystem.OffViewTimeFactor(world, prev[i].Position);
             var cold = table.Cold(i)!;
             var a = cold.Animation ??= new CharacterAnimation();
             var v = CappedToMoved(next[i].Velocity, prev[i].Position, next[i].Position, dt);
