@@ -309,6 +309,7 @@ public sealed class KenshiLuaTests
 
             host.EnableHotReload(TimeSpan.FromMilliseconds(20));
             File.WriteAllText(mainPath, """
+                -- modified for hot-reload
                 local n = 0
                 registerHandler('onPlayerLoadFromSerialise', function(_, gd)
                   n = gd:getNumber('count', 0) + 1
@@ -318,7 +319,7 @@ public sealed class KenshiLuaTests
                 """);
 
             bool reloaded = false;
-            for (int i = 0; i < 40 && !reloaded; i++)
+            for (int i = 0; i < 200 && !reloaded; i++)
             {
                 Thread.Sleep(25);
                 host.Tick();

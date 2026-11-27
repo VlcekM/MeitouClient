@@ -59,11 +59,11 @@ internal sealed class LuaHotReloader : IDisposable
             {
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
-                EnableRaisingEvents = true,
             };
             watcher.Changed += (_, _) => MarkDirty(modId);
             watcher.Created += (_, _) => MarkDirty(modId);
             watcher.Renamed += (_, _) => MarkDirty(modId);
+            watcher.EnableRaisingEvents = true;
             _watchers[modId] = watcher;
         }
         catch (Exception)
