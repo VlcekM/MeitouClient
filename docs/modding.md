@@ -1505,7 +1505,7 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   cut to 200 characters. A source that throws or gives a reply without a text or press is logged once and dropped; a press that throws is
   logged. Without a source the conversation window is as before. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
-  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen, Look, Tab)]` (`ModSettings.cs`) become one group, in declaration order (a
+  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen, Look, Tab, Header)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page
   ([native UI](native-ui.md#settings)): `bool` an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a
   hundredth of the range otherwise), an enum or a `string` with Options a list, a `string` without Options a free text box (one line, at most
@@ -1531,6 +1531,10 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   id, preset, key, text), not dropped by Restore defaults, and read once the game starts the mods (after `Initialize`). With buttons and a text
   setting for the name a mod builds its own preset slots. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
   `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group).
+- **Feature rows:** `Header = true` on a `bool` or a list with a `SubGroup` makes it that sub-group's header row
+  (`ModSettingsRows.AddModSubGroup`): its label, hint and control on the header's line and the sub-group's other settings folded under it,
+  as a feature's switch on the game's own pages; no arrow while nothing under it is visible (a `VisibleWhen` on the others hides them while
+  the switch is off). One per sub-group; a second one, one without a `SubGroup` or one of another kind refuses the mod.
 - **Graphics tabs:** `Tab = GraphicsTab.PostFx` (or `Lighting`, `Water`, `Terrain`, `Vegetation`, `Objects`, `Characters`, `Sky`, `Colour`,
   `Interface`) on a `[Setting]` shows it on that tab of the Graphics page as well ([native UI](native-ui.md#settings),
   `ModSettingsRows.TabRows`): after the game's own rows, mod after mod in load order, a setting without a `SubGroup` as a row of the tab and

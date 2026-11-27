@@ -299,7 +299,9 @@ sealed class ModSettingsRows(SettingsMenu menu)
     }
 
     /// <summary>
-    /// A sub-group's header, its visible settings under it while it is open (it starts open the first time).
+    /// A sub-group's header, its visible settings under it while it is open (it starts open the first time). Its Header setting, while visible,
+    /// is the header's row itself (its label, hint and control, as a feature's switch on the game's pages), with no arrow while nothing is
+    /// under it.
     /// </summary>
     void AddModSubGroup(List<SettingsMenu.Entry> rows, RowSet set, string subGroup)
     {
@@ -307,13 +309,18 @@ sealed class ModSettingsRows(SettingsMenu menu)
         if (_modGroupsSeen.Add(id)) menu.Grouping.OpenGroups.Add(id);
         bool open = menu.Grouping.OpenGroups.Contains(id);
         var members = set.Settings.Where(s => s.SubGroup == subGroup).ToList();
+        var head = members.FirstOrDefault(s => s.Header && s.Visible);
+        var under = members.Where(s => s.Visible && s != head).ToList();
         var changed = members.Where(s => Changed(s, set.Look)).ToList();
         Action? reset = changed.Count > 0 ? () => ResetSettings(changed, set.Look) : null;
-        rows.Add(new(set.Group.Shown(subGroup), "", Changed: changed.Count > 0, Raw: id, Open: open, GroupId: id, Reset: reset, Depth: set.Depth,
-            Tag: set.Tag));
+
+        var header = head is null
+            ? new SettingsMenu.Entry(set.Group.Shown(subGroup), "", Raw: id, Open: open)
+            : ModSettingEntry(head, set.Parent, set.Depth, set.Look) with { Open = under.Count > 0 ? open : null };
+        rows.Add(header with { Changed = changed.Count > 0, GroupId = id, Reset = reset, Depth = set.Depth, Tag = set.Tag });
         if (!open) return;
 
-        foreach (var member in members.Where(s => s.Visible)) rows.Add(ModSettingEntry(member, id, set.Depth + 1, set.Look));
+        foreach (var member in under) rows.Add(ModSettingEntry(member, id, set.Depth + 1, set.Look));
     }
 
     /// <summary>
