@@ -67,6 +67,12 @@ public sealed class SettingAttribute(string label) : Attribute
     /// chosen (back to its default for a preset that holds none) and count it when it differs.
     /// </summary>
     public bool Look { get; init; }
+
+    /// <summary>
+    /// The Graphics tab the setting is shown on as well, after the game's own rows and under its <see cref="SubGroup"/>, with the mod's name
+    /// beside it (docs/modding.md "Settings"); <see cref="GraphicsTab.None"/>: the object's <see cref="SettingsTabAttribute"/>, else none.
+    /// </summary>
+    public GraphicsTab Tab { get; init; }
 }
 
 /// <summary>
@@ -148,6 +154,7 @@ public sealed class ModSetting
         SubGroup = about.SubGroup.Trim();
         VisibleWhen = about.VisibleWhen.Trim();
         Look = about.Look;
+        Tab = about.Tab != GraphicsTab.None ? about.Tab : target.GetType().GetCustomAttribute<SettingsTabAttribute>()?.Tab ?? GraphicsTab.None;
         var type = property.PropertyType;
         Kind = KindOf(property, type, about);
         _options = type.IsEnum ? Enum.GetNames(type) : about.Options;
@@ -194,6 +201,12 @@ public sealed class ModSetting
     /// Whether the setting is part of the look: the look presets hold and set it (<see cref="SettingAttribute.Look"/>).
     /// </summary>
     public bool Look { get; }
+
+    /// <summary>
+    /// The Graphics tab the setting is shown on as well (<see cref="SettingAttribute.Tab"/>); <see cref="GraphicsTab.None"/>: none.
+    /// </summary>
+    public GraphicsTab Tab { get; }
+
     /// <summary>
     /// Whether the page shows the setting now: its <see cref="VisibleWhen"/> property is true, or it has none; a throw from that property is logged
     /// once and the setting stays shown.

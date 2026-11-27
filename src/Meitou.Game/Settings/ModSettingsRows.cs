@@ -218,6 +218,50 @@ sealed class ModSettingsRows(SettingsMenu menu)
         words.All(word => text.Contains(word, StringComparison.CurrentCultureIgnoreCase));
 
     /// <summary>
+    /// Settings of one mod to list as rows: <paramref name="Settings"/> under the row or page <paramref name="Parent"/> (the rows' keys start
+    /// with it), the top ones at <paramref name="Depth"/>. <paramref name="Look"/>: the look's changes, when the rows are marked against the
+    /// look (a Graphics tab under a preset); <paramref name="Tag"/>: the plate beside the top rows (the mod's name on a Graphics tab).
+    /// </summary>
+    sealed record RowSet(ModSettingsGroup Group, IReadOnlyList<ModSetting> Settings, string Parent, int Depth, HashSet<string>? Look = null,
+        string? Tag = null);
+
+    /// <summary>
+    /// The longest tag that fits a row's plate; a longer mod name is cut.
+    /// </summary>
+    const int TagLength = 16;
+
+    /// <summary>
+    /// The rows mods put on a Graphics tab (<c>[Setting(Tab = ...)]</c>, docs/modding.md "Settings"), mod after mod: each setting as on the Mods
+    /// page, under its sub-group's header, the mod's name beside the top rows. Under a preset a look setting is marked when it differs from the
+    /// preset's value and resets to it.
+    /// </summary>
+    internal List<SettingsMenu.Entry> TabRows(GraphicsTab tab)
+    {
+        var rows = new List<SettingsMenu.Entry>();
+        HashSet<string>? look = null;
+        foreach (var group in menu.ModSettings())
+        {
+            var settings = group.Settings.Where(s => s.Tab == tab).ToList();
+            if (settings.Count == 0) continue;
+
+            if (!menu.LookPresets.FaithfulLook) look ??= menu.LookPresets.LookChanges();
+            AddSettingRows(rows, new(group, settings, TabId(group, tab), 0, look, TagOf(group.Name)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// A mod's name as a row's tag: cut with an ellipsis past <see cref="TagLength"/>.
+    /// </summary>
+    static string TagOf(string name) => name.Length > TagLength ? string.Concat(name.AsSpan(0, TagLength - 1).TrimEnd(), "\u2026") : name;
+
+    /// <summary>
+    /// The key a mod's rows on a Graphics tab start with: apart from its rows on the Mods page.
+    /// </summary>
+    static string TabId(ModSettingsGroup group, GraphicsTab tab) => $"{GroupId(group)}{SubGroupSeparator}{KeySeparator}{tab}";
+
+    /// <summary>
     /// A mod's settings group header under <paramref name="label"/>, its settings under it while open (a group starts open the first time): a
     /// setting its VisibleWhen hides is left out, and a sub-group's settings sit under its own header.
     /// </summary>
@@ -231,47 +275,92 @@ sealed class ModSettingsRows(SettingsMenu menu)
         lines.Add(new(-1, new(label, "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset)));
         if (!open) return;
 
-        var visible = group.Settings.Where(s => s.Visible).ToList();
+        var rows = new List<SettingsMenu.Entry>();
+        AddSettingRows(rows, new(group, group.Settings, id, 1));
+        lines.AddRange(rows.Select(row => new ModsLine(-1, row)));
+    }
+
+    /// <summary>
+    /// A set's visible settings as rows: one without a sub-group as it is, the others under their sub-group's header at its first one's place.
+    /// </summary>
+    void AddSettingRows(List<SettingsMenu.Entry> rows, RowSet set)
+    {
         var subGroups = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var setting in visible)
+        foreach (var setting in set.Settings.Where(s => s.Visible))
         {
             if (setting.SubGroup.Length == 0)
             {
-                lines.Add(new(-1, ModSettingEntry(setting, id, depth: 1)));
+                rows.Add(ModSettingEntry(setting, set.Parent, set.Depth, set.Look) with { Tag = set.Tag });
                 continue;
             }
 
-            if (subGroups.Add(setting.SubGroup)) AddModSubGroup(lines, group, setting.SubGroup);
+            if (subGroups.Add(setting.SubGroup)) AddModSubGroup(rows, set, setting.SubGroup);
         }
     }
 
     /// <summary>
-    /// A sub-group's header under the mod's group, its visible settings under it while it is open (it starts open the first time).
+    /// A sub-group's header, its visible settings under it while it is open (it starts open the first time).
     /// </summary>
-    void AddModSubGroup(List<ModsLine> lines, ModSettingsGroup group, string subGroup)
+    void AddModSubGroup(List<SettingsMenu.Entry> rows, RowSet set, string subGroup)
     {
-        string id = SubGroupId(group, subGroup);
+        string id = SubGroupId(set.Group, subGroup);
         if (_modGroupsSeen.Add(id)) menu.Grouping.OpenGroups.Add(id);
         bool open = menu.Grouping.OpenGroups.Contains(id);
-        var members = group.Settings.Where(s => s.SubGroup == subGroup).ToList();
-        bool changed = members.Any(s => !s.IsDefault);
-        Action? reset = changed ? () => ResetModSubGroup(members) : null;
-        lines.Add(new(-1, new(group.Shown(subGroup), "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset, Depth: 1)));
+        var members = set.Settings.Where(s => s.SubGroup == subGroup).ToList();
+        var changed = members.Where(s => Changed(s, set.Look)).ToList();
+        Action? reset = changed.Count > 0 ? () => ResetSettings(changed, set.Look) : null;
+        rows.Add(new(set.Group.Shown(subGroup), "", Changed: changed.Count > 0, Raw: id, Open: open, GroupId: id, Reset: reset, Depth: set.Depth,
+            Tag: set.Tag));
         if (!open) return;
 
-        foreach (var member in members.Where(s => s.Visible)) lines.Add(new(-1, ModSettingEntry(member, id, depth: 2)));
+        foreach (var member in members.Where(s => s.Visible)) rows.Add(ModSettingEntry(member, id, set.Depth + 1, set.Look));
     }
 
     /// <summary>
-    /// A setting's row: a switch, a slider, a free text, a button or a choice by its kind, its reset back to the default; its label, hint, button
-    /// and choices in the mod's translation (the page's own lookup follows).
+    /// Whether a row marks its setting against the look (<paramref name="look"/>, the look's changes) and not against its default.
     /// </summary>
-    internal SettingsMenu.Entry ModSettingEntry(ModSetting setting, string group, int depth)
+    static bool AgainstLook(ModSetting setting, HashSet<string>? look) => look is not null && setting.Look && setting.Kind != ModSettingKind.Action;
+
+    /// <summary>
+    /// Whether a setting's row is marked as changed: off the active preset's value for a row marked against the look, else off its default.
+    /// </summary>
+    static bool Changed(ModSetting setting, HashSet<string>? look) =>
+        AgainstLook(setting, look) ? look!.Contains(LookModSettings.KeyOf(setting)) : !setting.IsDefault;
+
+    /// <summary>
+    /// A setting back to what its row's mark compares with: the active preset's value, else its default.
+    /// </summary>
+    void ResetSetting(ModSetting setting, HashSet<string>? look)
+    {
+        if (!AgainstLook(setting, look))
+        {
+            ChangeModSetting(setting, setting.Reset);
+            return;
+        }
+
+        var mods = menu.LookPresets.ActiveLook.Mods;
+        ChangeModSetting(setting, () => LookModSettings.Restore(setting, mods));
+    }
+
+    /// <summary>
+    /// Each of <paramref name="settings"/> back as <see cref="ResetSetting"/> does.
+    /// </summary>
+    void ResetSettings(IReadOnlyList<ModSetting> settings, HashSet<string>? look)
+    {
+        foreach (var setting in settings) ResetSetting(setting, look);
+    }
+
+    /// <summary>
+    /// A setting's row: a switch, a slider, a free text, a button or a choice by its kind, its reset back to the default (the active preset's
+    /// value when marked against the look, <paramref name="look"/>); its label, hint, button and choices in the mod's translation (the page's
+    /// own lookup follows).
+    /// </summary>
+    internal SettingsMenu.Entry ModSettingEntry(ModSetting setting, string group, int depth, HashSet<string>? look = null)
     {
         string raw = $"{group}{KeySeparator}{setting.Key}";
         var shown = setting.Group;
-        var entry = new SettingsMenu.Entry(shown.Shown(setting.Label), shown.Shown(setting.Hint), Changed: !setting.IsDefault, Raw: raw,
-            Depth: depth, Reset: () => ChangeModSetting(setting, setting.Reset));
+        var entry = new SettingsMenu.Entry(shown.Shown(setting.Label), shown.Shown(setting.Hint), Changed: Changed(setting, look), Raw: raw,
+            Depth: depth, Reset: () => ResetSetting(setting, look));
         return setting.Kind switch
         {
             ModSettingKind.Switch => entry with { Toggle = new Toggle(raw, () => setting.Get() is true, v => SetModSetting(setting, v)) },
@@ -305,14 +394,6 @@ sealed class ModSettingsRows(SettingsMenu menu)
     void ResetModGroup(ModSettingsGroup group)
     {
         foreach (var setting in group.Settings) ChangeModSetting(setting, setting.Reset);
-    }
-
-    /// <summary>
-    /// A sub-group's settings back to their defaults.
-    /// </summary>
-    void ResetModSubGroup(IReadOnlyList<ModSetting> members)
-    {
-        foreach (var member in members) ChangeModSetting(member, member.Reset);
     }
 
     /// <summary>

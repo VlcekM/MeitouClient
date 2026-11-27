@@ -27,7 +27,8 @@ button for the selected mod and one for all problems; a summary line under the v
 Under a mod's row, a Settings group holds the settings its code registered (`ModSettingsRows`, [modding](modding.md), "Settings"),
 open the first time it is shown, its rows the page's own switches, sliders and lists; a changed row is brass with a Reset link. A setting's
 `SubGroup` folds it under a sub-group header (its own arrow, open the first time), and a setting its `VisibleWhen` hides is not drawn. A group
-whose mod mods.cfg does not list comes after the list under the mod's name. While a mod has settings, Collapse all and Expand all (arrows to and
+whose mod mods.cfg does not list comes after the list under the mod's name. A setting with a `Tab` is also a row of that Graphics tab, after
+the tab's own rows, the mod's name on a plate beside it ([modding](modding.md), "Graphics tabs"). While a mod has settings, Collapse all and Expand all (arrows to and
 from a line) sit at the title's right end; Display and each Graphics tab with features to fold have them too.
 
 Graphics techniques that exclude each other are one list each on the Lighting tab (`WorldFrame.AddChoiceSliders`), heading their feature group:

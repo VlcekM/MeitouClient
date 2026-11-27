@@ -18,7 +18,7 @@ sealed class LookModSettings(Func<IReadOnlyList<ModSettingsGroup>> groups)
     /// <summary>
     /// A look setting's key among the look's changes: the mod and the setting, apart from every game setting's key.
     /// </summary>
-    static string KeyOf(ModSetting setting) => string.Concat("mod:", setting.Group.ModId, ":", setting.Key);
+    internal static string KeyOf(ModSetting setting) => string.Concat("mod:", setting.Group.ModId, ":", setting.Key);
 
     /// <summary>
     /// What <paramref name="mods"/> holds for a setting; null when it leaves it at its default.
@@ -42,7 +42,7 @@ sealed class LookModSettings(Func<IReadOnlyList<ModSettingsGroup>> groups)
         {
             try
             {
-                if (Held(mods, setting) is not { } text || !setting.Restore(text)) setting.Reset();
+                Restore(setting, mods);
             }
             catch (Exception e)
             {
@@ -50,6 +50,14 @@ sealed class LookModSettings(Func<IReadOnlyList<ModSettingsGroup>> groups)
                 Content.CodeModFaults.Tell(setting.Group.ModId, e);
             }
         }
+    }
+
+    /// <summary>
+    /// One look setting back to what a preset's <paramref name="mods"/> holds: its value, else (or when that is no longer valid) the default.
+    /// </summary>
+    internal static void Restore(ModSetting setting, Dictionary<string, Dictionary<string, string>> mods)
+    {
+        if (Held(mods, setting) is not { } text || !setting.Restore(text)) setting.Reset();
     }
 
     /// <summary>

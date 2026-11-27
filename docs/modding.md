@@ -1505,7 +1505,7 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   cut to 200 characters. A source that throws or gives a reply without a text or press is logged once and dropped; a press that throws is
   logged. Without a source the conversation window is as before. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
-  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen, Look)]` (`ModSettings.cs`) become one group, in declaration order (a
+  `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen, Look, Tab)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page
   ([native UI](native-ui.md#settings)): `bool` an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a
   hundredth of the range otherwise), an enum or a `string` with Options a list, a `string` without Options a free text box (one line, at most
@@ -1531,6 +1531,16 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   id, preset, key, text), not dropped by Restore defaults, and read once the game starts the mods (after `Initialize`). With buttons and a text
   setting for the name a mod builds its own preset slots. A mod copies what its simulation needs in a serial step (its system's `Inputs`). **Verified** by
   `ModdingTests`; the page **Observed** drawn (2026-11-04, Windows, Vulkan, `--settings-showcase` changed locally to open it with a scratch group).
+- **Graphics tabs:** `Tab = GraphicsTab.PostFx` (or `Lighting`, `Water`, `Terrain`, `Vegetation`, `Objects`, `Characters`, `Sky`, `Colour`,
+  `Interface`) on a `[Setting]` shows it on that tab of the Graphics page as well ([native UI](native-ui.md#settings),
+  `ModSettingsRows.TabRows`): after the game's own rows, mod after mod in load order, a setting without a `SubGroup` as a row of the tab and
+  the others under their sub-group's header, each top row with the mod's name on a plate (cut past 16 characters). `[SettingsTab(tab)]` on
+  the object's class is the tab of every setting that names none. The row stays on the Mods page too and both edit the one property. On a
+  tab, under a preset, a `Look` setting is marked when it differs from the preset's value and its Reset goes back to it (elsewhere: the
+  default). The search lists a mod's settings under Mods only, and the launcher shows none. A game older than `Tab` fails reading the
+  attribute, so a mod using it sets `gameVersion`. **Observed** (2026-11-27, Windows, a scratch mod registering PZA's Post-FX settings
+  class with `[SettingsTab(GraphicsTab.PostFx)]`): its 12 lists and 2 switches came after Heat haze on Post FX with the mod's
+  name beside each, and an effect turned on showed its sub-group's fold under it.
 - **Look presets:** `Look = true` on a `[Setting]` makes it part of the look ([native UI](native-ui.md#settings), `LookModSettings`): the
   Graphics page's look presets hold its value (`mods` in the preset file and its share code: mod id, setting key, the saved text; only values
   that are not the default), set it when a preset is chosen (through `ModSetting`'s own set, raising `Changed`; back to the default for a
