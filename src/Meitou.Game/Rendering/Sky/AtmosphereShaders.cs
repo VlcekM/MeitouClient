@@ -838,6 +838,15 @@ static class AtmosphereShaders
             return hazeColour(offset) + atmoNightAir(offset * inversesqrt(max(dot(offset, offset), 1e-12)));
         }
 
+        // The weather's fog share of the game's haze at dist (0 without fog): an ease-in-out curve of dist × uAtmoHaze.w, by the fog's density.
+        float atmoKenshiFogCurve(float dist)
+        {
+            if (!(uAtmoFog.z > 0.0)) return 0.0;
+
+            float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
+            return (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
+        }
+
         // The game's haze: AtmosphereFogMaterial (post/fog.hlsl), the in-scattered colour blended in by a linear ramp between 0.06 D
         // and 0.6 D; the weather's fog (colour, density) by an ease-in-out curve over it. uAtmoAltitude.y (the viewer's haze strength,
         // 1 = the game's) scales the ramp.
@@ -845,15 +854,12 @@ static class AtmosphereShaders
         {
             float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
             level = min(level * uAtmoAltitude.y, 1.0);
-            vec3 rgb = mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
-            float alpha = level;
-            if (uAtmoFog.z > 0.0)
-            {
-                float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
-                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
-                rgb = mix(rgb, uAtmoFogColour, curve);
-                alpha = clamp(alpha + curve, 0.0, 1.0);
-            }
+            float curve = atmoKenshiFogCurve(dist);
+            float alpha = clamp(level + curve, 0.0, 1.0);
+            // Nearer than the ramp's start, without the weather's fog, nothing is blended in: the in-scattered colour (a march) is not worked out.
+            if (alpha <= 0.0) return colour;
+
+            vec3 rgb = mix(mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a), uAtmoFogColour, curve);
             return mix(colour, rgb, alpha);
         }
         // The physical alternative (a viewer model): optical depth of SkyX's air (one density scale height for both) along the ray,
@@ -907,16 +913,13 @@ static class AtmosphereShaders
         {
             float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
             level = min(level * uAtmoAltitude.y, 1.0);
-            vec3 rgb = mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
-            float alpha = level;
-            if (uAtmoFog.z > 0.0)
-            {
-                float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
-                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
-                rgb = mix(rgb, uAtmoFogColour, curve);
-                alpha = clamp(alpha + curve, 0.0, 1.0);
-            }
+            float curve = atmoKenshiFogCurve(dist);
+            float alpha = clamp(level + curve, 0.0, 1.0);
             mul = vec3(1.0 - alpha);
+            add = vec3(0.0);
+            if (alpha <= 0.0) return;   // as atmoKenshiHaze
+
+            vec3 rgb = mix(mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a), uAtmoFogColour, curve);
             add = rgb * alpha;
         }
         void atmoPhysicalHazeCoefficients(vec3 eye, vec3 d, float dist, out vec3 mul, out vec3 add)

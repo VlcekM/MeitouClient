@@ -35,7 +35,9 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   New shaders include `AtmosphereShaders.Functions` (sky.md, "Using the atmosphere in a new shader"). The old colour model
   (`--simple-sky` / `B`) was removed.
   Cost: not re-measured after the 2026-10-05 rewrite (the sky's integral now runs per pixel, about 4 × 5 exponentials, instead of
-  a table lookup; the haze runs the same 4-sample integral per pixel). Earlier figures (2026-10-04, table version): the sky pass
+  a table lookup; the haze runs the same 4-sample integral per pixel, only where it blends something in: nearer than its ramp's start, without the weather's
+  fog, `atmoKenshiHaze` returns the colour unchanged without it. **Observed** (M6, Metal, `fps_issue` save, 1080p High, every pixel nearer than the ramp):
+  83 -> 85.7 frames a second at zoom 31, 103 -> 106.6 at zoom 300; the picture unchanged (10 views: differences only on a character in another idle pose)). Earlier figures (2026-10-04, table version): the sky pass
   0.06 to 0.09 ms GPU at 1280 × 720.
   With the Meitou `stars` switch at night (2026-10-10, 1920 × 1080, RTX 4070, minimum of five runs): the sky pass 0.34 ms (measured with the Milky Way, since removed) against 0.12 ms for the game's starfield texture (0.26 ms without the faint star layer, which an integrated GPU skips); by day the stars are skipped (0.11 ms).
 - **Draw order** (`WorldFrame.DrawSkyBehind`): the scene's sky is one full-screen triangle at the cleared depth, drawn after the opaque scene (terrain, objects,
