@@ -125,13 +125,16 @@ internal static class NavTileBuilder
     }
 
     /// <summary>
-    /// Cuts the carvers, the solids, the mesh solids and the ground under the terrain out of the tile's spans, then paints its doors.
+    /// Cuts the carvers, multi-shape interior mask pieces, the solids, the mesh solids and the ground under the terrain out of the tile's spans,
+    /// then paints its doors.
     /// </summary>
     static void CutVolumes(RcContext ctx, ZoneGeometry g, NavBuildSettings s, RcCompactHeightfield chf, List<int> carvers, List<int> painters,
         List<int> solids, List<int> meshSolids)
     {
         foreach (int c in carvers)
             Mark(ctx, g.Carvers[c], NavArea.Null, chf);
+
+        if (g.InteriorPieces.Count > 0) NavSolidCarving.RemoveOutside(g.InteriorPieces, chf);
 
         foreach (int c in solids)
             NavSolidCarving.RemoveInside(g.Solids[c], chf);

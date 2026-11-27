@@ -125,6 +125,33 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
+    /// The world-space vertices of a building's interior mask shapes, and each shape's plan polygon.
+    /// </summary>
+    (List<Vector3> Points, List<Vector2[]> Pieces) MaskShapes(GameRecord building, Vector3 position, Quaternion rotation)
+    {
+        var node = NodeMatrix(building, position, rotation);
+        var points = new List<Vector3>();
+        var pieces = new List<Vector2[]>();
+        foreach (var (_, path) in MaskParts(building))
+        {
+            if (_collision.Get(path) is not { } prepared) continue;
+            foreach (var shape in prepared.Shapes)
+            {
+                var shapePoints = new List<Vector3>(shape.Vertices.Length);
+                foreach (var v in shape.Vertices)
+                {
+                    var w = Vector3.Transform(v, node);
+                    points.Add(w);
+                    shapePoints.Add(w);
+                }
+                var poly = NavGeometry.Footprint(shapePoints, 0, 0, 0).Polygon;
+                if (poly.Length >= 3) pieces.Add(poly);
+            }
+        }
+        return (points, pieces);
+    }
+
+    /// <summary>
     /// The world-space vertices of a building's interior mask shapes.
     /// </summary>
     List<Vector3> MaskPoints(GameRecord building, Vector3 position, Quaternion rotation)
@@ -152,10 +179,10 @@ internal sealed partial class ZoneGeometryGatherer
 
     /// <summary>
     /// The input of one building's interior mesh in <see cref="InteriorSite.Zone"/>: its own shapes and its furniture's, the door painters, the inner
-    /// door markers as seeds, and the complement of the interior hull as carvers (the hull's inverted volume: everything outside it is removed). The
-    /// box is a square of whole tiles; where the hull crosses the zone's border the box ends on the border line, so the part beyond is the neighbour
-    /// zone's and the two meet like the exteriors do (border links, <see cref="ZoneKeptClosure"/>). Null when the building has no usable hull in the
-    /// zone.
+    /// door markers as seeds, and either the complement of the interior hull as carvers (single-shape mask) or <see cref="ZoneGeometry.InteriorPieces"/>
+    /// (multi-shape mask, clipped to the union of its trigger shapes so non-convex interiors match the per-shape exterior carvers). The box is a square
+    /// of whole tiles; where the hull crosses the zone's border the box ends on the border line, so the part beyond is the neighbour zone's and the
+    /// two meet like the exteriors do (border links, <see cref="ZoneKeptClosure"/>). Null when the building has no usable hull in the zone.
     /// </summary>
     /// <param name="ownOnly">Debug: only the building's own shapes, no furniture (the debug tool's <c>--own-only</c>).</param>
     /// <param name="trackParts">Debug: record each part's triangle range (<see cref="ZoneGeometry.PartRanges"/>).</param>
@@ -163,7 +190,7 @@ internal sealed partial class ZoneGeometryGatherer
             bool trackParts = false)
     {
         var node = NodeMatrix(site.Record, site.Position, site.Placement.Rotation);
-        var points = MaskPoints(site.Record, site.Position, site.Placement.Rotation);
+        var (points, pieces) = MaskShapes(site.Record, site.Position, site.Placement.Rotation);
         if (points.Count < 4) return null;
         float yMin = points.Min(p => p.Y), yMax = points.Max(p => p.Y);
         var hull = NavGeometry.Footprint(points, yMin, yMax, 0);
@@ -184,6 +211,7 @@ internal sealed partial class ZoneGeometryGatherer
             ZoneMax = boxMin + new Vector2(side),
             Margin = 8,
             InteriorHull = hull,
+            InteriorPieces = pieces.Count > 1 ? pieces : [],
             InteriorOf = site.Placement.Key,
             TrackParts = ownOnly || trackParts,
             ClippedAtBorder = clipped,
@@ -196,7 +224,7 @@ internal sealed partial class ZoneGeometryGatherer
         AddBuilding(g, site.Record, site.Placement.Key, site.Position, site.Placement.Rotation, site.Destroyed,
                 new InteriorContext(site.Placement.Key, site.Destroyed, mask, Own: true));
         if (!ownOnly) AddFurniture(g, site, mask);
-        if (!ownOnly) AddBuildingsInside(g, site, mask, hull.Polygon, yMin, yMax);
+        if (!ownOnly) AddBuildingsInside(g, site, mask, yMin, yMax);
 
         // Its walls cut the interior too.
         if (boundary is not null)
@@ -204,12 +232,30 @@ internal sealed partial class ZoneGeometryGatherer
             foreach (var shape in boundary.Shapes) AddShape(g, shape, node, 0, carve: false);
         }
 
-        AddOutsideCarvers(g, hull.Polygon);
+        if (g.InteriorPieces.Count == 0) AddOutsideCarvers(g, hull.Polygon);
         PutSeedsOnFloor(g, yMin, yMax, agentHeight);
 
-        // No door and no node: the original drops a ray from above the building's origin onto its floor-0 part.
-        if (g.Seeds.Count == 0 && g.NodeSeeds.Count == 0 && OriginRaySeed(g, site.Position, site.Placement.Rotation, out var originSeed))
-            g.NodeSeeds.Add(originSeed);
+        // No door and no node: the original drops a ray from above the building's origin onto its floor-0 part. For a multi-shape interior whose
+        // origin sits in an open yard outside every trigger piece, fall back to a piece's centre so the seed lands on kept floor.
+        if (g.Seeds.Count == 0 && g.NodeSeeds.Count == 0)
+        {
+            if (OriginRaySeed(g, site.Position, site.Placement.Rotation, out var originSeed)
+                    && (g.InteriorPieces.Count == 0 || InsideMask(g, new Vector2(originSeed.X, originSeed.Z), 0)))
+                g.NodeSeeds.Add(originSeed);
+            else if (g.InteriorPieces.Count > 0)
+            {
+                foreach (var piece in g.InteriorPieces)
+                {
+                    var c = piece.Aggregate(Vector2.Zero, (a, v) => a + v) / piece.Length;
+                    if (OriginRaySeed(g, new Vector3(c.X, site.Position.Y, c.Y), site.Placement.Rotation, out var pieceSeed)
+                            && InsideMask(g, new Vector2(pieceSeed.X, pieceSeed.Z), 0))
+                    {
+                        g.NodeSeeds.Add(pieceSeed);
+                        break;
+                    }
+                }
+            }
+        }
         return g;
     }
 
@@ -259,7 +305,8 @@ internal sealed partial class ZoneGeometryGatherer
     {
         foreach (var (item, at, rotation) in LayoutObjects(site.Placement, site.Record, site.Position, site.Destroyed))
         {
-            if (g.NodeSeeds.Count == 0 && item.Building.GetBool("is node") && item.Building.GetInt("node type") is 0 or 1)
+            if (g.NodeSeeds.Count == 0 && item.Building.GetBool("is node") && item.Building.GetInt("node type") is 0 or 1
+                    && (g.InteriorPieces.Count == 0 || InsideMask(g, new Vector2(at.X, at.Z), 0)))
                 g.NodeSeeds.Add(at);
             AddBuilding(g, item.Building, $"{site.Placement.Key}/{item.InstanceId}", at, rotation, destroyed: false,
                     new InteriorContext(site.Placement.Key, false, mask, Own: false), item.Floor);
@@ -267,16 +314,52 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// Other buildings standing inside the hull (furniture placed in the zone file): walkable ones give floor, the rest cut.
+    /// Whether <paramref name="point"/> lies inside the interior mask (any trigger shape when multi-shape, else the merged hull), widened by
+    /// <paramref name="tolerance"/>.
     /// </summary>
-    void AddBuildingsInside(ZoneGeometry g, InteriorSite site, uint mask, Vector2[] hull, float yMin, float yMax)
+    static bool InsideMask(ZoneGeometry g, Vector2 point, float tolerance)
+    {
+        if (g.InteriorPieces.Count > 0)
+        {
+            for (int i = 0; i < g.InteriorPieces.Count; i++)
+                if (NavGeometry.InsideConvex(g.InteriorPieces[i], point, tolerance)) return true;
+            return false;
+        }
+        return g.InteriorHull is not null && NavGeometry.InsideConvex(g.InteriorHull.Polygon, point, tolerance);
+    }
+
+    /// <summary>
+    /// Distance from <paramref name="point"/> to the nearest trigger shape's centre (or the merged hull's centre for a single-shape mask).
+    /// </summary>
+    static float DistanceToMaskCentre(ZoneGeometry g, Vector2 point)
+    {
+        if (g.InteriorPieces.Count > 0)
+        {
+            float best = float.MaxValue;
+            for (int i = 0; i < g.InteriorPieces.Count; i++)
+            {
+                var p = g.InteriorPieces[i];
+                var c = p.Aggregate(Vector2.Zero, (a, v) => a + v) / p.Length;
+                best = MathF.Min(best, Vector2.Distance(point, c));
+            }
+            return best;
+        }
+        var hull = g.InteriorHull!.Polygon;
+        var centre = hull.Aggregate(Vector2.Zero, (a, v) => a + v) / hull.Length;
+        return Vector2.Distance(point, centre);
+    }
+
+    /// <summary>
+    /// Other buildings standing inside the interior mask (furniture placed in the zone file): walkable ones give floor, the rest cut.
+    /// </summary>
+    void AddBuildingsInside(ZoneGeometry g, InteriorSite site, uint mask, float yMin, float yMax)
     {
         var (ox, oz) = WorldLayout.ZoneOrigin(site.Placement.Zone);
         var zmin = new Vector2((float)ox, (float)oz);
         foreach (var (b, record, position, destroyed) in NearBuildings(site.Placement.Zone, zmin, zmin + new Vector2(WorldLayout.ZoneSize), 0))
         {
             if (b.Key == site.Placement.Key || position.Y < yMin - 30 || position.Y > yMax + 30) continue;
-            if (!NavGeometry.InsideConvex(hull, new Vector2(position.X, position.Z), 5)) continue;
+            if (!InsideMask(g, new Vector2(position.X, position.Z), 5)) continue;
             AddBuilding(g, record, b.Key, position, b.Rotation, destroyed, new InteriorContext(site.Placement.Key, destroyed, mask, Own: false));
         }
     }
@@ -403,36 +486,38 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// How deep (units) a door painter must reach into the interior hull to paint the interior's cells by the door (engine choice: two cells).
+    /// How deep (units) a door painter must reach into the interior mask to paint the interior's cells by the door (engine choice: two cells).
     /// </summary>
     public const float DoorHullDepth = 4;
 
     /// <summary>
-    /// How far (units) a door painter is swept toward the inside at most to reach <see cref="DoorHullDepth"/> into the hull (engine choice).
+    /// How far (units) a door painter is swept toward the inside at most to reach <see cref="DoorHullDepth"/> into the mask (engine choice).
     /// </summary>
     public const float DoorHullReach = 12;
 
     /// <summary>
-    /// A door painter whose leaf stands outside the interior hull, swept toward the door's inner marker until it reaches <see cref="DoorHullDepth"/>
-    /// into the hull (at most <see cref="DoorHullReach"/>). Unswept, such a door paints no cell of the interior, so the interior has no door polygons
+    /// A door painter whose leaf stands outside the interior mask, swept toward the door's inner marker until it reaches <see cref="DoorHullDepth"/>
+    /// into the mask (at most <see cref="DoorHullReach"/>). Unswept, such a door paints no cell of the interior, so the interior has no door polygons
     /// and no door join (docs/game/pathfinding.md, "Door painters"; Heft's bar, the Outpost s-III `47.16:241-Newwworld-INGAME`, leaf 2..3 outside its
     /// hull). Unchanged when it reaches that deep already or the door has no markers.
     /// </summary>
     NavVolume ReachIntoHull(ZoneGeometry g, NavVolume painter, GameRecord door, PreparedShape shape, Matrix4x4 node)
     {
-        var hull = g.InteriorHull!.Polygon;
-        if (painter.Polygon.Any(p => NavGeometry.InsideConvex(hull, p, -DoorHullDepth))
+        if (painter.Polygon.Any(p => InsideMask(g, p, -DoorHullDepth))
                 || !DoorMarkers(door, shape, node, out var behind, out var ahead))
             return painter;
-        var centre = hull.Aggregate(Vector2.Zero, (a, p) => a + p) / hull.Length;
         Vector2 b = new(behind.X, behind.Z), a = new(ahead.X, ahead.Z);
-        var inward = Vector2.Distance(a, centre) < Vector2.Distance(b, centre) ? a - b : b - a;
+        Vector2 inward;
+        if (g.InteriorPieces.Count > 0 && InsideMask(g, a, 0) != InsideMask(g, b, 0))
+            inward = InsideMask(g, a, 0) ? a - b : b - a;
+        else
+            inward = DistanceToMaskCentre(g, a) < DistanceToMaskCentre(g, b) ? a - b : b - a;
         if (inward.LengthSquared() < 1e-6f) return painter;
         inward = Vector2.Normalize(inward);
         for (float d = 1; d <= DoorHullReach; d++)
         {
             var moved = painter.Polygon.Select(p => p + inward * d).ToArray();
-            if (!moved.Any(p => NavGeometry.InsideConvex(hull, p, -DoorHullDepth))) continue;
+            if (!moved.Any(p => InsideMask(g, p, -DoorHullDepth))) continue;
             var points = painter.Polygon.Concat(moved).Select(p => new Vector3(p.X, 0, p.Y)).ToList();
             return NavGeometry.Footprint(points, painter.YMin, painter.YMax, 0);
         }
@@ -440,18 +525,17 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// The door's inner marker: the one of the two points either side of the door that lies inside the interior hull (height resolved later).
+    /// The door's inner marker: the one of the two points either side of the door that lies inside the interior mask (height resolved later).
     /// </summary>
     void AddInnerDoorSeed(ZoneGeometry g, GameRecord door, PreparedShape shape, Matrix4x4 node)
     {
         if (g.InteriorHull is null || !DoorMarkers(door, shape, node, out var behind, out var ahead)) return;
-        var hullCentre = g.InteriorHull.Polygon.Aggregate(Vector2.Zero, (a, p) => a + p) / g.InteriorHull.Polygon.Length;
         Vector3? best = null;
         float bestScore = float.MaxValue;
         foreach (var at in new[] { behind, ahead })
         {
             var xz = new Vector2(at.X, at.Z);
-            float score = (NavGeometry.InsideConvex(g.InteriorHull.Polygon, xz, 0) ? 0 : 1000) + Vector2.Distance(xz, hullCentre);
+            float score = (InsideMask(g, xz, 0) ? 0 : 1000) + DistanceToMaskCentre(g, xz);
             if (score < bestScore)
             {
                 bestScore = score;

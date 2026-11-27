@@ -941,7 +941,8 @@ lose the collision too once a destroyed one was made; Meitou clears it per place
     27) or 0x82600 (groups 9, 10, 13, 19) when the building is destroyed. The building's own shapes: the points of
     its group-13 shapes (the `interior mask` hull) become one convex volume with `isInverted` set (hkaiConvexVolume
     +0x50, **Verified** against the reflection table), added as a carver, so everything **outside** the hull is
-    removed; its other shapes give material 1, or 0 for group 27. Shapes of other buildings that belong to it (furniture: its children or buildings inside it) give material
+    removed (Meitou clips a multi-shape mask to the union of its shapes' plan polygons instead, matching the per-shape
+    exterior carvers so non-convex buildings' interiors and exteriors meet at doorways); its other shapes give material 1, or 0 for group 27. Shapes of other buildings that belong to it (furniture: its children or buildings inside it) give material
     1 for WALKABLE and 0 otherwise; IGNORE ones are skipped. Vertices closer than 0.05 (squared, Havok) are merged. A
     destroyed building (virtual slot 0x330, below) adds the triangle meshes of its `destroyed boundary` XML to the geometry (fcs.def calls it the
     "Navmesh cutter for destroyed interior") with material 0, cutting (**Verified**: the triangle adder FUN_1403c0e80 writes its fifth argument
