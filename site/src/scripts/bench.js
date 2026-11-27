@@ -422,6 +422,8 @@
 
   function metricDef() { return METRICS.filter((m) => m.key === state.metric)[0] || METRICS[1]; }
 
+  function vramMetric() { return METRICS.filter((m) => m.key === "vramPeakMb")[0]; }
+
   // #endregion
 
   // #region Controls
@@ -749,11 +751,20 @@
     const runs = p.shown === 1
       ? "run 2: <b>" + fmt(p.v) + "</b>" + metric.unit + (p.v1 != null ? ", run 1: " + fmt(p.v1) + metric.unit : "")
       : "run 1: <b>" + fmt(p.v) + "</b>" + metric.unit + " (no run 2)";
+    const vram = metric.key !== "vramPeakMb" ? vramTipLine(e) : "";
     const commit = game.commit && !legacy() ? ' <span class="muted">' + esc(str(game.commit).slice(0, 8)) + "</span>" : "";
     return "<b>" + esc(t ? targetTitle(t) : e.target) + "</b>" + commit +
       "<br>" + ldot(e.line) + esc(lname(lineOf(e.line))) + (e.handle ? " by " + esc(e.handle) : "") +
-      "<br>" + esc(metric.label) + "<br>" + runs +
+      "<br>" + esc(metric.label) + "<br>" + runs + vram +
       "<br><span class=\"muted\">" + esc(e.when.slice(0, 16).replace("T", " ")) + "</span>";
+  }
+
+  function vramTipLine(e) {
+    const shown = shownRun(e, "vramPeakMb");
+    if (shown < 0) return "";
+    const v = e.runs[shown].vramPeakMb;
+    const v1 = shown === 1 && e.runs[0] ? e.runs[0].vramPeakMb : null;
+    return "<br>Peak VRAM: <b>" + fmt(v) + "</b> MB" + (v1 != null ? " (run 1: " + fmt(v1) + " MB)" : "");
   }
 
   // #endregion
@@ -838,8 +849,9 @@
   }
 
   function machineColumns(metric) {
-    const showRes = legacy();
+    const showRes = legacy(), showVram = metric.key !== "vramPeakMb";
     if (!showRes && state.sort.col === "res") state.sort = { col: "metric", dir: 0 };
+    if (!showVram && state.sort.col === "vram") state.sort = { col: "metric", dir: 0 };
     return [
       { id: "machine", label: "Machine", cls: "", num: false },
       { id: "platform", label: "Platform", cls: "l wide", num: false },
@@ -850,17 +862,18 @@
       ...(showRes ? [{ id: "res", label: "Resolution", cls: "wide", num: true }] : []),
       { id: "builds", label: "Builds", cls: "wide", num: true },
       { id: "newest", label: "Newest", cls: "l wide", num: true },
+      ...(showVram ? [{ id: "vram", label: "Peak VRAM", cls: "", num: true }] : []),
       { id: "metric", label: metric.label, cls: "", num: true }
     ];
   }
 
   function machineTable(items, metric) {
-    const cols = machineColumns(metric);
+    const cols = machineColumns(metric), showVram = metric.key !== "vramPeakMb";
     const wrap = el("div", { class: "tablewrap" }), table = el("table", { class: "mtable" });
     const head = el("tr"), body = el("tbody");
     head.appendChild(el("th", { class: "ck" }, ""));
     cols.forEach((c) => head.appendChild(sortHeader(c, metric)));
-    items.forEach((item) => body.appendChild(machineRow(item, metric, legacy())));
+    items.forEach((item) => body.appendChild(machineRow(item, metric, legacy(), showVram)));
     const thead = el("thead");
     thead.appendChild(head);
     table.appendChild(thead);
@@ -877,7 +890,7 @@
     btn.appendChild(el("span", { class: "sort-ind", "aria-hidden": "true" }, active ? (dir > 0 ? "▲" : "▼") : "⇅"));
     btn.addEventListener("click", () => {
       if (active) state.sort = { col: c.id, dir: -dir };
-      else state.sort = { col: c.id, dir: c.id === "metric" ? 0 : (c.num ? -1 : 1) };
+      else state.sort = { col: c.id, dir: c.id === "metric" ? 0 : (c.id === "vram" ? 1 : (c.num ? -1 : 1)) };
       state.page = 0;
       renderMachines();
     });
@@ -919,6 +932,8 @@
     const resPixels = resMatch ? Number(resMatch[1]) * Number(resMatch[2]) : null;
     const shown = shownRun(newest, metric.key);
     const metricVal = shown >= 0 ? num(newest.runs[shown][metric.key]) : null;
+    const vramShown = shownRun(newest, "vramPeakMb");
+    const vramVal = vramShown >= 0 ? num(newest.runs[vramShown].vramPeakMb) : null;
     return {
       key: key,
       entries: entries,
@@ -938,6 +953,7 @@
         res: resPixels,
         builds: entries.length,
         newest: D.targets.findIndex((x) => x.id === newest.target),
+        vram: vramVal,
         metric: metricVal
       }
     };
@@ -957,7 +973,7 @@
   }
 
   /** A row checks its machine when clicked anywhere; narrow screens show the platform and GPU under the name instead of their columns. */
-  function machineRow(item, metric, showRes) {
+  function machineRow(item, metric, showRes, showVram) {
     const key = item.key, entries = item.entries, newest = item.newest, m = item.m, hw = item.hw, t = item.t, ram = item.ram;
     const tr = el("tr", { class: state.checked[key] ? "is-checked" : "" });
     tr.appendChild(checkCell(key, tr));
@@ -971,6 +987,7 @@
       ...(showRes ? [[item.res, "wide"]] : []),
       [String(entries.length), "wide"],
       [t ? t.label : newest.target, "l wide", t ? targetTitle(t) : ""],
+      ...(showVram ? [[valueText(newest, vramMetric()), ""]] : []),
       [valueText(newest, metric), ""]
     ].forEach((c) => tr.appendChild(cell(c[0], c[1], c[2])));
     tr.addEventListener("click", (ev) => {
