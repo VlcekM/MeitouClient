@@ -1175,7 +1175,8 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
 - **Hash**: mask, frozen, age, blend and body poses in system order.
 
 - **Save** (Meitou key, [ragdolls](game/ragdolls.md#saves)): a whole-body ragdoll's body poses, frozen flag and age (`Saving/RagdollSave`); the loaded
-  character's first ragdoll starts from them when its root lies within 20 of where it stands, else (and for carried or limb ragdolls) from the animation.
+  character's first ragdoll starts from them when its root lies within 20 of where it stands, else (and for carried or limb ragdolls) from the animation; a frozen pose resting
+  on nothing falls again ([ragdolls](game/ragdolls.md#saves)).
 
 Gaps: ragdolls collide with each other but not with characters that have none (as the original: a character's click hull is group 0, which
 ragdoll group 3/4 skips, [ragdolls](game/ragdolls.md#collision-groups)); the building gather's

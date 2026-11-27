@@ -315,6 +315,10 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
 - **Focused push**: the struck part's LOCATIONAL_DAMAGE `bone name` (else `bone name 2`; its nearest ancestor with a body when the bone has none) names the struck body
   (`RagdollBlow.Bone`, `RagdollSystem.Struck`). The struck body takes the whole push times the ragdoll's mass over its own (at most 4x: an impulse on it
   alone), every other body 0.4 of it, so the body is thrown from the hit part and the joints drag the rest; no start cap (the physics holds each body to `RagdollPhysics.MaxSpeed`, 200). No bone: the whole push on every body.
+- **No freezing in the air**: until age 30 a whole body resting on nothing (`RagdollSystem.Rests`: no body centre within its shape's reach + 3 above the terrain or a
+  building's collision under it) does not freeze, and its freeze window starts again each tick ([Sleep and limits](#sleep-and-limits)). The timers run on game time and the physics
+  on real time, so at 5x the window ends 1.4 real seconds after the fall: a body thrown off a wall was frozen 55 over the ground by the ray (upstream #1574, the report's save:
+  age 7.033, ray start 1072, terrain 995), and a body thrown up froze at the top of its arc by the still share (Meitou's share reads the bodies' speed, not a sleep flag).
 
 ### Rest poses of the spine
 
@@ -421,7 +425,7 @@ WHOLE from the loaded animated pose.
 Meitou adds GAMESTATE_CHARACTER string `meitou ragdoll` for a whole-body (not carried) ragdoll: `frozen age n`, then per body (definition order)
 position x y z and rotation x y z w, invariant floats; absent otherwise (a world without ragdolls keeps the loaded key); the original ignores it. **Observed** (headless, real data, a knocked-out
 human frozen after 61 ticks): save → load gives the same 13 body poses (offset 0), frozen flag and age; without the key it falls again from the clip.
-An unsettled pose (flag 0, or frozen under `FreezeEarliest`) settles again from where it was with a new ragdoll's timers (age 0), as the original's ragdoll made on load:
+An unsettled pose (flag 0, frozen under `FreezeEarliest`, or frozen resting on nothing, `RagdollSystem.Rests`, as saves made before the falling test hold, #1574) settles again from where it was with a new ragdoll's timers (age 0), as the original's ragdoll made on load:
 its bodies start still, and with the saved age the freeze test passed on the first tick that had no physics step. **Observed** (headless, #1388: a goat dropped from a
 carrier knocked out at 5x, saved in the air with flag 0 at age 2.17, loaded at 5x): with the saved age it froze at once with its root 9 above the floor and was saved
 again with flag 1, then restored frozen in the air on every load; with age 0 it lands and freezes at 7.03 s, its lowest body 0.9 above the floor.
