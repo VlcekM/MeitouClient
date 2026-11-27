@@ -1618,7 +1618,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
 - Build window: categories, groups, research gating and the stats panel are in [buildings-production](buildings-production.md#build-menu);
   placement checks and messages (`FUN_1404e27e0`) and the build-map controls in [placement](buildings-production.md#placement).
 - **Build menu search** (Meitou's, not in the original; `BuildSearchBar`, `BuildMenuSearch`): a row the width of `MainPanel` sits on its top edge, in
-  `Kenshi_FloatingPanelSkin`: a text box (frame `Kenshi_GenericTextBoxFlatSkin`, ink `Kenshi_TextboxStandardText`, hint "Search buildings"), a clear
+  `Kenshi_FloatingPanelSkin`: a text box (frame `Kenshi_GenericTextBoxFlatSkin`, ink `Kenshi_TextboxStandardText`, hint "Search buildings" in the lists' selected-line ink, `Kenshi_ListBoxItemSkin` `normal_checked`), a clear
   button (`Kenshi_CloseButtonSkin`, enabled while the box holds text) and ticks (`Kenshi_TickBoxSkin`, labels `Kenshi_TextboxPaintedText`) for
   Categories, Buildings and Subtypes, all on by default. Every word of the query must appear, ignoring case, in a shown name. A category is listed when
   its name matches or one of its groups is kept; a group is kept when its category's name matched, its own name matches or one of its members (a group of

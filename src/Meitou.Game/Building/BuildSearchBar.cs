@@ -140,7 +140,7 @@ sealed class BuildSearchBar(PlayerInterface player)
 
     /// <summary>
     /// The text box with the query in the frame and ink of the window's building name (<c>Kenshi_GenericTextBoxFlatSkin</c>,
-    /// <c>Kenshi_TextboxStandardText</c>), the caret while it has the keys, and a faint hint while it is empty and does not.
+    /// <c>Kenshi_TextboxStandardText</c>), the caret while it has the keys, and a hint (<see cref="HintInk"/>) while it is empty and does not.
     /// </summary>
     void AddBox(List<UiControl> controls, UiRect at)
     {
@@ -161,10 +161,16 @@ sealed class BuildSearchBar(PlayerInterface player)
 
         var hint = new Dictionary<string, string>
         {
-            ["FontName"] = "Kenshi_StandardFont_Medium", ["TextColour"] = "0.42 0.39 0.33", ["TextAlign"] = "Left VCenter",
+            ["FontName"] = "Kenshi_StandardFont_Medium", ["TextColour"] = HintInk(), ["TextAlign"] = "Left VCenter",
         };
         controls.Add(new("build-search-hint", "TextBox", inset, Loc.Tr("Search buildings"), "", "", true, hint, Vector4.Zero, Pickable: false));
     }
+
+    /// <summary>
+    /// The hint's ink: the light tan of the selected line in the window's CATEGORIES and BUILDINGS lists (their line skin
+    /// <c>Kenshi_ListBoxItemSkin</c> in its <c>normal_checked</c> state), so a skin mod recolours both together.
+    /// </summary>
+    string HintInk() => MyGuiColours.SkinText(player.UiResources, "Kenshi_ListBoxItemSkin", "normal_checked") ?? "0.626 0.605 0.578";
 
     /// <summary>
     /// <paramref name="box"/> drawn focused with the caret and selection while it has the keys.
