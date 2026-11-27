@@ -346,8 +346,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   With no pass on in a stage the chain draws as without mods: no picture is made, no pass added. A fragment that does not compile, or a
   `Prepare` that throws, turns the pass off for the session (`PostPass.Fault`, one log line with the compiler's message). Not run in a tile of
   a tiled screenshot (a pass works on the whole view). Both backends (`PostPassRunner`, called by `PostProcess` and `PostComposite`); Metal has
-  no normals and takes no GPU time for a pass, and is untested. **Observed** (2026-11-27, headless Vulkan device, validation and
-  synchronization validation on, no error): a scene pass, then two picture passes in order with a uniform from `Prepare`, the depth and the
+  no normals and takes no GPU time for a pass, and is untested. **Verified** by `ModPostPassTests` (a Vulkan device, validation and
+  synchronization validation on): a scene pass, then two picture passes in order with a uniform from `Prepare`, the depth and the
   stand-in normals, with and without TAA and FXAA; a broken fragment and a throwing `Prepare` turned off; every pass off draws the plain chain.
   **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod in a new game, offscreen): a scene pass tinting the picture before the
   tone map, a picture pass drawing depth outlines and the surfaces' normals under the interface.
@@ -383,9 +383,10 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   mod's folder, at most 128 KiB; `params`: names of letters, digits and `_` (at most 32 characters) with the number each starts at. An older
   game ignores the key. Not offered: a texture of the hook's own (a sampler more in every lit program, of which Metal's legacy programs
   have 16).
-  **Observed** (2026-11-27, local probe): the file checks and the renaming; three hooks installed and compiled together, two of them with
-  the same helper name, a broken one and one calling a game function refused; the native lit variants compile with the hooks in and the
-  frame block's layout matches (`NativeShaderTests` run with them installed).
+  **Verified** by `LightingHookTests`: the file checks and the renaming; two hooks with the same helper name installed and compiled
+  together, a broken one and one calling a game function refused, none taken once the text is made; the lighting text with the hooks in
+  compiles as a lit vertex stage and a lit fragment stage, and without a hook is the same text. `NativeShaderTests` checks the frame
+  block's layout with `modLight`.
   **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod in a new game, offscreen): the hook installed at the start, every
   program compiled; `hookLight` banding the ground's light by day with the cascades and with the traced sun, traced lamp shadows and
   reflections on (the two pictures differ as the game's own two do, at the shadows' edges), the lamps' light kept at night; `hookAlbedo`
@@ -1517,7 +1518,7 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   drop-down after the player's with the mod's name, in load order; a name a look already has is left out, and the player cannot save over
   one (Save as makes a copy). A game older than `Look` fails reading the attribute, so a mod using it sets `gameVersion`; an older game or
   launcher ignores `mods` in a preset. The launcher lists the mods' presets too and writes a chosen preset's `mods` values
-  ([launcher](launcher.md)). **Observed** (2026-11-27, local probe: capture, apply, count, the file and code round trip; the look drop-down drawn
+  ([launcher](launcher.md)). **Verified** by `LookModSettingsTests` (capture, apply, count; the file and code round trip, a save without mod values keeping the file's). **Observed** (2026-11-27: the look drop-down drawn
   with a scratch mod's preset, `--settings-showcase`; with the mods' settings given to that menu for the run, choosing the mod's preset set its
   look setting and the picture took the mod's tint, and Meitou or another preset put it back; a setting the mod changed itself was in
   `meitou.user.json` 2 s later, the game still running).
