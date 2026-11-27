@@ -5925,3 +5925,11 @@ msgstr "防具の貫通修正"
 #. machine-translated
 msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
 msgstr "女性キャラクターが装備した男性専用防具メッシュを体に干渉しないよう調整し、重複メッシュがない場合は長いコートの下でかさばる脚防具を内側に収めます。新しく読み込まれたキャラクターや装備し直したキャラクターに適用されます。"
+
+#. machine-translated
+msgid "Shots into buildings"
+msgstr "建物内への射撃"
+
+#. machine-translated
+msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
+msgstr "タレットとクロスボウ兵は、見えていない別の建物内の相手を撃ちません。クロスボウ兵は代わりに近づきます。本来のゲームでは多くの建物の壁が床付近の射撃しか防がないため、外のタレットが壁越しに屋内の人に当て続けます。"

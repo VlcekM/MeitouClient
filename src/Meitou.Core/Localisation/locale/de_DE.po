@@ -5928,3 +5928,11 @@ msgstr "Rüstungs-Clipping"
 #. machine-translated
 msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
 msgstr "Passt nur männliche Rüstungs-Meshes an weibliche Charaktere an, damit sie nicht im Körper stecken, und zieht sperrige Beinrüstungen unter langen Mänteln ein, wenn kein Überlappungs-Mesh vorhanden ist. Gilt für neu geladene oder neu ausgerüstete Charaktere."
+
+#. machine-translated
+msgid "Shots into buildings"
+msgstr "Schüsse in Gebäude"
+
+#. machine-translated
+msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
+msgstr "Geschütztürme und Armbrustschützen schießen nicht auf jemanden in einem anderen Gebäude, den sie nicht sehen können; ein Armbrustschütze geht stattdessen näher heran. Im Spiel halten die Wände vieler Gebäude Schüsse nur in Bodennähe auf, sodass Geschütztürme draußen Personen drinnen weiterhin durch die Wände treffen."

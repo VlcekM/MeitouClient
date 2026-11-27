@@ -5925,3 +5925,11 @@ msgstr "방어구 겹침 수정"
 #. machine-translated
 msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
 msgstr "여성 캐릭터가 착용한 남성 전용 방어구 메시가 몸을 뚫지 않도록 맞추고, 겹침 메시가 없을 때 긴 코트 아래의 두꺼운 다리 방어구를 안쪽으로 정리합니다. 새로 불러오거나 다시 장착한 캐릭터에 적용됩니다."
+
+#. machine-translated
+msgid "Shots into buildings"
+msgstr "건물 안으로 사격"
+
+#. machine-translated
+msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
+msgstr "포탑과 석궁병은 보이지 않는 다른 건물 안의 대상을 쏘지 않으며, 석궁병은 대신 더 가까이 다가갑니다. 원래 게임에서는 많은 건물의 벽이 바닥 근처의 사격만 막기 때문에 바깥의 포탑이 벽 너머로 실내의 사람을 계속 맞힙니다."

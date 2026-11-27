@@ -1087,6 +1087,12 @@ fire. The terrain is such a shape (`FUN_1407eaf90`: heightfield, group 2, no use
 (`FUN_140435040`): barrel node + orientation × unit(gun `+0x90` = (0, `barrel pos Y`, `barrel pos Z`), `FUN_14043baa0`) × 50 (`DAT_141683170`), and what it meets decides
 as above. So a turret on a wall or roof shoots over its own parapet. Meitou: `CombatSystem.TurretLineOfFire`, `TurretRig.RecastFrom`; the mount's collision
 (`IRagdollEnvironment.BuildingTriangles`) tells it apart from other buildings at the hit point.
+**Walls without collision above the knee** (**Observed**, headless probe of #1557's save): the base game's Metal Wallhouse has wall collision only in
+`Metal_Wall-House_BASE-COL.xml` (boxes reaching about 15-17 over the base); its exterior and fill wall parts have no `xml collision`, so a line of fire
+at chest height from outside passes in most directions. Collision comes only from `xml collision` ([collision](../formats/collision.md)), so the
+original shares the gap. Meitou fix (Fixes page `Shots into buildings`, on by default; `CombatSystem.IndoorTargetsNeedSight`): a turret scores 0, and
+does not fire at, a target inside another building or on another floor of its own (`Indoors`) that the gunner's senses did not see at the last look;
+a crossbowman treats such a target as blocked (it closes in). Off: the line of fire alone decides, as the game does.
 **Closing ray** (`FUN_140438c70`, state 1): from the muzzle along (target feet + 5 up) − (own feet + 5 up) (read through the decompiler's garbled Ogre operators: the feet-to-feet
 line), mask `0x87f9e04` (no characters); it passes when it meets something
 farther from the shooter than the target is. Meeting nothing does not pass, so on open ground a walker goes on until its path fails or the planner turns it to melee.

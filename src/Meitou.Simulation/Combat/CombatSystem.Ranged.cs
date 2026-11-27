@@ -650,13 +650,13 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <summary>
     /// Walking towards the target (state 1, <c>FUN_140438c70</c>): in range, the closing ray (<see cref="ClosingRayPasses"/>) passing adds to the
     /// timer and past <see cref="RangedTuning.ClearToAim"/> the shooter stops (state 0, it aims from the next tick); a ray that does not pass sets
-    /// the timer to 0. Out of range the timer stays.
+    /// the timer to 0, as does a target hidden in another building (<see cref="IndoorTargetsNeedSight"/>). Out of range the timer stays.
     /// </summary>
     void Close(World world, int i, int t, ref CombatSlot s, Vector3 barrel, bool inRange, float dt)
     {
         if (!inRange) return;
 
-        if (!ClosingRayPasses(world, i, t, barrel))
+        if (!ClosingRayPasses(world, i, t, barrel) || HidesIndoorTarget(world, i, t))
         {
             s.ClearTime = 0;
             return;
@@ -692,7 +692,8 @@ public sealed partial class CombatSystem : IProjectileSource
 
     /// <summary>
     /// Aiming in range (state 0): crossbows and perception XP, the steady time, then the line of fire (<see cref="LineOfFire"/>): clear fires, one
-    /// not counted an enemy first on it holds, a nearer building sends the shooter closer (<see cref="StartClosing"/>).
+    /// not counted an enemy first on it holds, a nearer building sends the shooter closer (<see cref="StartClosing"/>), as does a target hidden in
+    /// another building (<see cref="IndoorTargetsNeedSight"/>).
     /// </summary>
     void Aim(World world, int i, int t, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, Vector3 barrel, int now, float dt)
     {
@@ -709,7 +710,10 @@ public sealed partial class CombatSystem : IProjectileSource
         var (range, speed) = Flight(x, s.LoadedKind);
         speed = Filtered(world, i, CombatSpeedKind.Projectile, speed);
         var aim = AimPoint(barrel, world.Characters.Previous[t], world.Characters.Cold(t), speed);
-        switch (LineOfFire(world, i, t, barrel, aim, cold.Faction, range))
+
+        // Meitou fix: a target hidden in another building is walked to rather than shot through its walls.
+        int decision = HidesIndoorTarget(world, i, t) ? 0 : LineOfFire(world, i, t, barrel, aim, cold.Faction, range);
+        switch (decision)
         {
             case 0:
                 StartClosing(ref s);

@@ -143,6 +143,13 @@ public sealed record CombatOptions
     public bool TurretAssault { get; init; }
 
     /// <summary>
+    /// A turret or crossbowman neither chooses nor shoots a target inside another building (or on another floor of its own) that its senses do not
+    /// see now (Meitou fix: such buildings' wall collision often stops below chest height); false: it shoots on the line of fire alone, as the game
+    /// does.
+    /// </summary>
+    public bool IndoorTargetsNeedSight { get; init; }
+
+    /// <summary>
     /// An animal fighting with a weapon drawn from its manufacturer (the Swamp Turtle) picks the elephant creature techniques (Meitou fix); false:
     /// its weapon's own, whose clips its skeleton lacks, as the game does.
     /// </summary>

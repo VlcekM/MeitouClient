@@ -169,7 +169,8 @@ public sealed partial class CombatSystem
     /// <summary>
     /// One tick of a manned turret (the controller <c>FUN_140438c70</c> with a turret, its fire gate <c>FUN_14043aee0</c>, which the controller
     /// triggers every tick): choose the target, reload when empty (no ammunition: GUN_DATA has none), set the aim point while loaded, turn the parts,
-    /// and with a target in range, the parts within 1 degree, the steady time held and the line along the barrel clear, fire. A turret never walks
+    /// and with a target in range and not hidden in another building (<see cref="IndoorTargetsNeedSight"/>), the parts within 1 degree, the steady
+    /// time held and the line along the barrel clear, fire. A turret never walks
     /// its gunner closer: out of range or blocked it only waits.
     /// </summary>
     void TickTurret(World world, TurretState t)
@@ -204,7 +205,7 @@ public sealed partial class CombatSystem
             if (heading.X * heading.X + heading.Z * heading.Z > 1e-6f) table.Next[g].Yaw = MathF.Atan2(heading.X, heading.Z);
         }
 
-        if (target < 0 || !loaded) return;
+        if (target < 0 || !loaded || HidesIndoorTarget(world, g, target)) return;
 
         var at = prev[g].Position;
         float h = RangedFormulas.HeightFactor(at.Y, prev[target].Position.Y);
@@ -328,6 +329,29 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
+    /// Whether shooter <paramref name="s"/> leaves target <paramref name="o"/> alone under <see cref="IndoorTargetsNeedSight"/>: the setting is on,
+    /// the world has senses and <see cref="HiddenIndoors"/> holds for the shooter's.
+    /// </summary>
+    bool HidesIndoorTarget(World world, int s, int o)
+    {
+        if (!IndoorTargetsNeedSight || world.SystemOf<AggroSystem>() is not { } look) return false;
+
+        return HiddenIndoors(world, s, o, look.SensesOf(s));
+    }
+
+    /// <summary>
+    /// Target <paramref name="o"/> is inside a building other than shooter <paramref name="s"/>'s or on another floor of it (<see cref="Indoors"/>;
+    /// not on top of one, <see cref="SightMap.BuildingOf"/>) and the shooter's <paramref name="senses"/> did not see it (<see cref="Unseen"/>).
+    /// </summary>
+    internal static bool HiddenIndoors(World world, int s, int o, SenseBlock? senses) =>
+        Indoors(world, s, o) && Unseen(senses, new CharacterId(o, world.Characters.Previous[o].Generation));
+
+    /// <summary>
+    /// Whether <paramref name="senses"/> (null: no look yet) did not see <paramref name="who"/> at the last look.
+    /// </summary>
+    internal static bool Unseen(SenseBlock? senses, CharacterId who) => senses is null || !senses.TryGet(who, out var e) || !e.Seen;
+
+    /// <summary>
     /// The target choice (<c>FUN_140437f40</c>, <c>FUN_1404374d0</c>, the score <c>FUN_140435d70</c>): the characters within 1.5 x range of the
     /// gunner that its senses hold (not imprisoned) score <see cref="TurretFormulas.Closeness"/> x <see cref="TurretFormulas.Arc"/>, x 1.5 when it
     /// fights the gunner, + 0.1 for the current target, x 0.1 when not seen at the last look, and the current target's score is x 1.5 again in the
@@ -433,7 +457,7 @@ public sealed partial class CombatSystem
         {
             var table = world.Characters;
             var oc = table.Cold(o);
-            if (ScoresZero(world, towns, gc, o)) return 0;
+            if (ScoresZero(world, towns, gc, o) || senses.HidesIndoors(world, g, o)) return 0;
 
             var med = oc!.Medical!;
             var there = table.Previous[o].Position;
@@ -574,6 +598,11 @@ public sealed partial class CombatSystem
             if (!e.Seen) seen = Unseen;
             return true;
         }
+
+        /// <summary>
+        /// Whether the gunner <paramref name="g"/> leaves <paramref name="o"/> alone (<see cref="IndoorTargetsNeedSight"/>, <see cref="HiddenIndoors"/>).
+        /// </summary>
+        public bool HidesIndoors(World world, int g, int o) => fights.IndoorTargetsNeedSight && look is not null && HiddenIndoors(world, g, o, block);
 
         /// <summary>
         /// <see cref="AggroSystem.Threatens"/> of the gunner <paramref name="gc"/> on <paramref name="oc"/> in <paramref name="o"/>; without senses,

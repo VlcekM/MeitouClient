@@ -4957,6 +4957,10 @@ msgstr ""
 msgid "Short sharp sun shadows where small things touch a surface."
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Shots into buildings"
+msgstr ""
+
 #: src/Meitou.Game/Settings/LauncherSchema.cs
 msgid "Shoulder"
 msgstr ""
@@ -6011,6 +6015,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Turret gunners turn"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs

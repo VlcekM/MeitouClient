@@ -168,6 +168,80 @@ public class RangedTests(ITestOutputHelper output)
         Assert.Equal(HandHold.OfCategory((int)WeaponCategory.Katanas).Weapon, world.Characters.Cold(shooter.Slot)!.DrawnWeapon);
     }
 
+    // ------------------------------------------------------------------ targets hidden indoors
+
+    /// <summary>
+    /// The indoor rule's senses half (#1557): a target the shooter has no look at yet, does not know or did not see at the last look is unseen; one
+    /// it saw is not.
+    /// </summary>
+    [Fact]
+    public void A_target_is_unseen_unless_the_last_look_saw_it()
+    {
+        var who = new CharacterId(4, 2);
+
+        Assert.True(CombatSystem.Unseen(null, who));
+
+        var senses = new Meitou.Simulation.Perception.SenseBlock();
+
+        Assert.True(CombatSystem.Unseen(senses, who));
+
+        senses.EntryList.Add(new Meitou.Simulation.Perception.SenseEntry { Target = 4, Generation = 2, Seen = false });
+
+        Assert.True(CombatSystem.Unseen(senses, who));
+
+        senses.EntryList[0] = senses.EntryList[0] with { Seen = true };
+
+        Assert.False(CombatSystem.Unseen(senses, who));
+        Assert.True(CombatSystem.Unseen(senses, new CharacterId(4, 3)));
+    }
+
+    /// <summary>
+    /// One building's indoor volume, from the install.
+    /// </summary>
+    sealed class OneRoom(Meitou.Data.World.InteriorVolume volume) : Meitou.Simulation.Perception.ISightSource
+    {
+        public Meitou.Data.World.InteriorVolume? Room(Meitou.Data.World.TownBuilding b) => volume;
+        public IReadOnlyList<Meitou.Data.World.WorldLight> Lights(Meitou.Data.World.TownBuilding b) => [];
+    }
+
+    /// <summary>
+    /// #1557 with the base game's Metal Wallhouse (42175-Newwworld.mod), whose ground-floor wall collision stops below chest height: a target
+    /// standing under its first floor is inside it, so a shooter outdoors whose last look did not see the target leaves it alone
+    /// (<see cref="CombatOptions.IndoorTargetsNeedSight"/>), and one whose look saw it does not; a target outdoors is never hidden.
+    /// </summary>
+    [Fact]
+    [Slow]
+    public void A_target_in_a_metal_wallhouse_is_hidden_from_a_shooter_outside_that_did_not_see_it()
+    {
+        var install = InstallData.Install;
+        Assert.SkipWhen(install is null, $"No Kenshi install configured ({Meitou.Content.GameInstall.EnvironmentVariable}).");
+        var db = InstallData.BaseGame!;
+        var at = new Vector3(1300, 125, 1000);
+        var volume = Meitou.Data.World.InteriorVolume.For(db, db.Find("42175-Newwworld.mod")!, "wallhouse", at, Quaternion.Identity,
+            new Meitou.Data.World.InteriorCollisions(install!));
+        Assert.NotNull(volume);
+
+        // Under the first floor, above the wall collision: 25 over the base, as #1557's target stood.
+        var inside = at + new Vector3(0, 25, 0);
+        Assert.True(volume.Contains(inside) && volume.Covered(inside), "the spot is indoors with the building over it");
+
+        using var world = NewWorld(5, 1, out _);
+        var shooter = Put(world, Shooter(100, 100, 3), new Vector3(1300, 150, 1350));
+        var target = Put(world, Dummy(1), inside);
+        world.Sight.Add(new OneRoom(volume), new Meitou.Data.World.TownBuilding("wallhouse", "42175-Newwworld.mod", "Metal Wallhouse", at, 0, false,
+            false, []));
+        world.RunTick();
+
+        Assert.NotNull(world.Sight.BuildingOf(target.Slot));
+        Assert.True(CombatSystem.HiddenIndoors(world, shooter.Slot, target.Slot, null));
+        Assert.False(CombatSystem.HiddenIndoors(world, target.Slot, shooter.Slot, null));
+
+        var senses = new Meitou.Simulation.Perception.SenseBlock();
+        senses.EntryList.Add(new Meitou.Simulation.Perception.SenseEntry { Target = target.Slot, Generation = target.Generation, Seen = true });
+
+        Assert.False(CombatSystem.HiddenIndoors(world, shooter.Slot, target.Slot, senses));
+    }
+
     // ------------------------------------------------------------------ determinism
 
     /// <summary>

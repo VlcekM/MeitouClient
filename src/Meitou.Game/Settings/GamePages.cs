@@ -722,6 +722,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game's data gives it a negative reach, so they throw it only when nearly touching their target.",
             Toggle: new("Weak punch reach", () => menu.Config.FixPunchReach,
                 v => { menu.Config.FixPunchReach = v; menu.PunchReachChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Shots into buildings",
+            "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. "
+            + "In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls.",
+            Toggle: new("Shots into buildings", () => menu.Config.FixIndoorShots,
+                v => { menu.Config.FixIndoorShots = v; menu.IndoorShotsChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Swamp turtle attacks",
             "A swamp turtle butts and bites when it fights. "
             + "In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion.",
