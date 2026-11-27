@@ -402,7 +402,8 @@ adds that camera. Both backends run the depth of field, the vignette, the grain 
 Code mods add full-screen passes at two places ([modding](modding.md), "Post passes"; `PostPassRunner`): `Scene` after the depth of field
 and before the exposure's measure, so the exposure, bloom and tone map see what a pass wrote; `Picture` after the heat haze, the game's own
 last pass then drawing into a display-size picture (RGBA8, RGBA16F in HDR output) instead of the frame's target, and the last mod pass into
-the target. Each stage keeps at most two pictures, made when a pass first runs. `PostProcess.RunCompositeChain` keeps its name and
+the target. Each stage keeps at most two pictures, made when a pass first runs. A pass that reads the surfaces' normals gets a copy
+(RG16 at the render size) taken before the particles' and the post chain's targets reuse the surface target's memory. `PostProcess.RunCompositeChain` keeps its name and
 parameters: mods that patched it to get the same place still bind.
 
 ## Depth of field

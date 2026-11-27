@@ -7,9 +7,9 @@ using Meitou.Modding;
 namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
-/// What a post chain hands the mods' passes of one frame: the scene's depth and surface targets (null: none) and its camera.
+/// What a post chain hands the mods' passes of one frame: the scene's depth and its surfaces' normals (null: none) and its camera.
 /// </summary>
-readonly record struct PostPassView(GpuTexture? Depth, GpuTexture? Surface, Vector3 Eye, Matrix4x4 View, float FieldOfView, float Aspect,
+readonly record struct PostPassView(GpuTexture? Depth, GpuTexture? Normals, Vector3 Eye, Matrix4x4 View, float FieldOfView, float Aspect,
     float Near, float Far, bool HasScene, bool Hdr);
 
 /// <summary>
@@ -38,9 +38,9 @@ sealed class PostPassRunner(IGpuContext ctx, string vertex, bool topDown) : IDis
         /// </summary>
         public readonly LegacyProgram P = program;
         /// <summary>
-        /// <c>uImage</c>, <c>uDepth</c> and <c>uSurface</c>.
+        /// <c>uImage</c>, <c>uDepth</c> and <c>uNormal</c>.
         /// </summary>
-        public readonly SamplerSlot Image = program.Sampler("uImage"), Depth = program.Sampler("uDepth"), Surface = program.Sampler("uSurface");
+        public readonly SamplerSlot Image = program.Sampler("uImage"), Depth = program.Sampler("uDepth"), Normal = program.Sampler("uNormal");
         /// <summary>
         /// <c>uViewport</c>, <c>uPlanes</c> and <c>uTime</c>.
         /// </summary>
@@ -83,15 +83,15 @@ sealed class PostPassRunner(IGpuContext ctx, string vertex, bool topDown) : IDis
     readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>
-    /// Whether a pass that is on reads the lit surfaces (<c>uSurface</c>): the chain then keeps their target until the passes ran.
+    /// Whether a pass that is on reads the surfaces' normals (<c>uNormal</c>): the chain then copies them out for the passes each frame.
     /// </summary>
-    public bool WantsSurface
+    public bool WantsNormals
     {
         get
         {
             foreach (var (pass, compiled) in _compiled)
             {
-                if (compiled.Surface.IsValid && pass.Enabled && pass.Fault is null) return true;
+                if (compiled.Normal.IsValid && pass.Enabled && pass.Fault is null) return true;
             }
 
             return false;
@@ -182,7 +182,7 @@ sealed class PostPassRunner(IGpuContext ctx, string vertex, bool topDown) : IDis
         (info.Stage, info.Width, info.Height) = (stage, width, height);
         (info.FieldOfView, info.Aspect, info.Near, info.Far) = (view.FieldOfView, view.Aspect, view.Near, view.Far);
         (info.View, info.Eye, info.Seconds) = (view.View, view.Eye, _clock.Elapsed.TotalSeconds);
-        (info.HasScene, info.HasSurface, info.Hdr, info.TopDown) = (view.HasScene, view.Surface is not null, view.Hdr, topDown);
+        (info.HasScene, info.HasNormals, info.Hdr, info.TopDown) = (view.HasScene, view.Normals is not null, view.Hdr, topDown);
         info.Open(compiled.P);
         try
         {
@@ -259,7 +259,7 @@ sealed class PostPassRunner(IGpuContext ctx, string vertex, bool topDown) : IDis
     }
 
     /// <summary>
-    /// Binds a pass's picture so far, and the scene's depth and surfaces where it declares them (the stand-in where the frame has none).
+    /// Binds a pass's picture so far, and the scene's depth and normals where it declares them (the stand-in where the frame has none).
     /// </summary>
     void Bind(Compiled pass, GpuTexture image, in PostPassView view)
     {
@@ -267,8 +267,8 @@ sealed class PostPassRunner(IGpuContext ctx, string vertex, bool topDown) : IDis
         if (pass.Image.IsValid) p.Bind(pass.Image, _linear with { View = image.View() });
         if (pass.Depth.IsValid)
             p.Bind(pass.Depth, view.Depth is { } depth ? _nearest with { View = depth.View() } : ctx.Dummy(p.SamplerInfo(pass.Depth)));
-        if (pass.Surface.IsValid)
-            p.Bind(pass.Surface, view.Surface is { } surface ? _nearest with { View = surface.View() } : ctx.Dummy(p.SamplerInfo(pass.Surface)));
+        if (pass.Normal.IsValid)
+            p.Bind(pass.Normal, view.Normals is { } normals ? _nearest with { View = normals.View() } : ctx.Dummy(p.SamplerInfo(pass.Normal)));
     }
 
     /// <summary>

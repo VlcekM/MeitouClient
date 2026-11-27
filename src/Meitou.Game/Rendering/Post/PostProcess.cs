@@ -128,6 +128,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _bloom.Dispose();
         _depthOfField?.Dispose();
         _modPasses?.Dispose();
+        _modNormalsProgram?.Dispose();
         DisposeGtao();
         DisposeLampShadows();
         Hiz?.Dispose();
@@ -778,7 +779,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 _fogRate.Distance, _fogRate.Image, _fogRate.Neutral, _giAlbedo, _giLow, _giLowSky, _ssrLowSky, _shafts.Injected, _shafts.Light,
                 _shafts.Scatter, _shafts.Raw, _shafts.History, _gtaoPacked, _terrainResolve, _lampLost, _ssrHit, _ssrLow, _tracedTerm, _tracedMask,
                 _tracedScratch, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1, _characterVisibility, _characterGatherLast,
-                _characterGatherPooled, _roomMask }
+                _characterGatherPooled, _roomMask, _modNormals }
             .OfType<Target2D>();
 
     /// <summary>
@@ -794,7 +795,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _gtaoPacked = _terrainResolve = null;
         _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = l.AccumFar = l.DepthFar = l.SoftFar = null;
-        _giAlbedo = _giLow = _giLowSky = _ssrLowSky = _softDepth = null;
+        _giAlbedo = _giLow = _giLowSky = _ssrLowSky = _softDepth = _modNormals = null;
         _tracedTerm = _tracedMask = _tracedScratch = _lampScratch = _lampFiltered = _lampTotal = _lampTotal1 = null;
         _lampLost = _ssrHit = _ssrLow = null;
         _characterVisibility = _characterGatherLast = _characterGatherPooled = _roomMask = null;
@@ -1263,7 +1264,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var l in _lowTargets) l.Drawn = l.Late = false;
         _softDepthReady = false;
         CloudMotion = null;   // WorldFrame.Draw sets this frame's; a sky-only frame has none
-        _sceneMarked = _aoApplied = _contactSunRan = _giResolved = false;
+        _sceneMarked = _aoApplied = _contactSunRan = _giResolved = _modNormalsCopied = false;
         Stamp("start");
         _frameIndex++;
         JitterPixels = Temporal ? Jitter.Offset(_frameIndex, JitterPhases) : Vector2.Zero;
@@ -1319,6 +1320,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (RoomMaskNow is { } roomPixels && _sceneColour is not null) _merged.InteriorGain(roomPixels, _sceneColour);
 
         // The upscaler: the scene at the render size becomes the display-size picture the rest of the chain reads.
+        CopySurfaceNormals();
         Gpu.BeginTransientPhase(TransientPhase.PostUpscale);
         _postColour = _sceneColour!;
         if (Temporal)
@@ -1543,17 +1545,50 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     PostPassDraw? _modDraw;
 
     /// <summary>
-    /// Whether the lit surfaces' target is kept until the end of the chain for a mod's pass (<see cref="EnsureGi"/>); else its memory is
-    /// other passes' by then, and the mods' passes get none.
+    /// The lit surfaces' normals copied out for the mods' passes (<see cref="CopySurfaceNormals"/>), made when a pass first reads them; null
+    /// until then.
     /// </summary>
-    bool _giSurfaceKept;
+    Target2D? _modNormals;
 
     /// <summary>
-    /// The scene and the camera the mods' passes get this frame; no depth or surfaces in a frame without a scene, and the surfaces only once
-    /// their target is kept for them (the frame after a pass that reads them first ran).
+    /// Whether <see cref="_modNormals"/> holds this frame's normals.
     /// </summary>
-    PostPassView ModView => new(_haveScene ? _sceneDepth?.Texture : null, _haveScene && _giSurfaceKept ? GiAlbedoTarget : null, _eyeNow,
+    bool _modNormalsCopied;
+
+    /// <summary>
+    /// The copy's program (<see cref="PostProcessShaders.SurfaceNormalCopy"/>) and its sampler, made with the target.
+    /// </summary>
+    LegacyProgram? _modNormalsProgram;
+
+    /// <summary>
+    /// The scene and the camera the mods' passes get this frame; no depth or normals in a frame without a scene, and the normals only when
+    /// they were copied this frame.
+    /// </summary>
+    PostPassView ModView => new(_haveScene ? _sceneDepth?.Texture : null, _modNormalsCopied ? _modNormals?.Texture : null, _eyeNow,
         _viewRotation, _fovNow, _aspectNow, _planes.X, _planes.Y, _haveScene, Options.HdrPeak > 1);
+
+    /// <summary>
+    /// Copies the lit surfaces' normals into a target of their own (two 16-bit channels at the render size) while a mod's pass that is on reads
+    /// them: once a frame, after the scene's last reader of the surface target and before the particles' and the post chain's targets take its
+    /// memory (<see cref="TransientLifetime"/>). Nothing without such a pass, a scene or the surface target (the indirect light and the
+    /// reflections off).
+    /// </summary>
+    void CopySurfaceNormals()
+    {
+        if (_modNormalsCopied || _modPasses?.WantsNormals != true || !_haveScene || GiAlbedoTarget is null || _giAlbedo is null) return;
+
+        _modNormalsProgram ??= LegacyProgram.Create(Gpu, PostProcessShaders.Vertex, PostProcessShaders.SurfaceNormalCopy, "post mod normals");
+        if (_modNormals is null || _modNormals.Width != _width || _modNormals.Height != _height)
+        {
+            _modNormals?.Texture.Dispose();
+            using var batch = Gpu.Uploads.Begin();
+            _modNormals = Make(batch, _width, _height, InternalFormat.Rg16, TextureMinFilter.Nearest, "post mod normals");
+        }
+        Bind(_modNormalsProgram, _modNormalsProgram.Sampler("uSurface"), _giAlbedo);
+        Draw(_modNormalsProgram, _modNormals);
+        Stamp("mod normals");
+        _modNormalsCopied = true;
+    }
 
     /// <summary>
     /// Readies the mods' passes of a stage for a picture of the size and format; how many draw this frame. None in a tile of a larger picture
@@ -2724,13 +2759,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     void EnsureGi()
     {
         int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces ? 2 : 0;
-        bool kept = _modPasses?.WantsSurface == true;
-        if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor && _giSurfaceKept == kept)) return;
+        if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor)) return;
 
         _giAlbedo?.Texture.Dispose();
         _giLow?.Texture.Dispose();
         _giLowSky?.Texture.Dispose();
-        (_giDivisor, _giSurfaceKept) = (divisor, kept);
+        _giDivisor = divisor;
         using var batch = Gpu.Uploads.Begin();
 
         // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the
@@ -2738,8 +2772,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba32Ui, _width, _height,
             Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")
         {
-            // Its memory goes to later passes once the fog and the occlusion are done, unless a mod's post pass reads the surfaces.
-            Transient = new TransientLifetime(TransientPhase.OpaqueScene, kept ? TransientPhase.PostUpscale : TransientPhase.FogAndAo),
+            Transient = new TransientLifetime(TransientPhase.OpaqueScene, TransientPhase.FogAndAo),
         }),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         _giLow = Make(batch, (_width + _giDivisor - 1) / _giDivisor, (_height + _giDivisor - 1) / _giDivisor, InternalFormat.Rgba16F,
@@ -2828,6 +2861,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             low.SoftFar = Make(batch, lw, lh, InternalFormat.R32F, TextureMinFilter.Nearest, $"post particle soft depth far 1/{div}",
                 transient: lowLife);
         }
+        CopySurfaceNormals();
         CloseSegment();
         Gpu.BeginTransientPhase(TransientPhase.Particles);
         var d = _particleDepthPass;
@@ -2864,6 +2898,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             _softDepth = Make(batch, _width, _height, InternalFormat.R32F, TextureMinFilter.Nearest, "post particle soft depth",
                 transient: TransientLifetime.Single(TransientPhase.Particles));
         }
+        CopySurfaceNormals();
         CloseSegment();
         Gpu.BeginTransientPhase(TransientPhase.Particles);
         Bind(_particleSoftDepthPass.P, _particleSoftDepthPass.Depth, _sceneDepth);

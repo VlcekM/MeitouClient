@@ -33,17 +33,33 @@ static class PostProcessShaders
         StringComparison.Ordinal);
 
     /// <summary>
+    /// The lit surfaces' normals out of the surface target into two 16-bit channels (<c>PostProcess.CopySurfaceNormals</c>): the shading normal's
+    /// octahedral position the lit fragments store for the GI resolve (the first two channels of <c>giAlbedoOut</c>,
+    /// <see cref="Sky.AtmosphereShaders"/>), moved up by one step so that 0 says nothing is stored there (the sky, a surface that stores none).
+    /// </summary>
+    public const string SurfaceNormalCopy = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform usampler2D uSurface;
+        void main()
+        {
+            uvec4 s = texelFetch(uSurface, ivec2(gl_FragCoord.xy), 0);
+            fragColour = s.xyz == uvec3(0u) ? vec4(0.0) : vec4((vec2(s.xy) * (65534.0 / 65535.0) + 1.0) / 65535.0, 0.0, 0.0);
+        }
+        """;
+
+    /// <summary>
     /// <c>vec3 meitouNormal(vec2 uv)</c> for a mod's post pass (<see cref="Meitou.Modding.PostPass.NormalGlsl"/>), after its
-    /// <c>uniform usampler2D uSurface;</c>: the shading normal the lit surfaces store for the GI resolve (the first two channels of
-    /// <c>giAlbedoOut</c>, <see cref="Sky.AtmosphereShaders"/>: its octahedral position in 16 bits each, decoded as <c>giOctDir</c>), or zero where
-    /// nothing is stored.
+    /// <c>uniform sampler2D uNormal;</c>: the world-space shading normal <see cref="SurfaceNormalCopy"/> kept (decoded as <c>giOctDir</c>), or
+    /// zero where nothing is stored, as the stand-in of a frame without normals reads.
     /// </summary>
     public const string SurfaceNormal = "\n" + """
         vec3 meitouNormal(vec2 uv)
         {
-            uvec4 s = texelFetch(uSurface, ivec2(uv * vec2(textureSize(uSurface, 0))), 0);
-            if (s.xyz == uvec3(0u)) return vec3(0.0);   // nothing stored, or the stand-in of a frame without surfaces (0, 0, 0, 1)
-            vec2 p = vec2(s.xy) / 65535.0 * 2.0 - 1.0;
+            vec2 s = texelFetch(uNormal, ivec2(uv * vec2(textureSize(uNormal, 0))), 0).rg;
+            if (s.x <= 0.0 && s.y <= 0.0) return vec3(0.0);
+            vec2 p = (s * 65535.0 - 1.0) / 65534.0 * 2.0 - 1.0;
             vec3 d = vec3(p.x, 1.0 - abs(p.x) - abs(p.y), p.y);
             if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
             return normalize(d);

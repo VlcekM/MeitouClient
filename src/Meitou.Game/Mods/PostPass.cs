@@ -30,7 +30,7 @@ public enum PostStage
 /// The fragment is whole GLSL as the game's own post shaders: <c>#version 330 core</c>, <c>in vec2 vUv;</c> (0..1 over the picture) and one
 /// <c>out vec4</c>. Declared by these names, the game binds <c>uniform sampler2D uImage</c> (the picture so far, linear, clamped),
 /// <c>uniform sampler2D uDepth</c> (the scene's depth at the render size, nearest; read it with <see cref="DepthGlsl"/>),
-/// <c>uniform usampler2D uSurface</c> (the lit surfaces' packed normals, <see cref="NormalGlsl"/>), and sets <c>uniform vec2 uViewport</c> (the
+/// <c>uniform sampler2D uNormal</c> (the lit surfaces' normals, read with <see cref="NormalGlsl"/>), and sets <c>uniform vec2 uViewport</c> (the
 /// picture's size in pixels), <c>uniform vec2 uPlanes</c> (the scene's near and far planes) and <c>uniform float uTime</c> (seconds, wrapped
 /// every hour).
 /// </remarks>
@@ -59,9 +59,9 @@ public sealed class PostPass
     public const string DepthGlsl = DepthConvention.Glsl;
 
     /// <summary>
-    /// GLSL to paste into a fragment after <c>uniform usampler2D uSurface;</c>: <c>vec3 meitouNormal(vec2 uv)</c>, the lit surface's shading normal
-    /// in world space at a place of the picture, or <c>vec3(0.0)</c> where there is none (the sky, an unlit surface, or a frame whose scene kept
-    /// no surfaces: <see cref="PostPassFrame.HasSurface"/> false). The game owns the packing, so a pass reads it through this only.
+    /// GLSL to paste into a fragment after <c>uniform sampler2D uNormal;</c>: <c>vec3 meitouNormal(vec2 uv)</c>, the lit surface's shading normal
+    /// in world space at a place of the picture, or <c>vec3(0.0)</c> where there is none (the sky, a surface that stores none, or a frame
+    /// without normals: <see cref="PostPassFrame.HasNormals"/> false). The game owns the packing, so a pass reads it through this only.
     /// </summary>
     public const string NormalGlsl = Meitou.Game.Rendering.Post.PostProcessShaders.SurfaceNormal;
 
@@ -202,10 +202,10 @@ public sealed class PostPassFrame
     public bool HasScene { get; internal set; }
 
     /// <summary>
-    /// Whether <c>uSurface</c> holds this frame's surfaces (<see cref="PostPass.NormalGlsl"/>): only while the scene stores them (the indirect
-    /// light or the reflections on, Vulkan) and from the frame after a pass that reads them first ran, else every lookup is none.
+    /// Whether <c>uNormal</c> holds this frame's normals (<see cref="PostPass.NormalGlsl"/>): only while the scene stores its surfaces (the
+    /// indirect light or the reflections on, Vulkan) and from the frame after a pass that reads them first ran, else every lookup is none.
     /// </summary>
-    public bool HasSurface { get; internal set; }
+    public bool HasNormals { get; internal set; }
 
     /// <summary>
     /// Whether the picture carries values above 1 (HDR output): a <see cref="PostStage.Picture"/> pass then must not clamp to 1.
