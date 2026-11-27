@@ -852,7 +852,6 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public void Update(Vector3 eye)
     {
-        _glassScene.Idle();
         Update(eye, Covered ? Math.Max(BudgetMs, CoveredBudgetMs) : BudgetMs);
     }
 

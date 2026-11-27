@@ -198,15 +198,21 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
     internal MetalGiCache? Cache => _cache;
 
     /// <summary>
-    /// Retires the cache on disable or when its memory tier changes.
+    /// Retires the cache on disable and sizes a fresh one to the device's memory tier without rebuilding a live cache on pressure toggles.
     /// </summary>
     public void ConfigureCache(bool enabled, bool pressure)
     {
-        int capacity = GiCache.CapacityFor(_ctx.VideoMemoryBudget, pressure);
-        if (enabled && _cache?.SlotCount == capacity) return;
+        if (!enabled)
+        {
+            if (_cache is { } previous) _ctx.DeferDelete(previous.Dispose);
+            _cache = null;
+            return;
+        }
 
-        if (_cache is { } previous) _ctx.DeferDelete(previous.Dispose);
-        _cache = enabled ? new MetalGiCache(_ctx, this, capacity) : null;
+        if (_cache is not null) return;
+
+        int capacity = GiCache.CapacityFor(_ctx.VideoMemoryBudget, pressure);
+        _cache = new MetalGiCache(_ctx, this, capacity);
     }
 
     /// <summary>

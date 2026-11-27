@@ -81,7 +81,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>
     /// Milliseconds without an enhanced portrait draw before the half-float square and its depth are released.
     /// </summary>
-    const long PortraitHdrIdleMs = 10_000;
+    const long PortraitHdrIdleMs = 60_000;
 
     /// <summary>
     /// The enhanced portraits' half-float square and its depth (<see cref="PortraitSupersample"/> times a cell's size).
@@ -163,7 +163,6 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public void DrawPortraits()
     {
-        _visibility?.Idle();
         if (PortraitRequests.Count == 0)
         {
             IdlePreviews();

@@ -575,6 +575,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             GiveBack(b);
         }
 
+        bytes += Transient.Trim();
         return bytes;
     }
 
@@ -1198,11 +1199,17 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// A block that left its pool goes back to the driver on a worker (vkFreeMemory takes 0.5 to 5 ms and sometimes 30; the render thread
     /// frees most blocks, when a frame's deletions run). Inline once the allocator is being disposed.
     /// </summary>
-    void GiveBack(MemoryBlock b)
+    void GiveBack(MemoryBlock b) => GiveBackMemory(b.Memory, b.Size, b.MemoryTypeIndex, b.Optimal, b.Dedicated);
+
+    /// <summary>
+    /// Releases a device memory block on a worker thread (or inline once disposed), tracked by <see cref="_workersBusy"/>
+    /// and <see cref="UploadProfile"/>. Used by <see cref="GpuAllocator"/> and <see cref="TransientImagePool"/>.
+    /// </summary>
+    internal void GiveBackMemory(DeviceMemory memory, ulong size, uint memoryTypeIndex, bool optimal, bool dedicated)
     {
         if (_disposed)
         {
-            _vk.FreeMemory(_dev.Device, b.Memory, null);
+            _vk.FreeMemory(_dev.Device, memory, null);
             return;
         }
 
@@ -1210,8 +1217,8 @@ public sealed unsafe class GpuAllocator : IDisposable
         ThreadPool.UnsafeQueueUserWorkItem(_ =>
         {
             long start = UploadProfile.Begin();
-            _vk.FreeMemory(_dev.Device, b.Memory, null);   // unmapping is implicit
-            UploadProfile.EndBlock(false, start, b.Size, b.MemoryTypeIndex, b.Optimal, b.Dedicated);
+            _vk.FreeMemory(_dev.Device, memory, null);   // unmapping is implicit
+            UploadProfile.EndBlock(false, start, size, memoryTypeIndex, optimal, dedicated);
             Interlocked.Decrement(ref _workersBusy);
         }, null);
     }

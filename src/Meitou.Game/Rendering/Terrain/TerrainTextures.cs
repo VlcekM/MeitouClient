@@ -506,6 +506,16 @@ public sealed unsafe class TerrainTextures : IDisposable
     int _nearRefused = int.MaxValue;
 
     /// <summary>
+    /// Milliseconds near demand must stay below the shrink threshold before shrinking the near arrays without memory pressure.
+    /// </summary>
+    const long ShrinkHoldMs = 30_000;
+
+    /// <summary>
+    /// Timestamp (<see cref="Environment.TickCount64"/>) when near demand first fell below the shrink threshold, or 0 when not shrinking.
+    /// </summary>
+    long _shrinkSince;
+
+    /// <summary>
     /// One diffuse and normal map pair of a layer, with where it lives in the arrays.
     /// </summary>
     sealed class Pair
@@ -983,8 +993,23 @@ public sealed unsafe class TerrainTextures : IDisposable
 
         int want = Math.Min(limit, Math.Max(Math.Min(NearLayers, limit), (demand + 7) / 8 * 8));
         bool grow = want > Capacity;
-        if (want == Capacity || !grow && want >= Capacity - 8 && Capacity <= limit) return;
-        if (grow && (GpuContext.DiagNoGrow || want >= _nearRefused || Guard is { Active: true })) return;
+        if (want == Capacity || !grow && want >= Capacity - 8 && Capacity <= limit)
+        {
+            _shrinkSince = 0;
+            return;
+        }
+
+        if (grow)
+        {
+            _shrinkSince = 0;
+            if (GpuContext.DiagNoGrow || want >= _nearRefused || Guard is { Active: true }) return;
+        }
+        else if (Guard?.Pressure != true)
+        {
+            long now = Environment.TickCount64;
+            if (_shrinkSince == 0) _shrinkSince = now;
+            if (now - _shrinkSince < ShrinkHoldMs) return;
+        }
 
         ulong bytes = (ulong)Bytes(_layerSize, _levelCount, want, 32);
         if (grow && Guard is { } guard && !guard.AllowsGrowth(bytes))
@@ -1012,6 +1037,7 @@ public sealed unsafe class TerrainTextures : IDisposable
         foreach (var p in _owner) if (p is not null) p.Slot = -1;
         _owner = new Pair?[want];
         _nextFree = 0;
+        _shrinkSince = 0;
         Capacity = want;
         for (int b = 0; b < _state.Length; b++) WriteNear(b);
         long megabytes = Bytes(_layerSize, _levelCount, want, 32) >> 20;

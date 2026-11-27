@@ -274,9 +274,19 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     #region Instance arena
 
     /// <summary>
+    /// Milliseconds the arena must stay below one quarter full before shrinking.
+    /// </summary>
+    const long TrimHoldMs = 30_000;
+
+    /// <summary>
     /// The instance arena; replaced by a larger one when full (<see cref="Generation"/>).
     /// </summary>
     BufferArena _arena;
+
+    /// <summary>
+    /// Timestamp (<see cref="Environment.TickCount64"/>) when <see cref="ArenaUsed"/> first fell below a quarter of <see cref="ArenaBytes"/>, or 0.
+    /// </summary>
+    long _lowSince;
     /// <summary>
     /// Bumped whenever the arena is replaced by a larger one: a group placed in an older generation is uploaded again.
     /// </summary>
@@ -383,12 +393,22 @@ public sealed unsafe class FoliageGpuCull : IDisposable
     }
 
     /// <summary>
-    /// When much of the arena has gone idle, re-place the surviving groups in a smaller buffer.
+    /// When much of the arena has gone idle for long enough, re-place the surviving groups in a smaller buffer.
     /// </summary>
     internal void TrimArena()
     {
         ulong bytes = ArenaBytes;
-        if (bytes > (16ul << 20) && ArenaUsed < bytes / 4) ReplaceArena(bytes / 2);
+        if (bytes <= (16ul << 20) || ArenaUsed >= bytes / 4)
+        {
+            _lowSince = 0;
+            return;
+        }
+
+        long now = Environment.TickCount64;
+        if (_lowSince == 0) _lowSince = now;
+        if (now - _lowSince < TrimHoldMs) return;
+
+        ReplaceArena(bytes / 2);
     }
 
     /// <summary>
@@ -418,6 +438,7 @@ public sealed unsafe class FoliageGpuCull : IDisposable
         var replacement = new BufferArena(_ctx, size, BufferUse.Storage | BufferUse.TransferDst, "foliage instances");
         _arena.Dispose();   // deferred: this frame's earlier dispatches may read it
         _arena = replacement;
+        _lowSince = 0;
         Generation++;
     }
 

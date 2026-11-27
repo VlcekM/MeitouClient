@@ -16,12 +16,7 @@ sealed class GlassScene(IGpuContext gpu) : IDisposable
         DepthFunction.Always, false, false, 1, 0);
 
     /// <summary>
-    /// Milliseconds without a capture before <see cref="_copy"/> is released.
-    /// </summary>
-    const long IdleMs = 5_000;
-
-    /// <summary>
-    /// The copy's bindless entry (made on first capture, freed with the copy when idle).
+    /// The copy's bindless entry (made on first capture, freed on dispose).
     /// </summary>
     BindlessTexture? _entry;
 
@@ -31,18 +26,12 @@ sealed class GlassScene(IGpuContext gpu) : IDisposable
     GpuTexture? _copy;
 
     /// <summary>
-    /// When <see cref="Capture"/> last ran (<see cref="Environment.TickCount64"/>).
-    /// </summary>
-    long _lastUsedAt;
-
-    /// <summary>
     /// Copies <paramref name="scene"/> (no pass open) and returns the copy's bindless index; null where there is no copy (not Vulkan).
     /// </summary>
     public uint? Capture(GpuTexture scene)
     {
         if (gpu is not GpuContext vulkan) return null;
 
-        _lastUsedAt = Environment.TickCount64;
         var cmd = gpu.BeginNative("glass scene copy");
         Ensure(vulkan, cmd, scene.Desc);
         gpu.BeginTransientPhase(TransientPhase.SeeThrough);
@@ -51,17 +40,6 @@ sealed class GlassScene(IGpuContext gpu) : IDisposable
 
         _entry ??= new BindlessTexture(gpu, BindlessKind.Texture2D);
         return _entry.Index(new SampledTexture(gpu.Samplers.Get(ClampLinear), _copy!.View()));
-    }
-
-    /// <summary>
-    /// Releases the copy and its bindless entry after <see cref="IdleMs"/> without a capture.
-    /// </summary>
-    public void Idle()
-    {
-        if (_copy is null) return;
-        if (Environment.TickCount64 - _lastUsedAt < IdleMs) return;
-
-        Dispose();
     }
 
     /// <summary>

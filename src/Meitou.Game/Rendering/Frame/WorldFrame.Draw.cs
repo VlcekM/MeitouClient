@@ -303,7 +303,7 @@ static partial class WorldFrame
     }
 
     /// <summary>
-    /// Keeps the hybrid radiance cache only while in use and sizes it to the device's memory tier.
+    /// Keeps the hybrid radiance cache only while in use, sizing a fresh cache to the device's memory tier.
     /// </summary>
     static Gi.GiCache? PrepareGiCache(WorldGpu gpu, IGpuContext gpuContext, bool enabled)
     {
@@ -315,10 +315,9 @@ static partial class WorldFrame
             return null;
         }
 
-        int capacity = Gi.GiCache.CapacityFor(context.VideoMemoryBudget, gpu.Guard?.Pressure == true);
-        if (gpu.GiCache?.SlotCount != capacity)
+        if (gpu.GiCache is null)
         {
-            gpu.GiCache?.Dispose();
+            int capacity = Gi.GiCache.CapacityFor(context.VideoMemoryBudget, gpu.Guard?.Pressure == true);
             gpu.GiCache = new Gi.GiCache(context, gpu.Gi, gpu.Probes, capacity);
         }
 

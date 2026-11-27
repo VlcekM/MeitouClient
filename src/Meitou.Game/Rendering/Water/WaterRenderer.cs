@@ -2259,11 +2259,6 @@ public sealed unsafe class WaterRenderer : IDisposable
     #region Scene capture
 
     /// <summary>
-    /// Milliseconds the refraction and scene-depth copies may sit unused before they are freed.
-    /// </summary>
-    const long CaptureIdleReleaseMs = 5_000;
-
-    /// <summary>
     /// The refraction: this frame's copy of the scene's colour (Meitou).
     /// </summary>
     GpuTexture? _refraction;
@@ -2274,11 +2269,6 @@ public sealed unsafe class WaterRenderer : IDisposable
     long _refractionFrame = -1;
 
     /// <summary>
-    /// Timestamp (<see cref="Environment.TickCount64"/>) when <see cref="_refraction"/> was last captured (0: none).
-    /// </summary>
-    long _refractionLastUsedMs;
-
-    /// <summary>
     /// This frame's copy of the scene's depth.
     /// </summary>
     GpuTexture? _sceneDepthCopy;
@@ -2287,11 +2277,6 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// The frame the depth was copied in (-1: never).
     /// </summary>
     long _sceneDepthFrame = -1;
-
-    /// <summary>
-    /// Timestamp (<see cref="Environment.TickCount64"/>) when <see cref="_sceneDepthCopy"/> was last captured (0: none).
-    /// </summary>
-    long _sceneDepthLastUsedMs;
 
     /// <summary>
     /// The near and far planes of the copied depth.
@@ -2306,36 +2291,12 @@ public sealed unsafe class WaterRenderer : IDisposable
     public void CaptureScene(GpuTexture sceneColour, GpuTexture? sceneDepth, float near, float far)
     {
         bool colour = NeedsRefraction(near), depth = sceneDepth is not null && NeedsDepth(near);
-        ReleaseIdleCaptures(colour, depth);
         if (!colour && !depth) return;
 
         var cmd = Gpu.BeginNative("water scene copy");
         if (colour) CopyRefraction(cmd, sceneColour);
         if (depth) CopyDepth(cmd, sceneDepth!, near, far);
         Gpu.EndNative(cmd);
-    }
-
-    /// <summary>
-    /// Frees the refraction and scene-depth copies once they have not been captured for <see cref="CaptureIdleReleaseMs"/>.
-    /// </summary>
-    void ReleaseIdleCaptures(bool keepRefraction, bool keepDepth)
-    {
-        long now = Environment.TickCount64;
-        if (!keepRefraction && _refraction is not null && now - _refractionLastUsedMs > CaptureIdleReleaseMs)
-        {
-            _refraction.Dispose();
-            _refraction = null;
-            _refractionFrame = -1;
-            _refractionLastUsedMs = 0;
-        }
-
-        if (!keepDepth && _sceneDepthCopy is not null && now - _sceneDepthLastUsedMs > CaptureIdleReleaseMs)
-        {
-            _sceneDepthCopy.Dispose();
-            _sceneDepthCopy = null;
-            _sceneDepthFrame = -1;
-            _sceneDepthLastUsedMs = 0;
-        }
     }
 
     /// <summary>
@@ -2359,7 +2320,6 @@ public sealed unsafe class WaterRenderer : IDisposable
         Gpu.BeginTransientPhase(TransientPhase.Water);
         cmd.Blit(sceneColour, _refraction, TextureMinFilter.Linear);
         _refractionFrame = Gpu.Frame.Number;
-        _refractionLastUsedMs = Environment.TickCount64;
     }
 
     /// <summary>
@@ -2385,7 +2345,6 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (Gpu is GpuContext vulkan) CopyDepthVulkan(vulkan, cmd, sceneDepth);
         else cmd.Blit(sceneDepth, _sceneDepthCopy!, TextureMinFilter.Nearest);
         (_sceneDepthFrame, _sceneDepthPlanes) = (Gpu.Frame.Number, new Vector2(near, far));
-        _sceneDepthLastUsedMs = Environment.TickCount64;
     }
 
     /// <summary>
@@ -2493,7 +2452,6 @@ public sealed unsafe class WaterRenderer : IDisposable
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent,
         ReflectionPass? reflection = null, Matrix4x4? relative = null)
     {
-        ReleaseIdleCaptures(_refractionFrame == Gpu.Frame.Number, _sceneDepthFrame == Gpu.Frame.Number);
         var targets = Gpu.CurrentTargets();
         bool meitouWater = Meitou && _meitou is not null;
         var p = meitouWater ? MeitouProgram() : _faithful;

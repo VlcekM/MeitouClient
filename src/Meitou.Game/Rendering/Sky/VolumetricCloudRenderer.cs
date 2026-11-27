@@ -61,7 +61,7 @@ public sealed class VolumetricCloudRenderer : IDisposable
     /// <summary>
     /// Milliseconds the reflection cloud history may sit unused before its targets are freed.
     /// </summary>
-    const long MirrorIdleReleaseMs = 5_000;
+    const long MirrorIdleReleaseMs = 60_000;
 
     /// <summary>
     /// The main view's history and the water reflection's.

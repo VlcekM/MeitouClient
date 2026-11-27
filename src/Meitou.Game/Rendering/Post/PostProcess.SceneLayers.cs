@@ -100,10 +100,6 @@ public sealed unsafe partial class PostProcess
     /// The half-size layers texture, and the lean pass's mask (a depth target at the render size).
     /// </summary>
     Target2D? _layerHalf, _layerMask;
-    /// <summary>
-    /// Timestamps (<see cref="Environment.TickCount64"/>) of the last frames <see cref="_layerHalf"/> and <see cref="_layerMask"/> were used.
-    /// </summary>
-    long _layerHalfLastUsed, _layerMaskLastUsed;
 
     // What is pending for the merged pass this frame besides the shafts' apply (LightShafts.Pending): the fog volumes, which of them the
     // half-size texture holds (this frame), and the shafts' grid the fog's shadow reads.
@@ -166,7 +162,6 @@ public sealed unsafe partial class PostProcess
     void PrepareHalfLayers(bool fog, bool shafts, (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) grid)
     {
         if (!fog && !shafts) return;
-        _layerHalfLastUsed = Environment.TickCount64;
         int hw = Math.Max((_width + 1) / 2, 1), hh = Math.Max((_height + 1) / 2, 1);
         if (_layerHalf is null || _layerHalf.Width != hw || _layerHalf.Height != hh)
         {
@@ -202,7 +197,6 @@ public sealed unsafe partial class PostProcess
         bool lean = LeanLayers && half && _halfHoldsShafts == _shafts.Pending && _halfHoldsFog == _fogPending;
         if (lean)
         {
-            _layerMaskLastUsed = Environment.TickCount64;
             int w = _width, h = _height;
             if (_layerMask is null || _layerMask.Width != w || _layerMask.Height != h)
             {
@@ -266,23 +260,6 @@ public sealed unsafe partial class PostProcess
         _layerHalf?.Texture.Dispose();
         _layerMask?.Texture.Dispose();
         _layerHalf = _layerMask = null;
-    }
-
-    /// <summary>
-    /// Releases <see cref="_layerHalf"/> or <see cref="_layerMask"/> when unused for more than <see cref="IdleReleaseMs"/> milliseconds.
-    /// </summary>
-    void ReleaseIdleSceneLayers(long now)
-    {
-        if (_layerHalf is not null && now - _layerHalfLastUsed > IdleReleaseMs)
-        {
-            _layerHalf.Texture.Dispose();
-            _layerHalf = null;
-        }
-        if (_layerMask is not null && now - _layerMaskLastUsed > IdleReleaseMs)
-        {
-            _layerMask.Texture.Dispose();
-            _layerMask = null;
-        }
     }
 
     /// <summary>

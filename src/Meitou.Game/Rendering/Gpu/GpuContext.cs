@@ -395,12 +395,14 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     #region Resources
 
     /// <summary>
-    /// A new texture: the Vulkan image and its transition into GENERAL layout (submitted at once).
+    /// A new texture: the Vulkan image and its transition into GENERAL layout (recorded on the frame's pre-frame buffer while a frame is open, or
+    /// submitted at once when none is).
     /// </summary>
     public GpuTexture CreateTexture(TextureDesc desc) => CreateTexture(desc, default);
 
     /// <summary>
-    /// A new texture whose transition is recorded into <paramref name="cmd"/> (the frame's own command buffer) instead of submitted at once.
+    /// A new texture whose transition is recorded into <paramref name="cmd"/> (or the frame's pre-frame buffer when <paramref name="cmd"/> is empty
+    /// and a frame is open) instead of submitted at once.
     /// </summary>
     internal GpuTexture CreateTexture(TextureDesc desc, CommandBuffer cmd)
     {
@@ -411,8 +413,8 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         var image = aliased
             ? Device.Allocator.CreateAliasedImage(in info, desc.Transient!.Value, aspect, name)
             : Device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, name, desc.Streamed);
-        bool immediate = cmd.Handle == 0;
-        var cb = immediate ? Device.BeginImmediate() : cmd;
+        bool immediate = cmd.Handle == 0 && !Frame.Open;
+        var cb = immediate ? Device.BeginImmediate() : cmd.Handle != 0 ? cmd : Frame.PreFrame.Handle;
         if (aliased && Frame.Open && cb.Handle == Frame.Commands.Handle.Handle)
         {
             Device.Allocator.Transient.RecordAcquireBarrier(cb, image.Image, aspect);

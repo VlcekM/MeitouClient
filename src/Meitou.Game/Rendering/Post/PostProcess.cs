@@ -733,7 +733,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// Milliseconds an optional pass's targets may sit unused before being released.
     /// </summary>
-    const long IdleReleaseMs = 5000;
+    const long IdleReleaseMs = 60_000;
 
     /// <summary>
     /// Width × height is the render size (the scene, SSAO); displayWidth × displayHeight the chain after the upscaler (exposure, composite).
@@ -832,7 +832,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         ReleaseIdleLateFogShadow(now);
         _lateParticles.ReleaseIfIdle(now, IdleReleaseMs);
         ReleaseIdleRoomMask(now);
-        ReleaseIdleSceneLayers(now);
     }
 
     /// <summary>

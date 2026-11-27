@@ -97,7 +97,7 @@ public sealed class ReflectionPass : IDisposable
     /// <summary>
     /// Milliseconds the targets may sit unused before they are freed.
     /// </summary>
-    const long IdleReleaseMs = 5_000;
+    const long IdleReleaseMs = 60_000;
 
     /// <summary>
     /// The texture the water samples, and the depth beside it when the scene is drawn without multisampling; else the multisampled twins the scene is

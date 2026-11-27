@@ -28,9 +28,14 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     const long LayerBudget = 256L << 20;
 
     /// <summary>
-    /// When a near decal cell was last drawn.
+    /// Milliseconds memory pressure with excess layers must hold before shrinking the decal array.
     /// </summary>
-    long _lastNear;
+    const long ShrinkHoldMs = 10_000;
+
+    /// <summary>
+    /// When a near decal cell was last drawn, and when excess layers under memory pressure first held (0 when not shrinking).
+    /// </summary>
+    long _lastNear, _shrinkSince;
 
     /// <summary>
     /// Whether the world is reclaiming resident video memory.
@@ -313,7 +318,18 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     {
         int need = Math.Max(FaithfulSlots, (_near.Count + 7) / 8 * 8);
         bool matches = _target?.Desc.Width == resolution;
-        if (matches && _layers >= need && (!UnderPressure || _layers == need)) return;
+        if (matches && _layers >= need)
+        {
+            if (!UnderPressure || _layers == need)
+            {
+                _shrinkSince = 0;
+                return;
+            }
+
+            long now = Environment.TickCount64;
+            if (_shrinkSince == 0) _shrinkSince = now;
+            if (now - _shrinkSince < ShrinkHoldMs) return;
+        }
 
         var desc = new TextureDesc(InternalFormat.Rgba8, resolution, resolution, Layers: need, Kind: TextureKind.Texture2DArray,
             Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "terrain decals");
@@ -333,6 +349,7 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         _target?.Dispose();
         _target = null;
         _layers = 0;
+        _shrinkSince = 0;
     }
 
     /// <summary>

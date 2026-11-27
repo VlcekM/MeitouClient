@@ -10,9 +10,9 @@ namespace Meitou.Game.Rendering.Gi;
 internal sealed class StaticBlasQueries(GpuContext ctx) : IDisposable
 {
     /// <summary>
-    /// The maximum number of static builds queried per frame.
+    /// The maximum number of static builds queried and compacted per frame.
     /// </summary>
-    const int Capacity = 64;
+    const int Capacity = 16;
 
     /// <summary>
     /// The queries, stored in consecutive ranges by frame slot.
@@ -26,6 +26,11 @@ internal sealed class StaticBlasQueries(GpuContext ctx) : IDisposable
         Enumerable.Range(0, ctx.Device.Frames.Count).Select(_ => new List<(object, GiScene.MeshEntry, string)>()).ToArray();
 
     /// <summary>
+    /// Static mesh builds queued during the current frame until <see cref="Flush"/> records their queries in one batch.
+    /// </summary>
+    readonly List<(object Key, GiScene.MeshEntry Entry, string Name)> _queued = [];
+
+    /// <summary>
     /// The frame that recorded each slot's pending queries.
     /// </summary>
     readonly long[] _recordedFrame = new long[ctx.Device.Frames.Count];
@@ -33,27 +38,49 @@ internal sealed class StaticBlasQueries(GpuContext ctx) : IDisposable
     /// <summary>
     /// Whether this frame has space for another query.
     /// </summary>
-    public bool HasRoom => _pending[ctx.Frame.Slot].Count < Capacity;
+    public bool HasRoom => _pending[ctx.Frame.Slot].Count == 0 && _queued.Count < Capacity;
 
     /// <summary>
-    /// Records a compacted-size query for a mesh built in the current frame slot.
+    /// Queues a static mesh built in the current frame so its compacted size is queried in one batch by <see cref="Flush"/>.
     /// </summary>
-    public unsafe void Record(CommandList cmd, object key, GiScene.MeshEntry entry, string name)
+    public void Enqueue(object key, GiScene.MeshEntry entry, string name)
     {
         if (!HasRoom) return;
+        _queued.Add((key, entry, name));
+    }
+
+    /// <summary>
+    /// Records one barrier, one query-pool reset and one batched compacted-size write for all static builds queued this frame.
+    /// </summary>
+    public unsafe void Flush(Func<CommandList> open)
+    {
+        int count = _queued.Count;
+        if (count == 0) return;
+
+        int slot = ctx.Frame.Slot;
+        var pending = _pending[slot];
+        if (pending.Count > 0)
+        {
+            _queued.Clear();
+            return;
+        }
+
         if (_pool.Handle == 0) CreatePool();
 
-        var list = _pending[ctx.Frame.Slot];
-        uint index = (uint)(ctx.Frame.Slot * Capacity + list.Count);
+        var cmd = open();
         var device = ctx.Device;
-        var handle = entry.Blas.Handle;
-        const QueryType type = QueryType.AccelerationStructureCompactedSizeKhr;
+        uint firstQuery = (uint)(slot * Capacity);
+        var handles = stackalloc AccelerationStructureKHR[count];
+        for (int i = 0; i < count; i++) handles[i] = _queued[i].Entry.Blas.Handle;
 
-        device.Vk.CmdResetQueryPool(cmd.Handle, _pool, index, 1);
+        device.Vk.CmdResetQueryPool(cmd.Handle, _pool, firstQuery, (uint)count);
         cmd.Barrier(AccelerationStructure.BuildToTrace);
-        device.AccelerationStructures!.CmdWriteAccelerationStructuresProperties(cmd.Handle, 1, &handle, type, _pool, index);
-        list.Add((key, entry, name));
-        _recordedFrame[ctx.Frame.Slot] = ctx.Frame.Number;
+        device.AccelerationStructures!.CmdWriteAccelerationStructuresProperties(cmd.Handle, (uint)count, handles,
+            QueryType.AccelerationStructureCompactedSizeKhr, _pool, firstQuery);
+
+        pending.AddRange(_queued);
+        _queued.Clear();
+        _recordedFrame[slot] = ctx.Frame.Number;
     }
 
     /// <summary>

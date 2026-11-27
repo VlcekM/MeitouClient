@@ -468,6 +468,11 @@ internal sealed unsafe class GiScene : IDisposable
         /// The update (<see cref="_frame"/>) the structure was last in the scene.
         /// </summary>
         public long LastUsed;
+
+        /// <summary>
+        /// Whether this entry belongs to the cached foliage block.
+        /// </summary>
+        public bool IsFoliage;
     }
 
     /// <summary>
@@ -589,6 +594,7 @@ internal sealed unsafe class GiScene : IDisposable
         var topSlot = SharedTop ? _slots[0] : slot;
         var top = topSlot.Top ??= AccelerationStructure.CreateTop(_device, MaxInstances, "gi top level", _scratch);
         ClearFrame();
+        _scratch.BeginFrame();
 
         // With the pass meter (MEITOU_PASS_STATS=1) the native list is cut after its barrier and before the top level, to time the barrier, the
         // bottom-level builds and the top level apart.
@@ -601,6 +607,7 @@ internal sealed unsafe class GiScene : IDisposable
         if (SkipWorld) foliage = null;
         if (foliage is not null && FoliageMinSize > 0) AddFoliageBlock(eye, foliage, lazy, commit);
         if (objects is not null) AddFarObjects(objects, lamps);
+        _compaction.Flush(Open);
         UpdateCasters();
         UpdateGrass(eye, foliage);
         UpdateCharacters(eye, characters);
@@ -1000,7 +1007,7 @@ internal sealed unsafe class GiScene : IDisposable
             recs.Add(new GeometryRecord { Vertices = vertices, Indices = indices, Stride = (uint)part.Stride, Kind = GeometryRecord.Object });
             partOf.Add(p);
         }
-        return Build(gpu, sources, geometries, recs, partOf, "gi object");
+        return Build(gpu, sources, geometries, recs, partOf, "gi object", isFoliage: false);
     }
 
     /// <summary>
@@ -1032,7 +1039,7 @@ internal sealed unsafe class GiScene : IDisposable
             });
             partOf.Add(p);
         }
-        return Build(mesh.Key, [mesh.Key], geometries, recs, partOf, "gi foliage");
+        return Build(mesh.Key, [mesh.Key], geometries, recs, partOf, "gi foliage", isFoliage: true);
     }
 
     #endregion
@@ -1307,20 +1314,27 @@ internal sealed unsafe class GiScene : IDisposable
     /// Builds the bottom-level structure of <paramref name="geometries"/> into the scene's list and keeps it under <paramref name="key"/> with its
     /// records; null when there are none.
     /// </summary>
-    MeshEntry? Build(object key, object[] sources, List<TriangleGeometry> geometries, List<GeometryRecord> recs, List<int> partOf, string name)
+    MeshEntry? Build(object key, object[] sources, List<TriangleGeometry> geometries, List<GeometryRecord> recs, List<int> partOf, string name,
+        bool isFoliage)
     {
         if (geometries.Count == 0) return null;
-        var cmd = (CommandList)Open();
+        var cmd = Open();
         var blas = AccelerationStructure.BuildBottom(_device, cmd, CollectionsMarshal.AsSpan(geometries), name, _scratch,
             compactable: _compaction.HasRoom);
         BuiltThisFrame++;
         MeshBytes += (long)blas.Bytes;
         var entry = new MeshEntry
         {
-            Blas = blas, CasterIdentity = blas.Address, Records = [.. recs], Parts = [.. partOf], Sources = sources, LastUsed = _frame,
+            Blas = blas,
+            CasterIdentity = blas.Address,
+            Records = [.. recs],
+            Parts = [.. partOf],
+            Sources = sources,
+            LastUsed = _frame,
+            IsFoliage = isFoliage,
         };
 
-        _compaction.Record(cmd, key, entry, name);
+        _compaction.Enqueue(key, entry, name);
         _meshes[key] = entry;
         return entry;
     }
@@ -1339,15 +1353,14 @@ internal sealed unsafe class GiScene : IDisposable
             if (size == 0 || size >= entry.Blas.Bytes) continue;
             if (!_meshes.TryGetValue(key, out var held) || !ReferenceEquals(held, entry)) continue;
 
-            var cmd = (CommandList)Open();
+            var cmd = Open();
             var previous = entry.Blas;
-            cmd.Barrier(AccelerationStructure.BuildToTrace);
             entry.Blas = previous.Compact(cmd, size, name);
             MeshBytes -= (long)(previous.Bytes - entry.Blas.Bytes);
             previous.Dispose();
 
             // The cached foliage instances contain the old bottom-level addresses.
-            _foliageGeneration = -1;
+            if (entry.IsFoliage) _foliageGeneration = -1;
         }
     }
 

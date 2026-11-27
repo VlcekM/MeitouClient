@@ -126,7 +126,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>
     /// Milliseconds without a studio draw before the studio maps and screen occlusion are released.
     /// </summary>
-    const long StudioIdleMs = 10_000;
+    const long StudioIdleMs = 60_000;
 
     /// <summary>
     /// When the driver last refused the studio's maps (a <see cref="Stopwatch"/> timestamp; 0: never).

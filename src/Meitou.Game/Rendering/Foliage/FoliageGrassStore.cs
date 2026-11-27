@@ -39,6 +39,16 @@ sealed class FoliageGrassStore
     const ulong GrassStoreBudgetPercent = 8;
 
     /// <summary>
+    /// Minimum milliseconds between memory-pressure shrinks of the grass store.
+    /// </summary>
+    const long PressureShrinkCooldownMs = 10_000;
+
+    /// <summary>
+    /// Milliseconds a smaller unguarded target scale must hold before shrinking the grass store.
+    /// </summary>
+    const long IdleShrinkHoldMs = 30_000;
+
+    /// <summary>
     /// The context the store and the programs are made on.
     /// </summary>
     readonly IGpuContext _gpu;
@@ -52,6 +62,11 @@ sealed class FoliageGrassStore
     /// The scale the store has, and the last one <see cref="VramGuard.Allows"/> refused (not asked again until the setting wants more).
     /// </summary>
     int _grassStoreScale, _grassStoreRefused;
+
+    /// <summary>
+    /// Timestamp (<see cref="Environment.TickCount64"/>) of the last shrink, and when a smaller unguarded scale first held (0 when not pending).
+    /// </summary>
+    long _lastShrinkAt, _shrinkSince;
 
     /// <summary>
     /// The store (replaced by a larger one when the grass distance grows, <see cref="Grow"/>).
@@ -133,15 +148,40 @@ sealed class FoliageGrassStore
         bool guarded = guard?.Active == true;
         float range = guard is { Active: true } active ? grassRange * active.RangeScale : grassRange;
         int scale = StoreScale(range, guarded ? 1 : areas, budget);
-        if (scale == _grassStoreScale) return;
+        if (scale == _grassStoreScale)
+        {
+            _shrinkSince = 0;
+            return;
+        }
 
         if (scale < _grassStoreScale)
         {
+            long now = Environment.TickCount64;
+            if (guard?.Pressure == true)
+            {
+                _shrinkSince = 0;
+                if (_lastShrinkAt != 0 && now - _lastShrinkAt < PressureShrinkCooldownMs) return;
+            }
+            else if (!guarded)
+            {
+                if (_shrinkSince == 0) _shrinkSince = now;
+                if (now - _shrinkSince < IdleShrinkHoldMs) return;
+            }
+            else
+            {
+                _shrinkSince = 0;
+                return;
+            }
+
             DropAllPages(zones);
             Replace(scale);
             _grassStoreRefused = 0;
+            _lastShrinkAt = now;
+            _shrinkSince = 0;
             return;
         }
+
+        _shrinkSince = 0;
 
         int wanted = scale;
         if (GpuContext.DiagNoGrow || guard?.Active == true || wanted <= _grassStoreRefused) return;
