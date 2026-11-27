@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game.Settings;
 
@@ -159,7 +160,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
             Surface(drawn, primary ? "primary" : "button", selected || pressed, true, clip);
             menu.Motion.Opacity(first, hover);
         }
-        var ink = primary && Meitou ? new Vector4(20 / 255f, 8 / 255f, 6 / 255f, 1) : Vector4.Lerp(MainInk, LightInk, selected ? 1 : hover);
+        var ink = primary && Meitou ? PaperInk.On(menu.Player) : Vector4.Lerp(MainInk, LightInk, selected ? 1 : hover);
         var textAt = new UiRect(drawn.X + 10 * menu.Scale, drawn.Y, drawn.Width - (20 + textInset) * menu.Scale, drawn.Height);
         Text(label, textAt, primary ? 15 : 13, ink, "Center", clip);
         if (clip is null || at.Intersect(clip.Value).Height >= at.Height - 1)

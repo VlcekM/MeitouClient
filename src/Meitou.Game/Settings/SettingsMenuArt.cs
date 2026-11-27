@@ -45,8 +45,8 @@ sealed class SettingsMenuArt
         painter.SetImage(SurfacePrefix + "button", MenuArt.Plate(atlas, new(612, 766, 118, 45), 160, 40, 1, 0.7f), srgb: false);
         painter.SetImage(SurfacePrefix + "button-hover", MenuArt.Plate(atlas, new(612, 766, 118, 45), 160, 40, 1, 0.85f), srgb: false);
         painter.SetImage(SurfacePrefix + "button-selected", MenuArt.Plate(atlas, new(741, 766, 118, 45), 160, 40, 1, 0.85f), srgb: false);
-        painter.SetImage(SurfacePrefix + "paper", MenuArt.Card(atlas, new(352, 457, 164, 81), 160, 40, 1, 0, 1), srgb: false);
-        painter.SetImage(SurfacePrefix + "paper-hover", MenuArt.Card(atlas, new(352, 457, 164, 81), 160, 40, 1, 0, 1.1f), srgb: false);
+        painter.SetImage(SurfacePrefix + "paper", MenuArt.Card(atlas, MenuArt.PaperCrop, 160, 40, 1, 0, 1), srgb: false);
+        painter.SetImage(SurfacePrefix + "paper-hover", MenuArt.Card(atlas, MenuArt.PaperCrop, 160, 40, 1, 0, 1.1f), srgb: false);
 
         // A fifth of the 1120x720 window, same aspect, so the stretched rust keeps its proportions.
         painter.SetImage(

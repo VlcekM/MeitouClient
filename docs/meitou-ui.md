@@ -16,12 +16,16 @@ The project site ([site/](../site/), Astro + nginx container) uses a texture-fre
 | Surface | Build | Text |
 | --- | --- | --- |
 | Plate (windows, tooltips, dialogue, clock) | `rust` under `plate-tint`, 1px `plate-rim` inset, `radius-card`, `plate-drop` | `main` |
-| Paper card (cards, primary action, save card) | `paper-inner` stretched whole, `paper-border` inset, `radius-card` | `secondary` |
+| Paper card (cards, primary action, save card) | `paper-inner` stretched whole, `paper-border` inset, `radius-card` | `secondary`, see below |
 | Button plate (buttons, selected tab) | Button1Skin 9-slice (6) at 70% brightness, clipped to `radius-btn`; raised skin at 85% on hover, pressed skin for selection/press | `main`, `paper-light` on hover |
 | Message banner | MessageSkin (caps 82 / 53), square | `secondary` |
 
 - Never stretch the uncropped GenericTextBoxSkin: its 5px alpha rim (insets L5 R5 T5 B4) reads as a
   halo. Use `paper-inner` and draw the edge (2px `paper-edge`, 1px faint line, 10px `paper-wear`).
+- Text on paper takes GenericTextBoxSkin's text colour (else the palette's Secondary) while its sRGB luminance differs from the paper crop's
+  alpha-weighted mean by 0.25 or more, else whichever of `secondary` and `paper-light` differs more. A UI mod that darkens `Kenshi_UI.png`
+  but keeps the ink stays readable. **Observed** (sampled from the atlases): game paper 0.44 (dark ink kept), Dark UI (workshop 1200632417) 0.11
+  with its grey Secondary at 0.46 (kept).
 - One paper (primary) action per screen; everything else is a plate.
 - No window frames. Plates float over the world; behind a stack that must read over the scene, a
   vignette: `radial-gradient(ellipse 620px 470px at 4% 100%, rgba(8,6,5,.93) 25%, rgba(8,6,5,.6) 55%, transparent 80%)`.

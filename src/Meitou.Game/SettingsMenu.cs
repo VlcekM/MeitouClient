@@ -10,6 +10,7 @@ using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Terrain;
 using Meitou.Game.Settings;
+using Meitou.Game.Ui;
 using Meitou.Modding;
 using Meitou.Simulation.Session;
 
@@ -1936,7 +1937,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     void DrawPage()
     {
         Canvas.Surface(Canvas.R(212, 56, 888, 34), "paper");
-        Canvas.Text(Search.Active ? "Search results" : Pages[Page], Canvas.R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
+        Canvas.Text(Search.Active ? "Search results" : Pages[Page], Canvas.R(224, 56, 864, 34), 18, PaperInk.On(Player));
         DrawFoldButtons();
         float top = 98;
 

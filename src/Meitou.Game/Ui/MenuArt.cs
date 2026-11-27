@@ -10,6 +10,31 @@ namespace Meitou.Game.Ui;
 static class MenuArt
 {
     /// <summary>
+    /// The paper the cards are baked from: GenericTextBoxSkin inside its soft alpha rim and worn corners (kit "paper-inner", cropped further).
+    /// </summary>
+    public static readonly UiRect PaperCrop = new(352, 457, 164, 81);
+
+    /// <summary>
+    /// The alpha-weighted mean Rec. 709 luminance (sRGB-encoded, 0..1) of <paramref name="crop"/> in <paramref name="atlas"/>; 0 when it is clear.
+    /// </summary>
+    public static float MeanLuminance(RgbaImage atlas, UiRect crop)
+    {
+        double sum = 0, weight = 0;
+        int x0 = Math.Max(0, (int)crop.X), y0 = Math.Max(0, (int)crop.Y);
+        int x1 = Math.Min(atlas.Width, (int)(crop.X + crop.Width)), y1 = Math.Min(atlas.Height, (int)(crop.Y + crop.Height));
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+            {
+                int i = (y * atlas.Width + x) * 4;
+                float alpha = atlas.Pixels[i + 3];
+                sum += alpha * (0.2126f * atlas.Pixels[i] + 0.7152f * atlas.Pixels[i + 1] + 0.0722f * atlas.Pixels[i + 2]) / 255;
+                weight += alpha;
+            }
+
+        return weight > 0 ? (float)(sum / weight) : 0;
+    }
+
+    /// <summary>
     /// The paper card (kit .mt-save): the paper crop stretched whole, brightened by <paramref name="bright"/>, with its edge drawn inside (2px dark
     /// line, 1px faint line, 10px wear), corners rounded to 10, over a drop shadow (6 down, ~14 soft, 55% black) in a margin of
     /// <paramref name="margin"/> pixels.

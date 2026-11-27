@@ -70,9 +70,9 @@ sealed class TitleMenu(PlayerInterface player)
     static Vector4 Hex(int r, int g, int b, float a = 1) => new(r / 255f, g / 255f, b / 255f, a);
 
     /// <summary>
-    /// The kit's inks: main, light, paper and danger.
+    /// The kit's inks: main, light and danger (text on paper takes PaperInk).
     /// </summary>
-    static readonly Vector4 InkMain = Hex(175, 166, 139), InkLight = Hex(217, 206, 184), InkPaper = Hex(20, 8, 6), InkDanger = Hex(191, 72, 52);
+    static readonly Vector4 InkMain = Hex(175, 166, 139), InkLight = Hex(217, 206, 184), InkDanger = Hex(191, 72, 52);
 
     /// <summary>
     /// The scale the menu's surfaces were baked at (<see cref="MenuArtReady"/>).
@@ -195,11 +195,13 @@ sealed class TitleMenu(PlayerInterface player)
                 if (hoverAmount > 0) art.Add(Image("MeitouMenuCardHover", cardBounds, MenuCardHover,
                     colour: FormattableString.Invariant($"1 1 1 {hoverAmount}")));
                 var (line, meta) = ContinueText();
-                art.Add(Text("MeitouMenuContinue", new(b.X + 16 * s, b.Y + 11 * s, b.Width - 80 * s, 26 * s), UpperTr("CONTINUE"), 22, InkPaper));
+                var paperInk = PaperInk.On(player);
+                art.Add(Text("MeitouMenuContinue", new(b.X + 16 * s, b.Y + 11 * s, b.Width - 80 * s, 26 * s), UpperTr("CONTINUE"), 22, paperInk));
                 art.Add(Image("MeitouMenuKey", new(b.X + b.Width - 60 * s, b.Y + 15 * s, 44 * s, 16 * s), MenuKey));
                 art.Add(Text("MeitouMenuKeyText", new(b.X + b.Width - 60 * s, b.Y + 15 * s, 44 * s, 16 * s), "ENTER", 10, InkLight, "Center"));
-                art.Add(Text("MeitouMenuSaveLine", new(b.X + 16 * s, b.Y + 37 * s, b.Width - 32 * s, 16 * s), line, 12, InkPaper));
-                art.Add(Text("MeitouMenuSaveMeta", new(b.X + 16 * s, b.Y + 52 * s, b.Width - 32 * s, 16 * s), meta, 12, InkPaper with { W = 0.75f }));
+                art.Add(Text("MeitouMenuSaveLine", new(b.X + 16 * s, b.Y + 37 * s, b.Width - 32 * s, 16 * s), line, 12, paperInk));
+                var metaAt = new UiRect(b.X + 16 * s, b.Y + 52 * s, b.Width - 32 * s, 16 * s);
+                art.Add(Text("MeitouMenuSaveMeta", metaAt, meta, 12, paperInk with { W = 0.75f }));
                 controls[i] = Hollow(c) with { Properties = new Dictionary<string, string>(c.Properties) { ["DefaultAction"] = "true" } };
                 continue;
             }
@@ -348,8 +350,7 @@ sealed class TitleMenu(PlayerInterface player)
 
         int W(float v) => Math.Max(1, (int)MathF.Round(v * s));
 
-        // GenericTextBoxSkin inside its soft alpha rim and worn corners (kit "paper-inner", cropped further)
-        var paper = new UiRect(352, 457, 164, 81);
+        var paper = MenuArt.PaperCrop;
         painter.SetImage(MenuCard, MenuArt.Card(uiAtlas, paper, W(MenuWidth), W(MenuCardHeight), s, MenuShadow * s, 1), srgb: false);
         painter.SetImage(MenuCardHover, MenuArt.Card(uiAtlas, paper, W(MenuWidth), W(MenuCardHeight), s, MenuShadow * s, 1.1f), srgb: false);
 

@@ -4,6 +4,7 @@ using Meitou.Data.Ui;
 using Meitou.Game.Host.Input;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Settings;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game.Host.Photo;
 
@@ -20,7 +21,7 @@ sealed class PhotoPanel(PhotoMode mode)
     /// <summary>
     /// The ink of text on a paper surface (the primary button and the name field in the Meitou interface).
     /// </summary>
-    static readonly Vector4 DarkInk = new(20 / 255f, 8 / 255f, 6 / 255f, 1);
+    Vector4 OnPaperInk => PaperInk.On(mode.Host.Player);
 
     /// <summary>
     /// A slider's empty track.
@@ -639,7 +640,7 @@ sealed class PhotoPanel(PhotoMode mode)
         Surface(field, "primary");
         bool caret = Environment.TickCount64 / 500 % 2 == 0;
         Text(typed + (caret ? "|" : ""), new(field.X + 8 * _scale, field.Y, field.Width - 16 * _scale, field.Height), 14,
-            _meitou ? DarkInk : SettingsCanvas.LightInk, translate: false);
+            _meitou ? OnPaperInk : SettingsCanvas.LightInk, translate: false);
 
         Button("OK", R(x + 56 + 300 + 10, y + 6, 70, 26), mode.CommitNaming);
         Button("Cancel", R(x + 56 + 300 + 10 + 70 + 8, y + 6, 90, 26), mode.CancelNaming);
@@ -698,7 +699,7 @@ sealed class PhotoPanel(PhotoMode mode)
         var field = R(x, y, width, 22);
         Surface(field, "primary");
         var inner = new UiRect(field.X + 6 * _scale, field.Y, field.Width - 12 * _scale, field.Height);
-        var ink = _meitou ? DarkInk : SettingsCanvas.LightInk;
+        var ink = _meitou ? OnPaperInk : SettingsCanvas.LightInk;
         bool caret = Environment.TickCount64 / 500 % 2 == 0;
 
         // The number starts selected (typing replaces it): a band behind it, as wide as the text.
@@ -753,7 +754,7 @@ sealed class PhotoPanel(PhotoMode mode)
         var drawn = at with { Y = at.Y + (pressed ? _scale : 0) };
         Surface(drawn, primary ? "primary" : "button", selected || pressed, hovered && !selected);
 
-        var ink = primary && _meitou ? DarkInk
+        var ink = primary && _meitou ? OnPaperInk
             : hovered || selected ? SettingsCanvas.LightInk
             : SettingsCanvas.MainInk;
         Text(label, new(drawn.X + 8 * _scale, drawn.Y, drawn.Width - 16 * _scale, drawn.Height), primary ? 15 : 13, ink, "Center", translate);
