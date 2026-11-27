@@ -36,8 +36,8 @@
     "areas": "Benchmark results, Animal hunger"
   },
   "dxseba": {
-    "commits": 84,
-    "areas": "Code mod hooks, blood prints"
+    "commits": 86,
+    "areas": "Code mod hooks, Blood prints"
   },
   "dfdffish": {
     "commits": 17,
@@ -48,24 +48,24 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 325,
-    "areas": "Shown text, Navmesh, Hauling"
+    "commits": 330,
+    "areas": "Shown text, Navmesh, Buildings"
   },
   "robgreen490": {
     "commits": 4,
     "areas": "UI scaling, Inventory rendering"
   },
   "deseven": {
-    "commits": 34,
-    "areas": "Metal rendering, debug menu"
+    "commits": 59,
+    "areas": "Metal rendering, Debug menu"
   },
   "mattresspad": {
     "commits": 3,
     "areas": "Benchmarks, Homepage"
   },
   "pza-mods-bot": {
-    "commits": 15,
-    "areas": "Code mods, settings window"
+    "commits": 20,
+    "areas": "Meitou.Lua, Settings window, Speed groups"
   },
   "dk853": {
     "commits": 3,
@@ -76,8 +76,8 @@
     "areas": "Monitor start option"
   },
   "theivorydisaster": {
-    "commits": 4,
-    "areas": "LockSystem WorkSpot"
+    "commits": 7,
+    "areas": "Locks, Trade orders"
   },
   "leviathanu158": {
     "commits": 1,
