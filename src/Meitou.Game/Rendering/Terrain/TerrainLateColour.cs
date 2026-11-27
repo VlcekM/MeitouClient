@@ -25,3 +25,15 @@ public static class TerrainResolveSplit
     /// </summary>
     public static bool Enabled { get; set; } = true;
 }
+
+/// <summary>
+/// The ground march in a pass of its own before the resolve (docs/render-terrain.md "Relief pass"): the resolve reads its result, so the march's
+/// registers do not weigh on the shading. <c>MEITOU_TERRAIN_RELIEF_PASS=0</c> marches in the resolve, for comparing.
+/// </summary>
+public static class TerrainReliefPass
+{
+    /// <summary>
+    /// The march runs in its own pass (true, the default); false marches in the resolve's program.
+    /// </summary>
+    public static bool Enabled { get; set; } = Environment.GetEnvironmentVariable("MEITOU_TERRAIN_RELIEF_PASS") != "0";
+}

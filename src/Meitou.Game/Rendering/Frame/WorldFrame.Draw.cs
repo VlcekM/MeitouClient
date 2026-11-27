@@ -1234,13 +1234,14 @@ static partial class WorldFrame
         terrain.FogCull = f.Gpu.FogVolumes;
         terrain.InteriorCut = f.Gpu.InteriorMask;
 
-        // The resolved colour (PostProcess.TerrainResolveTargets): the patches' prepass in a pass of its own, into the scene's depth (cleared by
+        // The resolved colour (IWorldPostChain.TerrainResolveTargets): the patches' prepass in a pass of its own, into the scene's depth (cleared by
         // the scene's pass, which closes for it) and the target that holds the resolve's inputs; DrawSceneLate then shades the patches over the
-        // picture.
+        // picture, after the relief pass's march where the terrain wants it.
         f.TerrainColour = null;
-        if (TerrainLateColour.Enabled && f.Gpu.Post is Post.PostProcess resolving
-            && resolving.TerrainResolveTargets(out var prepass, out var colour, out var inputs))
+        if (TerrainLateColour.Enabled
+            && f.Post.TerrainResolveTargets(terrain.ReliefPassWanted, out var prepass, out var colour, out var relief, out var inputs))
         {
+            terrain.ReliefTargets = relief;
             DrawTerrainPrepass(ref f, s, prepass, inputs);
             f.TerrainColour = colour;
         }
@@ -1259,7 +1260,7 @@ static partial class WorldFrame
     /// The terrain patches' prepass for the resolved colour, outside the scene's pass: into <paramref name="prepass"/> with the resolve's
     /// <paramref name="inputs"/>; the scene's pass opens again after it.
     /// </summary>
-    static void DrawTerrainPrepass(ref FrameState f, in SceneView s, PassTargets prepass, (uint G, uint Depth) inputs)
+    static void DrawTerrainPrepass(ref FrameState f, in SceneView s, PassTargets prepass, Post.TerrainResolveIndices inputs)
     {
         var terrain = f.Gpu.Terrain;
         f.Host.Close();
@@ -1342,6 +1343,7 @@ static partial class WorldFrame
         else gpu.Terrain.DrawDeferred();
 
         gpu.Terrain.ResolveInputs = null;
+        gpu.Terrain.ReliefTargets = null;
         if (gpu.Debris is { } debris)
         {
             var relative = f.RelativeRotation * s.Jittered;

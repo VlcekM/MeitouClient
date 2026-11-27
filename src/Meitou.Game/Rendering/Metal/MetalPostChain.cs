@@ -181,6 +181,26 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public GpuTexture SceneDepth => _ctx.Depth;
 
     /// <summary>
+    /// The terrain's resolved colour's own targets (made the first frame that asks; <see cref="TerrainResolveTargets"/>).
+    /// </summary>
+    MetalTerrainResolve? _terrainResolve;
+
+    /// <summary>
+    /// The terrain's resolved colour's targets (docs/render-terrain.md "Resolved colour"): the prepass's own and the relief pass's, the scene's colour
+    /// targets for the colour pass. Off with <c>MEITOU_TERRAIN_RESOLVE=0</c> (<see cref="Post.PostProcess.TerrainResolve"/>), or outside a frame.
+    /// </summary>
+    public bool TerrainResolveTargets(bool relief, out PassTargets prepass, out PassTargets colour, out PassTargets? reliefTargets,
+        out TerrainResolveIndices inputs)
+    {
+        (prepass, colour, reliefTargets, inputs) = (null!, null!, null, default);
+        if (!Post.PostProcess.TerrainResolve || _sceneColour is null) return false;
+
+        _terrainResolve ??= new MetalTerrainResolve(_ctx);
+        _terrainResolve.Targets(SceneTargets, _ctx.Depth, relief, out prepass, out colour, out reliefTargets, out inputs);
+        return true;
+    }
+
+    /// <summary>
     /// The scene colour's width (0 before the first frame).
     /// </summary>
     public int RenderWidth => _sceneColour?.Desc.Width ?? 0;
@@ -910,6 +930,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _screenRays?.Dispose();
         _reflections?.Dispose();
         _tracedTerm?.Dispose();
+        _terrainResolve?.Dispose();
         _sceneColour?.Dispose();
         foreach (var low in _lowTargets)
         {

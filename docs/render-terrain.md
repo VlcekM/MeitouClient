@@ -207,8 +207,8 @@ is named at the top left with its tile size and depth. In the game's sandbox Esc
 
 ## Resolved colour
 
-Meitou (`TerrainRenderer.Resolve`, `PostProcess.TerrainResolveTargets`, `WorldFrame.DrawSceneTerrain` / `DrawSceneLate`; `MEITOU_TERRAIN_RESOLVE=0` goes back to the
-patches' second pass, for comparing). In the main view the patches' colour is not drawn over their triangles: it is one triangle over the picture.
+Meitou (`TerrainRenderer.Resolve`, `IWorldPostChain.TerrainResolveTargets`: `PostProcess`'s, `MetalTerrainResolve`; `WorldFrame.DrawSceneTerrain` /
+`DrawSceneLate`; `MEITOU_TERRAIN_RESOLVE=0` goes back to the patches' second pass, for comparing). In the main view the patches' colour is not drawn over their triangles: it is one triangle over the picture.
 - **Prepass**: the patches' depth pass runs in a pass of its own, into the scene's depth and an RGBA32F target that keeps, per pixel, the undisplaced point less the drawn
   one (the material's coordinates are read at the undisplaced point) and the fragment's depth; 0 where no patch drew. The interior cut discards there as before.
 - **Resolve**: after the objects and the foliage, outside the scene's pass, `Fragment` runs for each pixel whose depth is still the prepass's (anything drawn nearer since
@@ -221,6 +221,9 @@ patches' second pass, for comparing). In the main view the patches' colour is no
   night 4.77 -> 2.87; a town with little ground in view 0.24 -> 0.37 (the target's clear and the pass over the picture). The pictures differ by 0.34 / 255 on average
   where two frames of the same setting differ by 0.21, at most 24 / 255 on about 150 pixels along ripple crests (the steps across an outline).
 - Not in the reflection, the viewer's other views or with the wireframe: those draw the patches' colour as before (`ResolveInputs` null).
+- **Metal**: the same passes; its targets' row 0 is the top (`IGpuContext.RenderTargetsBottomUp` false), so the resolve's programs turn a pixel's clip y round
+  (`RESOLVE_ROWS_DOWN`): unturned, every point was unprojected mirrored and the ground came out streaked and flat. **Verified** (M-series, `fps_issue` save, 1080p,
+  High, paused, zoom 31 and 300): against the patches' second pass, about 100 of 8.3 M pixels differ by more than 3 %.
 - **Split at the march's distance** (`TerrainShaders.ResolvePart`, `TerrainRenderer.NearRect`, switch `TerrainResolveSplit`): with the ground parallax on, the
   resolve is two triangles. The far program is built without the march (`NO_MARCH`) and leaves out the pixels the march's own test takes
   (`uParallax > 0.0 && distance < uParallaxEnd`); the near program is the full one, drawn last, keeps those pixels and a unit more (so the two programs' rounding leaves
@@ -232,6 +235,23 @@ patches' second pass, for comparing). In the main view the patches' colour is no
   parallax off); from 130 m 1.46 -> 1.40; nearer, and city-night, unchanged. **Verified** (2026-11-16, siwa-test6 and "The boys 123", 10 paused views with a
   partial rectangle, split against one program in the same session): no hole; 0.09 % of the pixels differ by more than 2 / 255 where two frames of one setting
   differ on 0.03 %, scattered on cliff faces, no shift of the mean.
+- **Relief pass** (`TerrainRenderer.RecordReliefPass`, `TerrainShaders.ReliefFragmentNative`, switch `TerrainReliefPass`; `MEITOU_TERRAIN_RELIEF_PASS=0` marches in
+  the resolve, for comparing): with the parallax on, the layers' ground march (`pixelRelief`) runs first in a full-screen pass of its own over the pixels the marching
+  part shades (the whole picture, or the near side's rectangle when split). It is the resolve's program (`RELIEF_PASS`) up to the march: the material cache's
+  choice of level is kept, its reads and its own march skipped, so it marches exactly the pixels whose layers the resolve shades; it writes the moves (ground, both
+  cliff projections, in world units), the self-shadow and the puddles' trough (65504: not read) into two RGBA16F targets and discards every other pixel. The
+  resolve's marching part is built with `RELIEF_READ` and reads them instead of marching; the cache's march stays in it. With trails, the pass tests whether a
+  mark is within the march's reach (`trailWithin`) at the unmoved point where the cache and the layers blend; the resolve tests it where the cache's march
+  moved it. The test has a margin of 3 units, so only a mark at the very edge of its reach could differ.
+  **Why**: the march's registers weigh on all the shading after it (Metal: at Low quality the march alone took about 1.5 ms, but the resolve with it took about 8 ms
+  more than without the parallax). **Verified** (M-series, Metal, `fps_issue` save, 3840x2160 shown at 1920x1080, High, paused): the pictures with and without
+  the pass differ on 43 of 8.3 M pixels by more than 3 %. **Observed** (same session setup, frames a second): zoom 31, 48.0 -> 53.1 (the patches' second pass
+  51.1); zoom 300, 63.1 -> 70.0 (65.4). Vulkan untested.
+- **No arrays in the march** (`Relief`'s layers are the fields `l0`..`l4`, every use written out per field up to `RELIEF_CAP`, the quality's count; `blendSlot`
+  picks components by comparison): the layers were an array read with a loop's index, so the struct lived in memory, and the Metal translation copies a
+  struct argument at every call: a copy before each of the march's height reads. **Observed** (Xcode GPU trace, M6, `fps_issue`, High, zoom 31): the relief
+  pass took 38.7 % of the frame, 250 registers and 2.89 KiB spilled a thread; the resolve 20 %, 252 registers and 240 bytes. With the fields: zoom 31 High
+  53.1 -> 61.4 frames a second, Medium 60.0 -> 66.7, Low 60.2 -> 70.1; the picture unchanged (about 150 of 8.3 M pixels over 3 %, as two runs of one build).
 
 ## Material cache
 

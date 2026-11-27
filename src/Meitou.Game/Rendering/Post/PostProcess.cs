@@ -778,9 +778,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 _lowTargets[0].Soft, _lowTargets[0].AccumFar, _lowTargets[0].DepthFar, _lowTargets[0].SoftFar, _lowTargets[1].Accum,
                 _lowTargets[1].Depth, _lowTargets[1].Soft, _lowTargets[1].AccumFar, _lowTargets[1].DepthFar, _lowTargets[1].SoftFar, _softDepth,
                 _fogRate.Distance, _fogRate.Image, _fogRate.Neutral, _giAlbedo, _giLow, _giLowSky, _ssrLowSky, _shafts.Injected, _shafts.Light,
-                _shafts.Scatter, _shafts.Raw, _shafts.History, _gtaoPacked, _terrainResolve, _lampLost, _ssrHit, _ssrLow, _tracedTerm, _tracedMask,
-                _tracedScratch, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1, _characterVisibility, _characterGatherLast,
-                _characterGatherPooled, _roomMask, _modNormals }
+                _shafts.Scatter, _shafts.Raw, _shafts.History, _gtaoPacked, _terrainResolve, _terrainReliefA, _terrainReliefB, _lampLost, _ssrHit,
+                _ssrLow, _tracedTerm, _tracedMask, _tracedScratch, _lampScratch, _lampFiltered, _lampTotal, _lampTotal1, _characterVisibility,
+                _characterGatherLast, _characterGatherPooled, _roomMask, _modNormals }
             .OfType<Target2D>();
 
     /// <summary>
@@ -793,7 +793,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _sceneColour = _sceneDepth = _motion = _upscaleDepth = _reactive = _historyA = _historyB = null;
         _fogRate.Free();
         _occlusion.Free();
-        _gtaoPacked = _terrainResolve = null;
+        _gtaoPacked = _terrainResolve = _terrainReliefA = _terrainReliefB = null;
         _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = l.AccumFar = l.DepthFar = l.SoftFar = null;
         _giAlbedo = _giLow = _giLowSky = _ssrLowSky = _softDepth = _modNormals = null;
