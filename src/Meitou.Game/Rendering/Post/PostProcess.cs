@@ -129,6 +129,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _depthOfField?.Dispose();
         _modPasses?.Dispose();
         _modNormalsProgram?.Dispose();
+        _letterboxProgram?.Dispose();
         DisposeGtao();
         DisposeLampShadows();
         Hiz?.Dispose();
@@ -1216,6 +1217,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     Target2D _postColour = null!;
 
     /// <summary>
+    /// The letterbox's program (<see cref="PostProcessShaders.Letterbox"/>), made the first frame it draws.
+    /// </summary>
+    LegacyProgram? _letterboxProgram;
+
+    /// <summary>
     /// The depth of field, made the first time it runs (<see cref="DepthOfField"/>).
     /// </summary>
     DepthOfField? _depthOfField;
@@ -1396,6 +1402,22 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             picture = _ldrFxaa;
         }
         if (haze) RunHeatHaze(picture!, final);
+        DrawLetterbox(o, final);
+    }
+
+    /// <summary>
+    /// The letterbox's bars over the finished picture in <paramref name="final"/> (<see cref="Letterbox"/>); nothing while it has none.
+    /// </summary>
+    void DrawLetterbox(PostOptions o, PassTargets final)
+    {
+        bool whole = _haveScene && ViewWindow.Current.IsWhole && !o.CameraEffectsHeld;
+        var bars = Letterbox.Bars(o, whole, _displayWidth, _displayHeight);
+        if (bars == Vector2.Zero) return;
+
+        _letterboxProgram ??= LegacyProgram.Create(Gpu, PostProcessShaders.Vertex, PostProcessShaders.Letterbox, "post letterbox");
+        _letterboxProgram.Set(_letterboxProgram.Uniform("uBars"), bars);
+        DrawFinal(_letterboxProgram, final);
+        Stamp("letterbox");
     }
 
     /// <summary>

@@ -358,12 +358,13 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   `Release(setting)`, `ReleaseAll()`, `Get(setting)` (the player's value, whatever is laid over it) and `Settings`, the keys: those of
   `meitou.user.json`'s `graphics` and of the look presets, a slider's label or `Meitou: ` and a switch's. The settings are the post chain's
   look (`GraphicsOverrides`): the sliders of tone map, grading, heat haze, bloom, vignette, film grain, depth of field aperture, night
-  grading and adaptive exposure, and the switches `Bloom`, `Depth of field`, `Vignette`, `Film grain`, `Camera effects in the strategy
-  camera`, `Tone map and grade` and `Night grading`. The overrides are in the options only while the world is drawn (`GameHost.DrawWorld`
+  grading and adaptive exposure, and the Letterbox aspect, and the switches `Bloom`, `Depth of field`, `Vignette`, `Film grain`,
+  `Letterbox`, `Camera effects in the strategy camera`, `Tone map and grade` and `Night grading`. The overrides are in the options only while the world is drawn (`GameHost.DrawWorld`
   lays them on before and puts the player's values back after), so the settings menu shows the player's values, a change made there stays,
   and nothing of a mod's reaches `meitou.user.json` or a preset. Of two mods overriding one setting the one that set its override last wins;
   a mod that fails in `Initialize` loses its own. An override lasts until released, across a load. Call on the host's thread. Both
-  backends (the options are shared). **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod, offscreen): the vignette and
+  backends (the options are shared). **Verified** by `GraphicsOverridesTests` (laid on and taken back, the player's value read meanwhile,
+  the clamp, the order of two mods, release and drop). **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod, offscreen): the vignette and
   the grain at 1 drawn over a new game while `Get` read the player's off and 0.35 and the settings file held nothing of it.
 - **Lighting hooks:** `"lighting": { "file": "toon.glsl", "params": { "strength": 1.0 }, "textures": { "ramp": "ramp.png" } }` in
   `meitou.json` (`CodeModLighting`) puts a mod's
@@ -403,7 +404,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   that bands the light keeps the bands it made from the sky's ambient, and the probes' share changes them smoothly. `file`: a path inside the
   mod's folder, at most 128 KiB; `params`: names of letters, digits and `_` (at most 32 characters) with the number each starts at. An older
   game ignores the key.
-  **Verified** by `LightingHookTests`: the file checks and the renaming; two hooks with the same helper name installed and compiled
+  **Verified** by `LightingHookTests`: the manifest's textures, their samplers in order and the refusal past the fourth; the file checks
+  and the renaming; two hooks with the same helper name installed and compiled
   together, a broken one and one calling a game function refused, none taken once the text is made; the lighting text with the hooks in
   compiles as a lit vertex stage and a lit fragment stage, and without a hook is the same text. `NativeShaderTests` checks the frame
   block's layout with `modLight`.

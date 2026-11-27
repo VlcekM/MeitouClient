@@ -33,6 +33,24 @@ static class PostProcessShaders
         StringComparison.Ordinal);
 
     /// <summary>
+    /// The letterbox's bars over the finished picture (<see cref="Post.Letterbox"/>): black where a pixel is nearer an edge than <c>uBars</c>
+    /// (x: the share of the height the top and bottom bars take each, y: the share of the width the side bars take each), the picture left
+    /// as it is elsewhere.
+    /// </summary>
+    public const string Letterbox = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform vec2 uBars;
+        void main()
+        {
+            vec2 edge = min(vUv, 1.0 - vUv);
+            if (edge.y >= uBars.x && edge.x >= uBars.y) discard;
+            fragColour = vec4(0.0, 0.0, 0.0, 1.0);
+        }
+        """;
+
+    /// <summary>
     /// The lit surfaces' normals out of the surface target into two 16-bit channels (<c>PostProcess.CopySurfaceNormals</c>): the shading normal's
     /// octahedral position the lit fragments store for the GI resolve (the first two channels of <c>giAlbedoOut</c>,
     /// <see cref="Sky.AtmosphereShaders"/>), moved up by one step so that 0 says nothing is stored there (the sky, a surface that stores none).

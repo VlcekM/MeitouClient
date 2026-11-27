@@ -41,6 +41,11 @@ sealed class PostComposite : IDisposable
     readonly string _vertex;
 
     /// <summary>
+    /// The letterbox's program (<see cref="PostProcessShaders.Letterbox"/>), made the first frame it draws.
+    /// </summary>
+    LegacyProgram? _letterboxProgram;
+
+    /// <summary>
     /// The composite, luminance and adaptation programs.
     /// </summary>
     readonly LegacyProgram _composite, _luminance, _adapt;
@@ -415,6 +420,21 @@ sealed class PostComposite : IDisposable
             picture = hazeOn ? _ldrFxaa! : target;
         }
         if (hazeOn) RunHeatHaze(cmd, depth, target, picture, o, inputs);
+        DrawLetterbox(cmd, target, o, inputs.HaveScene);
+    }
+
+    /// <summary>
+    /// The letterbox's bars over the finished picture in <paramref name="target"/> (<see cref="Letterbox"/>); nothing while it has none.
+    /// </summary>
+    void DrawLetterbox(IGpuCommandList cmd, GpuTexture target, PostOptions o, bool haveScene)
+    {
+        bool whole = haveScene && ViewWindow.Current.IsWhole && !o.CameraEffectsHeld;
+        var bars = Letterbox.Bars(o, whole, target.Desc.Width, target.Desc.Height);
+        if (bars == Vector2.Zero) return;
+
+        _letterboxProgram ??= LegacyProgram.Create(_ctx, _vertex, PostProcessShaders.Letterbox, "post letterbox");
+        _letterboxProgram.Set(_letterboxProgram.Uniform("uBars"), bars);
+        Fullscreen(cmd, _letterboxProgram, target, target.Desc.Width, target.Desc.Height, load: LoadOp.Load);
     }
 
     /// <summary>
@@ -1236,6 +1256,7 @@ sealed class PostComposite : IDisposable
     public void Dispose()
     {
         _modPasses?.Dispose();
+        _letterboxProgram?.Dispose();
         _luminanceTarget?.Dispose();
         _adaptA?.Dispose();
         _adaptB?.Dispose();

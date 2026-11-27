@@ -144,6 +144,7 @@ static class SettingHints
         WorldFrame.CameraEffectsSwitch => "Use the depth of field in the strategy camera too.",
         WorldFrame.VignetteSwitch => "Darken the picture towards its corners, as a camera lens does, in every camera.",
         WorldFrame.FilmGrainSwitch => "Lay a fine film grain over the picture, in every camera.",
+        WorldFrame.LetterboxSwitch => "Frame the world between black bars at the chosen picture shape, as a cinema screen, in every camera.",
         "Clouds" => "Render clouds with volume and depth.",
         "Cloud shadows" => "Let clouds cast shadows across land and water.",
         "Cloud shadows in fog" => "Fade cloud shadows in fog, so foggy places stay lit.",

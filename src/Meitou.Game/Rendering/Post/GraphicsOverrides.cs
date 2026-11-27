@@ -58,6 +58,7 @@ sealed class GraphicsOverrides
         settings.Add(Switch(WorldFrame.DepthOfFieldSwitch, () => options.DepthOfField, v => options.DepthOfField = v));
         settings.Add(Switch(WorldFrame.VignetteSwitch, () => options.Vignette, v => options.Vignette = v));
         settings.Add(Switch(WorldFrame.FilmGrainSwitch, () => options.FilmGrain, v => options.FilmGrain = v));
+        settings.Add(Switch(WorldFrame.LetterboxSwitch, () => options.Letterbox, v => options.Letterbox = v));
         settings.Add(Switch(WorldFrame.CameraEffectsSwitch, () => options.CameraEffectsEverywhere, v => options.CameraEffectsEverywhere = v));
         settings.Add(Switch(ToneMappingSwitch, () => options.ToneMapping, v => options.ToneMapping = v));
         settings.Add(Switch(NightGradeSwitch, () => options.NightGrade, v => options.NightGrade = v));

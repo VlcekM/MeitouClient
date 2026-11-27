@@ -397,6 +397,16 @@ It runs only in a whole view of a scene (`PostOptions.CameraEffectsHeld`, `ViewW
 or recording (`PostOptions.CinematicView`, set per frame by the game), never over the title. "Camera effects in the strategy camera" (`CameraEffectsEverywhere`, off)
 adds that camera. Both backends run the depth of field, the vignette, the grain and photo mode's filter.
 
+## Letterbox
+
+An optional effect (`PostOptions.Letterbox`, the `letterbox` switch, Off | On; off in both looks), ours, not the game's: black bars leave the
+world's picture the shape of "Letterbox aspect" (`LetterboxAspect`, 1.33 to 2.76, 2.39 by default), above and below for a shape wider than
+the picture, at the sides for a narrower one (`Letterbox.Bars`). It is the chain's last pass (`PostProcessShaders.Letterbox`: a full-screen
+draw that discards the picture's pixels), after the anti-aliasing and the heat haze so the bars' edges stay straight, before the mods'
+picture passes and under the interface; only in a whole view of a scene, in every camera. Photo mode's frame and the cinema's clean picture
+keep their own bars. Both backends; Metal untested. **Observed** (2026-11-27, Windows, Vulkan, offscreen, 1600 x 900): bars of 115 rows,
+the picture between them 2.388 to 1; off, the picture is unchanged.
+
 ## Mod passes
 
 Code mods add full-screen passes at two places ([modding](modding.md), "Post passes"; `PostPassRunner`): `Scene` after the depth of field

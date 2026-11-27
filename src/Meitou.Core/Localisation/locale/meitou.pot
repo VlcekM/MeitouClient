@@ -2006,6 +2006,10 @@ msgid "Frame limit"
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
+msgid "Frame the world between black bars at the chosen picture shape, as a cinema screen, in every camera."
+msgstr ""
+
+#: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Frames per second while vertical sync is off."
 msgstr ""
 
@@ -2963,6 +2967,14 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Let sunlight soften and warm under bare skin instead of ending at a hard edge."
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/SettingsMenu.cs
+msgid "Letterbox"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
+msgid "Letterbox aspect"
 msgstr ""
 
 #: src/Meitou.Game/Ui/ProductionWindows.cs
@@ -6528,6 +6540,10 @@ msgid "black & white"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "black bars"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "black haze"
 msgstr ""
 
@@ -7013,6 +7029,10 @@ msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs

@@ -5925,3 +5925,23 @@ msgstr "防具の貫通修正"
 #. machine-translated
 msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
 msgstr "女性キャラクターが装備した男性専用防具メッシュを体に干渉しないよう調整し、重複メッシュがない場合は長いコートの下でかさばる脚防具を内側に収めます。新しく読み込まれたキャラクターや装備し直したキャラクターに適用されます。"
+
+#. machine-translated
+msgid "Letterbox"
+msgstr "レターボックス"
+
+#. machine-translated
+msgid "Letterbox aspect"
+msgstr "レターボックスのアスペクト比"
+
+#. machine-translated
+msgid "black bars"
+msgstr "黒帯"
+
+#. machine-translated
+msgid "Frame the world between black bars at the chosen picture shape, as a cinema screen, in every camera."
+msgstr "すべてのカメラで、選んだ画面比率になるようワールドを映画のスクリーンのように黒帯で囲みます。"
+
+#. machine-translated
+msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
+msgstr "ゲームの画面は画面全体に表示されます。Meitou はレターボックスのアスペクト比（変更しない限り 2.39:1、映画のワイドスクリーン）でワールドを黒帯で囲めます。インターフェースの下に描かれ、すべてのカメラで有効です（docs/render-post.md \"Letterbox\"）"

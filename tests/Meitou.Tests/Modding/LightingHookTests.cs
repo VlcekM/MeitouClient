@@ -121,6 +121,74 @@ public class LightingHookTests
     }
 
     [Fact]
+    public void A_manifest_names_the_hooks_textures_as_a_file_or_with_repeat_and_refuses_one_outside_the_folder()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "meitou-hook-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            string Manifest(string textures) => """
+                { "id": "sample", "apiVersion": 2, "assemblies": ["Sample.dll"], "entry": "Sample.Mod",
+                  "lighting": { "file": "toon.glsl", "params": { "strength": 1.0 }, "textures": TEXTURES } }
+                """.Replace("TEXTURES", textures);
+            string path = Path.Combine(folder, "meitou.json");
+            File.WriteAllText(path, Manifest("""{ "ramp": "ramp.png", "hatch": { "file": "art/hatch.png", "repeat": true } }"""));
+            var lighting = CodeModManifest.Read(path).Lighting!;
+            Assert.Equal([new("ramp", "ramp.png", false), new("hatch", "art/hatch.png", true)], lighting.Textures);
+            Assert.Equal([new CodeModLightingParam("strength", 1)], lighting.Params);
+
+            File.WriteAllText(path, Manifest("""{ "ramp": "../ramp.png" }"""));
+            Assert.Throws<InvalidDataException>(() => CodeModManifest.Read(path));
+            File.WriteAllText(path, Manifest("""{ "a": "a.png", "b": "b.png", "c": "c.png", "d": "d.png", "e": "e.png" }"""));
+            Assert.Throws<InvalidDataException>(() => CodeModManifest.Read(path));
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
+    }
+
+    [Fact]
+    public void A_hooks_textures_get_samplers_in_order_and_a_hook_past_the_fourth_texture_is_refused()
+    {
+        try
+        {
+            Reset();
+            const string reads = "vec3 hookLight(vec3 l, vec3 s, vec3 k, vec3 n, vec3 v) { return l * texture(TEXTURE_ramp, vec2(0.5)).rgb"
+                + " * texture(TEXTURE_hatch, hookWorld.xz).r; }";
+            var two = new CodeModLighting("a.glsl", []) { Textures = [new("ramp", "ramp.png", false), new("hatch", "hatch.png", true)] };
+            var three = new CodeModLighting("c.glsl", [])
+                { Textures = [new("ramp", "r.png", false), new("hatch", "h.png", false), new("more", "m.png", false)] };
+            var refused = LightingHooks.Install(
+            [
+                new("sample.first", two, reads, "mods/first"),
+                new("sample.second", two, reads, "mods/second"),
+                new("sample.third", three, reads, "mods/third"),
+            ]);
+
+            Assert.Equal(["sample.first", "sample.second"], LightingHooks.Installed.Select(h => h.ModId));
+            Assert.Contains("4 textures", Assert.Single(refused).Reason);
+            Assert.Equal([0, 1], LightingHooks.Of("sample.first")!.Textures.Select(t => t.Slot));
+            Assert.Equal([2, 3], LightingHooks.Of("sample.second")!.Textures.Select(t => t.Slot));
+            Assert.Equal(Path.Combine("mods/second", "hatch.png"), LightingHooks.Of("sample.second")!.Textures[1].Path);
+            Assert.True(LightingHooks.Of("sample.second")!.Textures[1].Repeat);
+
+            string text = LightingHooks.Block(LightingHooks.Installed);
+            Assert.Contains("uniform sampler2D uModTexture3;", text);
+            Assert.DoesNotContain("uModTexture4", text);
+            Assert.Contains("#define TEXTURE_hatch uModTexture3", text);
+            Assert.Contains("#undef TEXTURE_hatch", text);
+
+            // A file may not take the game's prefix for a name of its own.
+            Assert.Contains("the game's", LightingHookFile.Check("float TEXTURE_mine = 1.0;\nvec3 hookAlbedo(vec3 a) { return a; }"));
+        }
+        finally
+        {
+            LightingHooks.ForgetForTests();
+        }
+    }
+
+    [Fact]
     public void The_lighting_text_with_hooks_in_it_compiles_in_both_stages_and_is_the_games_own_without_any()
     {
         try

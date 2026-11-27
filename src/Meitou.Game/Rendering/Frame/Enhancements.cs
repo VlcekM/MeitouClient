@@ -462,6 +462,11 @@ public static class Enhancements
             "the game's picture is clean; Meitou can lay a fine film grain over it, new each frame and strongest in the mid-tones, by the Film grain "
                 + "strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")",
             optional: true),
+        new("letterbox", WorldFrame.LetterboxSwitch, "off", "black bars",
+            () => post.Letterbox, v => post.Letterbox = v,
+            "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's "
+                + "widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")",
+            optional: true),
         new("gtao", "Ground-truth occlusion", "SSAO", "GTAO",
             () => post.Gtao, v => post.Gtao = v,
             "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's "

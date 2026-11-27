@@ -407,6 +407,17 @@ public sealed class PostOptions
     public float GrainStrength = 0.3f;
 
     /// <summary>
+    /// The Meitou <c>letterbox</c> switch (docs/render-post.md "Letterbox"), off by default even in the Meitou look: black bars leave the
+    /// world's picture the shape of <see cref="LetterboxAspect"/>.
+    /// </summary>
+    public bool Letterbox;
+
+    /// <summary>
+    /// The picture's shape under the letterbox, width over height (kept while the switch is off).
+    /// </summary>
+    public float LetterboxAspect = Post.Letterbox.DefaultAspect;
+
+    /// <summary>
     /// Photo mode's colour filter, after the grade (docs/viewer.md "Photo mode"); null outside the mode or with no filter.
     /// </summary>
     public ColourFilter? PhotoFilter;
