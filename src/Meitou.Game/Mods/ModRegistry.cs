@@ -149,6 +149,10 @@ sealed class ModRegistrations
     /// The per-frame callbacks.
     /// </summary>
     public List<ModFrameView> Frames { get; } = [];
+    /// <summary>
+    /// The post passes, in registration order.
+    /// </summary>
+    public List<PostPass> PostPasses { get; } = [];
     /// The placement rules.
     /// </summary>
     public List<ModPlacementRule> PlacementRules { get; } = [];
@@ -344,6 +348,10 @@ sealed class ModRegistry
     /// </summary>
     public ModGlows Glows { get; } = new();
     /// <summary>
+    /// Every mod's post passes (<see cref="ModContext.AddPostPass"/>), in running order.
+    /// </summary>
+    public ModPostPasses PostPasses { get; } = new();
+    /// <summary>
     /// The mods' display-only ribbon trails (<see cref="ModContext.KeepTrail"/>).
     /// </summary>
     public ModTrails Trails { get; } = new();
@@ -453,6 +461,7 @@ sealed class ModRegistry
         FactionLists.AddRange(r.FactionLists);
         SavesWritten.AddRange(r.SavesWritten);
         Frames.AddRange(r.Frames);
+        PostPasses.Add(r.PostPasses);
         PlacementRules.AddRange(r.PlacementRules);
         if (r.Settings is not null) Settings.Add(r.Settings);
     }

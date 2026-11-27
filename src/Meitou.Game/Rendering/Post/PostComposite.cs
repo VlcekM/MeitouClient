@@ -6,6 +6,7 @@ using Meitou.Data.Textures;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Sky;
+using Meitou.Modding;
 
 namespace Meitou.Game.Rendering.Post;
 
@@ -33,6 +34,11 @@ sealed class PostComposite : IDisposable
     /// row has the clip y negated: <see cref="UpAxis"/> turns the camera's up axis to match.
     /// </summary>
     readonly bool _flipY;
+
+    /// <summary>
+    /// The full-screen vertex every pass of the chain is compiled against (<see cref="_flipY"/>'s variant).
+    /// </summary>
+    readonly string _vertex;
 
     /// <summary>
     /// The composite, luminance and adaptation programs.
@@ -232,6 +238,7 @@ sealed class PostComposite : IDisposable
         var vertex = flipY
             ? PostProcessShaders.Vertex.Replace("vUv = p * 0.5 + 0.5;", "vUv = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5);")
             : PostProcessShaders.Vertex;
+        _vertex = vertex;
         _composite = LegacyProgram.Create(ctx, vertex, PostProcessShaders.Composite, "post composite");
         _luminance = LegacyProgram.Create(ctx, vertex, PostProcessShaders.Luminance, "post luminance");
         _adapt = LegacyProgram.Create(ctx, vertex, PostProcessShaders.Adapt, "post exposure adapted");
@@ -368,9 +375,31 @@ sealed class PostComposite : IDisposable
     {
         EnsureDisplay(target.Desc.Width, target.Desc.Height);
         MakeTargets(o, temporal);
+        var view = new PostPassView(inputs.HaveScene ? depth : null, null, inputs.Eye, inputs.View, inputs.FieldOfView, inputs.Aspect,
+            inputs.Near, inputs.Far, inputs.HaveScene, Hdr: false);
+        scene = RunScenePasses(cmd, scene, o, view);
         RunLuminance(cmd, scene);
         RunAdaptation(cmd, band, shade, PostProcess.Rate(o));
+        if (BeginModPasses(PostStage.Picture, o, view, target.Desc.Width, target.Desc.Height, InternalFormat.Rgba8) == 0)
+        {
+            DrawPicture(cmd, scene, depth, target, o, inputs, temporal);
+            return;
+        }
 
+        // The mods' picture passes: the game's passes end in a picture theirs read, and the last of theirs draws into the target.
+        var input = _modPasses!.PictureInput;
+        DrawPicture(cmd, scene, depth, input, o, inputs, temporal);
+        (_modCmd, _modFinal) = (cmd, target);
+        _modPasses.Run(PostStage.Picture, input, view, toTarget: true, _modDraw ??= DrawModPass);
+        (_modCmd, _modFinal) = (null, null);
+    }
+
+    /// <summary>
+    /// The exposed scene through the composite, then FXAA or SMAA and the heat haze, into <paramref name="target"/>.
+    /// </summary>
+    void DrawPicture(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, GpuTexture target, PostOptions o, in SceneInputs inputs,
+        bool temporal)
+    {
         // The composite: auto exposure (0.55 / adapted), the game's tone map, grade and dither.
         bool smaaOn = o.Smaa && !temporal && _ldr is not null;
         bool fxaaOn = o.Fxaa && !smaaOn && !temporal && _ldr is not null;
@@ -1143,11 +1172,70 @@ sealed class PostComposite : IDisposable
 
     #endregion
 
+    #region Mod passes (PostPassRunner)
+
+    /// <summary>
+    /// The code mods' post passes (docs/modding.md "Post passes"), made the first frame a mod has any.
+    /// </summary>
+    PostPassRunner? _modPasses;
+
+    /// <summary>
+    /// The segment and the frame's target <see cref="DrawModPass"/> draws with, set while the passes run.
+    /// </summary>
+    IGpuCommandList? _modCmd;
+
+    /// <summary>
+    /// See <see cref="_modCmd"/>.
+    /// </summary>
+    GpuTexture? _modFinal;
+
+    /// <summary>
+    /// <see cref="DrawModPass"/> as the runner calls it, made once.
+    /// </summary>
+    PostPassDraw? _modDraw;
+
+    /// <summary>
+    /// Readies the mods' passes of a stage for a picture of the size and format; how many draw this frame. None in a tile of a larger picture.
+    /// </summary>
+    int BeginModPasses(PostStage stage, PostOptions o, in PostPassView view, int width, int height, InternalFormat format)
+    {
+        if (o.ModPasses is not { } passes || !ViewWindow.Current.IsWhole) return 0;
+
+        _modPasses ??= new PostPassRunner(_ctx, _vertex, topDown: _flipY);
+        return _modPasses.Begin(stage, passes, view, width, height, format);
+    }
+
+    /// <summary>
+    /// The scene after the mods' scene passes, or <paramref name="scene"/> when none is on.
+    /// </summary>
+    GpuTexture RunScenePasses(IGpuCommandList cmd, GpuTexture scene, PostOptions o, in PostPassView view)
+    {
+        if (BeginModPasses(PostStage.Scene, o, view, scene.Desc.Width, scene.Desc.Height, scene.Desc.Format) == 0) return scene;
+
+        _modCmd = cmd;
+        var picture = _modPasses!.Run(PostStage.Scene, scene, view, toTarget: false, _modDraw ??= DrawModPass)!;
+        _modCmd = null;
+
+        return picture;
+    }
+
+    /// <summary>
+    /// One mod pass drawn into its picture, or into the frame's target (<paramref name="target"/> null). Metal's chain takes no GPU times.
+    /// </summary>
+    void DrawModPass(LegacyProgram p, GpuTexture? target, string stamp)
+    {
+        var into = target ?? _modFinal!;
+        Fullscreen(_modCmd!, p, into, into.Desc.Width, into.Desc.Height);
+    }
+
+    #endregion
+
     /// <summary>
     /// Frees the targets, the textures, the programs and the passes.
     /// </summary>
     public void Dispose()
     {
+        _modPasses?.Dispose();
         _luminanceTarget?.Dispose();
         _adaptA?.Dispose();
         _adaptB?.Dispose();

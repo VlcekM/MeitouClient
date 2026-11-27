@@ -241,6 +241,11 @@ public sealed class ModHost
     internal ModGlows Glows => _registry.Glows;
 
     /// <summary>
+    /// The mods' post passes (docs/modding.md "Post passes"), which the post chain runs each frame.
+    /// </summary>
+    internal ModPostPasses PostPasses => _registry.PostPasses;
+
+    /// <summary>
     /// The mods' display-only ribbon trails (docs/modding.md "Trails"), sampled and handed to the particles by the host once a frame.
     /// </summary>
     internal ModTrails Trails => _registry.Trails;

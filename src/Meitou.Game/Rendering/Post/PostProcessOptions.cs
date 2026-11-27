@@ -485,6 +485,11 @@ public sealed class PostOptions
     public bool CameraEffectsAllowed => !CameraEffectsHeld && (CinematicView || CameraEffectsEverywhere);
 
     /// <summary>
+    /// The code mods' post passes the chain runs (docs/modding.md "Post passes"), set once the mods are started; null without any.
+    /// </summary>
+    internal Meitou.Modding.ModPostPasses? ModPasses;
+
+    /// <summary>
     /// Meitou switch (<c>lampshadows</c>; docs/render-lights.md "Traced lamp shadows"), off by default even in the Meitou look; Faithful is the
     /// game's: lamps cast no shadows.
     /// </summary>

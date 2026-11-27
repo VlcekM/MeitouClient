@@ -325,6 +325,27 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   The original Elemental Enchantment's `SB_Prototype_Fire` kept on both duellists' `Weapon` (a katana: weapon length 21.15 world units,
   stretch 2.49) burned along each blade from near the hilt to the tip and stayed on it mid-swing; its `SB_Prototype_IceBlade` showed a
   faint cyan mist along a blade. Not seen: a `Worn` target, a `Building` anchor (no player or nest building in the duel).
+- **Post passes:** `AddPostPass(new PostPass(name, fragment) { Stage, Order, Prepare })` (`PostPass.cs`) adds a full-screen pass to the frame's
+  post chain; the game compiles it when it first runs, makes its pictures, binds its inputs and times it, so a mod patches nothing in
+  `PostProcess`. `Stage`: `PostStage.Scene` is the scene in linear HDR at the display size, after the upscaler and the depth of field and
+  before the exposure's measure, the bloom and the tone map; `PostStage.Picture` (the default) the finished picture after the tone map, grade,
+  anti-aliasing and heat haze, before the interface (0..1, above 1 in HDR output: `PostPassFrame.Hdr`). Passes of a stage run by `Order`, then
+  registration, each reading the one before; at most `PostPass.MaxPerMod` (32) a mod. `fragment` is whole GLSL as the game's post shaders:
+  `#version 330 core`, `in vec2 vUv;` (0..1 over the picture), one `out vec4`. Declared by these names the game binds `uniform sampler2D
+  uImage` (the picture so far, linear, clamped), `uniform sampler2D uDepth` (the scene's depth at the render size, nearest; read through
+  `PostPass.DepthGlsl`: `depthIsSky`, `depthViewZ(d, uPlanes)`, as the convention differs per backend) and `uniform usampler2D uSurface` (the
+  lit surfaces' packed normals, read through `PostPass.NormalGlsl`'s `meitouNormal(uv)`: world space, zero where none; held only while the
+  indirect light or the reflections are on, Vulkan), and sets `uniform vec2 uViewport` (pixels), `uniform vec2 uPlanes` (near, far) and
+  `uniform float uTime` (seconds, wrapped hourly). `Prepare(PostPassFrame)` runs on the render thread each frame the pass is on, before the
+  stage draws: it sets the pass's own uniforms by name (`Set`: float, int, vec2 to vec4, mat4; an unused name is ignored), reads the picture's
+  size, the scene camera (`FieldOfView`, `Aspect`, `Near`, `Far`, `View`, `Eye`), `Seconds`, `HasScene`, `HasSurface`, `Hdr`, `TopDown` (Metal:
+  `vUv.y` 0 is the top row), and may set `Skip` to leave the frame out. `PostPass.Enabled` turns a pass on and off at any time, from any thread.
+  With no pass on in a stage the chain draws as without mods: no picture is made, no pass added. A fragment that does not compile, or a
+  `Prepare` that throws, turns the pass off for the session (`PostPass.Fault`, one log line with the compiler's message). Not run in a tile of
+  a tiled screenshot (a pass works on the whole view). Both backends (`PostPassRunner`, called by `PostProcess` and `PostComposite`); Metal has
+  no surfaces and takes no GPU time for a pass, and is untested. **Observed** (2026-11-27, headless Vulkan device, validation and
+  synchronization validation on, no error): a scene pass, then two picture passes in order with a uniform from `Prepare`, the depth and the
+  stand-in surface, with and without TAA and FXAA; a broken fragment and a throwing `Prepare` turned off; every pass off draws the plain chain.
 - **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
   blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
   armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim

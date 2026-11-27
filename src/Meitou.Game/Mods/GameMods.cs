@@ -138,6 +138,7 @@ sealed class GameMods(GameHost host)
         LogEnabled(enabled.Count);
         Mods = ModHost.Load(Options(enabled, db, data, disabled));
         Mods.AudioModulations.Attach(host.Sound.Audio?.Player);
+        host.WorldOptions.Post.ModPasses = Mods.PostPasses;
 
         // No mod was found with a data phase, so an entry that is one anyway has it where the scan cannot see it.
         foreach (var mod in Mods.Mods.Where(m => m.Instance is IModDataPhase)) ModHost.NoteUnscannedDataPhase(mod);
@@ -155,6 +156,7 @@ sealed class GameMods(GameHost host)
         prepared.Start(Options(enabled, db, data));
         Mods = prepared;
         Mods.AudioModulations.Attach(host.Sound.Audio?.Player);
+        host.WorldOptions.Post.ModPasses = Mods.PostPasses;
         KeepModSettings(prepared);
     }
 

@@ -661,6 +661,25 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Adds a full-screen pass to the frame's post chain (docs/modding.md "Post passes"): <paramref name="pass"/>'s fragment shader reads the
+    /// picture so far at its <see cref="PostPass.Stage"/> and writes the picture the next pass gets. The game compiles it when it first runs and
+    /// makes its targets; the mod turns it on and off with <see cref="PostPass.Enabled"/> and sets its uniforms in
+    /// <see cref="PostPass.Prepare"/>. Returns <paramref name="pass"/>. At most <see cref="PostPass.MaxPerMod"/> a mod, each registered once.
+    /// </summary>
+    public PostPass AddPostPass(PostPass pass)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(pass);
+        if (pass.Owner.Length > 0) throw new InvalidOperationException($"{Id}: post pass '{pass.Name}' is registered already.");
+        if (Pending.PostPasses.Count >= PostPass.MaxPerMod)
+            throw new InvalidOperationException($"{Id}: a mod registers at most {PostPass.MaxPerMod} post passes.");
+
+        pass.Owner = Id;
+        Pending.PostPasses.Add(pass);
+        return pass;
+    }
+
+    /// <summary>
     /// Plays a display-only effect on <paramref name="anchor"/> (docs/modding.md "Visual effects"): a world point, a character's bone or held
     /// weapon, or a building, the system's origin at the anchor, its axes turned to the anchor's frame and its emitters scaled by its stretch,
     /// following it while it emits; while the anchor cannot be located (not drawn, weapon sheathed, building gone) it pauses, until its lifetime

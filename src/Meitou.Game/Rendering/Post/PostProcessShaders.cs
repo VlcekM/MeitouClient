@@ -33,6 +33,24 @@ static class PostProcessShaders
         StringComparison.Ordinal);
 
     /// <summary>
+    /// <c>vec3 meitouNormal(vec2 uv)</c> for a mod's post pass (<see cref="Meitou.Modding.PostPass.NormalGlsl"/>), after its
+    /// <c>uniform usampler2D uSurface;</c>: the shading normal the lit surfaces store for the GI resolve (the first two channels of
+    /// <c>giAlbedoOut</c>, <see cref="Sky.AtmosphereShaders"/>: its octahedral position in 16 bits each, decoded as <c>giOctDir</c>), or zero where
+    /// nothing is stored.
+    /// </summary>
+    public const string SurfaceNormal = "\n" + """
+        vec3 meitouNormal(vec2 uv)
+        {
+            uvec4 s = texelFetch(uSurface, ivec2(uv * vec2(textureSize(uSurface, 0))), 0);
+            if (s.xyz == uvec3(0u)) return vec3(0.0);   // nothing stored, or the stand-in of a frame without surfaces (0, 0, 0, 1)
+            vec2 p = vec2(s.xy) / 65535.0 * 2.0 - 1.0;
+            vec3 d = vec3(p.x, 1.0 - abs(p.x) - abs(p.y), p.y);
+            if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
+            return normalize(d);
+        }
+        """ + "\n";
+
+    /// <summary>
     /// One lookup of <c>uImage</c> at <c>vUv</c>: with a nearest sampler, the picture stretched to the target's size with the nearest pixel.
     /// </summary>
     public const string Stretch = """

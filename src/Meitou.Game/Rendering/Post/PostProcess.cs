@@ -7,6 +7,7 @@ using Meitou.Game.Rendering.Gpu.Core;
 using Meitou.Game.Rendering.Particles;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Sky;
+using Meitou.Modding;
 using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Vk = Silk.NET.Vulkan;
 
@@ -126,6 +127,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _upscaleExposure.Dispose();
         _bloom.Dispose();
         _depthOfField?.Dispose();
+        _modPasses?.Dispose();
         DisposeGtao();
         DisposeLampShadows();
         Hiz?.Dispose();
@@ -1326,6 +1328,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         }
         else ActiveUpscaler = Options.Smaa ? "SMAA" : Options.Fxaa ? "FXAA" : "off";
         _postColour = RunDepthOfField(_postColour);
+        _postColour = RunScenePasses(_postColour);
         bool auto = AutoExposure is not null && _luminance is not null;
         if (auto) RunExposure();
         if (auto) Stamp("exposure");
@@ -1341,9 +1344,28 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// The composite to the target, or to the LDR picture that FXAA (or SMAA) and / or the heat haze then read on their way to it.
+    /// The composite and the passes after it into <paramref name="final"/>, then the mods' picture passes when any is on: the game's passes
+    /// then end in a picture of the display's size that the mods' read, and the last of theirs draws into <paramref name="final"/>.
     /// </summary>
     void RunCompositeChain(PostOptions o, PassTargets final, bool ao, bool auto, Target2D? bloom)
+    {
+        var format = o.HdrPeak > 1 ? InternalFormat.Rgba16F : InternalFormat.Rgba8;
+        if (BeginModPasses(PostStage.Picture, _displayWidth, _displayHeight, format) == 0)
+        {
+            RunPictureChain(o, final, ao, auto, bloom);
+            return;
+        }
+
+        var input = _modPasses!.PictureInput;
+        RunPictureChain(o, PassTargets.Of(input, null), ao, auto, bloom);
+        _modFinal = final;
+        _modPasses.Run(PostStage.Picture, input, ModView, toTarget: true, _modDraw ??= DrawModPass);
+    }
+
+    /// <summary>
+    /// The composite to the target, or to the LDR picture that FXAA (or SMAA) and / or the heat haze then read on their way to it.
+    /// </summary>
+    void RunPictureChain(PostOptions o, PassTargets final, bool ao, bool auto, Target2D? bloom)
     {
         // Composite: to the target, or to the LDR picture FXAA (or SMAA) and / or the heat haze then read (the game's order: FXAA, HeatHaze).
         MakeLdrTargets(o.Smaa && !Temporal, o.Fxaa && !Temporal, HeatHazeWanted);
@@ -1494,6 +1516,78 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (haze) Draw(s.Blend, _ldrFxaa!);
         else DrawFinal(s.Blend, final);
         Stamp("smaa");
+    }
+
+    #endregion
+
+    #region Mod passes (PostPassRunner)
+
+    /// <summary>
+    /// The code mods' post passes (docs/modding.md "Post passes"), made the first frame a mod has any.
+    /// </summary>
+    PostPassRunner? _modPasses;
+
+    /// <summary>
+    /// The scene after the mods' scene passes, as a target the rest of the chain reads (made again only when the picture last written changes).
+    /// </summary>
+    Target2D? _modScene;
+
+    /// <summary>
+    /// The frame's target the last picture pass draws into (<see cref="DrawModPass"/>).
+    /// </summary>
+    PassTargets? _modFinal;
+
+    /// <summary>
+    /// <see cref="DrawModPass"/> as the runner calls it, made once.
+    /// </summary>
+    PostPassDraw? _modDraw;
+
+    /// <summary>
+    /// The scene and the camera the mods' passes get this frame; no depth or surfaces in a frame without a scene.
+    /// </summary>
+    PostPassView ModView => new(_haveScene ? _sceneDepth?.Texture : null, _haveScene ? GiAlbedoTarget : null, _eyeNow, _viewRotation,
+        _fovNow, _aspectNow, _planes.X, _planes.Y, _haveScene, Options.HdrPeak > 1);
+
+    /// <summary>
+    /// Readies the mods' passes of a stage for a picture of the size and format; how many draw this frame. None in a tile of a larger picture
+    /// (a pass works on the whole view, as the vignette does).
+    /// </summary>
+    int BeginModPasses(PostStage stage, int width, int height, InternalFormat format)
+    {
+        if (Options.ModPasses is not { } passes || !ViewWindow.Current.IsWhole) return 0;
+
+        _modPasses ??= new PostPassRunner(Gpu, PostProcessShaders.Vertex, topDown: false);
+        return _modPasses.Begin(stage, passes, ModView, width, height, format);
+    }
+
+    /// <summary>
+    /// The scene after the mods' scene passes, or <paramref name="scene"/> when none is on.
+    /// </summary>
+    Target2D RunScenePasses(Target2D scene)
+    {
+        if (BeginModPasses(PostStage.Scene, scene.Width, scene.Height, scene.Format) == 0) return scene;
+
+        var picture = _modPasses!.Run(PostStage.Scene, scene.Texture, ModView, toTarget: false, _modDraw ??= DrawModPass)!;
+        if (_modScene?.Texture != picture) _modScene = new Target2D(picture, TextureMinFilter.Linear, TextureMagFilter.Linear);
+
+        return _modScene;
+    }
+
+    /// <summary>
+    /// One mod pass drawn into its picture, or into the frame's target (<paramref name="target"/> null), and timed.
+    /// </summary>
+    void DrawModPass(LegacyProgram p, GpuTexture? target, string stamp)
+    {
+        if (target is null)
+        {
+            DrawFinal(p, _modFinal!);
+            Stamp(stamp);
+            return;
+        }
+
+        var desc = target.Desc;
+        Draw(p, new RenderTarget(target.Attachment()), desc.Format, desc.Width, desc.Height, desc.Width, desc.Height);
+        Stamp(stamp);
     }
 
     #endregion
