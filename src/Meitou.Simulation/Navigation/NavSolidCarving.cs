@@ -240,4 +240,71 @@ internal static class NavSolidCarving
             }
         }
     }
+
+    /// <summary>
+    /// Removes the walkable spans whose cell centre lies outside every polygon in <paramref name="pieces"/>: clips a multi-shape interior mesh to
+    /// the union of its trigger shapes so the inside and outside meshes meet at doorways on bent, L-shaped or courtyard buildings.
+    /// </summary>
+    internal static void RemoveOutside(IReadOnlyList<Vector2[]> pieces, RcCompactHeightfield chf)
+    {
+        var bounds = PieceBounds(pieces);
+        float cs = chf.cs;
+        for (int z = 0; z < chf.height; z++)
+        {
+            float pz = chf.bmin.Z + (z + 0.5f) * cs;
+            for (int x = 0; x < chf.width; x++)
+            {
+                var cell = chf.cells[x + z * chf.width];
+                if (!CellHasWalkable(chf, cell)) continue;
+                var q = new Vector2(chf.bmin.X + (x + 0.5f) * cs, pz);
+                if (InsideAny(pieces, bounds, q)) continue;
+                for (int i = cell.index, end = cell.index + cell.count; i < end; i++)
+                    chf.areas[i] = NavArea.Null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Axis-aligned plan bounds for each polygon in <paramref name="pieces"/>.
+    /// </summary>
+    static (Vector2 Min, Vector2 Max)[] PieceBounds(IReadOnlyList<Vector2[]> pieces)
+    {
+        var bounds = new (Vector2 Min, Vector2 Max)[pieces.Count];
+        for (int p = 0; p < pieces.Count; p++)
+        {
+            var poly = pieces[p];
+            Vector2 lo = poly[0], hi = poly[0];
+            for (int k = 1; k < poly.Length; k++)
+            {
+                lo = Vector2.Min(lo, poly[k]);
+                hi = Vector2.Max(hi, poly[k]);
+            }
+            bounds[p] = (lo, hi);
+        }
+        return bounds;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="cell"/> holds at least one non-null span.
+    /// </summary>
+    static bool CellHasWalkable(RcCompactHeightfield chf, RcCompactCell cell)
+    {
+        for (int i = cell.index, end = cell.index + cell.count; i < end; i++)
+            if (chf.areas[i] != NavArea.Null) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="q"/> lies inside any polygon of <paramref name="pieces"/>.
+    /// </summary>
+    static bool InsideAny(IReadOnlyList<Vector2[]> pieces, (Vector2 Min, Vector2 Max)[] bounds, Vector2 q)
+    {
+        for (int p = 0; p < pieces.Count; p++)
+        {
+            var (lo, hi) = bounds[p];
+            if (q.X < lo.X || q.X > hi.X || q.Y < lo.Y || q.Y > hi.Y) continue;
+            if (NavGeometry.InsideConvex(pieces[p], q, 0)) return true;
+        }
+        return false;
+    }
 }

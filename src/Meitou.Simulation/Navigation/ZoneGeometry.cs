@@ -269,9 +269,16 @@ internal sealed class ZoneGeometry
     public List<Vector3> NodeSeeds { get; } = [];
 
     /// <summary>
-    /// For an interior mesh: the convex hull of the building interior mask; the mesh is clipped to it.
+    /// For an interior mesh: the convex hull of the building interior mask; the mesh is clipped to it (or to the union of
+    /// <see cref="InteriorPieces"/> when the mask has more than one trigger shape).
     /// </summary>
     public NavVolume? InteriorHull { get; init; }
+
+    /// <summary>
+    /// For an interior mesh whose mask has more than one trigger shape: each shape's plan polygon, so the mesh is clipped to their union instead
+    /// of their merged convex hull. Empty for a single-shape mask (clipped by <see cref="InteriorHull"/>'s carvers).
+    /// </summary>
+    public IReadOnlyList<Vector2[]> InteriorPieces { get; init; } = [];
 
     /// <summary>
     /// For an interior mesh: the <see cref="Meitou.Data.World.BuildingKey"/> of the building it belongs to.
