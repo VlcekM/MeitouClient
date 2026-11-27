@@ -1208,7 +1208,7 @@ static class LampShadowShaders
             if (max(lost.r, max(lost.g, lost.b)) <= 0.0) discard;
             uvec4 surface = texelFetch(uAlbedo, px, 0);
             vec3 p = positionAt(px, depthAt(px));
-            vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
+            vec3 transmittance = atmoTransmittance(uGiEye, p);
             vec3 albedo = vec3(float(surface.z & 255u), float((surface.z >> 8) & 255u), float(surface.w & 255u)) / 255.0;
             vec3 taken = albedo * albedo * lost;
             // A character: the share of its lamps' light that is lost (this pass's own terms, lost over all) takes that share of what its fragment took of

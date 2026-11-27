@@ -396,9 +396,10 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// Whether the character swings at a door or wall this tick (<see cref="CharacterCold.BashSwing"/>, stamped by the lock system each update in
-    /// reach).
+    /// reach). -1 is never: at tick 0, the first after a load, -1 is also tick - 1, and every character took the swing's stonemine pose (held while
+    /// its zone loaded and it lay dormant: a squad loaded paused stood in it, Observed, save big_squad).
     /// </summary>
-    static bool Swinging(CharacterCold cold, long tick) => cold.BashSwing >= tick - 1;
+    static bool Swinging(CharacterCold cold, long tick) => cold.BashSwing >= 0 && cold.BashSwing >= tick - 1;
 
     /// <summary>
     /// Whether the character picked a lock this update or the last: a cage's or a container's, a door's on the way, or shackles (its own or

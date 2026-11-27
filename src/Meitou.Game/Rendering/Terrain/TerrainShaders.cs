@@ -738,7 +738,13 @@ static partial class TerrainShaders
     /// tangent-frame path, or fixes the march's layers and steps, instead of testing a uniform (a uniform quality cost High about 12% of the
     /// terrain's GPU time on swamp-low).
     /// </summary>
-    const string TerrainNormalMaps = "TERRAIN_NORMAL_MAPS", ReliefQualityName = "RELIEF_QUALITY";
+    const string TerrainNormalMaps = "TERRAIN_NORMAL_MAPS", ReliefQualityName = "RELIEF_QUALITY", ReliefCapName = "RELIEF_CAP";
+
+    /// <summary>
+    /// The relief layers the march keeps at a quality (<c>RELIEF_CAP</c>: the <c>Relief</c> fields the shader's code is written out for): five at
+    /// High, two at Medium, one at Low.
+    /// </summary>
+    static int ReliefCap(int quality) => quality >= 2 ? 5 : quality >= 1 ? 2 : 1;
 
     /// <summary>
     /// The runtime defaults of <see cref="TerrainNormalMaps"/> and <see cref="ReliefQualityName"/>: the uniforms, unless a variant defined them.
@@ -749,6 +755,9 @@ static partial class TerrainShaders
         #endif
         #ifndef RELIEF_QUALITY
         #define RELIEF_QUALITY uReliefQuality
+        #endif
+        #ifndef RELIEF_CAP
+        #define RELIEF_CAP 5
         #endif
 
         """;
@@ -823,20 +832,29 @@ static partial class TerrainShaders
         uniform sampler2DArray uBakeAlbedo;   // the material cache (TerrainRenderer.MaterialCache), a layer per level, addressed toroidally: albedo, gloss
         uniform sampler2DArray uBakeNormal;   // its shading normal (xyz * 0.5 + 0.5) and rain absorbance
         uniform int uBakeLevels;              // its levels (0: none, every pixel shades the layers)
-        uniform vec4 uBakeOrigin[4];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid)
+        uniform vec4 uBakeOrigin[8];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid)
         uniform float uBakeBias;              // the upscaler's texture bias (negative): the layers' sampler takes it, so the cache level is chosen that much finer
         uniform float uBakeReach;             // the cache is read nearer than this: beyond it a biome's distance fade (which the bake has not) may begin
 
         // The span of the cache's relief height in world units (BakeOutput): the deepest a layer gets, the cliff's scale included.
         #define BakeSpan (uParallax * uMaxDepth * max(uCliffScale, 1.0))
 
-        // Whether cache level k holds xz (4 texels in from its edges), and its value there.
-        bool bakeHolds(int k, vec2 xz)
+        // How far in from level k's edges (texels) a point it holds lies: 4, and the view's march round it (up to half its span each way, at most
+        // 2 BakeSpan): it reads the toroidal image there, and past the edge that is the far side's ground (with the finest level's 4 texels an eighth of a
+        // unit, a flat, unshaded band along the square's edge, Observed, Metal).
+        float bakeMargin(vec4 o) { return 4.0 + 2.0 * BakeSpan / o.z; }
+
+        // Whether cache level k holds xz with reach world units round it besides its margin (bakeMargin).
+        bool bakeHoldsBy(int k, vec2 xz, float reach)
         {
             vec4 o = uBakeOrigin[k];
             vec2 r = (xz - o.xy) / o.z;
-            return o.w > 0.0 && all(greaterThan(r, vec2(4.0))) && all(lessThan(r, vec2(o.w - 4.0)));
+            float m = bakeMargin(o) + reach / o.z;
+            return o.w > 0.0 && all(greaterThan(r, vec2(m))) && all(lessThan(r, vec2(o.w - m)));
         }
+
+        // Whether cache level k holds xz, its margin in from its edges (bakeMargin).
+        bool bakeHolds(int k, vec2 xz) { return bakeHoldsBy(k, xz, 0.0); }
 
         // How near xz is to the edge of level k's square: 0 further than a quarter of the side in from where bakeHolds stops holding it, rising smoothly to 1 there.
         // The cache blends towards the next coarser level over it, so the step to that level at the edge (which it reads alone beyond) is not a line.
@@ -844,7 +862,7 @@ static partial class TerrainShaders
         {
             vec4 o = uBakeOrigin[k];
             vec2 r = (xz - o.xy) / o.z;
-            vec2 d = min(r, vec2(o.w) - r) - 4.0;
+            vec2 d = min(r, vec2(o.w) - r) - bakeMargin(o);
             return 1.0 - smoothstep(0.0, 0.25 * o.w, min(d.x, d.y));
         }
 
@@ -936,12 +954,51 @@ static partial class TerrainShaders
         // Layers whose relief is marched together (GroundRelief): their common unscaled coordinate with its derivatives, and per layer its tiling (xy: the
         // coordinate's scale, also its move per unit of the march's offset), array layer (z) and weight (w: its share of the pixel times its depth factor).
         // Kept this small on purpose: the march carries it through every step, and a larger one (a coordinate and derivatives per layer) cost the
-        // parallax several times over in registers (docs/render-terrain.md, "Cost"). The quality keeps the heaviest one, two or five layers; the rest only
-        // shade the surface.
-        const int ReliefMax = 5;
-        struct Relief { GradCoord base; vec4 layer[ReliefMax]; int n; float total; };
+        // parallax several times over in registers (docs/render-terrain.md, "Cost"). The quality keeps the heaviest one, two or five layers
+        // (RELIEF_CAP); the rest only shade the surface.
+        // The layers are five named fields, not an array, and every use is written out per field: an array indexed by a variable lives in memory, and
+        // the Metal translation copied the whole struct before each of the march's reads (2.9 KB spilled a pixel, docs/render-terrain.md "Registers").
+        struct Relief { GradCoord base; vec4 l0; vec4 l1; vec4 l2; vec4 l3; vec4 l4; int n; float total; };
 
-        Relief noRelief(GradCoord base) { Relief r; r.base = base; r.n = 0; r.total = 0.0; return r; }
+        Relief noRelief(GradCoord base)
+        {
+            Relief r;
+            r.base = base;
+            r.l0 = r.l1 = r.l2 = r.l3 = r.l4 = vec4(0.0);
+            r.n = 0;
+            r.total = 0.0;
+            return r;
+        }
+
+        // Layer k of r (k a constant once the calls are written out).
+        vec4 reliefLayer(Relief r, int k) { return k == 0 ? r.l0 : k == 1 ? r.l1 : k == 2 ? r.l2 : k == 3 ? r.l3 : r.l4; }
+
+        // r with layer k set to l.
+        void setReliefLayer(inout Relief r, int k, vec4 l)
+        {
+            if (k == 0) r.l0 = l;
+            else if (k == 1) r.l1 = l;
+            else if (k == 2) r.l2 = l;
+            else if (k == 3) r.l3 = l;
+            else r.l4 = l;
+        }
+
+        // The same layer (texture and scale) from another biome adds its weight to the entry it has; true when it had one.
+        bool mergeRelief(inout vec4 entry, bool held, vec2 scale, float layer, float w)
+        {
+            if (!held || entry.z != layer || entry.xy != scale) return false;
+            entry.w += w;
+            return true;
+        }
+
+        // Layers a and b in weight order (a the heavier) where b is held.
+        void orderRelief(inout vec4 a, inout vec4 b, bool held)
+        {
+            if (!held || b.w <= a.w) return;
+            vec4 t = a;
+            a = b;
+            b = t;
+        }
 
         // share: how much of the pixel the layer shows; factor: its biome's relief factor (GroundRelief.BiomeDepth).
         void addRelief(inout Relief r, vec2 scale, float layer, float share, float factor)
@@ -949,25 +1006,52 @@ static partial class TerrainShaders
             // A layer showing under 5% of the pixel is left out, fading in to 15% (continuous: no seam where it drops out); the march's cost is per layer.
             float w = share * smoothstep(0.05, 0.15, share) * reliefDepth(layer, scale) * factor;
             if (w <= 0.0) return;
-            // The heaviest layers are kept, sorted, so a later heavy layer replaces a light one; the height is a weighted average, so the order only
-            // matters for the cap. The same layer from another biome (biomes share textures) adds to its entry.
-            int cap = RELIEF_QUALITY >= 2 ? ReliefMax : RELIEF_QUALITY >= 1 ? 2 : 1;
             r.total += w;
-            int at = r.n;
-            for (int i = 0; i < r.n; i++)
-                if (r.layer[i].z == layer && r.layer[i].xy == scale) { w += r.layer[i].w; at = i; break; }
-            if (at == r.n)
+
+            // The same layer from another biome (biomes share textures) adds to its entry.
+            bool merged = mergeRelief(r.l0, r.n > 0, scale, layer, w);
+            #if RELIEF_CAP > 1
+            merged = merged || mergeRelief(r.l1, r.n > 1, scale, layer, w);
+            #endif
+            #if RELIEF_CAP > 2
+            merged = merged || mergeRelief(r.l2, r.n > 2, scale, layer, w);
+            merged = merged || mergeRelief(r.l3, r.n > 3, scale, layer, w);
+            merged = merged || mergeRelief(r.l4, r.n > 4, scale, layer, w);
+            #endif
+
+            // A new layer goes last; with the kept ones all taken it replaces the lightest when heavier, else it is left out.
+            if (!merged)
             {
-                if (r.n < cap) r.n++;
-                else if (w > r.layer[cap - 1].w) { r.total -= r.layer[cap - 1].w; at = cap - 1; }
-                else { r.total -= w; return; }
+                int keep = RELIEF_QUALITY >= 2 ? 5 : RELIEF_QUALITY >= 1 ? 2 : 1;
+                vec4 entry = vec4(scale, layer, w);
+                if (r.n < keep)
+                {
+                    setReliefLayer(r, r.n, entry);
+                    r.n++;
+                }
+                else
+                {
+                    float lightest = reliefLayer(r, keep - 1).w;
+                    if (w <= lightest)
+                    {
+                        r.total -= w;
+                        return;
+                    }
+                    r.total -= lightest;
+                    setReliefLayer(r, keep - 1, entry);
+                }
             }
-            while (at > 0 && r.layer[at - 1].w < w)
-            {
-                r.layer[at] = r.layer[at - 1];
-                at--;
-            }
-            r.layer[at] = vec4(scale, layer, w);
+
+            // The heaviest layers are kept, sorted, so a later heavy layer replaces a light one; the height is a weighted average, so the order only
+            // matters for the cap. One entry changed and can only have risen: one pass from the end carries it to its place.
+            #if RELIEF_CAP > 2
+            orderRelief(r.l3, r.l4, r.n > 4);
+            orderRelief(r.l2, r.l3, r.n > 3);
+            orderRelief(r.l1, r.l2, r.n > 2);
+            #endif
+            #if RELIEF_CAP > 1
+            orderRelief(r.l0, r.l1, r.n > 1);
+            #endif
         }
 
         // Where the ground is displaced (ReliefFunctions), the mesh carries the relief down to its spacing there (reliefSegment, world units; 0 not
@@ -979,32 +1063,41 @@ static partial class TerrainShaders
         // to 3 and 2; low 4 and 2 to 2 and 1).
         int reliefSteps = 16, reliefShadowSteps = 8;
 
+        // One layer's share of reliefHeight: its height at offset o, times its weight.
+        float reliefLayerHeight(Relief r, vec4 l, vec2 o, bool finer, float blur, float texels)
+        {
+            vec3 c = vec3((r.base.p + o) * l.xy, l.z);
+            // The level of the footprint's short axis, the long one at most 8 times it (as an anisotropic read picks its level, with one tap): at a
+            // grazing angle the long axis alone chose a level whose heights were a blur, and the march runs along that axis anyway.
+            vec2 gx = r.base.dx * l.xy * blur, gy = r.base.dy * l.xy * blur;
+            float ax = dot(gx, gx), ay = dot(gy, gy);
+            float shrink = 1.0 / clamp(sqrt(max(ax, ay) / max(min(ax, ay), 1e-20)), 1.0, 8.0);
+            if (ax > ay) gx *= shrink; else gy *= shrink;
+            float x = textureGrad(uHeight, c, gx, gy).r;
+            if (finer && reliefSegment > 0.0 && reliefWhole < 1.0)
+            {
+                // ReliefFunctions' level for this spacing: texels half a segment apart.
+                float lod = max(0.0, log2(2.0 * reliefSegment * 0.5 * (l.x + l.y) * texels / 5000.0));
+                x = mix(clamp(x - textureLod(uHeight, c, lod).r + 0.5, 0.0, 1.0), x, reliefWhole);
+            }
+            return l.w * x;
+        }
+
         // The relief's height at offset o (1 the top): the layers' heights by weight; finer: only the detail the displaced mesh leaves out (above).
         // Sampled with the unmoved coordinates' derivatives, so the mip does not jump.
         // blur: the derivatives' scale (the sun's march reads 4: two levels coarser, its shadow is soft, and the coarser level is far cheaper to fetch).
         float reliefHeight(Relief r, vec2 o, bool finer, float blur)
         {
-            float h = 0.0;
             float texels = float(textureSize(uHeight, 0).x);
-            for (int i = 0; i < r.n; i++)
-            {
-                vec4 l = r.layer[i];
-                vec3 c = vec3((r.base.p + o) * l.xy, l.z);
-                // The level of the footprint's short axis, the long one at most 8 times it (as an anisotropic read picks its level, with one tap): at a
-                // grazing angle the long axis alone chose a level whose heights were a blur, and the march runs along that axis anyway.
-                vec2 gx = r.base.dx * l.xy * blur, gy = r.base.dy * l.xy * blur;
-                float ax = dot(gx, gx), ay = dot(gy, gy);
-                float shrink = 1.0 / clamp(sqrt(max(ax, ay) / max(min(ax, ay), 1e-20)), 1.0, 8.0);
-                if (ax > ay) gx *= shrink; else gy *= shrink;
-                float x = textureGrad(uHeight, c, gx, gy).r;
-                if (finer && reliefSegment > 0.0 && reliefWhole < 1.0)
-                {
-                    // ReliefFunctions' level for this spacing: texels half a segment apart.
-                    float lod = max(0.0, log2(2.0 * reliefSegment * 0.5 * (l.x + l.y) * texels / 5000.0));
-                    x = mix(clamp(x - textureLod(uHeight, c, lod).r + 0.5, 0.0, 1.0), x, reliefWhole);
-                }
-                h += l.w * x;
-            }
+            float h = r.n > 0 ? reliefLayerHeight(r, r.l0, o, finer, blur, texels) : 0.0;
+            #if RELIEF_CAP > 1
+            if (r.n > 1) h += reliefLayerHeight(r, r.l1, o, finer, blur, texels);
+            #endif
+            #if RELIEF_CAP > 2
+            if (r.n > 2) h += reliefLayerHeight(r, r.l2, o, finer, blur, texels);
+            if (r.n > 3) h += reliefLayerHeight(r, r.l3, o, finer, blur, texels);
+            if (r.n > 4) h += reliefLayerHeight(r, r.l4, o, finer, blur, texels);
+            #endif
             h /= r.total;
             #ifdef TERRAIN_TRAILS
             // The marks in the ground's march, whole also where the ground is displaced (the mesh leaves them to the march); both its moves are in the
@@ -1056,19 +1149,28 @@ static partial class TerrainShaders
             return foot >= 16.0 ? plain : mix(reliefSmooth(c, 2), plain, smoothstep(4.0, 16.0, foot));
         }
 
+        // One layer's share of reliefUnder.
+        float reliefLayerUnder(Relief r, vec4 l, vec2 o, float texels, int top)
+        {
+            vec3 c = vec3((r.base.p + o) * l.xy, l.z);
+            // The broad level, at the whole level nearest its spacing, read smoothly: its texels are metres wide.
+            float broad = uBroadCut > 0.0 ? reliefSmooth(c, min(int(max(0.0, log2(0.25 * uBroadCut * (l.x + l.y) * texels / 5000.0)) + 0.5), top)) : 0.5;
+            return l.w * (broad - reliefLevelled(c, r.base.dx * l.xy, r.base.dy * l.xy));
+        }
+
         float reliefUnder(Relief r, vec2 o)
         {
-            float under = 0.0;
             float texels = float(textureSize(uHeight, 0).x);
             int top = int(log2(texels) + 0.5);
-            for (int i = 0; i < r.n; i++)
-            {
-                vec4 l = r.layer[i];
-                vec3 c = vec3((r.base.p + o) * l.xy, l.z);
-                // The broad level, at the whole level nearest its spacing, read smoothly: its texels are metres wide.
-                float broad = uBroadCut > 0.0 ? reliefSmooth(c, min(int(max(0.0, log2(0.25 * uBroadCut * (l.x + l.y) * texels / 5000.0)) + 0.5), top)) : 0.5;
-                under += l.w * (broad - reliefLevelled(c, r.base.dx * l.xy, r.base.dy * l.xy));
-            }
+            float under = r.n > 0 ? reliefLayerUnder(r, r.l0, o, texels, top) : 0.0;
+            #if RELIEF_CAP > 1
+            if (r.n > 1) under += reliefLayerUnder(r, r.l1, o, texels, top);
+            #endif
+            #if RELIEF_CAP > 2
+            if (r.n > 2) under += reliefLayerUnder(r, r.l2, o, texels, top);
+            if (r.n > 3) under += reliefLayerUnder(r, r.l3, o, texels, top);
+            if (r.n > 4) under += reliefLayerUnder(r, r.l4, o, texels, top);
+            #endif
             return under;
         }
 
@@ -1087,7 +1189,7 @@ static partial class TerrainShaders
                 // Two steps for each texel of the level it reads (the heaviest layer's) the ray crosses, between half and four times the quality's count:
                 // a fixed count stepped over whole bumps at a grazing angle (the relief in slices) and was wasted looking straight down; one a texel still
                 // passed over the top of a bump one texel wide, which showed as teeth along its edge from close up.
-                vec2 tiling = r.layer[0].xy;
+                vec2 tiling = r.l0.xy;
                 vec2 fx = r.base.dx * tiling, fy = r.base.dy * tiling;
                 float texel = max(sqrt(min(dot(fx, fx), dot(fy, fy))), 1.0 / float(textureSize(uHeight, 0).x));
                 Steps = clamp(int(ceil(2.0 * length(viewSpan * tiling) / texel)), max(Steps / 2, 2), Steps * 4);
@@ -1170,7 +1272,7 @@ static partial class TerrainShaders
         struct ReliefOut { vec2 ground; vec2 cliffX; vec2 cliffZ; float shade; };
 
         // The pixel's relief, gathered over the biomes blended (gatherRelief) and marched once (pixelRelief): the ground layers of every biome by their
-        // share of the pixel in one Relief (the heaviest ReliefMax, two or one by the quality), so every biome's ground coordinates move alike; the
+        // share of the pixel in one Relief (the heaviest RELIEF_CAP: five, two or one by the quality), so every biome's ground coordinates move alike; the
         // cliff on the projections of the biome whose cliff relief weighs most, its moves applied to every biome's cliff. A march per biome (up to
         // five a pixel) kept a result each through the shading (docs/render-terrain.md "Registers").
         struct ReliefGather { Relief ground; int cliffBiome; float cliffWeight, cliffShare, share; };
@@ -1302,8 +1404,9 @@ static partial class TerrainShaders
         const float BiomeEps = 0.03;
         void blendSlot(int k, uvec4 slots, uint slot4, vec4 weights, float rest, out uint b, out float wk)
         {
-            b = k < 4 ? slots[k] : slot4;
-            wk = keepWeight(k < 4 ? weights[k] : rest, BiomeEps);
+            // Components picked by comparison: a vector indexed by a variable can live in memory on Metal (as the relief's layers did).
+            b = k == 0 ? slots.x : k == 1 ? slots.y : k == 2 ? slots.z : k == 3 ? slots.w : slot4;
+            wk = keepWeight(k == 0 ? weights.x : k == 1 ? weights.y : k == 2 ? weights.z : k == 3 ? weights.w : rest, BiomeEps);
         }
 
         // Biome b's cliff layer: its two projections blended by the facing, tinted (omult.x), moved by the march (relief.cliffX, cliffZ), its normal turned
@@ -1491,8 +1594,8 @@ static partial class TerrainShaders
             float reliefShade = 1.0;   // the relief's own shadow on the sun (GroundRelief), given to the lighting
             vec3 shadingNormal = n;
             bool baked = false;
-            // The cache's share where a pixel is finer than level 0's texel (a close-up): there the cache, magnified, came out blurred, so the layers are
-            // shaded, both mixed over the half level up to it (cacheLive: the layers' share of that mix; 0 none).
+            // The layers' share where the cache and the layers are mixed (cacheLive; 0 none): towards the cache's reach and its coarsest level's edge, and
+            // over the half level past one level coarser than the footprint.
             float cacheLive = 0.0;
             vec4 cacheAlbedo = vec4(0.0);
             vec3 cacheNormal = n;
@@ -1509,9 +1612,10 @@ static partial class TerrainShaders
                 float a = max(length(texDx.xz), 1e-6), b = max(length(texDy.xz), 1e-6), hi = max(a, b), lo = min(a, b);
                 // The footprint's short axis, the long one at most 8 times it: continuous. (hi / min(ceil(hi / lo), 8) jumped by up to 0.58 of a level wherever
                 // the stretch crossed a whole number, and the cache layer chosen with it changed sharpness in patches along those lines.)
-                float level = log2(max(max(lo, hi / 8.0), 1e-6) / uBakeOrigin[0].z) + uBakeBias;
-                // The layers' share also rises over the last fifth of the reach (the cache ends there), so the cache does not stop in a line round the eye.
-                cacheLive = max(clamp(-2.0 * level, 0.0, 1.0), smoothstep(0.8 * uBakeReach, uBakeReach, distance));
+                // A footprint finer than level 0 reads level 0, magnified: its texel is finer than a layer's (MaterialCache.CacheTexel), so it is as sharp.
+                float level = max(log2(max(max(lo, hi / 8.0), 1e-6) / uBakeOrigin[0].z) + uBakeBias, 0.0);
+                // The layers' share rises over the last fifth of the reach (the cache ends there), so the cache does not stop in a line round the eye.
+                cacheLive = smoothstep(0.8 * uBakeReach, uBakeReach, distance);
                 int k = clamp(int(floor(level)), 0, uBakeLevels - 1);
                 float t = clamp(level - float(k), 0.0, 1.0);
                 while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
@@ -1527,6 +1631,10 @@ static partial class TerrainShaders
                 else if (k < uBakeLevels) cacheLive = max(cacheLive, smoothstep(0.0, 0.5, tooCoarse));
                 if (k < uBakeLevels)
                 {
+                    #ifdef RELIEF_PASS
+                    // The relief pass marches only for the layers' shading below: the cache read, its march and its material are the resolve's.
+                    baked = !(cacheLive > 0.0);
+                    #else
                     vec2 at = texWorld.xz;
                     #ifndef NO_MARCH
                     if (uParallax > 0.0 && distance < uParallaxEnd)
@@ -1585,11 +1693,12 @@ static partial class TerrainShaders
                         at += o;
                         if (sun.y > 0.0 && uSelfShadow > 0.0)
                         {
-                            // The sun's march reads two levels coarser (pixelRelief's blur 4): its shadow is soft.
-                            int ks = min(k + 2, uBakeLevels - 1);
-                            if (!bakeHolds(ks, at)) ks = k;
-                            float hp = bakedHeight(ks, ks, 1.0, at), occlusion = 0.0;
+                            // The sun's march reads two levels coarser (pixelRelief's blur 4): its shadow is soft. Coarser still where that level does not
+                            // hold the march's reach towards the sun.
                             vec2 lightStep = sun.xz / max(sun.y, 0.15) * depth / float(sunSteps);
+                            int ks = min(k + 2, uBakeLevels - 1);
+                            while (ks < uBakeLevels - 1 && !bakeHoldsBy(ks, at, length(lightStep) * float(sunSteps))) ks++;
+                            float hp = bakedHeight(ks, ks, 1.0, at), occlusion = 0.0;
                             for (int s = 1; s <= sunSteps; s++)
                             {
                                 float ray = hp + float(s) / float(sunSteps);
@@ -1632,6 +1741,7 @@ static partial class TerrainShaders
                         cacheAlbedo = albedo; cacheNormal = shadingNormal; cacheAbsorbance = absorbance; cacheShade = reliefShade;
                         shadingNormal = n; reliefShade = 1.0; baked = false;
                     }
+                    #endif
                 }
                 else cacheLive = 0.0;
             }
@@ -1664,7 +1774,17 @@ static partial class TerrainShaders
                     int single = field.x >= 0 ? field.x : uFeatureBiome;
                     // The pixel's relief first, once for all its biomes (pixelRelief), then the shading. Without the march (NO_MARCH) none.
                     ReliefOut relief = ReliefOut(vec2(0.0), vec2(0.0), vec2(0.0), 1.0);
-                    #ifndef NO_MARCH
+                    #if defined(RELIEF_READ)
+                    // The relief pass marched this pixel (TerrainRenderer.Resolve, docs/render-terrain.md "Relief pass"): its moves (in world units), shade
+                    // and the puddles' trough (65504: none read).
+                    if (uParallax > 0.0 && distance < uParallaxEnd)
+                    {
+                        vec4 marchedA = texelFetch(uReliefA, resolvePixel, 0), marchedB = texelFetch(uReliefB, resolvePixel, 0);
+                        relief = ReliefOut(marchedA.xy / 5000.0, marchedA.zw / 5000.0, marchedB.xy / 5000.0, marchedB.z);
+                        wetKnown = marchedB.w < 65000.0;
+                        if (wetKnown) wetUnder = marchedB.w;
+                    }
+                    #elif !defined(NO_MARCH)
                     if (uParallax > 0.0 && distance < uParallaxEnd)
                     {
                         ReliefGather g = noGather();
@@ -1679,7 +1799,16 @@ static partial class TerrainShaders
                             }
                         }
                         relief = pixelRelief(g, n, distance);
+                        #ifdef RELIEF_PASS
+                        // The pass's targets (read under RELIEF_READ above): the moves in world units, so half floats keep them to a 2000th.
+                        fragColour = vec4(relief.ground * 5000.0, relief.cliffX * 5000.0);
+                        reliefSecond = vec4(relief.cliffZ * 5000.0, relief.shade, wetKnown ? wetUnder : 65504.0);
+                        return;
+                        #endif
                     }
+                    #endif
+                    #ifdef RELIEF_PASS
+                    discard;   // not marched: the resolve reads nothing here
                     #endif
                     #ifdef TERRAIN_TRAILS
                     trailPoint += relief.ground * 5000.0;
@@ -1757,6 +1886,9 @@ static partial class TerrainShaders
                 }
                 else albedo = vec4(uHasMaps ? colour.rgb / 1.2 : heightTint(vWorld.y), 0.2);
             }
+            #ifdef RELIEF_PASS
+            discard;   // the layers are not shaded here: nothing marched
+            #endif
             if (cacheLive > 0.0)
             {
                 albedo = mix(cacheAlbedo, albedo, cacheLive);
@@ -1972,7 +2104,7 @@ static partial class TerrainShaders
             uint bakeAlbedo;
             uint bakeNormal;
             int bakeLevels;
-            vec4 bakeOrigin[4];
+            vec4 bakeOrigin[8];
             float bakeReach;
             uint trails;
             float trailDepth;
@@ -1984,6 +2116,8 @@ static partial class TerrainShaders
             uint resolveG;
             vec4 trailFineWindow;
             uint resolveDepth;
+            uint reliefA;
+            uint reliefB;
             mat4 resolveInverse;
         } terrain;
 
@@ -2091,6 +2225,8 @@ static partial class TerrainShaders
         ["uTrailCells"] = "textures2D[terrain.trailCells]",
         ["uTrailFineWindow"] = "terrain.trailFineWindow",
         ["uResolveG"] = "textures2D[terrain.resolveG]",
+        ["uReliefA"] = "textures2D[terrain.reliefA]",
+        ["uReliefB"] = "textures2D[terrain.reliefB]",
         ["uResolveDepth"] = "textures2D[terrain.resolveDepth]",
         ["uResolveInverse"] = "terrain.resolveInverse",
     };
@@ -2129,7 +2265,7 @@ static partial class TerrainShaders
     static string Variant(string native, bool? normalMaps = null, int? reliefQuality = null)
     {
         string defines = (normalMaps is { } maps ? $"#define {TerrainNormalMaps} {(maps ? "true" : "false")}\n" : "")
-            + (reliefQuality is { } quality ? $"#define {ReliefQualityName} {quality}\n" : "");
+            + (reliefQuality is { } quality ? $"#define {ReliefQualityName} {quality}\n#define {ReliefCapName} {ReliefCap(quality)}\n" : "");
         if (defines.Length == 0) return native;
         int line = native.IndexOf('\n');
         if (line < 0)
@@ -2262,9 +2398,15 @@ static partial class TerrainShaders
         uniform sampler2D uResolveG;       // the prepass's: xyz the undisplaced point less the drawn one, w the fragment's depth (0: no patch)
         uniform sampler2D uResolveDepth;   // the scene's depth now
         uniform mat4 uResolveInverse;      // clip space to the point less the eye
+        uniform sampler2D uReliefA;        // the relief pass's (RELIEF_READ): the ground's and the X projection's moves, world units
+        uniform sampler2D uReliefB;        // the Z projection's move, the shade, the puddles' trough (65504: none)
         vec3 resolveUnproject(ivec2 q, float depth)
         {
-            vec4 h = uResolveInverse * vec4((vec2(q) + 0.5) / vec2(textureSize(uResolveDepth, 0)) * 2.0 - 1.0, depth, 1.0);
+            vec2 clip = (vec2(q) + 0.5) / vec2(textureSize(uResolveDepth, 0)) * 2.0 - 1.0;
+            #ifdef RESOLVE_ROWS_DOWN
+            clip.y = -clip.y;   // the target's row 0 is at the top (Metal: IGpuContext.RenderTargetsBottomUp false), clip y +1
+            #endif
+            vec4 h = uResolveInverse * vec4(clip, depth, 1.0);
             return h.xyz / h.w;
         }
         // The point the prepass drew at a pixel, less the eye; depth 0 when a patch is not what the pixel shows now.
@@ -2318,13 +2460,56 @@ static partial class TerrainShaders
     /// points, and every lookup names its level or its gradients.
     /// </summary>
     public static string ResolveFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool trails = false,
-        ResolvePart part = ResolvePart.Whole, bool simple = false, bool lean = false)
+        ResolvePart part = ResolvePart.Whole, bool simple = false, bool lean = false) =>
+        ResolveFragmentNative(march, normalMaps, reliefQuality, trails, part, simple, lean, reliefRead: false, rowsDown: false);
+
+    /// <summary>
+    /// <see cref="ResolveFragmentNative(bool, bool?, int?, bool, ResolvePart, bool, bool)"/>; <paramref name="reliefRead"/>: the ground march's result is
+    /// read from the relief pass's targets (<see cref="ReliefFragmentNative"/>) instead of marched here, so its code and registers are not this program's
+    /// (the material cache's own march stays). <paramref name="rowsDown"/>: the targets' row 0 is at the top (<c>RESOLVE_ROWS_DOWN</c>; Metal's,
+    /// <see cref="IGpuContext.RenderTargetsBottomUp"/> false), so a pixel's clip y is turned round.
+    /// </summary>
+    internal static string ResolveFragmentNative(bool march, bool? normalMaps, int? reliefQuality, bool trails, ResolvePart part, bool simple,
+        bool lean, bool reliefRead, bool rowsDown)
     {
-        string f = ResolvedPointPatches(Leaned(Simplified(Fragment, simple), lean));
-        f = ResolvedLookupPatches(f);
         bool far = part == ResolvePart.Far;
+        string f = ResolvedFragment(simple, lean);
         if (part != ResolvePart.Whole) f = ResolvePatch(f, "// RESOLVE_PART", ResolvePartTest(far));
-        return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Trailed(Baked(Marched(f, march && !far)), trails)), normalMaps, reliefQuality));
+        string native = Variant(Native(Trailed(Baked(Marched(f, march && !far)), trails)), normalMaps, reliefQuality);
+        if (reliefRead && march && !far) native = Defined(native, "RELIEF_READ");
+        if (rowsDown) native = Defined(native, "RESOLVE_ROWS_DOWN");
+
+        return Gi.GiResolveShaders.WithAlbedo(native);
+    }
+
+    /// <summary>
+    /// The relief pass (docs/render-terrain.md "Relief pass"): the resolve's pixels up to the ground march, which writes its result (the moves, the
+    /// shade, the puddles' trough) into two targets and stops; a pixel the march does not reach is discarded. The resolve built with <c>reliefRead</c>
+    /// takes the result from there. Without normal maps: the march does not read them. <paramref name="rowsDown"/> as the resolve's.
+    /// </summary>
+    internal static string ReliefFragmentNative(int reliefQuality, bool trails, bool simple, bool lean, bool rowsDown)
+    {
+        string f = ResolvedFragment(simple, lean);
+        f = ResolvePatch(f, "out vec4 fragColour;", "layout(location = 0) out vec4 fragColour;\n        layout(location = 1) out vec4 reliefSecond;");
+        string native = Defined(Variant(Native(Trailed(Baked(Marched(f, true)), trails)), normalMaps: false, reliefQuality), "RELIEF_PASS");
+
+        return rowsDown ? Defined(native, "RESOLVE_ROWS_DOWN") : native;
+    }
+
+    /// <summary>
+    /// <see cref="Fragment"/> with its point rebuilt per pixel (<see cref="ResolveFragmentNative(bool, bool?, int?, bool, ResolvePart, bool, bool)"/>).
+    /// </summary>
+    static string ResolvedFragment(bool simple, bool lean) => ResolvedLookupPatches(ResolvedPointPatches(Leaned(Simplified(Fragment, simple), lean)));
+
+    /// <summary>
+    /// <paramref name="native"/> with <paramref name="name"/> defined after its version line.
+    /// </summary>
+    static string Defined(string native, string name)
+    {
+        int line = native.IndexOf('\n');
+        if (line < 0) throw new InvalidOperationException("TerrainShaders.Defined: the native text has no version line.");
+
+        return native.Insert(line + 1, $"#define {name} 1\n");
     }
 
     /// <summary>
@@ -2608,7 +2793,7 @@ static partial class TerrainShaders
 /// The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools are 32-bit (0 /
 /// 1).
 /// </summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 1088)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 1152)]
 struct TerrainConstants
 {
     /// <summary>
@@ -2915,58 +3100,66 @@ struct TerrainConstants
     /// <summary>
     /// <c>uBakeReach</c>: the cache is read nearer than this (beyond it a biome's distance fade, which the bake has not, may begin).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(944)] public float BakeReach;
+    [System.Runtime.InteropServices.FieldOffset(1008)] public float BakeReach;
     /// <summary>
     /// Bindless index of <c>uTrails</c>: the ground trails' coarse height (<see cref="TerrainTrailRenderer"/>).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(948)] public uint Trails;
+    [System.Runtime.InteropServices.FieldOffset(1012)] public uint Trails;
     /// <summary>
     /// <c>uTrailDepth</c>: a full mark's depth in world units.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(952)] public float TrailDepth;
+    [System.Runtime.InteropServices.FieldOffset(1016)] public float TrailDepth;
     /// <summary>
     /// <c>uTrailMesh</c>: 1 where the mesh carries the trails (displaced with no parallax to march them).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(956)] public float TrailMesh;
+    [System.Runtime.InteropServices.FieldOffset(1020)] public float TrailMesh;
     /// <summary>
     /// <c>uTrailWindow</c>: the coarse window's centre x, z, half its side and 1 / its side.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(960)] public System.Numerics.Vector4 TrailWindow;
+    [System.Runtime.InteropServices.FieldOffset(1024)] public System.Numerics.Vector4 TrailWindow;
     /// <summary>
     /// Bindless index of <c>uTrailsFine</c>: the fine image (x the height, y 1 where a mark was recorded).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(976)] public uint TrailFine;
+    [System.Runtime.InteropServices.FieldOffset(1040)] public uint TrailFine;
     /// <summary>
     /// <c>uBakeBias</c>: the upscaler's texture bias (negative), so the cache level is chosen that much finer.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(980)] public float BakeBias;
+    [System.Runtime.InteropServices.FieldOffset(1044)] public float BakeBias;
     /// <summary>
     /// Bindless index of <c>uTrailCells</c>: the grid of cells a stamp wrote to.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(984)] public uint TrailCells;
+    [System.Runtime.InteropServices.FieldOffset(1048)] public uint TrailCells;
     /// <summary>
     /// Bindless index of <c>uResolveG</c>, the resolved colour's input (TerrainRenderer.Resolve): the prepass's target.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(988)] public uint ResolveG;
+    [System.Runtime.InteropServices.FieldOffset(1052)] public uint ResolveG;
     /// <summary>
     /// <c>uTrailFineWindow</c>: the fine window as <see cref="TrailWindow"/> (half 0: none).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(992)] public System.Numerics.Vector4 TrailFineWindow;
+    [System.Runtime.InteropServices.FieldOffset(1056)] public System.Numerics.Vector4 TrailFineWindow;
     /// <summary>
     /// Bindless index of <c>uResolveDepth</c>, the resolved colour's input: the scene's depth.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(1008)] public uint ResolveDepth;
+    [System.Runtime.InteropServices.FieldOffset(1072)] public uint ResolveDepth;
+    /// <summary>
+    /// Bindless index of <c>uReliefA</c>, the relief pass's first target (TerrainRenderer.Resolve): the ground's and the X projection's moves.
+    /// </summary>
+    [System.Runtime.InteropServices.FieldOffset(1076)] public uint ReliefA;
+    /// <summary>
+    /// Bindless index of <c>uReliefB</c>, the relief pass's second target: the Z projection's move, the shade and the puddles' trough.
+    /// </summary>
+    [System.Runtime.InteropServices.FieldOffset(1080)] public uint ReliefB;
     /// <summary>
     /// <c>uResolveInverse</c>, the resolved colour's input: clip space to the point less the eye.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(1024)] public System.Numerics.Matrix4x4 ResolveInverse;
+    [System.Runtime.InteropServices.FieldOffset(1088)] public System.Numerics.Matrix4x4 ResolveInverse;
 }
 
 /// <summary>
-/// The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel,
-/// the side (0: not valid).
+/// The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[8]</c>, up to <c>MaterialCache.CacheLevels</c> used): x, z
+/// of the first texel's corner, the texel, the side (0: not valid).
 /// </summary>
-[System.Runtime.CompilerServices.InlineArray(4)]
+[System.Runtime.CompilerServices.InlineArray(8)]
 struct BakeOrigins
 {
     /// <summary>

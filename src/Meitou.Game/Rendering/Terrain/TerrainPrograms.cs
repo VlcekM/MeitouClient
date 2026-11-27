@@ -26,10 +26,15 @@ sealed class TerrainPrograms : IDisposable
 
     /// <summary>
     /// The resolved colour's programs (TerrainRenderer.Resolve) by parallax march, relief quality, trails, the simple material, the lean
-    /// lighting and normal maps.
+    /// lighting, normal maps, the part and whether the relief pass marched for it.
     /// </summary>
-    readonly Dictionary<(bool March, int Quality, bool Trails, bool Simple, bool Lean, bool Normal, TerrainShaders.ResolvePart Part), TerrainProgram>
-        _resolvePrograms = [];
+    readonly Dictionary<(bool March, int Quality, bool Trails, bool Simple, bool Lean, bool Normal, TerrainShaders.ResolvePart Part, bool ReliefRead),
+        TerrainProgram> _resolvePrograms = [];
+
+    /// <summary>
+    /// The relief pass's programs (TerrainRenderer.Resolve) by relief quality, trails, the simple material and the lean lighting.
+    /// </summary>
+    readonly Dictionary<(int Quality, bool Trails, bool Simple, bool Lean), TerrainProgram> _reliefPrograms = [];
 
     /// <summary>
     /// Makes the depth and prepass programs, the colour set for the current relief, and the tessellated variants where the device has tessellation.
@@ -283,15 +288,17 @@ sealed class TerrainPrograms : IDisposable
     }
 
     /// <summary>
-    /// The resolve's program for the colour set in use (<see cref="ColourKey"/>) and <paramref name="normalMaps"/>, made the first time.
+    /// The resolve's program for the colour set in use (<see cref="ColourKey"/>) and <paramref name="normalMaps"/>, made the first time;
+    /// <paramref name="reliefRead"/>: the relief pass marched for it (<see cref="ReliefProgram"/>).
     /// </summary>
-    public TerrainProgram ResolveProgram(bool normalMaps, TerrainShaders.ResolvePart part = TerrainShaders.ResolvePart.Whole)
+    public TerrainProgram ResolveProgram(bool normalMaps, TerrainShaders.ResolvePart part = TerrainShaders.ResolvePart.Whole, bool reliefRead = false)
     {
-        var key = (ColourKey.March, ColourKey.Quality, ColourKey.Trails, ColourKey.Simple, ColourKey.Lean, normalMaps, part);
+        var key = (ColourKey.March, ColourKey.Quality, ColourKey.Trails, ColourKey.Simple, ColourKey.Lean, normalMaps, part, reliefRead);
         if (_resolvePrograms.TryGetValue(key, out var p)) return p;
 
         bool? normal = normalMaps ? null : false;
-        var fragment = TerrainShaders.ResolveFragmentNative(key.March, normal, key.Quality, key.Trails, part, key.Simple, key.Lean);
+        var fragment = TerrainShaders.ResolveFragmentNative(key.March, normal, key.Quality, key.Trails, part, key.Simple, key.Lean, reliefRead,
+            rowsDown: !_gpu.RenderTargetsBottomUp);
         string name = part switch
         {
             TerrainShaders.ResolvePart.Near => "terrain resolve near",
@@ -299,6 +306,18 @@ sealed class TerrainPrograms : IDisposable
             _ => "terrain resolve",
         };
         return _resolvePrograms[key] = new TerrainProgram(_gpu, _sets, TerrainShaders.ResolveVertexNative(), fragment, name);
+    }
+
+    /// <summary>
+    /// The relief pass's program for the colour set in use (<see cref="ColourKey"/>, its march on), made the first time.
+    /// </summary>
+    public TerrainProgram ReliefProgram()
+    {
+        var key = (ColourKey.Quality, ColourKey.Trails, ColourKey.Simple, ColourKey.Lean);
+        if (_reliefPrograms.TryGetValue(key, out var p)) return p;
+
+        var fragment = TerrainShaders.ReliefFragmentNative(key.Quality, key.Trails, key.Simple, key.Lean, rowsDown: !_gpu.RenderTargetsBottomUp);
+        return _reliefPrograms[key] = new TerrainProgram(_gpu, _sets, TerrainShaders.ResolveVertexNative(), fragment, "terrain relief pass");
     }
 
     /// <summary>
@@ -353,6 +372,7 @@ sealed class TerrainPrograms : IDisposable
         PatchPrepassResolveTess?.Dispose();
         PatchPrepassResolveCutTess?.Dispose();
         foreach (var p in _resolvePrograms.Values) p.Dispose();
+        foreach (var p in _reliefPrograms.Values) p.Dispose();
         foreach (var set in _colourSets) set?.Dispose();
         PatchPrepassTess?.Dispose();
         PatchPrepassCutTess?.Dispose();

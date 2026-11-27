@@ -356,6 +356,7 @@ All environment variables starting with `MEITOU_` are automatically recorded in 
 | `MEITOU_NGX_LOG` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `1`: prints the full NGX log (DLSS on Linux). |
 | `MEITOU_DLSS` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `0`: disables NGX/DLSS loading on Linux (falls back to TAA). |
 | `MEITOU_BENCH_ONLY` | `src/Meitou.Game/PlayBench` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |
+| `MEITOU_TERRAIN_RELIEF_PASS` | `src/Meitou.Game/Rendering/Terrain/TerrainLateColour.cs` | `0`: the ground parallax marches in the terrain's resolve instead of a pass of its own (A/B). |
 | `MEITOU_TERRAIN_NO_NORMAL` | `src/Meitou.Game/Host/MetalGameLoop.cs` | `1`/`true`: uses a terrain shader without normal maps (A/B test; fixed before first draw). |
 | `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/Host/MetalGameLoop.cs` | Metal VRAM budget in MB (default: 1/3 of Mac RAM in 256 MB steps, `5120..10240`, capped by Metal's recommended working set). Set by launcher unless Auto; overridden by `--metal-gpu-budget`. |
 | `MEITOU_METAL_NO_TAA` | `Host/MetalGameLoop.cs` | `1`/`true`: disables Metal upscaler/TAA (no jitter or temporal resolve; diagnostic). Keeps saved render resolution in fullscreen. |

@@ -838,22 +838,35 @@ static class AtmosphereShaders
             return hazeColour(offset) + atmoNightAir(offset * inversesqrt(max(dot(offset, offset), 1e-12)));
         }
 
+        // The weather's fog share of the game's haze at dist (0 without fog): an ease-in-out curve of dist × uAtmoHaze.w, by the fog's density.
+        float atmoKenshiFogCurve(float dist)
+        {
+            if (!(uAtmoFog.z > 0.0)) return 0.0;
+
+            float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
+            return (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
+        }
+
+        // The share of the in-scattered colour the game's haze blends in at dist (atmoKenshiHaze's alpha), the weather fog's part in curve.
+        float atmoKenshiAlpha(float dist, out float curve)
+        {
+            float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
+            level = min(level * uAtmoAltitude.y, 1.0);
+            curve = atmoKenshiFogCurve(dist);
+            return clamp(level + curve, 0.0, 1.0);
+        }
+
         // The game's haze: AtmosphereFogMaterial (post/fog.hlsl), the in-scattered colour blended in by a linear ramp between 0.06 D
         // and 0.6 D; the weather's fog (colour, density) by an ease-in-out curve over it. uAtmoAltitude.y (the viewer's haze strength,
         // 1 = the game's) scales the ramp.
         vec3 atmoKenshiHaze(vec3 colour, vec3 ray, float dist)
         {
-            float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
-            level = min(level * uAtmoAltitude.y, 1.0);
-            vec3 rgb = mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
-            float alpha = level;
-            if (uAtmoFog.z > 0.0)
-            {
-                float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
-                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
-                rgb = mix(rgb, uAtmoFogColour, curve);
-                alpha = clamp(alpha + curve, 0.0, 1.0);
-            }
+            float curve;
+            float alpha = atmoKenshiAlpha(dist, curve);
+            // Nearer than the ramp's start, without the weather's fog, nothing is blended in: the in-scattered colour (a march) is not worked out.
+            if (alpha <= 0.0) return colour;
+
+            vec3 rgb = mix(mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a), uAtmoFogColour, curve);
             return mix(colour, rgb, alpha);
         }
         // The physical alternative (a viewer model): optical depth of SkyX's air (one density scale height for both) along the ray,
@@ -905,21 +918,17 @@ static class AtmosphereShaders
         // atmoKenshiHaze and atmoPhysicalHaze above.
         void atmoKenshiHazeCoefficients(vec3 ray, float dist, out vec3 mul, out vec3 add)
         {
-            float level = clamp((dist - uAtmoHaze.y) / max(uAtmoHaze.z - uAtmoHaze.y, 1.0), 0.0, 1.0);
-            level = min(level * uAtmoAltitude.y, 1.0);
-            vec3 rgb = mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a);
-            float alpha = level;
-            if (uAtmoFog.z > 0.0)
-            {
-                float amount = clamp(dist * uAtmoHaze.w, 0.0, 1.0);
-                float curve = (amount < 0.5 ? 2.0 * amount * amount : 1.0 - 2.0 * (amount - 1.0) * (amount - 1.0)) * uAtmoFog.z;
-                rgb = mix(rgb, uAtmoFogColour, curve);
-                alpha = clamp(alpha + curve, 0.0, 1.0);
-            }
+            float curve;
+            float alpha = atmoKenshiAlpha(dist, curve);
             mul = vec3(1.0 - alpha);
+            add = vec3(0.0);
+            if (alpha <= 0.0) return;   // as atmoKenshiHaze
+
+            vec3 rgb = mix(mix(hazeTarget(ray), uAtmoHazeCloud.rgb, uAtmoHazeCloud.a), uAtmoFogColour, curve);
             add = rgb * alpha;
         }
-        void atmoPhysicalHazeCoefficients(vec3 eye, vec3 d, float dist, out vec3 mul, out vec3 add)
+        // The physical haze's share towards d over dist (atmoPhysicalHaze's haze, before the weather's fog).
+        vec3 atmoPhysicalShare(vec3 eye, vec3 d, float dist)
         {
             float h = uAtmoParams.z;
             float a0 = max(eye.y, 0.0) / h, len = dist / h;
@@ -928,12 +937,21 @@ static class AtmosphereShaders
             vec3 haze = 1.0 - exp(-(uAtmoTau.rgb + uAtmoTau.a) * column);
             haze = min(haze * uAtmoAltitude.y, vec3(1.0));
             float far = smoothstep(0.55, 1.0, dist / uAtmoParams.y);
-            haze = 1.0 - (1.0 - haze) * (1.0 - far);
+            return 1.0 - (1.0 - haze) * (1.0 - far);
+        }
+        // The weather fog's share over the physical haze at dist (0 without fog).
+        float atmoPhysicalFog(float dist)
+        {
+            return uAtmoFog.z > 0.0 ? clamp((dist - uAtmoFog.x) / max(uAtmoFog.y - uAtmoFog.x, 1.0), 0.0, 1.0) * uAtmoFog.z : 0.0;
+        }
+        void atmoPhysicalHazeCoefficients(vec3 eye, vec3 d, float dist, out vec3 mul, out vec3 add)
+        {
+            vec3 haze = atmoPhysicalShare(eye, d, dist);
             mul = vec3(1.0) - haze;
             add = atmoSky(d) * haze;
             if (uAtmoFog.z > 0.0)
             {
-                float fog = clamp((dist - uAtmoFog.x) / max(uAtmoFog.y - uAtmoFog.x, 1.0), 0.0, 1.0) * uAtmoFog.z;
+                float fog = atmoPhysicalFog(dist);
                 mul *= 1.0 - fog;
                 add = add * (1.0 - fog) + uAtmoFogColour * fog;
             }
@@ -964,6 +982,28 @@ static class AtmosphereShaders
                 return;
             }
             atmoPhysicalHazeCoefficients(eye, d, dist, mul, add);
+        }
+        // atmoApplyCoefficients' mul alone, the share of a point's own light that reaches the eye through the air (atmoApply(1) - atmoApply(0)): the
+        // in-scattered colours, the costly part, are not worked out.
+        vec3 atmoTransmittance(vec3 eye, vec3 position)
+        {
+            vec3 ray = position - eye;
+            float dist = length(ray);
+            if (dist < 1.0) return vec3(1.0);
+            vec3 d = ray / dist;
+            if (uAtmoParams.x < 0.5)
+            {
+                float f = clamp(dist / uAtmoSimple.w, 0.0, 1.0);
+                return vec3(1.0 - f * f * 0.9);
+            }
+            vec3 physical = vec3(1.0);
+            bool kenshi = uAtmoHaze.x > 0.5 && uAtmoAltitude.x < 1.0;
+            if (!kenshi || uAtmoAltitude.x > 0.0) physical = (vec3(1.0) - atmoPhysicalShare(eye, d, dist)) * (1.0 - atmoPhysicalFog(dist));
+            if (!kenshi) return physical;
+
+            float curve;
+            vec3 own = vec3(1.0 - atmoKenshiAlpha(dist, curve));
+            return uAtmoAltitude.x <= 0.0 ? own : mix(own, physical, uAtmoAltitude.x);
         }
         """);
 }

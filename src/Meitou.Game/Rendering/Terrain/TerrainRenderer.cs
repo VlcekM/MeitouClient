@@ -6,6 +6,7 @@ using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Gpu.Shaders;
 using Meitou.Game.Rendering.Impostors;
 using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
 
@@ -666,7 +667,18 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// resolve's inputs into its colour target (bindless <c>G</c>), and <see cref="Resolve"/> shades the patches over the picture from it and the
     /// scene's depth (bindless <c>Depth</c>), in place of <see cref="DrawDeferred"/>'s second pass over the patches' triangles.
     /// </summary>
-    internal (uint G, uint Depth)? ResolveInputs { get; set; }
+    internal TerrainResolveIndices? ResolveInputs { get; set; }
+
+    /// <summary>
+    /// Set with <see cref="ResolveInputs"/> when <see cref="ReliefPassWanted"/>: the relief pass's targets, which <see cref="Resolve"/> marches into
+    /// before shading (docs/render-terrain.md "Relief pass"); null: the resolve marches in its own program.
+    /// </summary>
+    internal PassTargets? ReliefTargets { get; set; }
+
+    /// <summary>
+    /// The resolve would march (the colour set in use has the ground parallax) and the relief pass is on: the frame then makes its targets.
+    /// </summary>
+    internal bool ReliefPassWanted => TerrainReliefPass.Enabled && _programs.ColourKey.March;
 
     /// <summary>
     /// The last deferred <see cref="Draw"/> waits for <see cref="Resolve"/>.
@@ -957,46 +969,96 @@ public sealed unsafe class TerrainRenderer : IDisposable
         // 0.08 ms more than the one program in close views).
         bool split = TerrainResolveSplit.Enabled && _programs.ColourKey.March
             && !(_lateNear is { } most && (most.Z - most.X) * (most.W - most.Y) > 0.6f * 4);
-        var state = DrawState.SceneDepth(targets.Formats, DrawState.Rgb) with { DepthTest = false, DepthWrite = false, Cull = CullMode.None };
-
-        var cmd = _gpu.BeginNative("terrain resolve");
-        cmd.Order();   // the scene's passes wrote the depth and the targets
-        cmd.BeginRendering(targets.Rendering);
-        state.Record(cmd, targets);
-        var view = View();
-        var binding = _nativeFrame.Prepare(in view);
-        var (set, offset) = PrepareConstantsBinding();
-        cmd.SetViewport(new PixelViewport(0, 0, targets.Width, targets.Height));
-        cmd.SetScissor(new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height));
         ReadOnlySpan<TerrainShaders.ResolvePart> parts = !split ? [TerrainShaders.ResolvePart.Whole]
             : _lateNear is null ? [TerrainShaders.ResolvePart.Far]
             : [TerrainShaders.ResolvePart.Far, TerrainShaders.ResolvePart.Near];
+        var whole = new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height);
+        PixelRect? marched = !_programs.ColourKey.March ? null : split ? NearScissor(targets) : whole;
+
+        var cmd = _gpu.BeginNative("terrain resolve");
+        cmd.Order();   // the scene's passes wrote the depth and the targets
+        var view = View();
+        var binding = _nativeFrame.Prepare(in view);
+        var constants = PrepareConstantsBinding();
+
+        // The relief pass marches the pixels the marching part shades, into its own targets, before that part reads them.
+        bool relief = ReliefTargets is { } reliefTargets && marched is { } reliefRect
+            && RecordReliefPass(cmd, reliefTargets, reliefRect, in binding, constants);
+
+        cmd.BeginRendering(targets.Rendering);
+        var state = DrawState.SceneDepth(targets.Formats, DrawState.Rgb) with { DepthTest = false, DepthWrite = false, Cull = CullMode.None };
+        state.Record(cmd, targets);
+        cmd.SetViewport(new PixelViewport(0, 0, targets.Width, targets.Height));
         foreach (var part in parts)
         {
-            if (part == TerrainShaders.ResolvePart.Near && _lateNear is { } near)
-            {
-                // NDC to pixels as the picture's passes take them (LampShadowPass.PlanAreas), four pixels wider.
-                int x0 = Math.Max((int)MathF.Floor((near.X + 1) * 0.5f * targets.Width) - 4, 0);
-                int y0 = Math.Max((int)MathF.Floor((near.Y + 1) * 0.5f * targets.Height) - 4, 0);
-                int x1 = Math.Min((int)MathF.Ceiling((near.Z + 1) * 0.5f * targets.Width) + 4, targets.Width);
-                int y1 = Math.Min((int)MathF.Ceiling((near.W + 1) * 0.5f * targets.Height) + 4, targets.Height);
-                if (x1 <= x0 || y1 <= y0) continue;
-                cmd.SetScissor(new PixelRect(x0, y0, (uint)(x1 - x0), (uint)(y1 - y0)));
-            }
-            var p = _programs.ResolveProgram(NormalMapsOn, part);
-            if (!_resolvePipelines.TryGetValue((p.P, targets.Formats), out var pipeline))
-            {
-                var desc = state.Pipeline(p.P, new VertexLayout(), PrimitiveType.Triangles, targets.Formats, "terrain resolve");
-                _resolvePipelines[(p.P, targets.Formats)] = pipeline = _gpu.Pipelines.Get(desc);
-            }
-            cmd.BindPipeline(pipeline);
-            NativeFrame.Record(cmd, p.P, in binding);
-            cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
-            cmd.Draw(3, 1);
+            var scissor = part == TerrainShaders.ResolvePart.Near ? marched : whole;
+            if (scissor is not { } rect) continue;
+
+            cmd.SetScissor(rect);
+            var p = _programs.ResolveProgram(NormalMapsOn, part, reliefRead: relief && part != TerrainShaders.ResolvePart.Far);
+            DrawOverPicture(cmd, p, state, targets.Formats, in binding, constants, "terrain resolve");
         }
         cmd.EndRendering();
         cmd.Order();
         _gpu.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The near side's rectangle of the split (<see cref="NearRect"/>) in <paramref name="targets"/>' pixels, four pixels wider, as the picture's passes
+    /// take NDC (LampShadowPass.PlanAreas); null when the march reaches no pixel. Its rows counted from the top on targets whose row 0 is the top
+    /// (Metal: <see cref="IGpuContext.RenderTargetsBottomUp"/> false), where the rectangle from the bottom left the near ground undrawn in a zoomed-out view.
+    /// </summary>
+    PixelRect? NearScissor(PassTargets targets)
+    {
+        if (_lateNear is not { } near) return null;
+
+        int x0 = Math.Max((int)MathF.Floor((near.X + 1) * 0.5f * targets.Width) - 4, 0);
+        int y0 = Math.Max((int)MathF.Floor((near.Y + 1) * 0.5f * targets.Height) - 4, 0);
+        int x1 = Math.Min((int)MathF.Ceiling((near.Z + 1) * 0.5f * targets.Width) + 4, targets.Width);
+        int y1 = Math.Min((int)MathF.Ceiling((near.W + 1) * 0.5f * targets.Height) + 4, targets.Height);
+        if (x1 <= x0 || y1 <= y0) return null;
+        if (!_gpu.RenderTargetsBottomUp) (y0, y1) = (targets.Height - y1, targets.Height - y0);
+
+        return new PixelRect(x0, y0, (uint)(x1 - x0), (uint)(y1 - y0));
+    }
+
+    /// <summary>
+    /// The relief pass (docs/render-terrain.md "Relief pass"): the ground march of the pixels in <paramref name="rect"/> into
+    /// <paramref name="reliefTargets"/>, in a rendering of its own on <paramref name="cmd"/>; the resolve's programs built to read it then leave
+    /// the march out. Returns true (it ran).
+    /// </summary>
+    bool RecordReliefPass(IGpuCommandList cmd, PassTargets reliefTargets, PixelRect rect, in FrameBinding binding,
+        (GpuSet Set, uint Offset) constants)
+    {
+        var state = DrawState.For(reliefTargets.Formats, false);
+        cmd.BeginLabel("terrain relief pass");   // its own encoder's name in a GPU trace
+        cmd.BeginRendering(reliefTargets.Rendering);
+        state.Record(cmd, reliefTargets);
+        cmd.SetScissor(rect);
+        DrawOverPicture(cmd, _programs.ReliefProgram(), state, reliefTargets.Formats, in binding, constants, "terrain relief pass");
+        cmd.EndRendering();
+        cmd.EndLabel();
+        cmd.Order();   // the resolve reads what the pass wrote
+
+        return true;
+    }
+
+    /// <summary>
+    /// One triangle over the picture with <paramref name="p"/> (its pipeline for <paramref name="formats"/> made the first time), bound to the frame
+    /// and the terrain's constants.
+    /// </summary>
+    void DrawOverPicture(IGpuCommandList cmd, TerrainProgram p, DrawState state, AttachmentFormats formats, in FrameBinding binding,
+        (GpuSet Set, uint Offset) constants, string name)
+    {
+        if (!_resolvePipelines.TryGetValue((p.P, formats), out var pipeline))
+        {
+            var desc = state.Pipeline(p.P, new VertexLayout(), PrimitiveType.Triangles, formats, name);
+            _resolvePipelines[(p.P, formats)] = pipeline = _gpu.Pipelines.Get(desc);
+        }
+        cmd.BindPipeline(pipeline);
+        NativeFrame.Record(cmd, p.P, in binding);
+        cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in constants.Set), new ReadOnlySpan<uint>(in constants.Offset));
+        cmd.Draw(3, 1);
     }
 
     /// <summary>
@@ -1618,6 +1680,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
             && Matrix4x4.Invert(RenderOrigin.ViewProjection(_frame.ViewProjection, _frame.Eye, _frame.Relative), out var fromClip))
         {
             (c.ResolveG, c.ResolveDepth, c.ResolveInverse) = (inputs.G, inputs.Depth, fromClip);
+            (c.ReliefA, c.ReliefB) = (inputs.ReliefA, inputs.ReliefB);
         }
         _constants = c;
     }

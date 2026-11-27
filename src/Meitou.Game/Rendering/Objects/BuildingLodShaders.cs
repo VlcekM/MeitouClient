@@ -148,7 +148,7 @@ static class BuildingLodShaders
         vec3 glassReflection(vec3 n, vec3 v)
         {
             vec3 r = kenshiLight(vec3(0.0), n, v, 0.96, vWorld);
-            if (uFogDistance > 0.0) r = atmoApply(r, uEye, vWorld) - atmoApply(vec3(0.0), uEye, vWorld);
+            if (uFogDistance > 0.0) r *= atmoTransmittance(uEye, vWorld);
             return min(r, vec3(16.0));
         }
         vec4 glassColour(vec3 lit, vec3 n, vec3 v, vec3 albedo, vec2 uv)

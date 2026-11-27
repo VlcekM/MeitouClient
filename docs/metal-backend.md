@@ -69,7 +69,8 @@ bindings start at 0.
 **Observed**, macOS Metal with `Haircut08-hobo`: the shaded, depth-tested editor loses hair layers while an unlit mask agrees with native Kenshi 1.0.68 D3D11.
 Writing the unchanged `gl_FragCoord.z` to `gl_FragDepth` restores 98.9% mask overlap at matched cameras, with depth testing and writes enabled;
 the source alpha in mip levels 0–3, channel selection, threshold and bone transforms agree. `MetalShaders.DiscardNeedsLateDepth` requests this output
-from the character colour shader; the interface default is false. Disabling fast math alone does not fix it.
+from the character colour shader; the interface default is false. Disabling fast math alone does not fix it. The main view draws a depth prepass
+first instead and its colour pass writes no depth ([character-renderer](character-renderer.md#depth-prepass-meitou-metal)).
 
 **The one binding table per stage.** Metal maps a resource to its MSL index by the binding
 decoration alone, set ignored, so two sets with the same binding number would land on one

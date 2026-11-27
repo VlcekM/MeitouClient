@@ -59,7 +59,7 @@ static class GtaoShaders
         float airVisibility(vec3 offset)
         {
             vec3 position = uGtaoEye + offset;
-            vec3 t = atmoApply(vec3(1.0), uGtaoEye, position) - atmoApply(vec3(0.0), uGtaoEye, position);
+            vec3 t = atmoTransmittance(uGtaoEye, position);
             float visible = clamp(dot(t, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
             float dist = length(offset);
             return dist < 1.0 ? visible : visible * fogVolumesTransmittance(uGtaoEye, offset / dist, dist);

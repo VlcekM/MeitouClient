@@ -56,6 +56,14 @@ interface IWorldPostChain
     GpuTexture SceneDepth { get; }
 
     /// <summary>
+    /// This frame's targets for the terrain's resolved colour (docs/render-terrain.md "Resolved colour", "Relief pass"): the prepass's, the colour
+    /// pass's, the relief pass's when <paramref name="relief"/> (else null) and the bindless indices the colour pass reads. False: the terrain draws its
+    /// colour over its patches.
+    /// </summary>
+    bool TerrainResolveTargets(bool relief, out PassTargets prepass, out PassTargets colour, out PassTargets? reliefTargets,
+        out TerrainResolveIndices inputs);
+
+    /// <summary>
     /// The scene render size after the upscaler's render scale, and the jitter the scene projection uses this frame.
     /// </summary>
     int RenderWidth { get; }

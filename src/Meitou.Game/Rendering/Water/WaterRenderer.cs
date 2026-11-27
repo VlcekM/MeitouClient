@@ -693,18 +693,22 @@ public sealed unsafe class WaterRenderer : IDisposable
         uniform float uExtent;
         uniform vec3 uEye;
         uniform float uGridStep;            // the grid's spacing over its radius
+        uniform float uGridHeight;          // the height the rings are spaced for (GridHeight)
         out vec3 vWorld;
         out vec2 vBase;                     // the undisplaced position: the fragment's waves and shore are evaluated there
         void main()
         {
-            float r = length(aXZ);
-            vec2 p = uCentre + (r > 1.0e5 ? aXZ / r * uExtent : aXZ);
+            // A ring of radius r lies at r - h² / 4r from the eye's foot (none closer than r = h / 2 do: they meet at the foot), so the rings are
+            // apart by the grid's step times the distance to the eye h above them, sqrt(radius² + h²), as they would be at the eye's own level.
+            float r = length(aXZ), h = uGridHeight;
+            float radius = r > 1.0e5 ? uExtent : max(r - h * h / (4.0 * max(r, 1.0e-6)), 0.0);
+            vec2 p = uCentre + (r > 0.0 ? aXZ / r * radius : vec2(0.0));
+            float spacing = max(sqrt(radius * radius + h * h), 1.0) * uGridStep;
             vec3 w = vec3(p.x, uWaterHeight, p.y);
             float dist = distance(w, uEye);
             bool inside = max(abs(p.x), abs(p.y)) < uHalfWorld;
             if (dist < uWaveFade.w && inside && r < 1.0e5)
             {
-                float spacing = max(r, 1.0) * uGridStep;
                 float fade = 1.0 - smoothstep(uWaveFade.x, uWaveFade.y, dist), shoreFade = 1.0 - smoothstep(uWaveFade.z, uWaveFade.w, dist);
                 Shore s = shoreAt(p);
                 // The geometry gets a smooth hump only (the steep front a few units wide would fall between the vertices and facet; the
@@ -718,7 +722,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
             #ifdef WATER_CONTACT
             // The interactive waves' height, only where the vertices are close enough to carry it (further out the fragment's normals do).
-            float rw = r < 1.0e5 ? rippleWeight(p) * (1.0 - smoothstep(1.0, 3.0, max(r, 1.0) * uGridStep / uRippleShape.z)) : 0.0;
+            float rw = r < 1.0e5 ? rippleWeight(p) * (1.0 - smoothstep(1.0, 3.0, spacing / uRippleShape.z)) : 0.0;
             if (rw > 0.0) w.y += rippleAt(p, 0.0).r * rw;
             #endif
             vBase = p;
@@ -786,8 +790,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         uniform float uRefract;         // 1: refract it and composite here; 0: blend over the scene as the game's water
         uniform vec2 uScreen;           // 1 / the target's size: gl_FragCoord to the copy's coordinates
-        uniform vec2 uCentre;           // the grid's centre and its spacing over its radius (the vertex stage's), for the hump's vertex spacing
+        uniform vec2 uCentre;           // the grid's centre, its spacing over its radius and the height its rings are spaced for (the vertex stage's), for the hump's vertex spacing
         uniform float uGridStep;
+        uniform float uGridHeight;
         uniform vec3 uClarity;          // x: the absorption per unit of depth times this (1 / the Tab panel's clarity); y: the far water's clarity (0 the true slant path, 1 none); z: the see-through distance (the game: 4000)
 
         vec3 sampleNormal(vec2 coord, vec2 direction, float speed, float time)
@@ -1068,7 +1073,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             if (thick >= 0.0 && !swash && fade > 0.0)
             {
                 float lift = uShore.y * s.open * max(s.size, s.sizeWet) * (1.0 - smoothstep(10.0, 60.0, s.dist)) * smoothstep(-140.0, -60.0, s.dist);
-                float spacing = max(length(vBase - uCentre), 1.0) * uGridStep;
+                float spacing = max(length(vec3(vBase - uCentre, uGridHeight)), 1.0) * uGridStep;
                 float hump = breakerScale(s) * pow(0.5 - 0.5 * cos(6.2831853 * s.g), 1.5) * smoothstep(0.45, 0.2, spacing / s.len);
                 thick = max(thick - max(lift - max(hump, level), 0.0) * fade / max(toEyeDir.y, 0.05), 0.0);
             }
@@ -1371,6 +1376,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         ["uSeaColour"] = "water.seaColour.xyz",
         ["uWaterFar"] = "water.seaColour.w",
         ["uSunDir"] = "water.sunDir.xyz",
+        ["uGridHeight"] = "water.sunDir.w",
         ["uSunColour"] = "water.sunColour.xyz",
         ["uGlintDir"] = "water.glintDir.xyz",
         ["uGlintColour"] = "water.glintColour.xyz",
@@ -1477,16 +1483,43 @@ public sealed unsafe class WaterRenderer : IDisposable
     readonly double[] _gridRadii = [];
 
     /// <summary>
-    /// Meitou: only the grid's rings the picture can show are drawn (<see cref="GridRange"/>). The whole grid is 1.46 million vertices at 1024
-    /// segments, each reading the ocean's maps, whatever the view: 0.33 ms at a town with no water in sight (docs/render-water.md "Grid").
+    /// Meitou: only the grid's rings and slices the picture can show are drawn (<see cref="DrawGrid"/>). The whole grid is 1.46 million vertices at
+    /// 1024 segments, each reading the ocean's maps, whatever the view: 0.33 ms at a town with no water in sight (docs/render-water.md "Grid").
     /// </summary>
     public static bool RingsInView { get; set; } = true;
 
     /// <summary>
-    /// How far the surface is taken to stand from its undisplaced place at most, up, down or sideways (units): the ocean's waves at the strongest
-    /// wind (<see cref="OceanSpectrum.MaxWind"/>: a significant height near 90 units), the breakers and the ripples, twice over.
+    /// The grid's slices round the eye (<see cref="PolarGrid"/>), each its own run of indices; one when the segments do not divide by it.
     /// </summary>
-    const float GridReach = 200;
+    const int GridSlices = 16;
+
+    /// <summary>
+    /// The most <see cref="GridReach"/> can be (units), the fixed reach it replaced. The strongest wind (<see cref="OceanSpectrum.MaxWind"/>: a
+    /// significant height of 21 units) with the strongest breakers (20) and the ripples comes to about 90.
+    /// </summary>
+    const float MaxGridReach = 200;
+
+    /// <summary>
+    /// How far the surface can stand from its undisplaced place now, up, down or sideways (units), twice over: the ocean's significant height
+    /// (<see cref="OceanWaves.SignificantHeight"/>, both spectra while one blends in) with its sideways part (<see cref="OceanWaves.Choppiness"/>),
+    /// the breakers' largest hump (the shader's <c>breakerScale</c>: the breaker height × 1.92, the largest wave size, × 1.9, the build-up) or
+    /// run-up (× 1.92), and the ripples' clamp (4); at most <see cref="MaxGridReach"/>.
+    /// </summary>
+    float GridReach()
+    {
+        float ocean = _ocean is { } waves ? waves.SignificantHeight * MathF.Max(1, waves.Choppiness) : 0;
+        var shore = _waves.Shore;
+        float breakers = MathF.Max(1.92f * 1.9f * shore.W, 1.92f * shore.Y);
+
+        return MathF.Min(2 * (ocean + breakers + 4), MaxGridReach);
+    }
+
+    /// <summary>
+    /// The height the grid's rings are spaced for (the vertex stage's <c>uGridHeight</c>): the eye's over the highest the surface reaches (0 when
+    /// within it), so from there on, nowhere nearer the eye than the surface can stand, the rings are as far apart as the grid's step times their
+    /// distance to the eye.
+    /// </summary>
+    float GridHeight(Vector3 eye) => MathF.Max(eye.Y - WorldWater.Height - GridReach(), 0);
 
     /// <summary>
     /// The water's maps: colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order
@@ -1856,14 +1889,27 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
         var indices = new List<uint>(segments * 3 + (radii.Length - 1) * segments * 6);
         uint V(int ring, int s) => (uint)(1 + ring * segments + (s % segments));
-        // Far rings first, the eye's fan last: the water writes no depth, so where a displaced crest stands in front of water further out the nearer
-        // triangle must come later to cover it (drawn near first, the water behind a wave showed through it).
-        for (int ring = radii.Length - 2; ring >= 0; ring--)
-            for (int s = 0; s < segments; s++)
-                indices.AddRange([V(ring, s), V(ring, s + 1), V(ring + 1, s + 1), V(ring, s), V(ring + 1, s + 1), V(ring + 1, s)]);
-        for (int s = 0; s < segments; s++) indices.AddRange([0u, V(0, s + 1), V(0, s)]);
+        int slices = Slices(segments), wide = segments / slices;
+
+        // Slice by slice, each the same number of indices. In a slice far rings first, the eye's fan last: the water writes no depth, so where a
+        // displaced crest stands in front of water further out the nearer triangle must come later to cover it (drawn near first, the water behind
+        // a wave showed through it). The grid is round the eye, so a ray of the picture stays in one slice and the slices' order does not matter.
+        for (int slice = 0; slice < slices; slice++)
+        {
+            int s0 = slice * wide, s1 = s0 + wide;
+            for (int ring = radii.Length - 2; ring >= 0; ring--)
+                for (int s = s0; s < s1; s++)
+                    indices.AddRange([V(ring, s), V(ring, s + 1), V(ring + 1, s + 1), V(ring, s), V(ring + 1, s + 1), V(ring + 1, s)]);
+            for (int s = s0; s < s1; s++) indices.AddRange([0u, V(0, s + 1), V(0, s)]);
+        }
+
         return (positions, indices.ToArray());
     }
+
+    /// <summary>
+    /// The slices <see cref="PolarGrid"/> cuts <paramref name="segments"/> into: <see cref="GridSlices"/>, or one when they do not divide by it.
+    /// </summary>
+    static int Slices(int segments) => segments % GridSlices == 0 ? GridSlices : 1;
 
     /// <summary>
     /// The polar grid's ring radii, nearest first: from 1 unit, each 1 + 2 pi / segments times the last, out to <see cref="GridDetailRadius"/>,
@@ -1880,44 +1926,127 @@ public sealed unsafe class WaterRenderer : IDisposable
     }
 
     /// <summary>
-    /// The grid's index range for a view: the rings between the nearest and the farthest ground distance at which the picture's rays cross the
-    /// slab the surface stays in (the water level, <see cref="GridReach"/> either side), the indices being the rings from the farthest in
-    /// (<see cref="PolarGrid"/>), so one run of them. A ray going down by angle a meets depth h under the eye at h / tan a from the point under
-    /// the eye: the steepest ray of the picture gives the nearest distance, the flattest the farthest (none when it does not go down). Sideways
-    /// nothing is left out. The whole grid when the eye is within the slab or under it, or the matrix cannot be inverted.
+    /// Where a view's picture can show the grid (<see cref="GridInView"/>): the ground distances between which its rays cross the slab the surface
+    /// stays in, <paramref name="Reach"/> its half-height, and the rays' directions round the eye (radians from +x towards +z, as the grid's
+    /// angles run): within <paramref name="Half"/> of <paramref name="Centre"/>, π when all round.
     /// </summary>
-    (uint First, uint Count) GridRange(Matrix4x4 relativeViewProjection, Vector3 eye, float extent)
-    {
-        var whole = (0u, _gridIndexCount);
-        float depth = eye.Y - WorldWater.Height;
-        if (!RingsInView || _gridRadii.Length < 2 || depth <= GridReach || !Matrix4x4.Invert(relativeViewProjection, out var inverse)) return whole;
+    readonly record struct GridWindow(double Near, double Far, double Reach, double Centre, double Half);
 
-        // The picture's corner rays, a twentieth wider than it (the jitter, and a margin): each from two points of its line, so what the matrix
-        // has left of the eye's place cancels.
+    /// <summary>
+    /// Draws the grid's runs of indices the view can show (all of it with <see cref="RingsInView"/> off): in each slice the rings between the
+    /// window's distances (<see cref="GridInView"/>); a slice beside the window only out to where the surface's sideways reach can bring it in.
+    /// </summary>
+    void DrawGrid(IGpuCommandList cmd, Matrix4x4 relativeViewProjection, Vector3 eye, float extent)
+    {
+        var window = RingsInView && _gridRadii.Length >= 2 ? GridInView(relativeViewProjection, eye) : null;
+        if (window is not { } w)
+        {
+            cmd.DrawIndexed(_gridIndexCount, firstIndex: 0);
+            return;
+        }
+
+        // The distances in the grid's radii (GridHeight): r - h² / 4r = d at r = (d + sqrt(d² + h²)) / 2; the rings within h / 2 meet at the foot.
+        double h = GridHeight(eye);
+        double GridRadius(double d) => double.IsPositiveInfinity(d) ? d : (d + Math.Sqrt(d * d + h * h)) / 2;
+        double near = Math.Max(GridRadius(w.Near), h / 2), outer = GridRadius(extent);
+
+        int slices = Slices(_gridSegments);
+        uint block = _gridIndexCount / (uint)slices;
+        for (int slice = 0; slice < slices; slice++)
+        {
+            var (first, count) = SliceRun(near, GridRadius(SliceFar(w, slice, slices)), outer, _gridSegments / slices);
+            if (count > 0) cmd.DrawIndexed(count, firstIndex: (uint)slice * block + first);
+        }
+    }
+
+    /// <summary>
+    /// The view's window on the grid (<see cref="GridWindow"/>); null for the whole grid: the eye within the slab or under it, or the matrix cannot
+    /// be inverted. A ray going down by angle a meets depth h under the eye at h / tan a from the point under the eye: the steepest ray of the
+    /// picture gives the nearest distance, the flattest the farthest (none when it does not go down; no ray going down: Near above Far).
+    /// </summary>
+    GridWindow? GridInView(Matrix4x4 relativeViewProjection, Vector3 eye)
+    {
+        float depth = eye.Y - WorldWater.Height, reach = GridReach();
         Span<Vector3> corners = stackalloc Vector3[4];
+        if (depth <= reach || !CornerRays(relativeViewProjection, corners)) return null;
+
+        float steepest = MostAlong(corners, -Vector3.UnitY), flattest = -MostAlong(corners, Vector3.UnitY);
+        if (!float.IsFinite(steepest) || !float.IsFinite(flattest)) return null;
+        if (steepest <= 0) return new GridWindow(1, 0, reach, 0, Math.PI);   // no ray goes down: the slab is under the eye
+
+        double near = steepest >= 1 ? 0 : (depth - reach) * Math.Sqrt(1 - (double)steepest * steepest) / steepest - reach;
+        double far = flattest <= 0 ? double.PositiveInfinity : (depth + reach) * Math.Sqrt(1 - (double)flattest * flattest) / flattest + reach;
+        var (centre, half) = steepest >= 1 || flattest <= -1 ? (0.0, Math.PI) : Around(corners);
+
+        return new GridWindow(near, far, reach, centre, half);
+    }
+
+    /// <summary>
+    /// The picture's corner rays, a twentieth wider than it (the jitter, and a margin), unit directions from the eye: each from two points of its
+    /// line, so what the matrix has left of the eye's place cancels. False when the matrix cannot be inverted or a ray is not finite.
+    /// </summary>
+    static bool CornerRays(Matrix4x4 relativeViewProjection, Span<Vector3> corners)
+    {
+        if (!Matrix4x4.Invert(relativeViewProjection, out var inverse)) return false;
+
         ReadOnlySpan<float> xs = [-1.05f, 1.05f, 1.05f, -1.05f], ys = [-1.05f, -1.05f, 1.05f, 1.05f];
         for (int i = 0; i < 4; i++)
         {
             var a = Vector4.Transform(new Vector4(xs[i], ys[i], 0.25f, 1), inverse);
             var b = Vector4.Transform(new Vector4(xs[i], ys[i], 0.75f, 1), inverse);
-            if (!(MathF.Abs(a.W) > 1e-20f) || !(MathF.Abs(b.W) > 1e-20f)) return whole;
+            if (!(MathF.Abs(a.W) > 1e-20f) || !(MathF.Abs(b.W) > 1e-20f)) return false;
             Vector3 pa = new Vector3(a.X, a.Y, a.Z) / a.W, pb = new Vector3(b.X, b.Y, b.Z) / b.W, along = pb - pa;
             float length = along.Length();
-            if (!(length > 1e-9f) || !float.IsFinite(length)) return whole;
+            if (!(length > 1e-9f) || !float.IsFinite(length)) return false;
             corners[i] = Vector3.Dot(along, pa + pb) < 0 ? -along / length : along / length;
         }
 
-        float steepest = MostAlong(corners, -Vector3.UnitY), flattest = -MostAlong(corners, Vector3.UnitY);
-        if (!float.IsFinite(steepest) || !float.IsFinite(flattest)) return whole;
-        if (steepest <= 0)
-        {
-            return (0, 0);   // no ray goes down: the slab is under the eye
-        }
-        double near = steepest >= 1 ? 0 : (depth - GridReach) * Math.Sqrt(1 - (double)steepest * steepest) / steepest - GridReach;
-        double far = flattest <= 0 ? double.PositiveInfinity : (depth + GridReach) * Math.Sqrt(1 - (double)flattest * flattest) / flattest + GridReach;
+        return true;
+    }
 
-        // A ring pair holds a point at ground distance d only if its outer ring is at least that far and its inner one no farther, to within a
-        // segment's sag (a 50th is far more).
+    /// <summary>
+    /// The directions round the eye of the cone between four rays that holds neither straight down nor up: its centre and half-width (π when a ray
+    /// is near vertical, or the spread reaches half a turn). Along an edge between two rays the direction round the eye runs one way, so the rays'
+    /// own are the extremes; measured from the cone's axis, which lies inside.
+    /// </summary>
+    static (double Centre, double Half) Around(ReadOnlySpan<Vector3> rays)
+    {
+        var axis = rays[0] + rays[1] + rays[2] + rays[3];
+        double centre = Math.Atan2(axis.Z, axis.X), lo = 0, hi = 0;
+        foreach (var ray in rays)
+        {
+            if (!(ray.X * ray.X + ray.Z * ray.Z > 1e-8f)) return (0, Math.PI);
+            double d = Math.IEEERemainder(Math.Atan2(ray.Z, ray.X) - centre, 2 * Math.PI);
+            (lo, hi) = (Math.Min(lo, d), Math.Max(hi, d));
+        }
+
+        return hi - lo >= Math.PI ? (0, Math.PI) : (centre + (lo + hi) / 2, (hi - lo) / 2);
+    }
+
+    /// <summary>
+    /// How far out <paramref name="slice"/> of <paramref name="slices"/> is drawn: to the window's far distance where its directions meet the
+    /// window's; beside it, by an angle g, a point at distance r is r sin g from the window's edge, so only out to the reach / sin g (the reach
+    /// beyond a quarter turn) can a wave bring it in.
+    /// </summary>
+    static double SliceFar(GridWindow w, int slice, int slices)
+    {
+        if (w.Half >= Math.PI) return w.Far;
+
+        double half = Math.PI / slices, centre = (2 * slice + 1) * half;
+        double gap = Math.Abs(Math.IEEERemainder(centre - w.Centre, 2 * Math.PI)) - half - w.Half;
+        if (gap <= 0) return w.Far;
+
+        return Math.Min(w.Far, gap >= Math.PI / 2 ? w.Reach : w.Reach / Math.Sin(gap));
+    }
+
+    /// <summary>
+    /// A slice's run of indices (from its first, <see cref="PolarGrid"/>: its rings from the farthest in, then the eye's fan) for the ring pairs
+    /// between grid radii <paramref name="near"/> and <paramref name="far"/>, the outer ring at <paramref name="extent"/>; the fan with
+    /// the nearest pair, or alone when the eye's ring is within reach. A ring pair holds a point at ground distance d only if its outer ring is at
+    /// least that far and its inner one no farther, to within a segment's sag (a 50th is far more).
+    /// </summary>
+    (uint First, uint Count) SliceRun(double near, double far, double extent, int wide)
+    {
         near *= 0.98;
         far *= 1.02;
         int rings = _gridRadii.Length, pairs = rings - 1, lo = pairs, hi = -1;
@@ -1928,11 +2057,13 @@ public sealed unsafe class WaterRenderer : IDisposable
             lo = Math.Min(lo, k);
             hi = Math.Max(hi, k);
         }
-        bool fan = _gridRadii[0] >= near;
-        uint perPair = 6 * (uint)_gridSegments, first, count;
+
+        bool fan = _gridRadii[0] >= near && near <= far;
+        uint perPair = 6 * (uint)wide, first, count;
         if (hi < lo) (first, count) = (perPair * (uint)pairs, 0);
         else (first, count) = (perPair * (uint)(pairs - 1 - hi), perPair * (uint)(hi - lo + 1));
-        if (fan && (hi < lo || lo == 0)) count += 3 * (uint)_gridSegments;
+        if (fan && (hi < lo || lo == 0)) count += 3 * (uint)wide;
+
         return (first, count);
     }
 
@@ -2470,8 +2601,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         if (meitouWater)
         {
             cmd.BindIndexBuffer(new GpuBufferBinding(_gridIndices!.Handle, 0, _gridIndices.Size), IndexKind.U32);
-            var (first, count) = GridRange(view.ViewProjection, eye, extent);
-            if (count > 0) cmd.DrawIndexed(count, firstIndex: first);
+            DrawGrid(cmd, view.ViewProjection, eye, extent);
         }
         else cmd.Draw(4);
         Gpu.EndGuest(cmd);
@@ -2540,7 +2670,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             SeaA = _seaA,
             SeaB = _seaB,
             SeaColour = new Vector4(_seaColour, extent / 1.5f),
-            SunDir = new Vector4(light.SunDirection, 0f),
+            SunDir = new Vector4(light.SunDirection, meitouWater ? GridHeight(eye) : 0f),
             SunColour = new Vector4(light.SunColour, 0f),
             GlintDir = new Vector4(glintDirection, 0f),
             GlintColour = new Vector4(glintColour, 0f),
