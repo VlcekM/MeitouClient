@@ -8,10 +8,10 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - Much lower VRAM use: texture quality split by kind, compressed formats and buffers, aliased render targets, leaner ray tracing and streaming
 - VRAM guard keeps characters' textures, foliage within 3000 and draw distances on small cards instead of dropping them (#1424, #1429, #1439, #1440)
 - macOS: Metal global illumination, ray-traced shadows, characters and grass, GTAO, water foam and reflections, tuned presets, an app bundle
-- SMAA uses the reference lookup tables; anti-aliasing and render scale rows follow the chosen upscaler
+- SMAA uses the reference lookup tables; anti-aliasing and render scale rows follow the chosen upscaler; grass takes upscaler LOD bias (#1526)
 - FSR 3 frame generation works on RADV, and Linux FSR no longer smears still scenes on AMD (#1423, #1425)
 - Optional 2D skybox cloud layers
-- KenshiLua compatibility runtime for Lua mods, with HUD overlays
+- KenshiLua compatibility runtime for Lua mods, with HUD overlays, camera/combat events, coroutines and live script hot-reload (#1537)
 - Extra Extensions: dialogue variable conditions, set/add effects and world state lists, DCs 1000-1006 (Quests & Contracts, Better Banking) (#1442)
 - Combat stats, dodge and XP read as the original's; a blow that beats a whole squad triggers arrests as the original
 - Arrests and bounty spotting use the full enemy test, and downed bounty holders are spotted
@@ -22,8 +22,8 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - Shops lock up before bed and keep open doors passable; refused trades say so (#1506, #1512, #1521)
 - Navmesh fixes: ruins, watershed slopes, uncovered tiles and Admag's longhouse stair are meshed; zone 14.35 no longer hangs loads (#1430, #1474, #1495)
 - Move orders to ground off the navmesh walk there instead of being dropped (#1421)
-- Buildings: basements and tall buildings keep their floors, shared beds take several sleepers, turrets stand on wall walkways (#1444, #1498, #1500)
-- Building: wall lines and snaps follow the original, wall ramps get built, outposts extend past their radius (#1432, #1447, #1522)
+- Buildings: basements, tall buildings and multi-shape interiors clip floors cleanly; shared beds take several sleepers; turrets stand on wall walkways (#1444, #1498, #1500, #1536)
+- Building: wall lines and snaps follow the original, wall ramps get built, sloping-floor placement works, outposts extend past their radius (#1432, #1447, #1522, #1523)
 - Builders, operators and machine outputs take materials and goods sensibly (#1481, #1484, #1487)
 - Blows no longer damage gate buildings or open gate leaves (#1496)
 - Medic button treats patient after patient (#1469)
@@ -33,7 +33,9 @@ notes and refuses to release a version without one: add a `## vX.Y.Z` section wi
 - Inventory pauses its character while open; tooltips name the mods a record comes from
 - UI: squad frames reorder by drag again; numpad keybinds work; CJK mod text shows (#1435, #1443, #1455, #1515, #1516, #1520)
 - Container and cage panels show lock state and complexity (#1502)
-- Body skeletons follow their animation links, so mod finger skeletons and carried bodies animate; legacy body files load (#1418, #1436)
+- Body skeletons follow their animation links, so mod finger skeletons and carried bodies animate; off-screen animation keeps 5x pace; legacy body files load (#1418, #1436, #1535)
+- Worn items keep mesh LODs twice as far as the body; optional load-time armour clipping fixes on the Fixes page (#1524, #1531)
+- Audio output reopens when the system default device changes (#1525)
 - Beds in tilted buildings tilt their sleepers; animals sleep on the ground; worn fist weapons can hide hands (#1420, #1438, #1450)
 - Imported saves keep faction rank and relations; the launcher reads edited saves' mod lists (#1433, #1490)
 - Mod API: per-mod character tags, mod item icons, shown text per character, screen click positions; removed API now fails the build (#1478, #1508)
