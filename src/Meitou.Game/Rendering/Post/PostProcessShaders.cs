@@ -137,12 +137,12 @@ static class PostProcessShaders
             return 1.0 - clamp(length(offset) * below / max(-offset.y, 1e-6) / 2.0, 0.0, 1.0);
         }
 
-        // The share of a surface's own light that reaches the eye through the air. atmoApply (the haze) is linear in the colour it is given, so
-        // apply(1) - apply(0) is its transmittance, as the grass uses it; the fog volumes (drawn by the fog pass, not atmoApply) add theirs.
+        // The share of a surface's own light that reaches the eye through the air: the haze's transmittance (atmoTransmittance, atmoApply(1) -
+        // atmoApply(0) without the in-scattered colours); the fog volumes (drawn by the fog pass, not atmoApply) add theirs.
         float airVisibility(vec3 offset)
         {
             vec3 position = uSsaoEye + offset;
-            vec3 t = atmoApply(vec3(1.0), uSsaoEye, position) - atmoApply(vec3(0.0), uSsaoEye, position);
+            vec3 t = atmoTransmittance(uSsaoEye, position);
             float visible = clamp(dot(t, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
             float dist = length(offset);
             return dist < 1.0 ? visible : visible * fogVolumesTransmittance(uSsaoEye, offset / dist, dist);

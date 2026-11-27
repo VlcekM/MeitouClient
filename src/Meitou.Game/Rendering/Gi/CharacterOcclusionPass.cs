@@ -218,7 +218,7 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
                 gi.rgb = giSurfaceIrradiance(gi.rgb, ambient, interior);
                 ambient = mix(ambient, gi.rgb, giWeight(gi.a, interior));
             }
-            vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
+            vec3 transmittance = atmoTransmittance(uGiEye, p);
             vec3 albedo = vec3(float(surface.z & 255u), float((surface.z >> 8) & 255u), float(surface.w & 255u)) / 255.0;
             albedo *= albedo;
             // The blend takes this off the scene: the ambient the fragment took, less the light gathered for it (below 0 where the rays found more).

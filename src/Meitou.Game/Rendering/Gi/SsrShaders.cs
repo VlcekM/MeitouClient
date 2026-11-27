@@ -256,7 +256,7 @@ static class SsrShaders
             vec3 n = ssrNormal(surface), p = positionAt(px, z), v = normalize(uGiEye - p);
             float gloss = ssrGloss(surface);
             vec3 ambient = atmoAmbientMapAt(p).rgb;
-            vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
+            vec3 transmittance = atmoTransmittance(uGiEye, p);
             float occlusion = ssrOcclusion(cell, n, transmittance, ambient);
             vec4 seen = vec4(0.0, 0.0, 0.0, occlusion);
             if (ssrWeight(gloss) > 0.0) seen = mix(seen, ssrCone(cell, p, n, z, gloss, occlusion), ssrWeight(gloss));
