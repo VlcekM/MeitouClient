@@ -81,6 +81,7 @@ public sealed unsafe class AudioOutput : IDisposable
         this._fill = fill;
         SampleRate = sampleRate;
         DeviceName = alc.GetContextProperty(device, GetContextString.DeviceSpecifier) ?? "default";
+        _defaultName = DefaultOutputName();
         _source = al.GenSource();
         _buffers = al.GenBuffers(Blocks);
         _thread = new Thread(Run) { Name = "Meitou audio", IsBackground = true, Priority = ThreadPriority.AboveNormal };
@@ -228,6 +229,10 @@ public sealed unsafe class AudioOutput : IDisposable
     /// </summary>
     const int AlcConnected = 0x313;
     /// <summary>
+    /// ALC_DEFAULT_DEVICE_SPECIFIER: the name of the system's current default output.
+    /// </summary>
+    const int AlcDefaultDeviceSpecifier = 0x1004;
+    /// <summary>
     /// Milliseconds between two device checks.
     /// </summary>
     const int ReconnectCheckMs = 500;
@@ -239,10 +244,15 @@ public sealed unsafe class AudioOutput : IDisposable
     /// Whether the lost device has been reported and not reopened since, so a device that stays lost is reported once.
     /// </summary>
     bool _reportedDisconnect;
+    /// <summary>
+    /// The system default output as of the last open or reopen; a different one later means the user (or Windows) switched the default.
+    /// </summary>
+    string? _defaultName;
 
     /// <summary>
-    /// A lost device stays silent forever in OpenAL, so every <see cref="ReconnectCheckMs"/> the device is checked and, when it is gone,
-    /// reopened on the current default output (ALC_SOFT_reopen_device); the context, source and queue survive the reopen.
+    /// A lost device stays silent forever in OpenAL, and a device that merely stops being the default (a powered-off speaker still listed)
+    /// keeps playing into nothing, so every <see cref="ReconnectCheckMs"/> the device is checked and, when it is gone or the system default
+    /// has changed, reopened on the current default output (ALC_SOFT_reopen_device); the context, source and queue survive the reopen.
     /// </summary>
     void KeepConnected()
     {
@@ -252,14 +262,25 @@ public sealed unsafe class AudioOutput : IDisposable
 
         int connected = 1;
         _alc.GetContextProperty(_device, (GetContextInteger)AlcConnected, 1, &connected);
-        if (connected != 0) return;
+        string? defaultName = DefaultOutputName();
+        bool defaultChanged = defaultName != null && defaultName != _defaultName;
+        if (connected != 0 && !defaultChanged) return;
 
         bool reopened = Reopen();
+        if (reopened) _defaultName = defaultName;
         if (reopened || !_reportedDisconnect)
         {
-            Console.Error.WriteLine(reopened ? "audio     output device lost; reopened on the default device" : "audio     output device lost");
+            Console.Error.WriteLine(reopened ? "audio     output device changed; reopened on the default device" : "audio     output device lost");
         }
         _reportedDisconnect = !reopened;
+    }
+
+    /// <summary>
+    /// The name of the system's current default output; null when OpenAL reports none.
+    /// </summary>
+    string? DefaultOutputName()
+    {
+        return _alc.GetContextProperty(null, (GetContextString)AlcDefaultDeviceSpecifier);
     }
 
     /// <summary>
