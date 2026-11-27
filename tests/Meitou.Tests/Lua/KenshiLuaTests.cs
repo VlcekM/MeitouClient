@@ -247,6 +247,44 @@ public sealed class KenshiLuaTests
     }
 
     /// <summary>
+    /// Repeated per-frame <see cref="KenshiLuaHost.Tick"/> calls must invoke pre-loaded Lua functions directly without calling
+    /// <c>Script.LoadString</c> (which would grow MoonSharp bytecode and trigger O(N²) <c>SignalByteCodeChange</c> stalls).
+    /// </summary>
+    [Fact]
+    public void Tick_DoesNotCompileBytecodePerFrame_AndStaysConstantTime()
+    {
+        string tmp = Path.Combine(Path.GetTempPath(), "meitou_lua_perf_" + Guid.NewGuid().ToString("N")[..8]);
+        string modDir = Path.Combine(tmp, "PerfMod");
+        Directory.CreateDirectory(Path.Combine(modDir, "scripts", "init"));
+        File.WriteAllText(Path.Combine(modDir, "scripts", "init", "main.lua"), """
+            local n = 0
+            Meitou.spawn(function()
+                while true do
+                    n = n + 1
+                    Meitou.waitFrames(1)
+                end
+            end)
+            """);
+
+        try
+        {
+            using KenshiLuaHost host = new(new FakeWorldBridge(), new LuaHudState(), log: _ => { });
+            Assert.Equal(1, host.DiscoverEnabledMods([("PerfMod", modDir)]));
+            Assert.Contains("PerfMod", host.StartAll());
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 600; i++) host.Tick();
+            sw.Stop();
+
+            Assert.True(sw.ElapsedMilliseconds < 2000, $"600 ticks took {sw.ElapsedMilliseconds} ms (expected constant-time dispatch)");
+        }
+        finally
+        {
+            Directory.Delete(tmp, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// <c>Meitou.spawn</c>, <c>waitFrames</c>, <c>waitUntil</c>, <c>after</c>, and <c>cancel</c> advance cooperatively across frames.
     /// </summary>
     [Fact]

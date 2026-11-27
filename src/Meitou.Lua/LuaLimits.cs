@@ -141,6 +141,37 @@ public sealed class LuaSandbox
     public DynValue Eval(string code) => Load("eval", code);
 
     /// <summary>
+    /// Invokes an already-loaded Lua function under the instruction budget without compiling new bytecode.
+    /// </summary>
+    public DynValue Call(DynValue fn, params object[] args)
+    {
+        if (Faulted || fn.IsNil()) return DynValue.Nil;
+
+        LastError = null;
+        _debugger.Begin(_limits.InstructionsPerCall);
+        try
+        {
+            return Script.Call(fn, args);
+        }
+        catch (BudgetExceededException e)
+        {
+            Fault(e);
+            return DynValue.Nil;
+        }
+        catch (InterpreterException e)
+        {
+            LastError = e.DecoratedMessage ?? e.Message;
+            return DynValue.Nil;
+        }
+    }
+
+    /// <summary>
+    /// Invokes a global Lua function by name under the instruction budget without compiling new bytecode.
+    /// </summary>
+    public DynValue CallGlobal(string funcName, params object[] args) =>
+        Faulted ? DynValue.Nil : Call(Script.Globals.Get(funcName), args);
+
+    /// <summary>
     /// The MoonSharp modules a mod may use: no io, os, debug or package.
     /// </summary>
     static CoreModules SafeModules() =>

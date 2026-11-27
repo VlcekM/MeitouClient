@@ -428,11 +428,6 @@ public sealed class KenshiLuaHost : IDisposable
     public const long GlobalTickBudget = 2_000_000;
 
     /// <summary>
-    /// Lua run once per frame to deliver the per-frame characters update.
-    /// </summary>
-    const string CharsUpdateScript = "__kl_dispatch('onCharsUpdate', getGameWorld()); __kl_dispatch('GameWorld::charsUpdate', getGameWorld())";
-
-    /// <summary>
     /// Measures the time between frames.
     /// </summary>
     readonly Stopwatch _frameClock = Stopwatch.StartNew();
@@ -445,7 +440,7 @@ public sealed class KenshiLuaHost : IDisposable
     /// <summary>
     /// What one frame delivers to every mod.
     /// </summary>
-    sealed record FrameInput(string DtStr, LuaWorldSnapshot Snap, string? SelectedName, IReadOnlyList<LuaGameEvent>? Events);
+    sealed record FrameInput(double Dt, LuaWorldSnapshot Snap, string? SelectedName, IReadOnlyList<LuaGameEvent>? Events);
 
     /// <summary>
     /// Advances all running Lua mods by one UI frame and dispatches any narrow game events.
@@ -480,8 +475,7 @@ public sealed class KenshiLuaHost : IDisposable
             if (!m.Running || m.Sandbox is null) continue;
 
             m.ActionsThisTick = 0;
-            m.Sandbox.Script.Globals["__kl_key"] = DynValue.NewNumber(keyCode);
-            m.Sandbox.Eval("__kl_dispatch('onKeyDown', __kl_key)");
+            m.Sandbox.CallGlobal("__kl_dispatch", "onKeyDown", keyCode);
             if (m.Sandbox.Faulted) Stop(m.Info.ModId);
         }
     }
@@ -498,8 +492,7 @@ public sealed class KenshiLuaHost : IDisposable
         if (!m.HudCallbacks.TryGetValue(buttonId, out DynValue? fn)) return;
 
         m.ActionsThisTick = 0;
-        m.Sandbox.Script.Globals["__kl_btn_fn"] = fn;
-        m.Sandbox.Eval("__kl_btn_fn()");
+        m.Sandbox.Call(fn);
         if (m.Sandbox.Faulted) Stop(m.Info.ModId);
     }
 
@@ -511,12 +504,11 @@ public sealed class KenshiLuaHost : IDisposable
         double nowSec = _frameClock.Elapsed.TotalSeconds;
         double dt = _lastFrameSec > 0 ? Math.Clamp(nowSec - _lastFrameSec, 0.001, 0.1) : 0.016;
         _lastFrameSec = nowSec;
-        string dtStr = dt.ToString("0.#####", CultureInfo.InvariantCulture);
 
         LuaWorldSnapshot snap = _bridge.Scan;
         string? selName = _bridge.SelectedName;
 
-        return new FrameInput(dtStr, snap, selName, events);
+        return new FrameInput(dt, snap, selName, events);
     }
 
     /// <summary>
@@ -540,7 +532,7 @@ public sealed class KenshiLuaHost : IDisposable
     bool DispatchCoroutines(ModRuntime m, FrameInput frame, ref long used)
     {
         LuaSandbox sandbox = m.Sandbox!;
-        sandbox.Eval($"__kl_step_tasks({frame.DtStr})");
+        sandbox.CallGlobal("__kl_step_tasks", frame.Dt);
         used += sandbox.LastCallInstructions;
         if (StopIfFaulted(m)) return false;
 
@@ -569,7 +561,7 @@ public sealed class KenshiLuaHost : IDisposable
     bool DispatchFrameStart(ModRuntime m, FrameInput frame, ref long used)
     {
         LuaSandbox sandbox = m.Sandbox!;
-        sandbox.Eval($"__kl_dispatch('MyGUI::Gui::eventFrameStart', {frame.DtStr})");
+        sandbox.CallGlobal("__kl_dispatch", "MyGUI::Gui::eventFrameStart", frame.Dt);
         used += sandbox.LastCallInstructions;
         if (StopIfFaulted(m)) return false;
 
@@ -587,8 +579,11 @@ public sealed class KenshiLuaHost : IDisposable
             if (!m.SeenBuildings.Add(d.Building)) continue;
 
             LuaSandbox sandbox = m.Sandbox!;
-            sandbox.Script.Globals["__kl_bld"] = DynValue.NewTable(BuildingTable(sandbox, d));
-            sandbox.Eval("__kl_dispatch('onBuildingLoaded', __kl_wrap_building(__kl_bld))");
+            DynValue wrapped = sandbox.CallGlobal("__kl_wrap_building", BuildingTable(sandbox, d));
+            used += sandbox.LastCallInstructions;
+            if (StopIfFaulted(m)) break;
+
+            sandbox.CallGlobal("__kl_dispatch", "onBuildingLoaded", wrapped);
             used += sandbox.LastCallInstructions;
             if (StopIfFaulted(m)) break;
         }
@@ -632,8 +627,11 @@ public sealed class KenshiLuaHost : IDisposable
         if (selChar is null) return true;
 
         LuaSandbox sandbox = m.Sandbox!;
-        sandbox.Script.Globals["__kl_sel"] = DynValue.NewTable(CharacterTable(sandbox, selChar));
-        sandbox.Eval("__kl_dispatch('onCharacterSelect', __kl_wrap_char(__kl_sel))");
+        DynValue wrapped = sandbox.CallGlobal("__kl_wrap_char", CharacterTable(sandbox, selChar));
+        used += sandbox.LastCallInstructions;
+        if (StopIfFaulted(m)) return false;
+
+        sandbox.CallGlobal("__kl_dispatch", "onCharacterSelect", wrapped);
         used += sandbox.LastCallInstructions;
 
         return !StopIfFaulted(m);
@@ -668,7 +666,15 @@ public sealed class KenshiLuaHost : IDisposable
     bool DispatchCharsUpdate(ModRuntime m, ref long used)
     {
         LuaSandbox sandbox = m.Sandbox!;
-        sandbox.Eval(CharsUpdateScript);
+        DynValue world = sandbox.CallGlobal("getGameWorld");
+        used += sandbox.LastCallInstructions;
+        if (StopIfFaulted(m)) return false;
+
+        sandbox.CallGlobal("__kl_dispatch", "onCharsUpdate", world);
+        used += sandbox.LastCallInstructions;
+        if (StopIfFaulted(m)) return false;
+
+        sandbox.CallGlobal("__kl_dispatch", "GameWorld::charsUpdate", world);
         used += sandbox.LastCallInstructions;
 
         return !StopIfFaulted(m);
@@ -689,8 +695,7 @@ public sealed class KenshiLuaHost : IDisposable
             if (klName.Length == 0) continue;
 
             LuaSandbox sandbox = m.Sandbox!;
-            sandbox.Script.Globals["__kl_ev"] = DynValue.NewTable(PayloadTable(sandbox, ev));
-            sandbox.Eval($"__kl_dispatch('{klName}', __kl_ev)");
+            sandbox.CallGlobal("__kl_dispatch", klName, PayloadTable(sandbox, ev));
             used += sandbox.LastCallInstructions;
             if (StopIfFaulted(m)) break;
         }
