@@ -229,6 +229,111 @@ public sealed class KenshiLuaTests
     }
 
     /// <summary>
+    /// <c>Meitou.spawn</c>, <c>waitFrames</c>, <c>waitUntil</c>, <c>after</c>, and <c>cancel</c> advance cooperatively across frames.
+    /// </summary>
+    [Fact]
+    public void Coroutines_SupportWaitFramesWaitUntilAfterAndCancel()
+    {
+        string tmp = Path.Combine(Path.GetTempPath(), "meitou_lua_co_" + Guid.NewGuid().ToString("N")[..8]);
+        string modDir = Path.Combine(tmp, "CoMod");
+        Directory.CreateDirectory(Path.Combine(modDir, "scripts", "init"));
+        File.WriteAllText(Path.Combine(modDir, "scripts", "init", "main.lua"), """
+            local gate = false
+            local cancelledId = Meitou.spawn(function()
+              Meitou.waitFrames(2)
+              KenshiLua.log('SHOULD_NOT_RUN')
+            end)
+            Meitou.cancel(cancelledId)
+
+            Meitou.spawn(function()
+              KenshiLua.log('STEP:1')
+              Meitou.waitFrames(2)
+              KenshiLua.log('STEP:2')
+              gate = true
+              Meitou.waitUntil(function() return gate end)
+              KenshiLua.log('STEP:3')
+            end)
+
+            Meitou.after(0, function()
+              KenshiLua.log('AFTER:OK')
+            end)
+            """);
+
+        try
+        {
+            List<string> logs = [];
+            using KenshiLuaHost host = new(new FakeWorldBridge(), new LuaHudState(), log: logs.Add);
+            Assert.Equal(1, host.DiscoverEnabledMods([("CoMod", modDir)]));
+            Assert.Contains("CoMod", host.StartAll());
+
+            for (int i = 0; i < 6; i++) host.Tick();
+
+            Assert.Contains(logs, l => l.Contains("STEP:1"));
+            Assert.Contains(logs, l => l.Contains("STEP:2"));
+            Assert.Contains(logs, l => l.Contains("STEP:3"));
+            Assert.Contains(logs, l => l.Contains("AFTER:OK"));
+            Assert.DoesNotContain(logs, l => l.Contains("SHOULD_NOT_RUN"));
+        }
+        finally
+        {
+            Directory.Delete(tmp, true);
+        }
+    }
+
+    /// <summary>
+    /// Live hot-reload re-runs modified scripts on disk and preserves persisted GameData across the reload.
+    /// </summary>
+    [Fact]
+    public void HotReload_ReloadsModifiedScript_AndPreservesGameData()
+    {
+        string tmp = Path.Combine(Path.GetTempPath(), "meitou_lua_hr_" + Guid.NewGuid().ToString("N")[..8]);
+        string modDir = Path.Combine(tmp, "HrMod");
+        string mainPath = Path.Combine(modDir, "scripts", "init", "main.lua");
+        Directory.CreateDirectory(Path.GetDirectoryName(mainPath)!);
+        File.WriteAllText(mainPath, """
+            local n = 0
+            registerHandler('onPlayerLoadFromSerialise', function(_, gd)
+              n = gd:getNumber('count', 0) + 1
+              KenshiLua.log('VER:1:' .. n)
+            end)
+            registerHandler('onPlayerSerialise', function(_, gd) gd:setNumber('count', n) end)
+            """);
+
+        try
+        {
+            List<string> logs = [];
+            using KenshiLuaHost host = new(new FakeWorldBridge(), new LuaHudState(), log: logs.Add, stateDir: Path.Combine(tmp, "state"));
+            Assert.Equal(1, host.DiscoverEnabledMods([("HrMod", modDir)]));
+            Assert.Contains("HrMod", host.StartAll());
+            Assert.Contains(logs, l => l.Contains("VER:1:1"));
+
+            host.EnableHotReload(TimeSpan.FromMilliseconds(20));
+            File.WriteAllText(mainPath, """
+                local n = 0
+                registerHandler('onPlayerLoadFromSerialise', function(_, gd)
+                  n = gd:getNumber('count', 0) + 1
+                  KenshiLua.log('VER:2:' .. n)
+                end)
+                registerHandler('onPlayerSerialise', function(_, gd) gd:setNumber('count', n) end)
+                """);
+
+            bool reloaded = false;
+            for (int i = 0; i < 40 && !reloaded; i++)
+            {
+                Thread.Sleep(25);
+                host.Tick();
+                reloaded = logs.Any(l => l.Contains("VER:2:2"));
+            }
+
+            Assert.True(reloaded, "Expected FileSystemWatcher hot-reload to pick up VER:2 with persisted count=2.");
+        }
+        finally
+        {
+            Directory.Delete(tmp, true);
+        }
+    }
+
+    /// <summary>
     /// <see cref="LuaMods.CaptureCamera"/> converts the active <see cref="WorldCamera"/> into a <see cref="LuaCameraSnap"/>
     /// that projects world targets onto screen coordinates through <see cref="SimulationLuaBridge.SetCamera"/>.
     /// </summary>

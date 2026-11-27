@@ -15,7 +15,7 @@ public sealed record LuaModDescriptor(string ModId, string ModFolder, IReadOnlyL
 /// MoonSharp sandboxes, dispatches KenshiLua events each frame, and stays completely idle when
 /// no enabled mods contain Lua scripts.
 /// </summary>
-public sealed class KenshiLuaHost
+public sealed class KenshiLuaHost : IDisposable
 {
     #region Host state
 
@@ -43,6 +43,11 @@ public sealed class KenshiLuaHost
     /// The discovered mods by id, whether running or not.
     /// </summary>
     readonly Dictionary<string, ModRuntime> _mods = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Active file-system hot-reloader; null when hot-reload is disabled.
+    /// </summary>
+    LuaHotReloader? _hotReloader;
 
     /// <summary>
     /// Whether at least one KenshiLua mod is currently running.
@@ -77,7 +82,7 @@ public sealed class KenshiLuaHost
         /// <summary>
         /// The discovered mod this runtime belongs to.
         /// </summary>
-        public LuaModDescriptor Info { get; } = info;
+        public LuaModDescriptor Info { get; set; } = info;
 
         /// <summary>
         /// The mod's sandbox while it runs; null otherwise.
@@ -270,6 +275,76 @@ public sealed class KenshiLuaHost
     }
 
     /// <summary>
+    /// Hot-reloads a discovered Lua mod from disk: re-scans <c>scripts/init/*.lua</c>,
+    /// persists its GameData state, clears old HUD widgets, and restarts it cleanly.
+    /// </summary>
+    public (bool Ok, string Message) Reload(string modId)
+    {
+        if (!_mods.TryGetValue(modId, out ModRuntime? m)) return (false, $"unknown Lua mod '{modId}'");
+
+        string folder = m.Info.ModFolder;
+        if (m.Running) Stop(modId);
+
+        if (FindInitScripts(folder) is { Count: > 0 } scripts)
+        {
+            m.Info = new LuaModDescriptor(m.Info.ModId, folder, scripts);
+        }
+
+        (bool ok, string msg) = Start(m.Info.ModId);
+        if (ok) _log($"[Meitou.Lua:{m.Info.ModId}] hot-reloaded");
+        return (ok, msg);
+    }
+
+    /// <summary>
+    /// Enables live <c>*.lua</c> hot-reloading for all discovered mods.
+    /// </summary>
+    public void EnableHotReload(TimeSpan? debounce = null)
+    {
+        _hotReloader?.Dispose();
+        _hotReloader = new LuaHotReloader(debounce);
+        foreach (ModRuntime m in _mods.Values)
+        {
+            _hotReloader.Watch(m.Info.ModId, m.Info.ModFolder);
+        }
+    }
+
+    /// <summary>
+    /// Disables live hot-reloading and disposes all file-system watchers.
+    /// </summary>
+    public void DisableHotReload()
+    {
+        _hotReloader?.Dispose();
+        _hotReloader = null;
+    }
+
+    /// <summary>
+    /// Reloads any watched mod whose <c>*.lua</c> files changed and settled past the debounce window.
+    /// Returns the reloaded mod ids.
+    /// </summary>
+    public IReadOnlyList<string> PollHotReload()
+    {
+        if (_hotReloader is null) return [];
+
+        List<string> ready = _hotReloader.DrainReady();
+        if (ready.Count == 0) return [];
+
+        List<string> reloaded = new(ready.Count);
+        foreach (string modId in ready)
+        {
+            if (Reload(modId).Ok) reloaded.Add(modId);
+        }
+
+        return reloaded;
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        DisableHotReload();
+        StopAll();
+    }
+
+    /// <summary>
     /// Gives the mod a fresh sandbox and clears the state of its previous run.
     /// </summary>
     LuaSandbox ResetForStart(ModRuntime m)
@@ -377,6 +452,7 @@ public sealed class KenshiLuaHost
     /// </summary>
     public void Tick(IReadOnlyList<LuaGameEvent>? events = null)
     {
+        PollHotReload();
         if (!HasRunningMods) return;
 
         FrameInput frame = BeginFrame(events);
@@ -450,11 +526,25 @@ public sealed class KenshiLuaHost
     void TickMod(ModRuntime m, FrameInput frame, ref long used)
     {
         if (!DispatchFrameStart(m, frame, ref used)) return;
+        if (!DispatchCoroutines(m, frame, ref used)) return;
         if (!DispatchBuildings(m, frame.Snap, ref used)) return;
         if (!DispatchSelection(m, frame, ref used)) return;
         if (!DispatchCharsUpdate(m, ref used)) return;
 
         DispatchGameEvents(m, frame.Events, ref used);
+    }
+
+    /// <summary>
+    /// Steps active <c>Meitou.spawn</c> coroutines for one frame; false when the rest of the mod's frame is skipped.
+    /// </summary>
+    bool DispatchCoroutines(ModRuntime m, FrameInput frame, ref long used)
+    {
+        LuaSandbox sandbox = m.Sandbox!;
+        sandbox.Eval($"__kl_step_tasks({frame.DtStr})");
+        used += sandbox.LastCallInstructions;
+        if (StopIfFaulted(m)) return false;
+
+        return CanContinue(m, used);
     }
 
     /// <summary>

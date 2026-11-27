@@ -93,6 +93,7 @@ sealed class LuaMods
         IReadOnlyList<string> started = luaHost.StartAll();
         if (started.Count == 0) return null;
 
+        luaHost.EnableHotReload();
         Console.WriteLine($"lua       started {started.Count} KenshiLua mod(s): {string.Join(", ", started)}");
         return new LuaMods(bridge, hud, luaHost);
     }
@@ -233,9 +234,9 @@ sealed class LuaMods
     public void NotifyKeyDown(int vk) => _host.NotifyKeyDown(vk);
 
     /// <summary>
-    /// Stops all running Lua mods and clears all HUD overlay widgets.
+    /// Stops all running Lua mods, disposes hot-reload watchers, and clears all HUD overlay widgets.
     /// </summary>
-    public void StopAll() => _host.StopAll();
+    public void StopAll() => _host.Dispose();
 
     /// <summary>
     /// The mods on disk by name; null when the mod folder cannot be listed.
