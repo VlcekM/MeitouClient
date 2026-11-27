@@ -1594,8 +1594,8 @@ static partial class TerrainShaders
             float reliefShade = 1.0;   // the relief's own shadow on the sun (GroundRelief), given to the lighting
             vec3 shadingNormal = n;
             bool baked = false;
-            // The cache's share where a pixel is finer than level 0's texel (a close-up): there the cache, magnified, came out blurred, so the layers are
-            // shaded, both mixed over the half level up to it (cacheLive: the layers' share of that mix; 0 none).
+            // The layers' share where the cache and the layers are mixed (cacheLive; 0 none): towards the cache's reach and its coarsest level's edge, and
+            // over the half level past one level coarser than the footprint.
             float cacheLive = 0.0;
             vec4 cacheAlbedo = vec4(0.0);
             vec3 cacheNormal = n;
@@ -1612,9 +1612,10 @@ static partial class TerrainShaders
                 float a = max(length(texDx.xz), 1e-6), b = max(length(texDy.xz), 1e-6), hi = max(a, b), lo = min(a, b);
                 // The footprint's short axis, the long one at most 8 times it: continuous. (hi / min(ceil(hi / lo), 8) jumped by up to 0.58 of a level wherever
                 // the stretch crossed a whole number, and the cache layer chosen with it changed sharpness in patches along those lines.)
-                float level = log2(max(max(lo, hi / 8.0), 1e-6) / uBakeOrigin[0].z) + uBakeBias;
-                // The layers' share also rises over the last fifth of the reach (the cache ends there), so the cache does not stop in a line round the eye.
-                cacheLive = max(clamp(-2.0 * level, 0.0, 1.0), smoothstep(0.8 * uBakeReach, uBakeReach, distance));
+                // A footprint finer than level 0 reads level 0, magnified: its texel is finer than a layer's (MaterialCache.CacheTexel), so it is as sharp.
+                float level = max(log2(max(max(lo, hi / 8.0), 1e-6) / uBakeOrigin[0].z) + uBakeBias, 0.0);
+                // The layers' share rises over the last fifth of the reach (the cache ends there), so the cache does not stop in a line round the eye.
+                cacheLive = smoothstep(0.8 * uBakeReach, uBakeReach, distance);
                 int k = clamp(int(floor(level)), 0, uBakeLevels - 1);
                 float t = clamp(level - float(k), 0.0, 1.0);
                 while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
