@@ -832,20 +832,29 @@ static partial class TerrainShaders
         uniform sampler2DArray uBakeAlbedo;   // the material cache (TerrainRenderer.MaterialCache), a layer per level, addressed toroidally: albedo, gloss
         uniform sampler2DArray uBakeNormal;   // its shading normal (xyz * 0.5 + 0.5) and rain absorbance
         uniform int uBakeLevels;              // its levels (0: none, every pixel shades the layers)
-        uniform vec4 uBakeOrigin[4];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid)
+        uniform vec4 uBakeOrigin[8];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid)
         uniform float uBakeBias;              // the upscaler's texture bias (negative): the layers' sampler takes it, so the cache level is chosen that much finer
         uniform float uBakeReach;             // the cache is read nearer than this: beyond it a biome's distance fade (which the bake has not) may begin
 
         // The span of the cache's relief height in world units (BakeOutput): the deepest a layer gets, the cliff's scale included.
         #define BakeSpan (uParallax * uMaxDepth * max(uCliffScale, 1.0))
 
-        // Whether cache level k holds xz (4 texels in from its edges), and its value there.
-        bool bakeHolds(int k, vec2 xz)
+        // How far in from level k's edges (texels) a point it holds lies: 4, and the view's march round it (up to half its span each way, at most
+        // 2 BakeSpan): it reads the toroidal image there, and past the edge that is the far side's ground (with the finest level's 4 texels an eighth of a
+        // unit, a flat, unshaded band along the square's edge, Observed, Metal).
+        float bakeMargin(vec4 o) { return 4.0 + 2.0 * BakeSpan / o.z; }
+
+        // Whether cache level k holds xz with reach world units round it besides its margin (bakeMargin).
+        bool bakeHoldsBy(int k, vec2 xz, float reach)
         {
             vec4 o = uBakeOrigin[k];
             vec2 r = (xz - o.xy) / o.z;
-            return o.w > 0.0 && all(greaterThan(r, vec2(4.0))) && all(lessThan(r, vec2(o.w - 4.0)));
+            float m = bakeMargin(o) + reach / o.z;
+            return o.w > 0.0 && all(greaterThan(r, vec2(m))) && all(lessThan(r, vec2(o.w - m)));
         }
+
+        // Whether cache level k holds xz, its margin in from its edges (bakeMargin).
+        bool bakeHolds(int k, vec2 xz) { return bakeHoldsBy(k, xz, 0.0); }
 
         // How near xz is to the edge of level k's square: 0 further than a quarter of the side in from where bakeHolds stops holding it, rising smoothly to 1 there.
         // The cache blends towards the next coarser level over it, so the step to that level at the edge (which it reads alone beyond) is not a line.
@@ -853,7 +862,7 @@ static partial class TerrainShaders
         {
             vec4 o = uBakeOrigin[k];
             vec2 r = (xz - o.xy) / o.z;
-            vec2 d = min(r, vec2(o.w) - r) - 4.0;
+            vec2 d = min(r, vec2(o.w) - r) - bakeMargin(o);
             return 1.0 - smoothstep(0.0, 0.25 * o.w, min(d.x, d.y));
         }
 
@@ -1683,11 +1692,12 @@ static partial class TerrainShaders
                         at += o;
                         if (sun.y > 0.0 && uSelfShadow > 0.0)
                         {
-                            // The sun's march reads two levels coarser (pixelRelief's blur 4): its shadow is soft.
-                            int ks = min(k + 2, uBakeLevels - 1);
-                            if (!bakeHolds(ks, at)) ks = k;
-                            float hp = bakedHeight(ks, ks, 1.0, at), occlusion = 0.0;
+                            // The sun's march reads two levels coarser (pixelRelief's blur 4): its shadow is soft. Coarser still where that level does not
+                            // hold the march's reach towards the sun.
                             vec2 lightStep = sun.xz / max(sun.y, 0.15) * depth / float(sunSteps);
+                            int ks = min(k + 2, uBakeLevels - 1);
+                            while (ks < uBakeLevels - 1 && !bakeHoldsBy(ks, at, length(lightStep) * float(sunSteps))) ks++;
+                            float hp = bakedHeight(ks, ks, 1.0, at), occlusion = 0.0;
                             for (int s = 1; s <= sunSteps; s++)
                             {
                                 float ray = hp + float(s) / float(sunSteps);
@@ -2093,7 +2103,7 @@ static partial class TerrainShaders
             uint bakeAlbedo;
             uint bakeNormal;
             int bakeLevels;
-            vec4 bakeOrigin[4];
+            vec4 bakeOrigin[8];
             float bakeReach;
             uint trails;
             float trailDepth;
@@ -2782,7 +2792,7 @@ static partial class TerrainShaders
 /// The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools are 32-bit (0 /
 /// 1).
 /// </summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 1088)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 1152)]
 struct TerrainConstants
 {
     /// <summary>
@@ -3089,66 +3099,66 @@ struct TerrainConstants
     /// <summary>
     /// <c>uBakeReach</c>: the cache is read nearer than this (beyond it a biome's distance fade, which the bake has not, may begin).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(944)] public float BakeReach;
+    [System.Runtime.InteropServices.FieldOffset(1008)] public float BakeReach;
     /// <summary>
     /// Bindless index of <c>uTrails</c>: the ground trails' coarse height (<see cref="TerrainTrailRenderer"/>).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(948)] public uint Trails;
+    [System.Runtime.InteropServices.FieldOffset(1012)] public uint Trails;
     /// <summary>
     /// <c>uTrailDepth</c>: a full mark's depth in world units.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(952)] public float TrailDepth;
+    [System.Runtime.InteropServices.FieldOffset(1016)] public float TrailDepth;
     /// <summary>
     /// <c>uTrailMesh</c>: 1 where the mesh carries the trails (displaced with no parallax to march them).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(956)] public float TrailMesh;
+    [System.Runtime.InteropServices.FieldOffset(1020)] public float TrailMesh;
     /// <summary>
     /// <c>uTrailWindow</c>: the coarse window's centre x, z, half its side and 1 / its side.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(960)] public System.Numerics.Vector4 TrailWindow;
+    [System.Runtime.InteropServices.FieldOffset(1024)] public System.Numerics.Vector4 TrailWindow;
     /// <summary>
     /// Bindless index of <c>uTrailsFine</c>: the fine image (x the height, y 1 where a mark was recorded).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(976)] public uint TrailFine;
+    [System.Runtime.InteropServices.FieldOffset(1040)] public uint TrailFine;
     /// <summary>
     /// <c>uBakeBias</c>: the upscaler's texture bias (negative), so the cache level is chosen that much finer.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(980)] public float BakeBias;
+    [System.Runtime.InteropServices.FieldOffset(1044)] public float BakeBias;
     /// <summary>
     /// Bindless index of <c>uTrailCells</c>: the grid of cells a stamp wrote to.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(984)] public uint TrailCells;
+    [System.Runtime.InteropServices.FieldOffset(1048)] public uint TrailCells;
     /// <summary>
     /// Bindless index of <c>uResolveG</c>, the resolved colour's input (TerrainRenderer.Resolve): the prepass's target.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(988)] public uint ResolveG;
+    [System.Runtime.InteropServices.FieldOffset(1052)] public uint ResolveG;
     /// <summary>
     /// <c>uTrailFineWindow</c>: the fine window as <see cref="TrailWindow"/> (half 0: none).
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(992)] public System.Numerics.Vector4 TrailFineWindow;
+    [System.Runtime.InteropServices.FieldOffset(1056)] public System.Numerics.Vector4 TrailFineWindow;
     /// <summary>
     /// Bindless index of <c>uResolveDepth</c>, the resolved colour's input: the scene's depth.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(1008)] public uint ResolveDepth;
+    [System.Runtime.InteropServices.FieldOffset(1072)] public uint ResolveDepth;
     /// <summary>
     /// Bindless index of <c>uReliefA</c>, the relief pass's first target (TerrainRenderer.Resolve): the ground's and the X projection's moves.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(1012)] public uint ReliefA;
+    [System.Runtime.InteropServices.FieldOffset(1076)] public uint ReliefA;
     /// <summary>
     /// Bindless index of <c>uReliefB</c>, the relief pass's second target: the Z projection's move, the shade and the puddles' trough.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(1016)] public uint ReliefB;
+    [System.Runtime.InteropServices.FieldOffset(1080)] public uint ReliefB;
     /// <summary>
     /// <c>uResolveInverse</c>, the resolved colour's input: clip space to the point less the eye.
     /// </summary>
-    [System.Runtime.InteropServices.FieldOffset(1024)] public System.Numerics.Matrix4x4 ResolveInverse;
+    [System.Runtime.InteropServices.FieldOffset(1088)] public System.Numerics.Matrix4x4 ResolveInverse;
 }
 
 /// <summary>
-/// The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel,
-/// the side (0: not valid).
+/// The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[8]</c>, up to <c>MaterialCache.CacheLevels</c> used): x, z
+/// of the first texel's corner, the texel, the side (0: not valid).
 /// </summary>
-[System.Runtime.CompilerServices.InlineArray(4)]
+[System.Runtime.CompilerServices.InlineArray(8)]
 struct BakeOrigins
 {
     /// <summary>

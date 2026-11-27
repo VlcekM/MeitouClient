@@ -258,11 +258,17 @@ Meitou (`TerrainRenderer.Resolve`, `IWorldPostChain.TerrainResolveTargets`: `Pos
 Meitou, not in the game (`MaterialCache`, A/B `terrain-material-cache`, B: every pixel shades the layers). The patches' layered
 material is baked into world-space levels round the eye, and a patch pixel within them reads the cache instead of shading up to five biomes of up
 to 14 layer samples each.
-- **Levels**: 4 of 2048² texels (1024² on budgets up to 6 GiB), level k's texel 0.25 × 2^k units, RGBA8 albedo + gloss and RGBA8 tangent-space
-  normal x, y (z follows), rain absorbance, relief height: 128 MiB (32 MiB at 1024²). Pressure releases the cache and terrain shades the layers live. It can rebuild once the ranges recover. Each is addressed toroidally (repeat
+- **Levels**: 7 of 2048² texels (1024² on budgets up to 6 GiB), level k's texel 0.03125 × 2^k units (finer than a layer's, about 0.049), RGBA8
+  albedo + gloss and RGBA8 tangent-space normal x, y (z follows), rain absorbance, relief height: 224 MiB (56 MiB at 1024²). With level 0 at 0.25
+  (4 levels) a footprint finer than it, within about 23 m of a 1080p camera, shaded the layers: **Observed** (M6, Metal, `fps_issue` save, 1080p High,
+  a character at zoom 31): 64 -> 83 frames a second, 81 -> 103 at zoom 300; without a focus at zoom 31, settled, orbiting and panning alike 67 -> 73
+  (the finer levels' strips cost nothing seen). The live layers were 1.7 ms of the resolve there (its material replaced by a constant: 63.8 -> 71
+  frames a second). Pressure releases the cache and terrain shades the layers live. It can rebuild once the ranges recover. Each is addressed toroidally (repeat
   sampler, texel = world mod side), its origin snapped to 64 texels round the eye moved towards the camera's focus (`Camera.Target`) by at most a quarter of the level's side (`MaterialCache.Centre`: the
   game's camera orbits a point some way off, so most of the picture lies beyond it; centred on the eye, the focus sat at the finest square's edge and the pixels beyond fell to the next level in a hard step: **Observed**, Metal);
-  `bakeEdge` blends a level towards the next coarser over its last quarter of the side, so the step at its edge is not a line; the layers are mixed in over the half level past one level
+  a level holds a point 4 texels and the view march's reach (2 × `BakeSpan`) in from its edges (`bakeMargin`): the march reads round the point, and past the
+  edge the toroidal image holds the far side's ground (with level 0 at 0.03125 and 4 texels alone, a flat, unshaded band along its square's edge,
+  **Observed**, Metal); the sun's march takes a coarser level until one holds its reach. `bakeEdge` blends a level towards the next coarser over its last quarter of the side, so the step at its edge is not a line; the layers are mixed in over the half level past one level
   coarser than the footprint, over the last fifth of the reach and over the coarsest level's edge, so the cache never ends in a line (**Observed**, Metal: with these the ground's patches and the
   cache's edges were gone; MoltenVK (owner, same Mac): no difference seen with or without them, not on NVIDIA or AMD); as the eye moves a level bakes only the strips it gains, and is
   built again only after moving a whole side. A first bake takes 256 rows a frame (its pixels shade the layers until it is whole).
@@ -273,15 +279,17 @@ to 14 layer samples each.
 - **Refresh**: the inputs (bindless indices, overlay window, `TerrainTextures.MaterialVersion` = writes to the biomes' parameter rows, relief settings)
   are hashed each frame; a change re-bakes every level 64 rows a frame, finest first, drawn from meanwhile.
 - **Draw**: the level whose texel is the pixel's footprint (short axis, the long one at most 8 times it: `max(short, long / 8)`, continuous; the hardware-style `long / min(ceil(long / short), 8)` jumped up to 0.58 of a level where the stretch crossed a whole number, and the layer chosen with it changed sharpness in jagged patches: **Observed**, Metal; the continuous level reads up to a level blurrier than the hardware-style one), blended with the next coarser;
-  a footprint finer than level 0's texel (within ~23 m of a 1080p camera), beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
+  a footprint finer than level 0's texel, beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
   **Observed** (title screen, DLSS 0.67, `LodBias` -1.58): the layers' sampler takes the upscaler's bias, so the live layers are sharper than a cache level at the pixel's footprint; the level is chosen with the bias (`uBakeBias`), and a level more than one level coarser than that (a close ground beyond the fine levels' square, from a raised eye: the title's nearest band read level 3 for a pixel wanting level 0.6) is not read, the layers are shaded. Edge measure of that band 4.3 (cache) to 5.9 (layers, equal to the cache off).
   (an xz texel spans 1 / n.y of the face: **Observed**, cliffs smeared into vertical streaks, their parallax wavy), the layers are shaded (the
-  finer footprint mixed with the cache over the half level below 0, so no line where it switches). Level 0's
-  texel is about 5x a layer's (tiling 50: 2048 texels over 100 units); read magnified it blurred the near ground (**Observed**, 2026-11-07). The
+  finer footprint mixed with the cache over the half level below 0, so no line where it switches). A level 0 of 0.25 units, about 5x a layer's texel
+  (tiling 50: 2048 texels over 100 units), read magnified blurred the near ground (**Observed**, 2026-11-07). The
   parallax marches the cached height with the march's steps and self-shadow (the sun's from two levels coarser; where displaced, only what the level
   holds finer than one at half the mesh spacing): one read a step, no per-biome work. A per-pixel gather (cliff layers live over a cached ground,
   per-biome fade) cost as much as it saved: terrain 4.0 ms against 3.9 live.
-- **Differences** (**Observed**, viewer A/B stills, 1920x1080 DLSS, before near footprints shaded the layers): mean 0.8-1.1 / 255, 0.35-1.4% of pixels over 12; the ripples' parallax phase
+- **Differences** (**Observed**, M6, Metal, paused, 7 levels against 4 with the near layers live: `fps_issue` 6 views from 8° to 60° pitch, zoom 31 to 300, and
+  Bark 4 views, zoom 40 to 900): 0.003 to 0.08 % of pixels over 3 %, thin lines along the relief's edges (ripples, stones), the same to the eye.
+  (**Observed**, viewer A/B stills, 1920x1080 DLSS, before near footprints shaded the layers): mean 0.8-1.1 / 255, 0.35-1.4% of pixels over 12; the ripples' parallax phase
   and self-shadow shift slightly; a slope's parallax (n.y over 0.5) follows the height field instead of the cliff's projections. After a 90 m flight at 12 units a
   frame: mean 1.27 against the live picture, no stale strips. The game's `--screenshot` does not run the cache (its frames skip the hook).
 - **Cost** (**Observed** before near footprints shaded the layers, `--play-bench` on save "stutter final boss", RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms

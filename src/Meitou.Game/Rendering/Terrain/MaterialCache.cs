@@ -29,15 +29,16 @@ public static class TerrainMaterialCache
 sealed class MaterialCache : IDisposable
 {
     /// <summary>
-    /// The levels, their side in texels, the snap step of a level's origin in texels, the rows a refresh bakes a frame and the rows a first bake
-    /// bakes a frame.
+    /// The levels (at most the 8 of <see cref="BakeOrigins"/>), the snap step of a level's origin in texels, the rows a refresh bakes a frame and the
+    /// rows a first bake bakes a frame.
     /// </summary>
-    const int CacheLevels = 4, CacheStep = 64, CacheRows = 64, CacheBuildRows = 256;
+    const int CacheLevels = 7, CacheStep = 64, CacheRows = 64, CacheBuildRows = 256;
 
     /// <summary>
-    /// Level 0's texel (world units); level k's is this × 2^k.
+    /// Level 0's texel (world units); level k's is this × 2^k. Finer than a layer's texel (about 0.049: 2048 over 100 units), so a close pixel
+    /// reads the cache as sharp as the layers; at 0.25 every pixel within about 23 m of a 1080p camera shaded the layers live.
     /// </summary>
-    const float CacheTexel = 0.25f;
+    const float CacheTexel = 0.03125f;
 
     /// <summary>
     /// The levels' albedo and normal (2D arrays of RGBA8, one layer per level; null until the first <see cref="Record"/> with the biomes loaded).
@@ -77,7 +78,7 @@ sealed class MaterialCache : IDisposable
     /// <summary>
     /// Per level: a first bake's rows done (-1: none running).
     /// </summary>
-    readonly int[] _cacheBuilt = [-1, -1, -1, -1];
+    readonly int[] _cacheBuilt = [.. Enumerable.Repeat(-1, CacheLevels)];
 
     /// <summary>
     /// Per level: a refresh's next row, and its rows left.
@@ -138,7 +139,7 @@ sealed class MaterialCache : IDisposable
     int CacheSide { get; }
 
     /// <summary>
-    /// The levels' bytes: albedo and normal, RGBA8, <see cref="CacheLevels"/> × <see cref="CacheSide"/>² each (128 MB).
+    /// The levels' bytes: albedo and normal, RGBA8, <see cref="CacheLevels"/> × <see cref="CacheSide"/>² each (224 MB at 2048²).
     /// </summary>
     long CacheBytes => 2L * CacheLevels * CacheSide * CacheSide * 4;
 
