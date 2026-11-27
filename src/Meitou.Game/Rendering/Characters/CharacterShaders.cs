@@ -187,9 +187,12 @@ static class CharacterShaders
     /// <summary>
     /// The vertex program: morph, skin and place the vertex relative to the eye, hide limbs, parts and the head by the instance flags;
     /// <paramref name="motion"/>: also last frame's position for the motion vectors; <paramref name="row"/>: also the instance row (flat
-    /// <c>vRow</c>).
+    /// <c>vRow</c>). Its position is invariant: the main view's depth prepass and colour pass, two pipelines of this text with other fragment programs,
+    /// compare their depths, and Metal's pipeline build re-optimised the stage by the outputs its fragment reads (a position a rounding step apart: a
+    /// near-clipped plate's pixels dithered away, **Observed**, docs/character-renderer.md "Depth prepass").
     /// </summary>
-    static string VertexSource(bool motion, bool row = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + VertexBody(motion, row);
+    static string VertexSource(bool motion, bool row = false) =>
+        "#version 450\n" + NativeShaders.Prelude(PushMembers) + "invariant gl_Position;\n" + VertexBody(motion, row);
 
     /// <summary>
     /// <see cref="VertexSource"/> after its prelude: the inputs, the storage buffers, the outputs and <c>main</c>. The visibility buffer's resolve
@@ -397,6 +400,36 @@ static class CharacterShaders
     /// </summary>
     public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n"
         + CharacterSurface.Prototypes + CharacterSurface.Lighting() + Structs + Lookup + ForwardMacros + FragmentBody(lateDepth);
+
+    /// <summary>
+    /// The main view's depth prepass (docs/character-renderer.md "Depth prepass"; <see cref="Vertex"/>'s outputs): the depth of what <see cref="Fragment"/>
+    /// keeps, its discards mirrored (hidden parts, a cut-out still streaming in, the hair's alpha, a worn item's clip, glass by the see-through mode),
+    /// nothing shaded. The rasterizer's depth, not one written here: the colour pass after it tests the rasterizer's, and a written
+    /// <c>gl_FragCoord.z</c> differed from it by a rounding step on a near-clipped triangle (**Observed**, Metal).
+    /// </summary>
+    public static string PrepassFragment() => "#version 450\n" + NativeShaders.Prelude(PushMembers) + Structs + Lookup + $$"""
+        in vec2 vUv;
+        flat in uint vMaterial;
+        in float vHidden;
+        layout(location = 0) out vec4 fragColour;
+        void main()
+        {
+            if (vHidden > 0.0) discard;
+            CharMaterial m = materials.items[vMaterial];
+            uint f = m.flags;
+            if ((f & 32768u) != 0u) discard;
+            bool cut = false;
+            if (m.shading == 2u) cut = (f & 1u) != 0u && dot(hairTex(m, vUv), m.alphaChannel) < m.alphaThreshold;
+            else if (m.shading != 1u)
+            {
+                cut = (f & 512u) != 0u && tex(m.tex[1], vUv).a < 0.6;
+                bool glass = m.shading == 0u && (f & {{SeeThrough}}u) != 0u;
+                if (glass && (pc.seeThrough == 1u || (pc.seeThrough == 0u && opacityDither() >= tex(m.tex[{{SlotOpacity}}], vUv).r))) cut = true;
+            }
+            if (cut) discard;
+            fragColour = vec4(0.0);
+        }
+        """;
 
     /// <summary>
     /// What <see cref="FragmentBody"/>'s macros are in the colour pass: the lookups and derivatives the rasteriser's quads give, the cut-outs'

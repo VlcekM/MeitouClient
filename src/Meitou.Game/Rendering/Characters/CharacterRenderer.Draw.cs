@@ -527,17 +527,17 @@ internal sealed unsafe partial class CharacterRenderer
 
     /// <summary>
     /// 3. One draw per batch, into a job recorded with the pass's program. The instances were laid out when the view was gathered (AllocateRows),
-    /// each batch contiguous and reached by firstInstance.
+    /// each batch contiguous and reached by firstInstance. A colour pass with the depth prepass (<see cref="PrepassWanted"/>) draws the prepass first,
+    /// then shades only what lies at its depth.
     /// </summary>
     void RecordDraws(in ViewConstants view, ViewBatches vb)
     {
-        var active = vb.Active;
-        var instances = vb.Instances;
         var targets = Gpu.CurrentTargets();
+        bool prepass = PrepassWanted;
         var prog = _motionPass ? _motionProg
             : _depthPass ? _depthProg
             : _visibilityPass ? _visibility!.Ids(targets.Formats.ShadingRate)
-            : ColourProg();
+            : ColourProg(prepass);
         string label = _motionPass ? "characters motion" : _depthPass ? "characters depth" : _visibilityPass ? "characters ids" : "characters";
         var state = Gpu.CurrentState() with { Cull = CullMode.None };
 
@@ -545,16 +545,39 @@ internal sealed unsafe partial class CharacterRenderer
         // writes all four channels of its targets.
         if (!_depthPass && !_motionPass) state = state with { ColourMask = DrawState.Rgba };
 
-        var job = _drawJobs.Rent();
-        (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, prog.P, 0);
         ReadOnlySpan<GpuBufferBinding> storage =
             [_bones.Binding, _content.Materials.Binding(Gpu.Frame), _content.Morphs.Binding(Gpu.Frame), _previousBones.Binding];
-        job.Frame = _nativeFrame.Prepare(in view, storage);
+        var frame = _nativeFrame.Prepare(in view, storage);
+        var push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, Chars2 ? SurfaceParts : 0),
+            SkinLut = SkinShading ? _skinScattering.Index : 0, SeeThrough = _seeThroughMode };
+        var timer = _depthPass ? _depthTimer : _colourTimer;
+        if (_portraitLive < 0) timer.Begin();
+        if (prepass)
+        {
+            Gpu.Record("characters prepass", Job(vb, PrepassProg(), PrepassState(state), targets, frame, push, "characters prepass", count: false));
+            state = ShadedState(state);
+        }
+
+        var job = Job(vb, prog, state, targets, frame, push, label, count: true);
+        if (_visibilityPass) _visibility!.Keep(in view, in job.Push, storage, vb.Instances, vb.Active);
+        if (_seeThroughMode == 1) HoldSeeThrough(job, vb, in view, storage);
+        Gpu.Record(label, job);
+        if (_portraitLive < 0) timer.End();
+    }
+
+    /// <summary>
+    /// A job of <paramref name="vb"/>'s batches with <paramref name="prog"/> in <paramref name="state"/>: the motion pass's meshes, the depth pass's, or
+    /// the colour pass's (its prepass's too: the same vertex program). <paramref name="count"/>: the draws go into the view's statistics.
+    /// </summary>
+    DrawJob Job(ViewBatches vb, ReflectedProgram prog, DrawState state, PassTargets targets, FrameBinding frame, CharacterPush push, string label,
+        bool count)
+    {
+        var active = vb.Active;
+        var instances = vb.Instances;
+        var job = _drawJobs.Rent();
+        (job.Owner, job.Targets, job.State, job.Program, job.Count, job.Frame, job.Push) = (this, targets, state, prog.P, 0, frame, push);
         job.Cull = _depthPass ? CullMode.None : CullMode.Back;
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, Chars2 ? SurfaceParts : 0),
-            SkinLut = SkinShading ? _skinScattering.Index : 0, SeeThrough = _seeThroughMode };
-        if (_visibilityPass) _visibility!.Keep(in view, in job.Push, storage, instances, active);
         job.RowCount = _motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
 
@@ -574,31 +597,68 @@ internal sealed unsafe partial class CharacterRenderer
                 FirstInstance = (uint)b.Offset,
                 TwoSided = b.DoubleSided,
             };
-            CountDraw(part.Count[b.Level], b.Level, b.Count);
+            if (count) CountDraw(part.Count[b.Level], b.Level, b.Count);
         }
         job.Count = n;
-        if (_seeThroughMode == 1) HoldSeeThrough(job, vb, in view, storage);
 
-        var timer = _depthPass ? _depthTimer : _colourTimer;
-        if (_portraitLive < 0) timer.Begin();
-        Gpu.Record(label, job);
-        if (_portraitLive < 0) timer.End();
+        return job;
     }
 
     /// <summary>
     /// The world colour pass's program for this frame's lighting: the lean one while <see cref="LeanLighting.Active"/> (not for a portrait, lit by
-    /// its studio).
+    /// its studio); <paramref name="afterPrepass"/>: the one without the late depth (<see cref="PrepassWanted"/>).
     /// </summary>
-    ReflectedProgram ColourProg()
+    ReflectedProgram ColourProg(bool afterPrepass)
     {
-        if (!LeanLighting.Active || _portraitLive >= 0) return _colourProg;
-        if (_colourLean is not null) return _colourLean;
+        bool lean = LeanLighting.Active && _portraitLive < 0;
+        if (afterPrepass && lean) return _colourEarlyLean ??= MakeColour(lean: true, lateDepth: false);
+        if (afterPrepass) return _colourEarly ??= MakeColour(lean: false, lateDepth: false);
+        if (!lean) return _colourProg;
 
-        string lean = LeanLighting.Define(CharacterShaders.Fragment(Gpu.Shaders.DiscardNeedsLateDepth));
-        string fragment = Gi.GiResolveShaders.WithAlbedo(lean, inShader: true);
-        return _colourLean = new ReflectedProgram(Gpu, _nativeFrame, CharacterShaders.Vertex(), fragment, "characters lean",
-            CharacterShaders.InstanceLocation);
+        return _colourLean ??= MakeColour(lean: true, Gpu.Shaders.DiscardNeedsLateDepth);
     }
+
+    /// <summary>
+    /// A colour program: lit lean (<see cref="LeanLighting"/>) or in full, with or without <see cref="CharacterShaders.Fragment"/>'s late depth.
+    /// </summary>
+    ReflectedProgram MakeColour(bool lean, bool lateDepth)
+    {
+        string text = CharacterShaders.Fragment(lateDepth);
+        string fragment = Gi.GiResolveShaders.WithAlbedo(lean ? LeanLighting.Define(text) : text, inShader: true);
+        string name = (lean ? "characters lean" : "characters") + (lateDepth ? "" : " after prepass");
+        return new ReflectedProgram(Gpu, _nativeFrame, CharacterShaders.Vertex(), fragment, name, CharacterShaders.InstanceLocation);
+    }
+
+    #region Depth prepass
+
+    /// <summary>
+    /// The main view's colour pass draws a depth prepass first (docs/character-renderer.md "Depth prepass"): where the backend writes the depth itself
+    /// in the colour program (<see cref="IGpuServices.DiscardNeedsLateDepth"/>, Metal), no layer is hidden before it is shaded, and every overlapping
+    /// part (a body under its armour, the squad behind) was shaded in full. Not for the depth, motion and id passes or a portrait.
+    /// </summary>
+    bool PrepassWanted => CharacterPrepass.Enabled && Gpu.Shaders.DiscardNeedsLateDepth && !_depthPass && !_motionPass && !_visibilityPass
+        && _portraitLive < 0;
+
+    /// <summary>
+    /// The prepass's program (made when first used).
+    /// </summary>
+    ReflectedProgram PrepassProg() => _prepassProg ??= new ReflectedProgram(Gpu, _nativeFrame, CharacterShaders.Vertex(),
+        CharacterShaders.PrepassFragment(), "characters prepass", CharacterShaders.InstanceLocation);
+
+    /// <summary>
+    /// The prepass's state: the colour pass's, its depth written, no colour.
+    /// </summary>
+    static DrawState PrepassState(DrawState colour) => colour with { ColourMask = ColorMask.None };
+
+    /// <summary>
+    /// The colour pass's state after the prepass: its depth test kept (less or equal: only what lies at the prepass's depth passes), no depth written.
+    /// No bias: the two pipelines' depths are the same (an invariant position, <see cref="CharacterShaders.Vertex"/>, and the rasterizer's depth in
+    /// both; a pull of 4 units with slope let a head through its helmet, the prepass's depth written by its fragment program let a near-clipped plate
+    /// dither away, **Observed**).
+    /// </summary>
+    static DrawState ShadedState(DrawState colour) => colour with { DepthWrite = false };
+
+    #endregion
 
     /// <summary>
     /// The statistics of one draw: <paramref name="instances"/> of a level of <paramref name="indices"/> indices.

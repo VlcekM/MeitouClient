@@ -159,6 +159,22 @@ masks) draws forward. Needs Vulkan with ray query (meshes read by device address
   8 levels. Not emulated (gaps): derivatives after a cut-out's discard, in the skin's light-through shadow, at the traced sun's boundary and in the wet
   beads (all where part of a quad left early).
 
+### Depth prepass (Meitou, Metal)
+
+`CharacterPrepass` (`MEITOU_CHARACTER_PREPASS=0` draws without it), `CharacterRenderer.PrepassWanted`. Where the backend writes the colour
+program's depth itself (`IGpuServices.DiscardNeedsLateDepth`: Metal, [metal-backend](metal-backend.md)), no fragment is rejected before it is shaded, so
+every overlapping layer (a body under its armour, the squad behind) was shaded in full. The main view's colour pass (not the depth, motion and id passes or
+a portrait) draws first the characters' depth (`CharacterShaders.PrepassFragment`: the colour program's discards mirrored, no shading, the rasterizer's
+depth), then the colour program without the late depth, its depth test kept (less or equal) and no depth written: only what lies at the prepass's depth is
+shaded. The two pipelines' depths must be the same: the vertex program's position is `invariant` (MSL `[[position, invariant]]`, its library compiled with
+`preserveInvariance`). **Observed** (M6, Metal, 1080p High, paused): a depth bias of 4 units with slope 4 instead let heads through their helmets;
+without invariance a near-clipped plate dithered away, and with the prepass's depth written by its fragment program (`gl_FragCoord.z`) a skin-and-chain
+pair did. With both in place, prepass on against off in one launch (`big_squad` save, 7 views from zoom 15 to 689): at most 64 of 8.3 M pixels differ.
+The chain mail's clip cut-outs show the skin under them as without it (the discards reject before the rasterizer's depth is written).
+- **Cost** (**Observed**, same session, on against off in one launch; two launches, the squad's idle poses differ between them): `big_squad` zoom 689
+  116-118 -> 123 frames a second, zoom 100 68-80 -> 84-104, zoom 40 44-51 -> 68-86; `fps_issue` save zoom 31 99 -> 106. The characters' colour pass
+  at zoom 40 was about 11 ms (a flat-colour program instead: 44 -> 90 frames a second), 4 ms of it the late depth alone.
+
 ## Content, LOD and memory
 
 `CharacterContent` owns buffers/textures/morph arena; worker fetching/preparation precedes render

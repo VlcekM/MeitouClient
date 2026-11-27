@@ -56,6 +56,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// The colour program lit without the sun shadows and probe GI (<see cref="LeanLighting"/>), made the first world frame that has neither.
     /// </summary>
     ReflectedProgram? _colourLean;
+
+    /// <summary>
+    /// The colour programs without the late depth, drawn after the depth prepass, in full and lean; the prepass's own (made when first used).
+    /// </summary>
+    ReflectedProgram? _colourEarly, _colourEarlyLean, _prepassProg;
     /// <summary>
     /// The meshes, textures, rigs, morphs and material table the assets are built from.
     /// </summary>
@@ -1008,6 +1013,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         string fragment = Gi.GiResolveShaders.WithAlbedo(CharacterShaders.Fragment(Gpu.Shaders.DiscardNeedsLateDepth), inShader: true);
         _colourProg = new ReflectedProgram(Gpu, _nativeFrame, CharacterShaders.Vertex(), fragment, "characters", CharacterShaders.InstanceLocation);
         _colourLean = null;   // made again from the new text when next used, as the visibility below
+        (_colourEarly, _colourEarlyLean) = (null, null);
         _visibility = null;   // made again from the new text when next used; the old one stays alive as the old colour program does
     }
 
@@ -2152,6 +2158,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         _visibility?.Dispose();
         _colourProg.Dispose();
         _colourLean?.Dispose();
+        _colourEarly?.Dispose();
+        _colourEarlyLean?.Dispose();
+        _prepassProg?.Dispose();
         _depthProg.Dispose();
         _motionProg.Dispose();
         _nativeFrame.Dispose();

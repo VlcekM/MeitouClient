@@ -117,6 +117,10 @@ internal sealed class MetalStage : IDisposable
         var options = new MTLCompileOptions();
         if (_fastMath is { } fast) options.FastMathEnabled = fast;
 
+        // An invariant position (GLSL "invariant gl_Position", the characters' vertex program) holds only with the option: the pipelines that share
+        // the stage then compute it alike whatever their fragment programs read. Not for the others: it limits the compiler's optimisations.
+        if (_msl.Contains("invariant]]", StringComparison.Ordinal)) options.PreserveInvariance = true;
+
         _library = _device.NewLibrary((NSString)_msl, options, ref error);
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"{_name}: the MSL did not compile: {error.LocalizedDescription}");
