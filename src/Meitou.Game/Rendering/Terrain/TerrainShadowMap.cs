@@ -10,8 +10,8 @@ namespace Meitou.Game.Rendering.Terrain;
 /// The terrain's shadow over the whole world for the Meitou shadows (beyond the cascades' range): for the sun's direction, per sample of the world
 /// height grid (2049², 144 units apart) the height of the top of the shadow the land towards the sun casts there, and the distance to the land that
 /// casts it. A point below that top is in shadow; the distance widens the penumbra. Built on the GPU by a doubling sweep (each pass looks twice as
-/// far towards the sun: 12 passes cover the world) into an RG32F target with a temporary scratch target during rebuilds, again only when the sun has
-/// moved. The receiver reads it with one fetch (<see cref="MeitouShadowShaders.Functions"/>, <c>msTerrain</c>).
+/// far towards the sun: 12 passes cover the world) into an RG32F target and a scratch one they ping-pong with, again only when the sun has moved
+/// (about once a second while it turns). The receiver reads it with one fetch (<see cref="MeitouShadowShaders.Functions"/>, <c>msTerrain</c>).
 /// <para>
 /// Phase 8 (docs/renderer-native.md 8): the heights and the targets are native textures and the sweep renders into them in one native segment of its
 /// own; the consumer (<c>ShadowPass.Meitou</c>) takes the finished map as <see cref="Sampled"/> (linear, clamped, as the GL texture was).
@@ -69,6 +69,17 @@ sealed unsafe class TerrainShadowMap : IDisposable
     /// The persistent target with the linear, clamped sampler.
     /// </summary>
     readonly SampledTexture _targetSampled;
+
+    /// <summary>
+    /// The sweep's other RG32F target, made at the first build and kept: making and freeing its 32 MB at every build stalled the render thread
+    /// (11-21 ms a build on an RTX 4070, once a second while the sun turns).
+    /// </summary>
+    GpuTexture? _scratch;
+
+    /// <summary>
+    /// <see cref="_scratch"/> with the linear, clamped sampler.
+    /// </summary>
+    SampledTexture _scratchSampled;
 
     /// <summary>
     /// The targets' attachment formats (colour only).
@@ -191,9 +202,7 @@ sealed unsafe class TerrainShadowMap : IDisposable
         int passes = 1;
         while ((1 << (passes - 1)) < _size) passes++;
 
-        var scratch = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rg32F, _size, _size,
-            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "terrain shadow map scratch"));
-        var scratchSampled = new SampledTexture(_linear, scratch.View());
+        var scratch = Scratch();
 
         // Start on _target (0) for an odd pass count or scratch (1) for an even one so the final pass always lands in _target.
         int write = (passes - 1) & 1;
@@ -210,7 +219,7 @@ sealed unsafe class TerrainShadowMap : IDisposable
             _sweep.Set(_uStep, direction.X * step, direction.Y * step);
             _sweep.Set(_uDrop, step * _spacing * tangent);
             _sweep.Set(_uDistance, step * _spacing);
-            _sweep.Bind(_sourceSlot, pass == 0 ? _heightsSampled : write == 0 ? scratchSampled : _targetSampled);
+            _sweep.Bind(_sourceSlot, pass == 0 ? _heightsSampled : write == 0 ? _scratchSampled : _targetSampled);
             var target = write == 0 ? _target : scratch;
             cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), LoadOp.Load, default), default, _size, _size));
             cmd.SetViewport(viewport);
@@ -227,7 +236,6 @@ sealed unsafe class TerrainShadowMap : IDisposable
         }
 
         Gpu.EndNative(cmd);
-        scratch.Dispose();
         _built = true;
         _builtFor = toSun;
         Builds++;
@@ -236,11 +244,25 @@ sealed unsafe class TerrainShadowMap : IDisposable
     }
 
     /// <summary>
-    /// Frees the target, the heights and the program.
+    /// The sweep's scratch target, made on first use.
+    /// </summary>
+    GpuTexture Scratch()
+    {
+        if (_scratch is not null) return _scratch;
+
+        _scratch = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rg32F, _size, _size,
+            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "terrain shadow map scratch"));
+        _scratchSampled = new SampledTexture(_linear, _scratch.View());
+        return _scratch;
+    }
+
+    /// <summary>
+    /// Frees the targets, the heights and the program.
     /// </summary>
     public void Dispose()
     {
         _target.Dispose();
+        _scratch?.Dispose();
         _heights.Dispose();
         _sweep.Dispose();
     }
