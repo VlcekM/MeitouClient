@@ -25,6 +25,10 @@ movement/deletion/build progress. Probes see no grass, characters or water (rays
 Origin tracks eye in64-unit steps with1024-unit hysteresis; lazy scene epochs coordinate commits.
 Shared top level fits 32768 instances, prefers fast trace, reuses identical instance data; with characters in it (lamp shadows) it is refitted each frame, built again every 30.
 Terrain refits unchanged topology (periodic full rebuild); retire structures after GPU consumers.
+The scene is updated only while something reads it (`WorldGpu.GiActive`: the probes, the traced sun or lamps, the debug view; both
+backends): with the indirect light off (the tiers below Ultra) the reflections march alone and the rooms' exposure goes without their
+trace, as on a device without ray queries. **Observed** (Radeon 8060S, 1080p, High, before): kept for nothing, it cost 0.9-1.3 ms of GPU
+and 0.2-0.3 ms of render thread a frame.
 
 On Vulkan, builds and refits share one aligned scratch buffer ordered on the graphics queue. The buffer grows on demand and is released after five
 seconds without a build. Static meshes request compacted sizes in their build frame, then copy into smaller storage after that frame's slot fence.

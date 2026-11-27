@@ -1456,6 +1456,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
 
         if (host.GameOptions.Benchmark is { } tier)
             host.PlayBench.Applied = MetalBenchmark.ApplyTier(settings, settingsValues, tier);
+        Console.WriteLine(settings.Tiers.StartLine());
         // The impostor atlas path is re-enabled after the frame-slot fence. Keep the diagnostic off switch as a
         // fallback; the saved "Far impostors" toggle is otherwise allowed through.
         if (_foliage is not null && !_metalImpostors) _foliage.DisableImpostors();
@@ -1502,6 +1503,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         AddCharacterSettings(sliders, toggles);
         AddWaterSettings(sliders, toggles);
         AddEffectSettings(sliders, toggles);
+
+        // The rows made here over Metal's renderers take the catalogue's Faithful / Meitou marks, so the looks reach them as on Vulkan.
+        WorldFrame.MarkFromCatalogue(toggles, LiveSwitches);
         WorldFrame.AddChoiceSliders(sliders, toggles, _worldGpu);   // the launcher's technique choices, over the switches above
         var actions = new List<PanelAction>();
         if (_foliage?.ImpostorDiskCache is { } cache)
@@ -1755,8 +1759,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // The Meitou character, icon and audio switches from the Vulkan panel, which the shared renderers read.
         if (_characters is not null)
         {
-            toggles.Add(new Toggle("Skin scattering", () => _characters.SkinShading, v => _characters.SkinShading = v));
-            toggles.Add(new Toggle("Enhanced item icons", () => _characters.EnhancedIcons, v => _characters.EnhancedIcons = v));
+            toggles.Add(new Toggle("Skin", () => _characters.SkinShading, v => _characters.SkinShading = v));
+            toggles.Add(new Toggle("Item icons", () => _characters.EnhancedIcons, v => _characters.EnhancedIcons = v));
             toggles.Add(SwitchToggle("chars2"));
             WorldFrame.AddMaterialToggles(toggles, _worldGpu, host.WorldOptions);
         }

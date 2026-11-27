@@ -723,7 +723,7 @@ sealed class BenchSession
         if (gpu.Gi is not null)
         {
             int giMode = gpu.GiDebug;
-            AbToggles.Register("gi-scene", () => gpu.GiActive, v => gpu.GiActive = v,
+            AbToggles.Register("gi-scene", () => gpu.GiScene, v => gpu.GiScene = v,
                     "the global illumination's traced scene (acceleration structure builds) and its debug view (needs --gi-debug)");
             if (gpu.Probes is { } shadeProbes)
             {

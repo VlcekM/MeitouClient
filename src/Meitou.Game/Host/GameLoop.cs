@@ -651,6 +651,7 @@ sealed class GameLoop(GameHost host)
         }
         if (host.GameOptions.BenchmarkBaseline) _panel?.Tiers.ApplyBenchmarkBaseline();
         if (host.GameOptions.Benchmark is { } tier) ApplyBenchmarkTier(tier);
+        if (_panel is not null) Console.WriteLine(_panel.Tiers.StartLine());
     }
 
     /// <summary>

@@ -302,11 +302,12 @@ sealed class LookPresets(SettingsMenu menu)
     }
 
     /// <summary>
-    /// Whether a switch or slider is part of the look (presets set it); a quality tier's slider on a look tab (light shafts quality) is not.
+    /// Whether a switch or slider is part of the look (presets set it); a quality tier's setting on a look tab is not (light shafts quality, the
+    /// indirect light: the tier sets it under the Meitou look, Faithful turns it off).
     /// </summary>
     internal static bool IsLook(string label, bool toggle) => SettingsMenu.GraphicsSection(label, toggle) != "Hidden"
         && LookRoles.Contains(Role(label, toggle))
-        && (toggle || !QualityTiers.PresetSliders.Any(p => p.Label == label));
+        && (toggle ? !QualityTiers.PresetToggles.Any(p => p.Label == label) : !QualityTiers.PresetSliders.Any(p => p.Label == label));
 
     /// <summary>
     /// A Faithful / Meitou switch of the Graphics page that Faithful turns off (not the gameplay one, Interior lamps, nor the <see

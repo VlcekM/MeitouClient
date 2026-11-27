@@ -106,6 +106,9 @@ numbers from untraced runs.
 Segments: settle, idle, orbit, zoom to the farthest, pan, a 30 s travel at 3000 units/s, return, time x2 and x5, talk, trade, container, doors, pick-up, paths (a squad or each member sent 20-200 m in a random direction every 0.5 s), walk,
 fight (six spawned enemies, `--scene-npc`), loot, the panels opened cold then warm (with limbs and build), a grazing horizon view, the overview, flights (each player character in turn, twice, 6 s each, as a double click on its portrait: a character flight when they are on).
 Each interaction targets the nearest candidate within 150 m and retries every 3 s; a modal message box is closed and logged.
+Graphics are the saved settings (`meitou.user.json` in the working directory, else beside the executable): a saved `graphicsPreset` the
+settings do not sit at is applied at start, with the indirect light the tier's (off below Ultra), but the anti-aliasing and render scale
+stay as saved (the launcher benchmark pins TAA at scale 1). The log's `settings` line names what the run drew with ([native-ui](native-ui.md)).
 `MEITOU_BENCH_ONLY=settle,zoom` keeps only the named segments (the run is deterministic from the save, so a hitch comes back at its tick).
 A later `--vsync` keeps vsync on (the frame limit stays off); the summary's run line says which.
 `gc0`-`gc2` and `gc_pause_ms` are read once the frame is drawn, so a collection's pause stands in the row before the long `frame_ms` it caused.
@@ -226,7 +229,7 @@ is the launcher's benchmark: the play bench machinery with a fixed workload, com
 - Tiers `low`..`extreme` (`QualityTiers`), applied from a default `UserConfig` with tutorials off: `meitou.user.json` and the look presets
   are neither read nor written, no autosave. No mods: the base data and core mods only, no code mods, whatever `data/mods.cfg`, `--mods-cfg` or
   `MEITOU_MODS_CFG` list (`ModList.NoMods`). The install's `settings.cfg` defaults (language, edge scroll, markers, camera) still apply. Before the device: a 1920x1080 window, the tier's texture quality, no GI and no ray queries unless the tier
-  has traced switches (Ultra, Extreme), anti-aliasing Low's own (none at 0.83) or TAA at render scale 1. After the settings panel exists:
+  turns the indirect light or a traced switch on (Ultra, Extreme; `QualityTiers.NeedsRayQueries`), anti-aliasing Low's own (none at 0.83) or TAA at render scale 1. After the settings panel exists:
   the Meitou look, the tier, its traced switches, an upscaler (FSR, DLSS) turned TAA and render scale 1 (not Low). Frame limit, vsync and
   HDR off, default `--scene-npc`, `MEITOU_BENCH_ONLY` ignored. Later options do not override these. Vulkan by default; the Metal run is below.
 - Metal (`--renderer metal`, macOS builds: `BenchmarkSpec.Renderers`, `MetalBenchmark`): the game runs in a **full-screen Space**, not a

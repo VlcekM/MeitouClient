@@ -179,6 +179,18 @@ public sealed class SettingsLooks
     /// </summary>
     public Dictionary<string, float> Faithful { get; set; } = [];
     /// <summary>
+    /// The technique choices' highest value under the Faithful look, by key (none in older schemas): the choices are ordered from off to the most
+    /// Meitou, so Faithful lowers one above it to it and keeps one below (the sun's shadows off stay off), as the game's Faithful does through the
+    /// switches the choice stands for.
+    /// </summary>
+    public Dictionary<string, float> FaithfulCaps { get; set; } = [];
+
+    /// <summary>
+    /// The choices the Faithful look writes, each at its cap (<see cref="FaithfulCaps"/>): those whose value now (<paramref name="current"/>, by key)
+    /// is above it; one at or below is left as it is.
+    /// </summary>
+    public IEnumerable<KeyValuePair<string, float>> CappedChoices(Func<string, float> current) => FaithfulCaps.Where(c => current(c.Key) > c.Value);
+    /// <summary>
     /// The <c>graphics</c> values of the Meitou look, which every preset starts from, by key.
     /// </summary>
     public Dictionary<string, float> Meitou { get; set; } = [];

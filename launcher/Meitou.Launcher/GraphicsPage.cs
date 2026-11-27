@@ -704,9 +704,24 @@ public sealed partial class MainWindow
             LookChoices.ApplyMods(_game, before, look);
         }
         foreach (var (key, value) in faithful ? l.Faithful : LookValues(l, look.Look)) _game.SetGraphics(key, value);
+        if (faithful) CapChoices(l);
         SaveGame();
         Dispatcher.UIThread.Post(ShowGraphics);
     }
+
+    /// <summary>
+    /// Faithful's technique choices (<see cref="SettingsLooks.FaithfulCaps"/>): each lowered to its cap, one already below kept. The game reads a saved
+    /// choice over the switches it stands for, so a choice left above (the indirect light on) would undo the look.
+    /// </summary>
+    void CapChoices(SettingsLooks l)
+    {
+        foreach (var (key, cap) in l.CappedChoices(Current)) _game.SetGraphics(key, cap);
+    }
+
+    /// <summary>
+    /// A setting's value now by its key (0 for a key the page does not have).
+    /// </summary>
+    float Current(string key) => _settingByKey.TryGetValue(key, out var s) ? CurrentValue(s) : 0;
 
     /// <summary>
     /// Saves the look settings as the player's preset <paramref name="name"/> (what differs from Meitou's, as the game saves it) and makes it the

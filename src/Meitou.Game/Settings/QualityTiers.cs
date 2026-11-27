@@ -121,8 +121,22 @@ sealed class QualityTiers(SettingsMenu menu)
         new("Ground trails", false, true, true, High: true),
         new("Water contact foam, wakes and ripples", false, true, true, High: true),
         new(WorldFrame.GrassCoverSwitch, false, true, true, High: true),
+
+        // Effects whose cost shows only in their content (Radeon 8060S, 1080p, High; Observed with fresh blood, in forced rain): the blood on walls
+        // and objects 2.5 ms, the water beads up to 0.6 ms close up, the rain's drops and puddles 0.6-0.7 ms. On from High, as they start.
+        new("Blood on surfaces", false, false, true, High: true),
+        new("Water beads", false, false, true, High: true),
+        new("Rain drops and puddles", false, false, true, High: true),
+
+        // The contact shadows: 0.4-0.8 ms at High (same machine). From Ultra, where they act only without the traced sun (it replaces them).
+        new("Contact shadows", false, false, true, High: false),
         new("Reflections", false, false, true, High: true),
         new("Ground-truth occlusion", false, false, true, High: true),
+
+        // The indirect light and its share indoors: from Ultra, the classes that trace (the tiers below run on GPUs without ray tracing). Before the
+        // traced rows, which follow the indirect light (SwitchTargetHere). Off where the device has no GI (GiSwitches).
+        new("Indirect light", false, false, true, High: false),
+        new("Indoor GI", false, false, true, High: false),
         new("Hybrid GI", false, false, true, High: false),
         new("Traced sun shadows", false, false, true, High: false),
         // Traced lamp shadows: 0.9 to 6.3 ms on an RTX 4090 at 1440p (a lit hall at night the most), so only from the classes that trace the sun.
@@ -160,6 +174,65 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal static readonly string[] TracedSwitches =
         ["Hybrid GI", "Traced sun shadows", WorldFrame.TracedFarCascadesSwitch, "Lamp shadows", WorldFrame.GiCharactersSwitch];
+
+    /// <summary>
+    /// The tier switches of the indirect light itself: off, whatever the tier, on a device without the GI (no ray queries, <c>--no-gi</c>; <see
+    /// cref="GiHere"/>), where the switch reads off whatever it is set to.
+    /// </summary>
+    internal static readonly string[] GiSwitches = ["Indirect light", "Indoor GI"];
+
+    /// <summary>
+    /// The device has the GI: on Metal its switches exist only then (MetalGameLoop), on Vulkan the device was made with ray queries.
+    /// </summary>
+    static bool GiHere => MetalTiers || WorldFrame.RayTracingAvailable;
+
+    /// <summary>
+    /// The graphics settings no tier sets, by their launcher key, each group with why (docs/native-ui.md "Settings"): every other graphics setting
+    /// is a tier row (<see cref="PresetKeys"/>) or the look's (LauncherSchemaTests checks both ways).
+    /// </summary>
+    internal static readonly IReadOnlySet<string> OutsideTiers = new HashSet<string>(
+    [
+        // The anti-aliasing's: the player's, by hardware and taste (the launcher benchmark pins TAA).
+        WorldFrame.DlssPresetSlider, WorldFrame.SmaaQualitySlider, WorldFrame.UpscalerSliders[2],
+
+        // Follows the hardware by itself.
+        WorldFrame.ImpostorBudgetSlider,
+
+        // A matter of taste or content, not of cost.
+        .. SwitchKeys("Gear sway", "Bolt tracers", "Glass bottles", "Polished armour", WorldFrame.NearTreeFadeSwitch, "Soft grazing sun",
+            "Item icons", "Portrait and editor sun", "Character editor bar"),
+
+        // The sky's or the ground's art, not cost.
+        SettingsMenu.SwitchKey("High Altitude Clouds"), WorldFrame.HazeDistanceSlider, WorldFrame.CloudHeightSlider,
+        WorldFrame.GroundParallaxDepthSlider, .. WorldFrame.HighCloudSliders,
+
+        // The Faithful / Meitou base the tier's distances scale from.
+        .. SwitchKeys("Draw distances", "Foliage ranges"),
+
+        // Saves memory for the same picture: on at every tier.
+        SettingsMenu.SwitchKey("Mesh welding"),
+
+        // Save GPU time for the same picture, on at every tier (the look keeps them too, LookPresets.PerformanceSwitches). Observed (Radeon 8060S,
+        // 1080p, Ultra, GPU-bound; the cost of turning each off): character levels up to +1.1 ms, foliage levels +6.0, far impostors +8.8.
+        .. SwitchKeys("Character levels", "Foliage levels", "Far impostors"),
+
+        // No measurable cost (same machine and tier, the noise about 0.3 ms, in close and wide views, the sea's for the water): left at their start
+        // values. The water at 128 segments or the smallest wave grid, the GI parts (with the hybrid GI on) and the characters' and buildings'
+        // detail effects off all stayed within the noise.
+        // With fresh blood about the decal cap (64 to 2048), the blood cells, the bloody footprints and the blood on weapons and gear too.
+        WorldFrame.WaterGridSlider, WorldFrame.WaterOceanSlider, WorldFrame.BloodDrawsSlider,
+        .. SwitchKeys("Blood cells", "Bloody footprints", "Blood on weapons and gear", WorldFrame.GiRelocateSwitch, WorldFrame.GiCloudShadowsSwitch, "Hair highlights", "Cloth sheen", "Skin sheen and glow",
+            "Eye catchlights", "Metal on characters", "Metal on buildings"),
+
+        // The game's NPC View Range: the simulation's on-screen test reads it too (docs/formats/settings.md), so a tier would change play. Observed:
+        // 8000 to 2000 saved 0.5 ms at High and 2.0 at Ultra in a wide low view, nothing near.
+        WorldFrame.CharacterDistanceSlider,
+    ]);
+
+    /// <summary>
+    /// The launcher keys of the switches <paramref name="labels"/>.
+    /// </summary>
+    static IEnumerable<string> SwitchKeys(params string[] labels) => labels.Select(SettingsMenu.SwitchKey);
 
     /// <summary>
     /// The Meitou effects Low sets Faithful, as <c>--low-end</c> does. The look's ones (docs/native-ui.md "Settings") are held off without changing
@@ -276,11 +349,12 @@ sealed class QualityTiers(SettingsMenu menu)
     };
 
     /// <summary>
-    /// <see cref="SwitchTarget"/> on this device: a switch that needs the traced scene (<see cref="TracedSwitches"/>) is off while the indirect light
-    /// is.
+    /// <see cref="SwitchTarget"/> on this device: the GI's own switches (<see cref="GiSwitches"/>) are off without the GI, and a switch that needs
+    /// the traced scene (<see cref="TracedSwitches"/>) is off while the indirect light is.
     /// </summary>
     internal bool SwitchTargetHere(PresetToggle p, bool start, int preset) =>
         SwitchTarget(p, start, preset)
+        && (!GiSwitches.Contains(p.Label) || GiHere)
         && (!TracedSwitches.Contains(p.Label) || menu.Values.Toggles.Any(t => t.Label == "Indirect light" && t.Get()));
 
     /// <summary>
@@ -314,7 +388,8 @@ sealed class QualityTiers(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The graphics keys a preset may set: a launcher that changes one of them no longer asks for a preset.
+    /// The graphics keys a preset may set: a launcher that changes one of them no longer asks for a preset. The technique choices count, as each
+    /// stands for tier switches and the launcher writes the choice alone.
     /// </summary>
     internal static IEnumerable<string> PresetKeys()
     {
@@ -322,6 +397,7 @@ sealed class QualityTiers(SettingsMenu menu)
         return PresetSliders.Select(p => p.Label)
             .Append(WorldFrame.ParticleSliders[0])
             .Concat(WorldFrame.UpscalerSliders.Take(2))
+            .Concat(WorldFrame.ChoiceSliders)
             .Concat(switches.Select(label => SettingsMenu.SwitchKeyPrefix + label))
             .Distinct();
     }
@@ -350,6 +426,33 @@ sealed class QualityTiers(SettingsMenu menu)
     }
 
     /// <summary>
+    /// The settings the start log line names besides the tier: the technique choices, then the anti-aliasing and render scale (Vulkan's, Metal's).
+    /// </summary>
+    static readonly string[] StartLineSliders =
+    [
+        .. WorldFrame.ChoiceSliders, WorldFrame.UpscalerSliders[0], WorldFrame.UpscalerSliders[1], SettingsMenu.MetalUseUpscalingSlider,
+        SettingsMenu.MetalRenderScaleSlider,
+    ];
+
+    /// <summary>
+    /// The start's log line of what the run draws with (docs/bench.md "Play benchmark"), once the saved settings, the preset and a benchmark tier
+    /// are applied: the tier the settings sit at and the saved preset's name, the technique choices, the anti-aliasing and render scale, and
+    /// whether the device has the GI. The quality preset leaves the anti-aliasing to the player.
+    /// </summary>
+    internal string StartLine()
+    {
+        var values = StartLineSliders
+            .Select(label => menu.Values.Sliders.FirstOrDefault(s => s.Label == label))
+            .OfType<Slider>()
+            .Select(s => $"{s.Label} = {s.Get():0.##}");
+        bool gi = GiHere && menu.Values.Toggles.Any(t => t.Label == "Indirect light");
+        string saved = menu.Config.GraphicsPreset ?? "none";
+        string tier = PresetNames[CurrentPreset()];
+
+        return $"settings  preset {tier} (saved {saved}); {string.Join("; ", values)}; GI on the device: {(gi ? "yes" : "no")}";
+    }
+
+    /// <summary>
     /// <c>--benchmark-baseline</c>, at start instead of the saved settings: the Medium tier, then no GI, ground parallax or tessellation (Medium's
     /// rock smoothing too), no upscaler and SMAA at full size. Nothing is saved (GameHost leaves the saved graphics as they are).
     /// </summary>
@@ -373,29 +476,25 @@ sealed class QualityTiers(SettingsMenu menu)
     /// <summary>
     /// The launcher benchmark's tier (<c>--benchmark</c>, docs/bench.md "Launcher benchmark"), at start instead of the saved settings: the Meitou
     /// look, the tier, its traced switches, then the anti-aliasing: an upscaler (FSR, DLSS) becomes TAA and every tier but Low draws at render
-    /// scale 1 (Low keeps its own anti-aliasing and scale). A tier without traced switches has no indirect light either (no ray queries on the
-    /// device). Nothing is saved.
+    /// scale 1 (Low keeps its own anti-aliasing and scale). The indirect light is the tier's, as in the game (a tier without it has no ray queries
+    /// on the device either, WorldOptions.ApplyBenchmarkTier). Nothing is saved.
     /// </summary>
     internal void ApplyBenchmarkTier(int tier)
     {
         menu.LookPresets.ApplyLook(LookPresets.MeitouLook);
         ApplyPreset(tier);
         ApplyTracedSwitches(tier);
-        if (!NeedsRayQueries(tier))
-        {
-            foreach (var toggle in menu.Values.Toggles.Where(t => t.Label is "Indirect light" or "Indoor GI" && t.Get())) toggle.Set(false);
-        }
-
         if (tier != LowPreset) SetBenchmarkAntiAliasing();
         menu.Notice = "";
         LastTier = CurrentPreset();
     }
 
     /// <summary>
-    /// Whether tier <paramref name="tier"/> turns on a switch that needs ray queries (<see cref="TracedSwitches"/>), from the tables alone.
+    /// Whether tier <paramref name="tier"/> turns on a switch that needs ray queries (<see cref="GiSwitches"/>, <see cref="TracedSwitches"/>), from
+    /// the tables alone.
     /// </summary>
     internal static bool NeedsRayQueries(int tier) =>
-        PresetToggles.Any(p => TracedSwitches.Contains(p.Label) && TableSwitch(p, tier) == true);
+        PresetToggles.Any(p => (GiSwitches.Contains(p.Label) || TracedSwitches.Contains(p.Label)) && TableSwitch(p, tier) == true);
 
     /// <summary>
     /// The table's value of <paramref name="p"/> at <paramref name="tier"/> (High's own, else the tier's factor or fixed value); null where the
