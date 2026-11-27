@@ -25,15 +25,31 @@ static class LightingHooks
     public const int MaxVectors = 32;
 
     /// <summary>
+    /// The lighting hooks' textures together: <c>uModTexture0</c> to <c>uModTexture3</c>.
+    /// </summary>
+    public const int MaxTextures = CodeModLighting.MaxTextures;
+
+    /// <summary>
     /// One installed hook: the mod, its GLSL with its names made its own (<see cref="LightingHookFile"/>), which of the three functions it
     /// defines, and where its numbers sit in <c>uModLight</c> (the switch at <see cref="First"/>, then the parameters in manifest order).
     /// </summary>
-    internal sealed record Hook(string ModId, string Text, IReadOnlyList<CodeModLightingParam> Params, int First, bool Albedo, bool Light, bool Lit);
+    internal sealed record Hook(string ModId, string Text, IReadOnlyList<CodeModLightingParam> Params, int First, bool Albedo, bool Light, bool Lit)
+    {
+        /// <summary>
+        /// The images its GLSL reads, each with the sampler it has among <c>uModTexture0</c>..; empty when it declares none.
+        /// </summary>
+        public IReadOnlyList<HookTexture> Textures { get; init; } = [];
+    }
 
     /// <summary>
-    /// A hook to install: the mod, its manifest's declaration and its file's text.
+    /// One texture of an installed hook: the name its GLSL reads it by, its image's full path, whether it tiles, and which of the samplers it is.
     /// </summary>
-    internal readonly record struct Source(string ModId, CodeModLighting Declared, string Text);
+    internal readonly record struct HookTexture(string Name, string Path, bool Repeat, int Slot);
+
+    /// <summary>
+    /// A hook to install: the mod, its manifest's declaration, its file's text and the mod's folder (where its textures are).
+    /// </summary>
+    internal readonly record struct Source(string ModId, CodeModLighting Declared, string Text, string Folder = "");
 
     /// <summary>
     /// What <c>uModLight</c> holds: each hook's switch (1 on) and parameters. Written by the mods' handles, read each frame by the frame globals.
@@ -83,7 +99,7 @@ static class LightingHooks
         int next = 0;
         foreach (var source in sources)
         {
-            var hook = Make(source, hooks.Count, next, out string? reason);
+            var hook = Make(source, hooks.Count, next, hooks.Sum(h => h.Textures.Count), out string? reason);
             reason ??= hook is null ? null : CompileProblem([.. hooks, hook]);
             if (hook is null || reason is not null)
             {
@@ -101,20 +117,31 @@ static class LightingHooks
     }
 
     /// <summary>
-    /// Hook <paramref name="index"/> of a checked source with its numbers from <paramref name="first"/>; null, with the reason, when the file
-    /// or the room fails.
+    /// Hook <paramref name="index"/> of a checked source with its numbers from <paramref name="first"/> and its textures from sampler
+    /// <paramref name="firstTexture"/>; null, with the reason, when the file or the room fails.
     /// </summary>
-    static Hook? Make(in Source source, int index, int first, out string? reason)
+    static Hook? Make(in Source source, int index, int first, int firstTexture, out string? reason)
     {
-        if (first + 1 + source.Declared.Params.Count > MaxVectors * 4)
-        {
-            reason = $"the lighting hooks hold {MaxVectors * 4} numbers together, and they are taken";
-            return null;
-        }
+        reason = first + 1 + source.Declared.Params.Count > MaxVectors * 4
+            ? $"the lighting hooks hold {MaxVectors * 4} numbers together, and they are taken"
+            : firstTexture + source.Declared.Textures.Count > MaxTextures ? $"the lighting hooks hold {MaxTextures} textures together, and they are taken"
+            : null;
+        if (reason is not null) return null;
 
         var read = LightingHookFile.Parse(source.Text, index, out reason);
-        return read is null ? null : new Hook(source.ModId, read.Text, source.Declared.Params, first, read.Albedo, read.Light, read.Lit);
+        if (read is null) return null;
+
+        string folder = source.Folder;
+        return new Hook(source.ModId, read.Text, source.Declared.Params, first, read.Albedo, read.Light, read.Lit)
+        {
+            Textures = [.. source.Declared.Textures.Select((t, i) => new HookTexture(t.Name, Path.Combine(folder, t.File), t.Repeat, firstTexture + i))],
+        };
     }
+
+    /// <summary>
+    /// The sampler of a texture slot, as the lighting text and the frame globals name it.
+    /// </summary>
+    internal static string TextureUniform(int slot) => string.Create(CultureInfo.InvariantCulture, $"uModTexture{slot}");
 
     /// <summary>
     /// Turns a mod's hook on or off (nothing for a mod without one): on while the mod runs, from its <c>Initialize</c>.
@@ -272,13 +299,15 @@ static class LightingHooks
     }
 
     /// <summary>
-    /// The hooks' GLSL: <c>uModLight</c>, what a hook reads (<see cref="Inputs"/>), each mod's file with its parameters given their place in
-    /// <c>uModLight</c>, then the three functions the lighting calls, which run each mod's behind its switch, and whether any switch is on.
+    /// The hooks' GLSL: <c>uModLight</c>, the textures' samplers, what a hook reads (<see cref="Inputs"/>), each mod's file with its parameters
+    /// given their place in <c>uModLight</c> and its textures their sampler, then the three functions the lighting calls, which run each mod's behind its switch, and whether any switch is on.
     /// </summary>
     internal static string Block(IReadOnlyList<Hook> hooks)
     {
         var sb = new StringBuilder();
-        sb.Append("\nuniform vec4 uModLight[").Append(MaxVectors).Append("];\n").Append(Inputs.ReplaceLineEndings("\n"));
+        sb.Append("\nuniform vec4 uModLight[").Append(MaxVectors).Append("];\n");
+        foreach (var texture in hooks.SelectMany(h => h.Textures)) sb.Append("uniform sampler2D ").Append(TextureUniform(texture.Slot)).Append(";\n");
+        sb.Append(Inputs.ReplaceLineEndings("\n"));
         foreach (var hook in hooks) AppendHook(sb, hook);
         AppendCalls(sb, hooks, LightingHookFile.Albedo, "vec3 albedo", "albedo", h => h.Albedo);
         AppendCalls(sb, hooks, LightingHookFile.Light, "vec3 light, vec3 sun, vec3 sky, vec3 n, vec3 v", "light, sun, sky, n, v", h => h.Light);
@@ -289,15 +318,18 @@ static class LightingHooks
     }
 
     /// <summary>
-    /// One mod's file between the macros that give its parameters their place in <c>uModLight</c> (<c>PARAM_name</c>).
+    /// One mod's file between the macros that give its parameters their place in <c>uModLight</c> (<c>PARAM_name</c>) and its textures their
+    /// sampler (<c>TEXTURE_name</c>).
     /// </summary>
     static void AppendHook(StringBuilder sb, Hook hook)
     {
         sb.Append("// ---- lighting hook of mod ").Append(hook.ModId).Append(" ----\n");
         for (int p = 0; p < hook.Params.Count; p++)
             sb.Append("#define PARAM_").Append(hook.Params[p].Name).Append(' ').Append(Slot(hook.First + 1 + p)).Append('\n');
+        foreach (var t in hook.Textures) sb.Append("#define TEXTURE_").Append(t.Name).Append(' ').Append(TextureUniform(t.Slot)).Append('\n');
         sb.Append(hook.Text.ReplaceLineEndings("\n")).Append('\n');
         foreach (var p in hook.Params) sb.Append("#undef PARAM_").Append(p.Name).Append('\n');
+        foreach (var t in hook.Textures) sb.Append("#undef TEXTURE_").Append(t.Name).Append('\n');
     }
 
     /// <summary>

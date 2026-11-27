@@ -120,6 +120,10 @@ static partial class NativeShaders
             uint atmoLayerNormal;
             vec4 foliageNear;
             vec4 modLight[32];
+            uint modTexture0;
+            uint modTexture1;
+            uint modTexture2;
+            uint modTexture3;
         } frame;
 
         """;
@@ -258,6 +262,8 @@ static partial class NativeShaders
         ["uGrassRayReach"] = "frame.grassRayReach", ["uWetClock"] = "frame.wetClock", ["uWetWorld"] = "frame.wetWorld",
         ["uWetSplash"] = "frame.wetSplash", ["uFoliageNear"] = "frame.foliageNear",
         ["uModLight"] = "frame.modLight",
+        ["uModTexture0"] = "textures2D[frame.modTexture0]", ["uModTexture1"] = "textures2D[frame.modTexture1]",
+        ["uModTexture2"] = "textures2D[frame.modTexture2]", ["uModTexture3"] = "textures2D[frame.modTexture3]",
         ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
         ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
         ["uLightGrid"] = "frame.lightGrid", ["uLightCells"] = "textures2D[frame.lightCells]", ["uLightIndex"] = "textures2D[frame.lightIndex]",
@@ -439,7 +445,7 @@ static partial class NativeShaders
 /// <summary>
 /// The C# side of <see cref="NativeShaders.FrameBlock"/> (std140; offsets checked against the reflection by a test).
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 9504)]
+[StructLayout(LayoutKind.Explicit, Size = 9520)]
 unsafe struct FrameConstants
 {
     /// <summary>
@@ -745,6 +751,26 @@ unsafe struct FrameConstants
     [FieldOffset(8992)] public fixed float ModLight[128];
 
     /// <summary>
+    /// The bindless indices of <c>uModTexture0</c> to <c>uModTexture3</c>, the lighting hooks' textures (<c>LightingHookTextures</c>).
+    /// </summary>
+    [FieldOffset(9504)] public uint ModTexture0;
+
+    /// <summary>
+    /// See <see cref="ModTexture0"/>.
+    /// </summary>
+    [FieldOffset(9508)] public uint ModTexture1;
+
+    /// <summary>
+    /// See <see cref="ModTexture0"/>.
+    /// </summary>
+    [FieldOffset(9512)] public uint ModTexture2;
+
+    /// <summary>
+    /// See <see cref="ModTexture0"/>.
+    /// </summary>
+    [FieldOffset(9516)] public uint ModTexture3;
+
+    /// <summary>
     /// The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.
     /// </summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -777,6 +803,8 @@ unsafe struct FrameConstants
         ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692),
         ("uAtmoLayerClouds", BindlessKind.Texture2D, 8960), ("uAtmoLayerTile", BindlessKind.Texture2D, 8964),
         ("uAtmoLayerNormal", BindlessKind.Texture2D, 8968),
+        ("uModTexture0", BindlessKind.Texture2D, 9504), ("uModTexture1", BindlessKind.Texture2D, 9508),
+        ("uModTexture2", BindlessKind.Texture2D, 9512), ("uModTexture3", BindlessKind.Texture2D, 9516),
     ];
 }
 

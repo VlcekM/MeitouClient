@@ -148,7 +148,7 @@ sealed class GameMods(GameHost host)
             var manifest = Content.CodeModManifest.Read(Path.Combine(mod.Folder, Content.ModList.CodeManifestFile));
             if (manifest.Lighting is not { } lighting) return null;
 
-            return new LightingHooks.Source(manifest.Id, lighting, File.ReadAllText(Path.Combine(mod.Folder, lighting.File)));
+            return new LightingHooks.Source(manifest.Id, lighting, File.ReadAllText(Path.Combine(mod.Folder, lighting.File)), mod.Folder);
         }
         catch (InvalidDataException)
         {

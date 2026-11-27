@@ -129,9 +129,9 @@ static partial class LightingHookFile
         if (Reserved.Contains(name)) return $"the declaration at '{name}' cannot be read: put the name right after its type";
         if (SwizzleRegex().IsMatch(name)) return $"'{name}' is declared at file scope: a name made of xyzw, rgba or stpq alone would rename every swizzle";
         bool kept = name.StartsWith("gl_", StringComparison.Ordinal) || name.StartsWith("meitou", StringComparison.Ordinal)
-            || name.StartsWith("PARAM_", StringComparison.Ordinal);
+            || name.StartsWith("PARAM_", StringComparison.Ordinal) || name.StartsWith("TEXTURE_", StringComparison.Ordinal);
 
-        return kept ? $"'{name}' is declared at file scope: gl_, meitou and PARAM_ names are the game's" : null;
+        return kept ? $"'{name}' is declared at file scope: gl_, meitou, PARAM_ and TEXTURE_ names are the game's" : null;
     }
 
     /// <summary>

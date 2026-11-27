@@ -351,7 +351,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   stand-in normals, with and without TAA and FXAA; a broken fragment and a throwing `Prepare` turned off; every pass off draws the plain chain.
   **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod in a new game, offscreen): a scene pass tinting the picture before the
   tone map, a picture pass drawing depth outlines and the surfaces' normals under the interface.
-- **Lighting hooks:** `"lighting": { "file": "toon.glsl", "params": { "strength": 1.0 } }` in `meitou.json` (`CodeModLighting`) puts a mod's
+- **Lighting hooks:** `"lighting": { "file": "toon.glsl", "params": { "strength": 1.0 }, "textures": { "ramp": "ramp.png" } }` in
+  `meitou.json` (`CodeModLighting`) puts a mod's
   GLSL into `kenshiLight`, the one function every lit surface goes through (terrain, buildings, characters, foliage, grass, debris,
   impostors; `AtmosphereShaders.Functions`), with no Harmony patch on the shader compiler. The file defines any of
   `vec3 hookAlbedo(vec3 albedo)` (the surface colour before it is lit),
@@ -364,16 +365,22 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   `PARAM_name` and set while the game runs: `context.Lighting` (`LightingHook`, null without an installed hook) has `Enabled`,
   `Set(name, value)`, `Get(name)` and `Params`, from any thread, drawn from the next frame with no recompile. The switches and parameters
   are one frame-global array (`uModLight[32]`: 128 numbers for every mod, one switch and at most 31 parameters each;
-  `FrameConstants.ModLight` in the native model, both backends). The hook is off until the mod's `Initialize` starts (so not over the
+  `FrameConstants.ModLight` in the native model, both backends). A texture is read in the GLSL as `TEXTURE_name`, a `sampler2D`
+  (`texture(TEXTURE_ramp, uv)`): `textures` names each image in the mod's folder, as its file (`"ramp": "ramp.png"`: the edge pixels go on
+  past the image) or as `{ "file": "noise.png", "repeat": true }` (it tiles); PNG, TGA, JPG or the top level of a DDS, kept as RGBA 8 bits a
+  channel as the file holds them (no colour conversion), with mip levels made from it, loaded once at the start. The hooks hold 4
+  textures together (`uModTexture0` to `3`, `LightingHookTextures`): frame globals, read through the bindless table by a native program
+  and as a sampler of its own by a legacy one (each is then one of the 16 direct samplers a Metal fragment stage has). A hook past the
+  fourth texture is left out; an image that cannot be loaded is logged and reads black. The hook is off until the mod's `Initialize` starts (so not over the
   title) and off again when it throws; with every hook off the hooks' part of the shader is skipped whole.
   The files are read from the manifests at the game's start (`GameMods.InstallLightingHooks`), before any lit program is compiled, because
   the lighting text is made once: a file changed later takes effect at the next start. Every name a file declares at file scope (function,
   constant, struct, macro) gets a name of its own in the shaders (`LightingHookFile`: `meitouHook<n>_<name>`, every use renamed with it), so
   a helper may have any name and two mods may share one. A file is left out, with a log line, when it holds `#version`, `#extension`,
-  `#include` or `#pragma`; `uniform`, `in`, `out` or `layout` at file scope (no texture or input of its own); `discard`, a derivative or
-  `gl_Frag*` (the grass lights its vertices); a declared name that reads as a swizzle (`xy`, `rgb`) or starts with `gl_`, `meitou` or
-  `PARAM_`; a declaration the check cannot read (the name must follow its type); or when the hooks so far plus this one do not compile
-  together in a scratch vertex and fragment stage. It sees its own names, its `PARAM_`s and the four inputs above, not the game's functions
+  `#include` or `#pragma`; `uniform`, `in`, `out` or `layout` at file scope (no input of its own beside the declared textures); `discard`, a
+  derivative or `gl_Frag*` (the grass lights its vertices); a declared name that reads as a swizzle (`xy`, `rgb`) or starts with `gl_`,
+  `meitou`, `PARAM_` or `TEXTURE_`; a declaration the check cannot read (the name must follow its type); or when the hooks so far plus this one do not compile
+  together in a scratch vertex and fragment stage. It sees its own names, its `PARAM_`s and `TEXTURE_`s and the four inputs above, not the game's functions
   or uniforms. Without an installed hook the lighting text is the game's own, character for character.
   What later passes add follows the hooks (`LightingHooks.BeforeReturn`): the traced sun's term is written as the hooked colour with the sun
   less the hooked colour without it, so it is exact where a ray's mask is 0 or 1 and a straight line across a penumbra; the albedo the lit
@@ -381,8 +388,7 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   hooks gave the light and the lit colour (clamped to 1), so those passes add and take back hooked light to the first order: a `hookLight`
   that bands the light keeps the bands it made from the sky's ambient, and the probes' share changes them smoothly. `file`: a path inside the
   mod's folder, at most 128 KiB; `params`: names of letters, digits and `_` (at most 32 characters) with the number each starts at. An older
-  game ignores the key. Not offered: a texture of the hook's own (a sampler more in every lit program, of which Metal's legacy programs
-  have 16).
+  game ignores the key.
   **Verified** by `LightingHookTests`: the file checks and the renaming; two hooks with the same helper name installed and compiled
   together, a broken one and one calling a game function refused, none taken once the text is made; the lighting text with the hooks in
   compiles as a lit vertex stage and a lit fragment stage, and without a hook is the same text. `NativeShaderTests` checks the frame
@@ -390,8 +396,8 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod in a new game, offscreen): the hook installed at the start, every
   program compiled; `hookLight` banding the ground's light by day with the cascades and with the traced sun, traced lamp shadows and
   reflections on (the two pictures differ as the game's own two do, at the shadows' edges), the lamps' light kept at night; `hookAlbedo`
-  saturating and `hookLit` tinting every lit surface, each by its parameter; switched off, the picture is the same as without the mod, pixel
-  for pixel.
+  saturating and `hookLit` tinting every lit surface, each by its parameter; a clamped ramp image and a tiling hatch image read by
+  `hookLight` on the terrain, the buildings and the foliage; switched off, the picture is the same as without the mod, pixel for pixel.
 - **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
   blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
   armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim
