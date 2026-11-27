@@ -996,7 +996,7 @@ public sealed partial class World
     /// The bar of Task_LockDoor and Task_UnlockDoor (<c>ProgressBarTask</c>, captions "Locking" and "Unlocking", <b>Verified</b>
     /// <c>FUN_140351fd0</c>, <c>FUN_140352140</c>), while the character works the lock (<see cref="CharacterCold.LockWork"/>).
     /// </summary>
-    TaskBar? LockBar(CharacterCold c) => c.LockWork.Tick >= Tick - 1
+    TaskBar? LockBar(CharacterCold c) => c.LockWork.Tick >= 0 && c.LockWork.Tick >= Tick - 1   // -1 is never (also tick - 1 at tick 0)
         ? new TaskBar(c.LockWork.Locking ? Loc.Tr("Locking") : Loc.Tr("Unlocking"), c.LockWork.Fill)
         : null;
 
