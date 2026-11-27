@@ -2,6 +2,12 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.22.0
+
+- macOS: launches the new engine `.app` bundle (Game Mode support), adds Metal benchmarking and Apple GPU tiers, and improves Steam Workshop sync (#1510)
+- Reads the mod list of edited saves with type 16/17 FCS headers so they can continue from the launcher (#1490)
+- Settings updated for v0.24.0: split texture quality, upscaler-aware anti-aliasing and render scale rows with SMAA quality (#1492), Metal GI, 2D skybox clouds (#1475), Drop from loot (#1470), and optional load-time armour clipping fixes (#1531)
+
 ## v1.21.3
 
 - The Mods page offers more endorsed RE_Kenshi ports from the wishlist and recognizes either endorsed Sparring port when installed.
