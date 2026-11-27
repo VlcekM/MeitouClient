@@ -2589,6 +2589,10 @@ msgstr ""
 msgid "Hybrid tone map: ACES share"
 msgstr ""
 
+#: src/Meitou.Simulation/Construction/ConstructionSystem.cs
+msgid "I don't have any {1}."
+msgstr ""
+
 #: src/Meitou.Game/Title/FrontendScreens.cs src/Meitou.Game/Title/TitleMenu.cs
 msgid "IMPORT GAME"
 msgstr ""

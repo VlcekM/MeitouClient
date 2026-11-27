@@ -115,8 +115,10 @@ while the character has room, then ends. Meitou takes the material instead of th
 Missing-material speech: **Verified** text in the original `locale/zh_CN/LC_MESSAGES/main.po`, source annotation
 `character.cpp:3412`: "I don't have any building materials." / "我没有建筑材料了。" The separate GOAP.cpp:490
 line is "I don't have any materials". **Observed** (user report): repeating a manual build order without materials
-shows a character speech bubble. Meitou emits the character-order line once per explicit order when the site is stalled,
-the builder carries no needed material and no fetch source exists.
+shows a character speech bubble. Meitou says it once per explicit order when the site is stalled, the builder carries no
+needed material and no fetch source exists, and names the materials the site still owes ("I don't have any Iron Plates.";
+engine choice: the original's line names none, so a builder carrying Building Materials for a site that wants Iron Plates
+seemed to deny holding them).
 
 ### Builders and dismantle
 

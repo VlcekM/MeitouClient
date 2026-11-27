@@ -5931,3 +5931,7 @@ msgstr "Пересечение брони"
 #. machine-translated
 msgid "Fits male-only armour meshes worn by female characters clear of the body and tucks bulky leg armour under long coats when no overlap mesh is supplied. Applies to newly loaded or re-equipped characters."
 msgstr "Подгоняет только мужские модели брони на женских персонажах, чтобы они не проваливались в тело, и убирает объёмную броню ног под длинные плащи, если нет модели перекрытия. Применяется к новым или переодетым персонажам."
+
+#. machine-translated
+msgid "I don't have any {1}."
+msgstr "У меня нет: {1}."
