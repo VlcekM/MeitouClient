@@ -75,14 +75,14 @@ public sealed class LuaHudOverlay
     }
 
     /// <summary>
-    /// Registers this overlay on <paramref name="screens"/> once.
+    /// Registers this overlay as a HUD panel on <paramref name="screens"/> once (drawn beneath windows, never closed by Escape).
     /// </summary>
     public void EnsureRegistered(MyGuiScreenHost screens)
     {
         if (_registered) return;
 
         _registered = true;
-        screens.Register(ScreenId, BuildLayout());
+        screens.RegisterPanel(ScreenId, BuildLayout());
     }
 
     /// <summary>

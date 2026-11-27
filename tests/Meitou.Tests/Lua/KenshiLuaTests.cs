@@ -229,6 +229,24 @@ public sealed class KenshiLuaTests
     }
 
     /// <summary>
+    /// The overlay is registered as a HUD panel, so Escape does not close it or swallow the key before the game menu opens.
+    /// </summary>
+    [Fact]
+    public void LuaHudOverlay_IsRegisteredAsPanel_AndIgnoresEscape()
+    {
+        LuaHudState hud = new();
+        LuaHudOverlay overlay = new(hud, (_, _) => { });
+        MyGuiScreenHost screens = new(new());
+
+        Assert.True(hud.SetText("kl:Demo", "lbl0", 0.1, 0.1, 0.2, 0.04, "HUD", "#FFFFFF"));
+        overlay.SyncOpen(screens);
+        Assert.True(screens.IsOpen(LuaHudOverlay.ScreenId));
+
+        Assert.False(screens.Escape());
+        Assert.True(screens.IsOpen(LuaHudOverlay.ScreenId));
+    }
+
+    /// <summary>
     /// <c>Meitou.spawn</c>, <c>waitFrames</c>, <c>waitUntil</c>, <c>after</c>, and <c>cancel</c> advance cooperatively across frames.
     /// </summary>
     [Fact]
