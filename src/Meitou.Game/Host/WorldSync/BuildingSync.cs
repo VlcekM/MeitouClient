@@ -527,12 +527,14 @@ sealed class BuildingSync(GameHost host)
     {
         if (host.Gpu.Objects?.FloorHit(origin, direction, host.Interiors.ViewedFloorValue, length) is not { } hit) return null;
 
-        var floor = GhostFloorOf(hit.Room, hit.Room.FloorAt(hit.Position)) with
+        int floorIndex = hit.Room.FloorAt(hit.Position);
+        var floor = GhostFloorOf(hit.Room, floorIndex) with
         {
             Ceiling = hit.Room.CeilingAbove(hit.Position),
             Normal = hit.Room.FloorNormal(hit.Position, host.Interiors.ViewedFloorValue, FloorSurfaces.RayStart),
             Structure = hit.Room.StructureCuts,
             Roof = hit.Room.RoofCuts,
+            FloorY = (x, z) => hit.Room.HighestFloorUpTo(x, z, floorIndex),
         };
         return (hit.Position, floor);
     }

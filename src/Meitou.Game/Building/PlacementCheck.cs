@@ -76,6 +76,11 @@ public sealed record GhostFloor(string Building, Vector2[] Footprint, int Floor,
     public Func<FootprintPrism, float, bool>? Roof { get; init; }
 
     /// <summary>
+    /// The height of this floor of the building at a world X/Z, null where it has none or when it is not known.
+    /// </summary>
+    public Func<float, float, float?>? FloorY { get; init; }
+
+    /// <summary>
     /// The parent the placed building records: the site's id, or the level building's instance id.
     /// </summary>
     public string Parent => Level ?? Building;
@@ -308,6 +313,10 @@ public static class PlacementCheck
     /// </summary>
     const float RoofClearance = 12;
     /// <summary>
+    /// The most a sloping floor may rise under a ghost's footprint before the rise counts as a step it cannot stand over (engine choice).
+    /// </summary>
+    const float MaxFloorRise = 5;
+    /// <summary>
     /// The slope the original refuses outright (the ground's normal Y below 0.2).
     /// </summary>
     const float SteepestNormalY = 0.2f;
@@ -513,7 +522,7 @@ public static class PlacementCheck
     {
         if (q.On is not { } on || q.Services.Footprint(q.Building.Id) is not { } footprint) return false;
 
-        float floor = q.Position.Y + MathF.Max(footprint.YMin, 0);
+        float floor = q.Position.Y + MathF.Max(footprint.YMin, 0) + FloorRise(on, q.Position.Y, hull);
         float top = q.Position.Y + footprint.YMax - StructureClearance;
         return Cuts(on.Structure, hull, floor + StructureClearance, top) || Cuts(on.Roof, hull, floor + RoofClearance, top);
     }
@@ -546,6 +555,21 @@ public static class PlacementCheck
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// How far the floor rises over <paramref name="originY"/> under the footprint <paramref name="hull"/> (at most <see cref="MaxFloorRise"/>): a ghost
+    /// on a sloping floor stands on its highest point, so a large one is not cut by the floor itself (#1523: a Longhouse floor rising 4 over a workbench).
+    /// </summary>
+    static float FloorRise(GhostFloor on, float originY, Vector2[] hull)
+    {
+        if (on.FloorY is not { } floorY) return 0;
+
+        float rise = 0;
+        foreach (var p in hull)
+            if (floorY(p.X, p.Y) is { } y) rise = MathF.Max(rise, y - originY);
+
+        return MathF.Min(rise, MaxFloorRise);
     }
 
     /// <summary>
