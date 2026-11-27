@@ -549,10 +549,36 @@ public sealed class Fixture
 /// <summary>
 /// A door as the snapshot shows it (<see cref="WorldSnapshot.Doors"/>): its open amount 0..1, motion, whether it is effectively locked and whether it
 /// wants to lock; for the sounds, whether it is broken, where it is (the leaf's centre once known, else its building's origin), its own BUILDING
-/// record (<c>door type</c>) and its lock's level (the Pick Lock chance).
+/// record (<c>door type</c>), its lock's level (the Pick Lock chance) and whether it is damaged (below its whole progress and not broken: the
+/// owner's menu offers Repair, <see cref="Fixture.DoorProgress"/>).
 /// </summary>
 public readonly record struct DoorView(float Open, DoorMotion Motion, bool Locked, bool WantsLock, bool Broken = false, Vector3 Position = default,
-        string Record = "", int Level = 0);
+        string Record = "", int Level = 0, bool Damaged = false)
+{
+    /// <summary>
+    /// The signature before <c>Damaged</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public DoorView(float open, DoorMotion motion, bool locked, bool wantsLock, bool broken, Vector3 position, string record, int level)
+        : this(open, motion, locked, wantsLock, broken, position, record, level, false)
+    {
+    }
+
+    /// <summary>
+    /// The signature before <c>Damaged</c>, kept for code mods built against it (docs/modding.md "API compatibility").
+    /// </summary>
+    public void Deconstruct(out float open, out DoorMotion motion, out bool locked, out bool wantsLock, out bool broken, out Vector3 position,
+        out string record, out int level)
+    {
+        open = Open;
+        motion = Motion;
+        locked = Locked;
+        wantsLock = WantsLock;
+        broken = Broken;
+        position = Position;
+        record = Record;
+        level = Level;
+    }
+}
 
 /// <summary>
 /// The doors of the building the HUD shows (<see cref="InspectBuildingCommand"/>), in the building's door order: what the panel's door lines say;

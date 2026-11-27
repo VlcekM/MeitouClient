@@ -503,7 +503,14 @@ sealed class FurnitureUse(PlayerInterface player)
     internal bool DoorBroken(DoorPick door) => player.Session.CurrentSnapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Broken;
 
     /// <summary>
-    /// The broken door's Repair (95): the selection repairs it; with Shift it also takes the Engineer job (125, the job of 95), as a site's Repair.
+    /// Whether the door is damaged: below its whole progress and not broken (<see cref="Meitou.Simulation.Locks.DoorView.Damaged"/>, a bash blow
+    /// short of breaking it); the player's own takes Repair (95) before its other verbs.
+    /// </summary>
+    internal bool DoorDamaged(DoorPick door) => player.Session.CurrentSnapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Damaged;
+
+    /// <summary>
+    /// A broken or damaged door's Repair (95): the selection repairs it; with Shift it also takes the Engineer job (125, the job of 95), as a site's
+    /// Repair.
     /// </summary>
     internal void RepairDoor(DoorPick door)
     {

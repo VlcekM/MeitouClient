@@ -383,8 +383,8 @@ public sealed partial class FixtureRegistry
             ??= _all.Where(f => f.Kind == FixtureKind.Door).ToLookup(f => f.Building, StringComparer.Ordinal);
 
     /// <summary>
-    /// The doors of the player's buildings and every other door that is not plainly closed and unlocked (open, moving, locked, set to lock or
-    /// broken), for the snapshot; a new dictionary only when one of them changed.
+    /// The doors of the player's buildings and every other door that is not plainly closed, unlocked and whole (open, moving, locked, set to lock,
+    /// broken or damaged), for the snapshot; a new dictionary only when one of them changed.
     /// </summary>
     internal IReadOnlyDictionary<(string Building, int Door), DoorView> PublishedDoors()
     {
@@ -395,7 +395,8 @@ public sealed partial class FixtureRegistry
             var f = _doorList[i];
             if (f.Kind != FixtureKind.Door || !Shown(f)) continue;
             key = Rng.Mix(key ^ (ulong)i) ^ BitConverter.SingleToUInt32Bits(f.OpenAmount) ^ ((ulong)f.Motion << 32)
-                    ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 40 : 0) ^ (f.WantsLock ? 1UL << 41 : 0) ^ (f.DoorBroken ? 1UL << 42 : 0);
+                    ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 40 : 0) ^ (f.WantsLock ? 1UL << 41 : 0) ^ (f.DoorBroken ? 1UL << 42 : 0)
+                    ^ (Damaged(f) ? 1UL << 43 : 0);
         }
 
         if (key == _publishedDoorsKey) return _publishedDoors;
@@ -405,7 +406,7 @@ public sealed partial class FixtureRegistry
             if (Shown(f))
             {
                 doorViews[(f.Building, f.DoorIndex)] = new DoorView(f.OpenAmount, f.Motion, f.Lock is { EffectivelyLocked: true }, f.WantsLock,
-                        f.DoorBroken, DoorSpotOf(f)?.Centre ?? f.Position, f.RecordId, f.Lock?.Level ?? 0);
+                        f.DoorBroken, DoorSpotOf(f)?.Centre ?? f.Position, f.RecordId, f.Lock?.Level ?? 0, Damaged(f));
             }
         }
 
@@ -413,7 +414,10 @@ public sealed partial class FixtureRegistry
         return _publishedDoors = doorViews;
 
         static bool Shown(Fixture f) => f.Site < 0 || f.OpenAmount > 0 || f.Motion != DoorMotion.Closed || f.WantsLock || f.DoorBroken
-                || f.Lock is { EffectivelyLocked: true };
+                || f.Lock is { EffectivelyLocked: true } || Damaged(f);
+
+        // Below its whole progress and not broken: a bash blow, or a repair not yet finished (#1571).
+        static bool Damaged(Fixture f) => !f.DoorBroken && f.DoorProgress < 1;
     }
 
     /// <summary>

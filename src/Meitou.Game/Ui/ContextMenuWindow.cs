@@ -846,6 +846,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// (140), another faction's Pick Lock (76). Lock and Unlock are task orders on this one door
     /// (<see cref="Meitou.Simulation.Locks.DoorLockOrder"/>: the nearest selected character walks there and works 3.3 s); the panel's buttons toggle
     /// the building. A locked one also has Use Tools, Use Strength and Smash (285, 286, 226: <see cref="Meitou.Simulation.Locks.ForceLockOrder"/>).
+    /// The player's broken door has Repair (95) alone; a damaged one Repair first, then the rest.
     /// </summary>
     internal List<(string Caption, Action Give)> DoorVerbs((DoorPick Door, bool Locked) pick)
     {
@@ -874,6 +875,11 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
             return verbs;
         }
+
+        // A damaged one (below its whole progress) is repaired too, before the door's own verbs, locked or not (FUN_1407a6bc0: 95 when damaged,
+        // then the door's rows; #1571).
+        if (own && player.Furniture.DoorDamaged(door))
+            verbs.Add(("Repair", () => player.Furniture.RepairDoor(door)));
 
         if (pick.Locked)
         {
