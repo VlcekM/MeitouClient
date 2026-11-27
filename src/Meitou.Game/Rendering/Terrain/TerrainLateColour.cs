@@ -28,12 +28,18 @@ public static class TerrainResolveSplit
 
 /// <summary>
 /// The ground march in a pass of its own before the resolve (docs/render-terrain.md "Relief pass"): the resolve reads its result, so the march's
-/// registers do not weigh on the shading. <c>MEITOU_TERRAIN_RELIEF_PASS=0</c> marches in the resolve, for comparing.
+/// registers do not weigh on the shading. On Metal by default, where it was measured; Vulkan marches in the resolve (the pass lost the device
+/// there). <c>MEITOU_TERRAIN_RELIEF_PASS=0</c> or <c>1</c> forces it off or on, for comparing.
 /// </summary>
 public static class TerrainReliefPass
 {
     /// <summary>
-    /// The march runs in its own pass (true, the default); false marches in the resolve's program.
+    /// The march runs in its own pass (true) or in the resolve's program (false); null: the renderer's default (TerrainRenderer.ReliefPassWanted).
     /// </summary>
-    public static bool Enabled { get; set; } = Environment.GetEnvironmentVariable("MEITOU_TERRAIN_RELIEF_PASS") != "0";
+    public static bool? Enabled { get; set; } = Environment.GetEnvironmentVariable("MEITOU_TERRAIN_RELIEF_PASS") switch
+    {
+        "0" => false,
+        "1" => true,
+        _ => null,
+    };
 }

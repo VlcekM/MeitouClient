@@ -61,9 +61,12 @@ rows above its tabs:
   | Switch | Low | Medium | High | Ultra | Extreme |
   |---|---|---|---|---|---|
   | Advanced materials, ground trails, water contact foam, far grass cover | off | on | on | on | on |
+  | Blood on surfaces, water beads, rain drops and puddles (their cost shows in their content: 2.5, 0.6 and 0.6-0.7 ms, **Observed** on a Radeon 8060S at 1080p, High, with fresh blood and in forced rain) | off | off | on | on | on |
+  | Contact shadows (0.4-0.8 ms there; with the traced sun they do not run) | off | off | off | on | on |
   | Reflections, GTAO (quality Medium; High from Ultra, on Metal from Extreme: `PresetSlider.MetalUltra`, its full size cost an M6 2.4 ms for a picture as close to Medium's as two frames of High are) | off | off | on | on | on |
   | Rock smoothing, outline refinement | off | off | start default | on | on |
   | Simple terrain shading ([render-terrain](render-terrain.md#simple-material)) | on | off | off | off | off |
+  | Indirect light, Indoor GI (off on a device without the GI: no ray queries or `--no-gi`, `GiSwitches`) | off | off | off | on | on |
   | Hybrid GI, traced sun shadows, lamp shadows, GI traced on characters (off without the indirect light's traced scene, `TracedSwitches`) | off | off | off | on | on |
   | Traced grass shadows | off | off | off | off | on |
   | GI radiance cache, GI 64 probe rays (Metal only, `PresetToggle.MetalOnly`: Vulkan's tiers leave them as they are) | off | off | start default | off | on |
@@ -83,8 +86,8 @@ rows above its tabs:
   Medium's ambient occlusion is the SSAO (its GTAO is off), at the twelve taps it always had. Terrain material distance is a quality row, not part of a look: a look preset file that sets it no longer
   applies it.
 
-  Extreme has Ultra's distances: it adds effects and quality, not range. The optional effects (contact shadows, depth of field, bloom,
-  metal on buildings, rain drops and puddles) are the player's at every tier. Lamp shadows are a tier switch (0.9 to 6.3 ms on an RTX 4090
+  Extreme has Ultra's distances: it adds effects and quality, not range. The optional effects (depth of field, bloom, metal on buildings)
+  are the player's at every tier. Lamp shadows are a tier switch (0.9 to 6.3 ms on an RTX 4090
   at 1440p, a lit hall at night the most), and so is the GI traced on characters (2.7 to 3.6 ms; High keeps GTAO without it); the lamps
   among traced grass come with the traced grass shadows. The far cascades past the traced sun are off at every tier. High sets render scale Quality 0.67
   (`UpscaleOptions.DefaultScale`; 1 without TAA, FSR or DLSS), not counted when reading the tier; Medium, Ultra and Extreme leave
@@ -93,7 +96,12 @@ rows above its tabs:
   anti-aliasing at 0.83 render scale. Low holds the costly look switches off (AO, light shafts, water, Meitou shadows, parallax,
   displacement) without changing the preset; turning one on keeps it on at Low (`keepAtLow`), leaving Low gives them back. The
   tier's name is saved (`graphicsPreset`); a saved name the settings do not sit at (one the launcher chose, or a tier whose
-  switches changed with the build) is applied at start.
+  switches changed with the build) is applied at start. The menu, the launcher's preset row and the launcher benchmark apply the same tables,
+  so a tier is one set of values everywhere; the benchmark only adds its own controls (window, anti-aliasing, no ray queries below Ultra).
+  What no tier sets is listed with why in `QualityTiers.OutsideTiers` (the anti-aliasing method and its options, the player's by hardware
+  and taste; settings that follow the hardware; taste and content; sky and ground art; the distances' Faithful / Meitou base; savings on at
+  every tier); every other graphics setting is a tier row or the look's (`LauncherSchemaTests`). The game logs the result at start:
+  `settings  preset <tier the settings sit at> (saved <name>); <technique choices>; <anti-aliasing, render scale>; GI on the device: yes|no`.
 
 Effects with a strength are a switch plus a slider that keeps its value while off (haze, heat haze, tone map and grade, night
 grading, bloom). Bloom and the camera effects are optional (`Toggle.Optional`): off in both looks, Off | On, a preset may turn them on. Settings layout 2

@@ -61,6 +61,29 @@ public class LauncherSchemaTests
         foreach (var s in All.Where(s => s.Graphics)) Assert.Contains(s.Key, s.Kind == SettingKind.Toggle ? switches : sliders);
     }
 
+    /// <summary>
+    /// The presets' scope (CLAUDE.md "Graphics presets"): a new graphics setting is a tier row, the look's, or listed outside the tiers with why, so
+    /// a preset never leaves one at whatever was saved by oversight; the list names only settings that exist and no tier sets; and the Faithful
+    /// look sets every Faithful / Meitou switch but the performance ones, which it keeps.
+    /// </summary>
+    [Fact]
+    public void Each_graphics_setting_is_placed_on_both_the_tiers_and_the_looks()
+    {
+        var faithful = Schema.Looks!.Faithful.Keys.ToHashSet();
+        var kept = LookPresets.PerformanceSwitches.Select(SettingsMenu.SwitchKey).ToHashSet();
+        var switches = All.Where(s => s.Graphics && s.Kind == SettingKind.Toggle).Select(s => s.Key);
+        Assert.Equal(Array.Empty<string>(), switches.Where(k => !faithful.Contains(k) && !kept.Contains(k)).Order().ToArray());
+
+        var tiers = Schema.Presets!.Keys.ToHashSet();
+        var looks = Schema.Looks!.Keys.ToHashSet();
+        var graphics = All.Where(s => s.Graphics).Select(s => s.Key).ToHashSet();
+
+        var unplaced = graphics.Where(k => !tiers.Contains(k) && !looks.Contains(k) && !QualityTiers.OutsideTiers.Contains(k)).Order();
+        var stale = QualityTiers.OutsideTiers.Where(k => !graphics.Contains(k) || tiers.Contains(k)).Order();
+        Assert.Equal(Array.Empty<string>(), unplaced.ToArray());
+        Assert.Equal(Array.Empty<string>(), stale.ToArray());
+    }
+
     [Fact]
     public void Each_setting_is_unique_and_describes_its_values()
     {

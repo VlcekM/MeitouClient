@@ -243,9 +243,20 @@ internal sealed class WorldGpu : IDisposable
     public int GiDebug;
 
     /// <summary>
-    /// Whether the traced scene is updated (and the debug view drawn) this frame: the bench's gi-scene switch.
+    /// The bench's gi-scene switch: false keeps the traced scene off whatever reads it.
     /// </summary>
-    public bool GiActive = true;
+    public bool GiScene = true;
+
+    /// <summary>
+    /// Something reads the traced scene this frame (set by the frame's lighting update): the probes, the traced sun or lamps, or the debug view.
+    /// </summary>
+    public bool GiWanted = true;
+
+    /// <summary>
+    /// Whether the traced scene is updated (and the debug view drawn) this frame: wanted and not switched off by the bench. Without it the
+    /// reflections march alone and the rooms are found without it, as on a device without ray queries.
+    /// </summary>
+    public bool GiActive => GiScene && GiWanted;
 
     /// <summary>
     /// The GI resolve's divisor (0 the lit fragments read the probes, 1 full size, 2 half; the bench's gi-resolve switch; docs/render-gi.md

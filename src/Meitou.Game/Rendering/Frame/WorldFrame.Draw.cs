@@ -664,7 +664,11 @@ static partial class WorldFrame
         var gpu = f.Gpu;
         UpdateLamps(ref f);
 
-        // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md).
+        // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md), kept only while something
+        // reads it (the indirect light off at High kept it for nothing: 0.9-1.3 ms of GPU, Radeon 8060S at 1080p).
+        var options = f.Post.Options;
+        bool probesOn = gpu.Probes is { Enabled: true } || gpu.ProbeGi is { Enabled: true };
+        gpu.GiWanted = probesOn || options.TracedSun || options.LampShadows || gpu.GiDebug > 0;
         if (gpu.Probes is { } probesActive) probesActive.Active = gpu.GiActive;
         var objects = f.Render.Objects ? gpu.Objects : null;
         if (gpu.Gi is { } gi && gpu.GiActive) UpdateGiScene(ref f, gi, objects);

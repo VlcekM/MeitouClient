@@ -745,6 +745,12 @@ stage applies race, gender, slider and clothes changes instead of the interface-
 host callbacks `ConfigurePlayerInterface` supplies (build services, rocks, factions, tooltips, editor previews); the
 character editor opens on a new game. The settings panel, title, New Game, save/load and audio are wired; the panel
 keys and pointer hover/clicks/scroll work, and camera movement, selection and orders belong to the interactive loop.
+The panel makes its own switch rows over Metal's renderers (`MetalGameLoop.CreateMetalSettings`); each named as a catalogue switch
+(`Enhancements`) takes that switch's Faithful / Meitou marks (`WorldFrame.MarkFromCatalogue`), so the Faithful look turns off the same
+switches as on Vulkan. Without them it skipped every hand-made row: the sky's, the indirect light, the foliage modes and dithering
+(**Observed**: Metal's Faithful left clouds, high altitude clouds, night air and night sky on). The skin and item icon
+rows had their own names; layout 7 moves `Meitou: Skin scattering` and `Meitou: Enhanced item icons` to the shared `Meitou: Skin` and
+`Meitou: Item icons`, the keys the launcher writes.
 
 ### 6. The remaining effects
 

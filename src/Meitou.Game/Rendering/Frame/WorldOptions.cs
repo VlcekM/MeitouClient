@@ -671,7 +671,7 @@ sealed class WorldOptions
     /// <summary>
     /// <c>--benchmark &lt;tier&gt;</c>: the parts of the launcher benchmark's tier that must be set before the device and the post chain exist, after
     /// the whole command line (docs/bench.md "Launcher benchmark"): a 1920x1080 window, the tier's <paramref name="textureQuality"/>, no GI (the
-    /// device is made without ray queries) unless the tier traces (<paramref name="rays"/>), and the anti-aliasing: Low's none at its render scale,
+    /// device is made without ray queries) unless the tier's table turns it or a traced switch on (<paramref name="rays"/>), and the anti-aliasing: Low's none at its render scale,
     /// else TAA at scale 1. The game sets the rest of the tier through the settings (QualityTiers.ApplyBenchmarkTier). <paramref name="windowed"/>:
     /// the Vulkan runs' window; the Metal run is not (it runs in a full-screen Space and draws at that size itself, MetalBenchmark).
     /// </summary>

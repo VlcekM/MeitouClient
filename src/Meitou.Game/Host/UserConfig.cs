@@ -104,7 +104,7 @@ sealed class UserConfig
     /// retyped or read with a new meaning, and convert older files in <see cref="Migrate"/>. A Tab panel slider whose numbering changes
     /// takes a new label instead (<c>WorldFrame.UpscalerSliders</c>), so its old value is not misread.
     /// </summary>
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
     /// <summary>
     /// The default of <see cref="CharacterFlightSeconds"/>, and the distance from the view a squad member must be past for a double click to
     /// fly there.
@@ -1153,6 +1153,24 @@ sealed class UserConfig
         if (from < 4) MigrateShadowCascades(json);
         if (from < 5) MigrateTickAhead(json);
         if (from < 6) MigrateMetalDisplayDefaults(json);
+        if (from < 7) MigrateMetalSwitchNames(json);
+    }
+
+    /// <summary>
+    /// Layout 7 saves Metal's skin and icon switches under the shared catalogue's names, as Vulkan and the launcher do: <c>Meitou: Skin
+    /// scattering</c> becomes <c>Meitou: Skin</c> and <c>Meitou: Enhanced item icons</c> <c>Meitou: Item icons</c>.
+    /// </summary>
+    static void MigrateMetalSwitchNames(JsonObject json)
+    {
+        if (json["graphics"] is not JsonObject graphics) return;
+
+        foreach (var (old, now) in new[] { ("Meitou: Skin scattering", "Meitou: Skin"), ("Meitou: Enhanced item icons", "Meitou: Item icons") })
+        {
+            if (graphics[old] is not { } value) continue;
+
+            graphics.Remove(old);
+            graphics[now] ??= value;
+        }
     }
 
     /// <summary>

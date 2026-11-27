@@ -1208,6 +1208,28 @@ static partial class WorldFrame
             OnOff: e.Faithful is "off" or "none", Optional: e.Optional);
 
     /// <summary>
+    /// Gives each row of <paramref name="toggles"/> named as a Faithful / Meitou switch of <paramref name="catalogue"/> that switch's marks (its sides'
+    /// names, Faithful / Meitou, off / on, optional), so a panel that makes its own rows over its own renderer (Metal's) takes the looks as the
+    /// catalogue's rows do: Faithful turns only marked switches off.
+    /// </summary>
+    internal static void MarkFromCatalogue(List<Toggle> toggles, IReadOnlyList<Enhancement> catalogue)
+    {
+        for (int i = 0; i < toggles.Count; i++)
+        {
+            var t = toggles[i];
+            if (t.Remaster || catalogue.FirstOrDefault(e => e.Name == t.Label) is not { } e) continue;
+
+            toggles[i] = t with
+            {
+                Text = () => t.Get() ? e.Meitou : e.Faithful,
+                Remaster = true,
+                OnOff = e.Faithful is "off" or "none",
+                Optional = e.Optional,
+            };
+        }
+    }
+
+    /// <summary>
     /// The hybrid GI's parts (<c>--gi-hybrid</c>), plain on / off rows of <paramref name="options"/>; they act while the Hybrid GI choice is on. Both
     /// settings panels show them.
     /// </summary>

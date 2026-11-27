@@ -237,8 +237,8 @@ Meitou (`TerrainRenderer.Resolve`, `IWorldPostChain.TerrainResolveTargets`: `Pos
   parallax off); from 130 m 1.46 -> 1.40; nearer, and city-night, unchanged. **Verified** (2026-11-16, siwa-test6 and "The boys 123", 10 paused views with a
   partial rectangle, split against one program in the same session): no hole; 0.09 % of the pixels differ by more than 2 / 255 where two frames of one setting
   differ on 0.03 %, scattered on cliff faces, no shift of the mean.
-- **Relief pass** (`TerrainRenderer.RecordReliefPass`, `TerrainShaders.ReliefFragmentNative`, switch `TerrainReliefPass`; `MEITOU_TERRAIN_RELIEF_PASS=0` marches in
-  the resolve, for comparing): with the parallax on, the layers' ground march (`pixelRelief`) runs first in a full-screen pass of its own over the pixels the marching
+- **Relief pass** (`TerrainRenderer.RecordReliefPass`, `TerrainShaders.ReliefFragmentNative`, switch `TerrainReliefPass`, on Metal by default;
+  `MEITOU_TERRAIN_RELIEF_PASS=0` or `1` forces it off or on, for comparing): with the parallax on, the layers' ground march (`pixelRelief`) runs first in a full-screen pass of its own over the pixels the marching
   part shades (the whole picture, or the near side's rectangle when split). It is the resolve's program (`RELIEF_PASS`) up to the march: the material cache's
   choice of level is kept, its reads and its own march skipped, so it marches exactly the pixels whose layers the resolve shades; it writes the moves (ground, both
   cliff projections, in world units), the self-shadow and the puddles' trough (65504: not read) into two RGBA16F targets and discards every other pixel. The
@@ -249,6 +249,9 @@ Meitou (`TerrainRenderer.Resolve`, `IWorldPostChain.TerrainResolveTargets`: `Pos
   more than without the parallax). **Verified** (M-series, Metal, `fps_issue` save, 3840x2160 shown at 1920x1080, High, paused): the pictures with and without
   the pass differ on 43 of 8.3 M pixels by more than 3 %. **Observed** (same session setup, frames a second): zoom 31, 48.0 -> 53.1 (the patches' second pass
   51.1); zoom 300, 63.1 -> 70.0 (65.4). Vulkan untested.
+  Vulkan marches in the resolve: with the pass, a GPU write to memory just freed lost the device (**Observed**, Radeon 8060S, `big_squad` after
+  a staged fight, the blood's static depth copy freed: 9 of 9 runs of builds with the pass, from its first commit; 0 of 4 on master, 0 with
+  the pass off or with `MEITOU_NO_ALIAS=1`).
 - **No arrays in the march** (`Relief`'s layers are the fields `l0`..`l4`, every use written out per field up to `RELIEF_CAP`, the quality's count; `blendSlot`
   picks components by comparison): the layers were an array read with a loop's index, so the struct lived in memory, and the Metal translation copies a
   struct argument at every call: a copy before each of the march's height reads. **Observed** (Xcode GPU trace, M6, `fps_issue`, High, zoom 31): the relief

@@ -89,6 +89,14 @@ drop-in replacement that runs original content and mods unchanged.
   does not. At least check that the `-p:MeitouMetal=true` build passes, and say in the change that the Metal side is untested.
 - Where Metal can't do it, say so: a Metal note in the feature's doc and, for a setting, `LauncherSchema`'s Vulkan-only mark.
 
+## Graphics presets
+
+- The quality tiers (`QualityTiers`) are the one source of what a preset sets: the in-game menu, the launcher's preset row and the
+  launcher benchmark apply the same tables. A new graphics setting that changes quality or cost is a tier row (each tier's value from a
+  measurement, not a guess); one that does not is the look's or listed in `QualityTiers.OutsideTiers` with why. A Faithful / Meitou
+  switch is in the shared catalogue (`Enhancements`), so the Faithful look turns it off on both backends, unless it only saves work
+  (`LookPresets.PerformanceSwitches`). `LauncherSchemaTests` fails on a setting placed on neither axis ([native-ui](docs/native-ui.md), "Quality").
+
 ## Player-facing text
 
 - Meitou's own texts go through `Loc.Tr` (placeholders `{1}`, never concatenation or `$"..."`) and need a translation in every built-in

@@ -235,8 +235,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   reads Faithful when every switch Faithful turns off and Meitou turns on is saved off, as the game does (unsaved, not written back). A look slider's Default writes the look's value.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its
   settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--benchmark-baseline`, `--meitou` or `--faithful`), so a preset chosen in
-  the launcher takes effect on the next start; the rows show the old values until then. Changing a row the preset sets (`presets.keys`)
-  saves Custom, so the game keeps that change. No saved preset shows High without saved graphics, else Custom.
+  the launcher takes effect on the next start; the rows show the old values until then. Changing a row the preset sets (`presets.keys`,
+  the technique choices among them: each stands for tier switches) saves Custom, so the game keeps that change. No saved preset shows High without saved graphics, else Custom.
 - Detect (when `presets.detect` names the game's option, `--recommend-preset <file>`) runs the played version's game, which makes a
   headless Vulkan device (the GPU it would pick), reads the memory and the cores, and writes `{ preset, summary, gpu, integrated,
   videoMemoryMb, memoryMb, cores, problem }`; the launcher saves `preset` as above and shows `summary`. Without Vulkan (a Metal-only

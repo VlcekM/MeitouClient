@@ -676,9 +676,10 @@ public sealed unsafe class TerrainRenderer : IDisposable
     internal PassTargets? ReliefTargets { get; set; }
 
     /// <summary>
-    /// The resolve would march (the colour set in use has the ground parallax) and the relief pass is on: the frame then makes its targets.
+    /// The resolve would march (the colour set in use has the ground parallax) and the relief pass is on (<see cref="TerrainReliefPass"/>; by default
+    /// on Metal only): the frame then makes its targets.
     /// </summary>
-    internal bool ReliefPassWanted => TerrainReliefPass.Enabled && _programs.ColourKey.March;
+    internal bool ReliefPassWanted => (TerrainReliefPass.Enabled ?? _gpu is not GpuContext) && _programs.ColourKey.March;
 
     /// <summary>
     /// The last deferred <see cref="Draw"/> waits for <see cref="Resolve"/>.
