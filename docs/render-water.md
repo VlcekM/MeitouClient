@@ -7,9 +7,12 @@ gameplay water stays Y100. Evolution follows the game clock and stops paused.
 ## Surface and waves
 
 Faithful: flat surface and game shading/reflection rules. Meitou: camera-centred polar grid,
-default 1024 segments (a vertex every 0.6 % of its distance from the eye, about 8 pixels at 1080p; 256 was 30); `--water-grid 256` reduces geometry with visible quality differences (Graphics > World > Water: "Water grid segments" and "Water wave resolution" (the FFT size), read at start-up). The waves a vertex carries are those its spacing can hold, so their shape at a world point depends on the eye's distance: **Observed** (an open beach, paused, the same moment with 256 and 1024 segments): at 256 the swell 150 to 300 units out was long smooth crests where 1024 draws the choppy waves, and breakers' crests changed shape as the camera moved (the user). The grid's triangles are drawn from
-the outer rings in (the eye's fan last): the water writes no depth, so a displaced crest in front of water further out must be drawn after it,
-else the water behind a wave showed through it.
+default 1024 segments (a vertex every 0.6 % of its distance from the eye, about 8 pixels at 1080p; 256 was 30); `--water-grid 256` reduces geometry with visible quality differences (Graphics > World > Water: "Water grid segments" and "Water wave resolution" (the FFT size), read at start-up). The waves a vertex carries are those its spacing can hold, so their shape at a world point depends on the eye's distance: **Observed** (an open beach, paused, the same moment with 256 and 1024 segments): at 256 the swell 150 to 300 units out was long smooth crests where 1024 draws the choppy waves, and breakers' crests changed shape as the camera moved (the user). The rings are spaced for the eye's height over
+the highest the surface reaches (h, `GridHeight`; 0 within it): grid radius r lies r − h²/4r from the eye's foot (those within h/2 meet there), so
+the spacing is the step times sqrt(radius² + h²), the distance to the eye h above (the vertex stage's `spacing`, which picks the waves a vertex
+carries). The grid's triangles are drawn in 16 slices round the eye, in each from the outer rings in (the eye's fan last): the water writes no
+depth, so a displaced crest in front of water further out must be drawn after it, else the water behind a wave showed through it. A ray of the
+picture stays in one slice (the grid is round the eye), so the slices' order does not matter.
 Three256² FFT cascades cover250/47/9m tiles with separate wave-number bands. JONSWAP wind spectrum,
 mirror-conjugate coefficients and normalized directional spreading; zero/Nyquist/out-of-band
 modes excluded. Evolve omega=sqrt(g*k), quantized to2pi/600s; modulo clock keeps phases precise.
@@ -146,17 +149,23 @@ transmission is zero and swash faded. Higher clarity restores the copy. Do not i
 from terrain/reflection visibility. `--ab water-lean` isolates shader/copy skips; geometry quality
 is independent. A scene with no nearby water can skip water work, with conservative bounds.
 
-Grid rings in view (`WaterRenderer.GridRange`, switch `RingsInView`): the grid's indices run ring by ring from the farthest in, so one
-index run draws the rings between the nearest and the farthest ground distance at which the picture's rays (5 % wider) cross the slab the
+Grid in view (`WaterRenderer.DrawGrid`, switch `RingsInView`): each slice's indices run ring by ring from the farthest in, so one
+index run per slice draws the rings between the nearest and the farthest ground distance at which the picture's rays (5 % wider) cross the slab the
 surface stays in (water level ± the reach, `GridReach`: twice the sum of the shown ocean's significant height (`OceanSpectrum.SignificantHeight`:
 4 √(2 Σ |h0|²), the larger of the two spectra while one blends in) times the choppiness, the breakers' largest hump (3.65 × `Shore.W`: 1.92 the largest
 wave size, 1.9 the build-up; or the run-up, 1.92 × `Shore.Y`) and the ripples' clamp (4); at most 200, the fixed reach it replaced). The steepest ray
-gives the nearest distance, the flattest the farthest (no cut when it does not go down); nothing is cut sideways; the whole grid when the eye is
-within the reach above the level or under it. Same triangles in the same order, so the picture is the same. **Verified** (logged): the significant
+gives the nearest distance, the flattest the farthest (no cut when it does not go down). Sideways, a slice outside the rays' directions round the
+eye by an angle g is drawn only out to the reach / sin g (the reach past a quarter turn), where the surface's sideways reach can bring it in. The
+whole grid when the eye is within the reach above the level or under it. **Verified** (logged): the significant
 height is 21.1 units at the strongest wind (20 m/s) and 6.5 at 5.7 m/s, where the reach came to 50.8 (breakers 14.9). **Verified** (M6, Metal, Bark, paused,
 8 views from 8° to 70° pitch, 200 to 2000 zoom, the reach against a fixed 200): no difference on the water; 0.01 to 0.05 % of pixels differ, on object
 and shadow edges, between the two launches. **Observed** (M6, `fps_issue` save, 1080p High, the eye 67 units over the water level, no water in
-sight): 61.2 -> 63.8 frames a second at zoom 31, 74.4 -> 78.5 at zoom 300; the Xcode trace gave the grid's vertex stage 11 % of the frame before. **Verified** (2026-11-16,
+sight): 61.2 -> 63.8 frames a second at zoom 31, 74.4 -> 78.5 at zoom 300; the Xcode trace gave the grid's vertex stage 11 % of the frame before.
+**Observed** (the same view, the slices and the spacing by height against the rings alone): 26 % of the indices at zoom 31 (the eye 29 units over
+the reach), 15 % at zoom 300; about 63 -> 65 to 67 frames a second at zoom 31, 79.5 -> 83 at zoom 300. **Verified** (M6, Metal, paused, against the
+rings alone): Bark, 8 views from 10° to 80° pitch, 120 to 2000 zoom, the sea in 3: under 0.1 % of pixels differ, on object and shadow edges, none on
+the water; the open sea east of Bark at the strongest wind, 8 views from 15° to 85° pitch, 60 to 2000 zoom: at most 0.13 % of pixels differ, the sun's
+glint (its sparkles a pixel aside, the same to the eye). **Verified** (2026-11-16,
 siwa-test6, paused, 5 views from 20° to 88° pitch with water in view, rings on against off: differences at the same-state noise floor).
 **Observed** (RTX 4090, 2560x1440): the whole grid (1.46 M vertices) cost 0.33 ms whatever the view; a town view with no water in
 sight draws 25 to 33 % of the indices, 0.14 to 0.16 ms; about 0.1 ms of the pass is not the grid.
