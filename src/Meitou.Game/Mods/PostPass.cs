@@ -202,8 +202,8 @@ public sealed class PostPassFrame
     public bool HasScene { get; internal set; }
 
     /// <summary>
-    /// Whether <c>uNormal</c> holds this frame's normals (<see cref="PostPass.NormalGlsl"/>): only while the scene stores its surfaces (the
-    /// indirect light or the reflections on, Vulkan) and from the frame after a pass that reads them first ran, else every lookup is none.
+    /// Whether <c>uNormal</c> holds this frame's normals (<see cref="PostPass.NormalGlsl"/>): on Vulkan, from the frame after a pass that
+    /// reads them first ran; else every lookup is none.
     /// </summary>
     public bool HasNormals { get; internal set; }
 

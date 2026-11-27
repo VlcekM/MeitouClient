@@ -121,7 +121,8 @@ public unsafe class ModPostPassTests
     }
 
     /// <summary>
-    /// One frame of a grey scene with a sky's depth through the chain.
+    /// One frame of a grey scene with a sky's depth through the chain. The surface target, which the chain keeps from the second frame for the
+    /// pass that reads the normals, is cleared as the game's scene pass clears it: no surface anywhere.
     /// </summary>
     static void Frame(GpuContext ctx, PostProcess post, int w, int h)
     {
@@ -133,7 +134,7 @@ public unsafe class ModPostPassTests
         cmd.BeginRendering(new RenderingDesc(
             t.Colour with { Load = LoadOp.Clear, Clear = new ClearColour(0.5f, 0.5f, 0.5f, 1) },
             t.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear },
-            t.Width, t.Height));
+            t.Width, t.Height, Extra: t.Extra.IsNull ? default : t.Extra with { Load = LoadOp.Clear, Clear = default }));
         cmd.EndRendering();
         ctx.EndNative(cmd);
         post.End();

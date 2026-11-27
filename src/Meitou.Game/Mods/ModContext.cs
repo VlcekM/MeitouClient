@@ -668,6 +668,12 @@ public sealed class ModContext
     public LightingHook? Lighting => field ??= Game.Rendering.Sky.LightingHooks.Of(Id) is { } hook ? new LightingHook(hook) : null;
 
     /// <summary>
+    /// The picture's look settings as this mod sees and overrides them (docs/modding.md "Graphics overrides"): the player's values, and values
+    /// of the mod's own laid over them while it holds them, never saved.
+    /// </summary>
+    public ModGraphics Graphics => field ??= new ModGraphics(_registry.Graphics, Id);
+
+    /// <summary>
     /// Adds a full-screen pass to the frame's post chain (docs/modding.md "Post passes"): <paramref name="pass"/>'s fragment shader reads the
     /// picture so far at its <see cref="PostPass.Stage"/> and writes the picture the next pass gets. The game compiles it when it first runs and
     /// makes its targets; the mod turns it on and off with <see cref="PostPass.Enabled"/> and sets its uniforms in

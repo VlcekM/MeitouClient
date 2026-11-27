@@ -445,7 +445,8 @@ static class WorldGpuBuilder
     /// (<see cref="Gi.GiProbes"/>' <c>Params</c>).
     /// </summary>
     static void PublishReflectionSurfaces(WorldGpu gpu, GpuContext context) =>
-        context.Globals.PublishUniform("uGiParams", () => new System.Numerics.Vector4(0, 0, gpu.PostChain is { SsrSurfaces: true } ? 2 : 0, 0));
+        context.Globals.PublishUniform("uGiParams", () => new System.Numerics.Vector4(0, 0, (gpu.PostChain is { SsrSurfaces: true } ? 2 : 0)
+            + (gpu.PostChain is { SurfaceNormalsWanted: true } ? Gi.GiProbes.SurfaceNormalsBit : 0), 0));
 
     /// <summary>
     /// The memory-pressure guard (VramGuard), shared by the renderers that stream: MEITOU_VRAM_GUARD=0 leaves it off. Vulkan samples its allocator;

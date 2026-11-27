@@ -352,6 +352,10 @@ sealed class ModRegistry
     /// </summary>
     public ModPostPasses PostPasses { get; } = new();
     /// <summary>
+    /// The mods' overrides of the look settings (<see cref="ModContext.Graphics"/>).
+    /// </summary>
+    public Game.Rendering.Post.GraphicsOverrides Graphics { get; } = new();
+    /// <summary>
     /// The mods' display-only ribbon trails (<see cref="ModContext.KeepTrail"/>).
     /// </summary>
     public ModTrails Trails { get; } = new();

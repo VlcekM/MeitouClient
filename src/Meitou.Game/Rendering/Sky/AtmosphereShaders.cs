@@ -765,6 +765,9 @@ static class AtmosphereShaders
                 specularOcclusion = mix(1.0, clamp(dot(gi.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(sky, 1e-4), 0.0, 1.0), gi.a);
                 envDiffuse = mix(envDiffuse, gi.rgb, gi.a);
             }
+            // A code mod's post pass reads the surfaces' normals (uGiParams.z bit 32, docs/modding.md "Post passes"): a fragment that stored none
+            // above (no resolve, no reflections, or one that reads the probes itself) stores its own, and nothing else.
+            if ((int(uGiParams.z + 0.5) & 32) != 0 && giAlbedoOut.xy == uvec2(0u)) giAlbedoOut.xy = uvec2((giOct(n) * 0.5 + 0.5) * 65535.0 + 0.5);
             vec3 envSpecular = vec3(0.0);
             if (uAtmoMaps.y > 0.5)
             {

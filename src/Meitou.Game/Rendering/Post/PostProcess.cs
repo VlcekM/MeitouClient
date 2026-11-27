@@ -1568,14 +1568,19 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _viewRotation, _fovNow, _aspectNow, _planes.X, _planes.Y, _haveScene, Options.HdrPeak > 1);
 
     /// <summary>
+    /// Whether a mod's pass that is on reads the surfaces' normals: the scene then keeps its surface target and every lit fragment stores its
+    /// normal there (<c>uGiParams.z</c> bit 32), with or without the indirect light's resolve and the reflections.
+    /// </summary>
+    public bool SurfaceNormalsWanted => _modPasses?.WantsNormals == true;
+
+    /// <summary>
     /// Copies the lit surfaces' normals into a target of their own (two 16-bit channels at the render size) while a mod's pass that is on reads
     /// them: once a frame, after the scene's last reader of the surface target and before the particles' and the post chain's targets take its
-    /// memory (<see cref="TransientLifetime"/>). Nothing without such a pass, a scene or the surface target (the indirect light and the
-    /// reflections off).
+    /// memory (<see cref="TransientLifetime"/>). Nothing without such a pass or a scene.
     /// </summary>
     void CopySurfaceNormals()
     {
-        if (_modNormalsCopied || _modPasses?.WantsNormals != true || !_haveScene || GiAlbedoTarget is null || _giAlbedo is null) return;
+        if (_modNormalsCopied || !SurfaceNormalsWanted || !_haveScene || GiAlbedoTarget is null || _giAlbedo is null) return;
 
         _modNormalsProgram ??= LegacyProgram.Create(Gpu, PostProcessShaders.Vertex, PostProcessShaders.SurfaceNormalCopy, "post mod normals");
         if (_modNormals is null || _modNormals.Width != _width || _modNormals.Height != _height)
@@ -2672,7 +2677,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// The albedo target the scene writes while the GI resolve is on, else null.
     /// </summary>
-    GpuTexture? GiAlbedoTarget => GiResolve > 0 || SsrSurfaces ? _giAlbedo?.Texture : null;
+    GpuTexture? GiAlbedoTarget => GiResolve > 0 || SsrSurfaces || SurfaceNormalsWanted ? _giAlbedo?.Texture : null;
 
     /// <summary>
     /// The radiance cache to run before the resolve, set before <see cref="RunGiResolve"/>'s frame by the frame (null: none; the <c>gihybrid</c>
@@ -2758,7 +2763,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     void EnsureGi()
     {
-        int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces ? 2 : 0;
+        int divisor = GiResolve > 0 ? GiResolve : SsrSurfaces || SurfaceNormalsWanted ? 2 : 0;
         if (divisor <= 0 || (_giAlbedo is not null && _giDivisor == divisor)) return;
 
         _giAlbedo?.Texture.Dispose();

@@ -1094,7 +1094,7 @@ static partial class WorldFrame
     /// Ours, not the game's (docs/render-post.md "Tone map and grading"): the Meitou tone curve (the tone map switch's Faithful side is the game's
     /// clamp), the saturation / contrast grade, scales on the heat haze, bloom and night grade, and the light shafts.
     /// </summary>
-    static void AddLookSliders(List<Slider> sliders, PostOptions options)
+    internal static void AddLookSliders(List<Slider> sliders, PostOptions options)
     {
         static float Round20(float v) => MathF.Round(v * 20) / 20;
 

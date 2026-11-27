@@ -334,10 +334,11 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   `#version 330 core`, `in vec2 vUv;` (0..1 over the picture), one `out vec4`. Declared by these names the game binds `uniform sampler2D
   uImage` (the picture so far, linear, clamped), `uniform sampler2D uDepth` (the scene's depth at the render size, nearest; read through
   `PostPass.DepthGlsl`: `depthIsSky`, `depthViewZ(d, uPlanes)`, as the convention differs per backend) and `uniform sampler2D uNormal` (the
-  lit surfaces' normals, read through `PostPass.NormalGlsl`'s `meitouNormal(uv)`: world space, zero where none: the sky, foliage
-  cards, and every pixel unless the indirect light or the reflections are on, Vulkan; while a pass that declares it is on, the chain copies
-  them out of the surface target each frame before later passes reuse its memory, into two 16-bit channels at the render size, 4 bytes a
-  pixel, from the frame after the pass first ran: `PostProcess.CopySurfaceNormals`),
+  lit surfaces' normals, read through `PostPass.NormalGlsl`'s `meitouNormal(uv)`: world space, zero where none: the sky and
+  foliage cards; Vulkan. While a pass that declares it is on, from the frame after it first ran, the scene keeps its surface target and
+  every lit fragment stores its normal there (`uGiParams.z` bit 32), whether or not the indirect light's resolve or the reflections are on,
+  and the chain copies the normals out each frame before later passes reuse that target's memory, into two 16-bit channels at the render
+  size, 4 bytes a pixel: `PostProcess.CopySurfaceNormals`),
   and sets `uniform vec2 uViewport` (pixels), `uniform vec2 uPlanes` (near, far) and
   `uniform float uTime` (seconds, wrapped hourly). `Prepare(PostPassFrame)` runs on the render thread each frame the pass is on, before the
   stage draws: it sets the pass's own uniforms by name (`Set`: float, int, vec2 to vec4, mat4; an unused name is ignored), reads the picture's
@@ -350,7 +351,20 @@ type 1000 (VARIABLE) refuse a mod as taken by `BFrizz_Extra_Extensions` ([dialog
   synchronization validation on): a scene pass, then two picture passes in order with a uniform from `Prepare`, the depth and the
   stand-in normals, with and without TAA and FXAA; a broken fragment and a throwing `Prepare` turned off; every pass off draws the plain chain.
   **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod in a new game, offscreen): a scene pass tinting the picture before the
-  tone map, a picture pass drawing depth outlines and the surfaces' normals under the interface.
+  tone map, a picture pass drawing depth outlines and the surfaces' normals under the interface, the normals also with the indirect light
+  and the reflections off, and with the sun shadows off as well (the lean lighting programs).
+- **Graphics overrides:** `context.Graphics` (`ModGraphics`) lays a mod's values over the player's look settings for as long as the mod
+  holds them, without changing what the player set: `Override(setting, value)` (clamped to the setting's range, a switch on from 0.5),
+  `Release(setting)`, `ReleaseAll()`, `Get(setting)` (the player's value, whatever is laid over it) and `Settings`, the keys: those of
+  `meitou.user.json`'s `graphics` and of the look presets, a slider's label or `Meitou: ` and a switch's. The settings are the post chain's
+  look (`GraphicsOverrides`): the sliders of tone map, grading, heat haze, bloom, vignette, film grain, depth of field aperture, night
+  grading and adaptive exposure, and the switches `Bloom`, `Depth of field`, `Vignette`, `Film grain`, `Camera effects in the strategy
+  camera`, `Tone map and grade` and `Night grading`. The overrides are in the options only while the world is drawn (`GameHost.DrawWorld`
+  lays them on before and puts the player's values back after), so the settings menu shows the player's values, a change made there stays,
+  and nothing of a mod's reaches `meitou.user.json` or a preset. Of two mods overriding one setting the one that set its override last wins;
+  a mod that fails in `Initialize` loses its own. An override lasts until released, across a load. Call on the host's thread. Both
+  backends (the options are shared). **Observed** in the game (2026-11-27, Windows, Vulkan, a scratch mod, offscreen): the vignette and
+  the grain at 1 drawn over a new game while `Get` read the player's off and 0.35 and the settings file held nothing of it.
 - **Lighting hooks:** `"lighting": { "file": "toon.glsl", "params": { "strength": 1.0 }, "textures": { "ramp": "ramp.png" } }` in
   `meitou.json` (`CodeModLighting`) puts a mod's
   GLSL into `kenshiLight`, the one function every lit surface goes through (terrain, buildings, characters, foliage, grass, debris,

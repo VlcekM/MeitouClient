@@ -246,6 +246,11 @@ public sealed class ModHost
     internal ModPostPasses PostPasses => _registry.PostPasses;
 
     /// <summary>
+    /// The mods' overrides of the look settings (docs/modding.md "Graphics overrides"), laid over the options while the world is drawn.
+    /// </summary>
+    internal Game.Rendering.Post.GraphicsOverrides Graphics => _registry.Graphics;
+
+    /// <summary>
     /// The mods' display-only ribbon trails (docs/modding.md "Trails"), sampled and handed to the particles by the host once a frame.
     /// </summary>
     internal ModTrails Trails => _registry.Trails;
@@ -818,6 +823,7 @@ public sealed class ModHost
         catch
         {
             Game.Rendering.Sky.LightingHooks.Switch(context.Id, false);
+            _registry.Graphics.Drop(context.Id);
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
             _registry.Effects.Drop(context.Id);
             _registry.Glows.Drop(context.Id);

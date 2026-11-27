@@ -165,7 +165,8 @@ beside them (the plane weight keeps other cells off, not the cell's own mean poi
 `ssr` Enhancement, off by default; `Gi/SsrShaders.cs`, `GiShaders.Reflect`, `PostProcess.Reflections.cs` (Metal: [below](#metal)). Replaces the sky cubemap's
 reflection (`uAtmoSpecular`) on surfaces that write the surface target; water writes 0 and keeps `ReflectionPass`; characters, foliage and grass write 0 too (they
 read the probes in shader), so they mirror nothing but appear in what others mirror. Runs after the resolve, before shafts, fog volumes and SSAO.
-With the switch on, `uGiParams.z` gains bit 2 (bits: 1 resolve, 2 reflections, 4 traced sun): every lit fragment writes the target, `1 + gloss * 62` in bits 10-15 and bit 8 only if it takes the probes (so
+With the switch on, `uGiParams.z` gains bit 2 (bits: 1 resolve, 2 reflections, 4 traced sun, 8 the sun written apart, 16 the traced lamps, 32 the normals
+stored for a code mod's post pass, which changes no light): every lit fragment writes the target, `1 + gloss * 62` in bits 10-15 and bit 8 only if it takes the probes (so
 without probes, and on interiors with **Indoor GI** off, reflections run with no resolve). Off, the words written are those of before.
 
 - **March** (resolve size, 1/2 without it): gloss above 0.25, reflected from the stored normal, 40 screen steps with inverse depth linear, 5 halvings, up to 3000 units.

@@ -250,7 +250,7 @@ internal sealed unsafe class GiProbes : IDisposable
 
     /// <summary>
     /// Render globals: x on/filled, y strength, z bits: 1 resolve, 2 reflections, 4 the traced sun, 8 the sun written apart with its cascades, 16
-    /// the traced lamps (all three with the resolve); w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.
+    /// the traced lamps (all three with the resolve), 32 the normals stored for a mod's post pass; w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.
     /// </summary>
     Vector4 Params => new(Enabled && Active && Shade && !InReflection && _updated ? 1 : 0, Strength, ParamsBits,
         InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
@@ -262,7 +262,19 @@ internal sealed unsafe class GiProbes : IDisposable
         + (Reflections && !InReflection ? 2 : 0)
         + (Resolve && Traced ? 4 : 0)
         + (Resolve && SunApart ? 8 : 0)
-        + (Resolve && LampReceivers ? 16 : 0);
+        + (Resolve && LampReceivers ? 16 : 0)
+        + (SurfaceNormals && !InReflection ? SurfaceNormalsBit : 0);
+
+    /// <summary>
+    /// <c>uGiParams.z</c>'s bit for <see cref="SurfaceNormals"/>, also set without probes (<c>WorldGpuBuilder</c>).
+    /// </summary>
+    internal const int SurfaceNormalsBit = 32;
+
+    /// <summary>
+    /// True while a code mod's post pass reads the surfaces' normals (<c>uGiParams.z</c> bit 32, docs/modding.md "Post passes"): every lit
+    /// fragment of the main view stores its normal in the surface target, whatever else it writes there.
+    /// </summary>
+    public bool SurfaceNormals { get; set; }
 
     /// <summary>
     /// True while the main view's opaque scene draws with the traced sun (<c>kenshiLight</c> reads it from <c>uGiParams.z</c> bit 4;

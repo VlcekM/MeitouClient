@@ -221,6 +221,7 @@ sealed class GameMods(GameHost host)
         Mods = ModHost.Load(Options(enabled, db, data, disabled));
         Mods.AudioModulations.Attach(host.Sound.Audio?.Player);
         host.WorldOptions.Post.ModPasses = Mods.PostPasses;
+        Mods.Graphics.Bind(host.WorldOptions.Post);
 
         // No mod was found with a data phase, so an entry that is one anyway has it where the scan cannot see it.
         foreach (var mod in Mods.Mods.Where(m => m.Instance is IModDataPhase)) ModHost.NoteUnscannedDataPhase(mod);
@@ -239,6 +240,7 @@ sealed class GameMods(GameHost host)
         Mods = prepared;
         Mods.AudioModulations.Attach(host.Sound.Audio?.Player);
         host.WorldOptions.Post.ModPasses = Mods.PostPasses;
+        Mods.Graphics.Bind(host.WorldOptions.Post);
         KeepModSettings(prepared);
     }
 
@@ -257,6 +259,16 @@ sealed class GameMods(GameHost host)
             group.PresetsChanged += host.Config.KeepModPresets;
         }
     }
+
+    /// <summary>
+    /// Before the world is drawn: lays the mods' overrides of the look settings over the options (docs/modding.md "Graphics overrides").
+    /// </summary>
+    internal void ApplyGraphicsOverrides() => Mods?.Graphics.Apply();
+
+    /// <summary>
+    /// After the world is drawn: the options hold the player's values again.
+    /// </summary>
+    internal void RestoreGraphicsOverrides() => Mods?.Graphics.Restore();
 
     /// <summary>
     /// Notes that a mod's setting or preset changed and the config holds a value its file does not.
