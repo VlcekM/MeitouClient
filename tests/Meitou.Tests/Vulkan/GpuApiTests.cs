@@ -361,4 +361,75 @@ public class GpuApiTests
             (Recording.Mode, Recording.MinThreadedDraws) = (mode, min);
         }
     }
+
+    /// <summary>
+    /// Disposing a transient aliased target inside frame N must retire it from <see cref="TransientImagePool"/>'s phase barrier list
+    /// immediately so frame N+1 does not emit a layout-transition barrier on a <c>VkImage</c> that frame N's deferred deletion destroys
+    /// while frame N+1 is in flight, while keeping its physical slot reserved until frame N completes.
+    /// </summary>
+    [Fact]
+    [Slow]
+    public void Disposed_transient_target_is_retired_from_phase_barriers_before_deferred_free()
+    {
+        using var d = TryCreate();
+        Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+        Assert.SkipWhen(!d!.Allocator.Transient.Enabled, "Transient aliasing disabled");
+
+        using (var ctx = new GpuContext(d))
+        {
+            int samples = Math.Min(4, ctx.MaxSampleCount);
+            var desc = new TextureDesc(InternalFormat.Rgba16F, 256, 256, Samples: samples,
+                Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "transient test")
+            {
+                Transient = TransientLifetime.Single(TransientPhase.Reflection),
+            };
+
+            var first = ctx.CreateTexture(desc);
+            var firstSlot = d.TextureAt(first.Index).Allocation!.TransientSlot!;
+            Assert.Equal(1, d.Allocator.Transient.ImageCount);
+
+            // Frame 1 (slot 0): use the target, then dispose it while the frame is open.
+            ctx.BeginFrame();
+            ctx.BeginTransientPhase(TransientPhase.Reflection);
+            ctx.Frame.Commands.BeginRendering(Target(first));
+            ctx.Frame.Commands.EndRendering();
+            first.Dispose();
+
+            // Physical slot must stay reserved until frame 1 completes.
+            Assert.Equal(1, d.Allocator.Transient.ImageCount);
+
+            // A replacement in the same phase while frame 1 is still in flight must not alias the retired slot's memory range.
+            var second = ctx.CreateTexture(desc with { Name = "transient test replacement" });
+            var secondSlot = d.TextureAt(second.Index).Allocation!.TransientSlot!;
+            Assert.Equal(2, d.Allocator.Transient.ImageCount);
+            if (secondSlot.Block == firstSlot.Block)
+            {
+                bool disjoint = secondSlot.Offset + secondSlot.Size <= firstSlot.Offset
+                    || firstSlot.Offset + firstSlot.Size <= secondSlot.Offset;
+                Assert.True(disjoint, $"Replacement aliased in-flight slot [{firstSlot.Offset}, +{firstSlot.Size}) at [{secondSlot.Offset}, +{secondSlot.Size})");
+            }
+
+            ctx.EndFrame();
+
+            // Frame 2 (slot 1): BeginTransientPhase must not record a barrier referencing the disposed first image.
+            ctx.BeginFrame();
+            ctx.BeginTransientPhase(TransientPhase.Reflection);
+            ctx.Frame.Commands.BeginRendering(Target(second));
+            ctx.Frame.Commands.EndRendering();
+            ctx.EndFrame();
+
+            // Frame 3 (slot 0): retires frame 1 (destroying first's VkImage) while frame 2 is still in flight.
+            // Without synchronous retirement, VK_LAYER_KHRONOS_validation reports VUID-vkDestroyImage-image-01000.
+            ctx.BeginFrame();
+            ctx.BeginTransientPhase(TransientPhase.Reflection);
+            ctx.EndFrame();
+
+            second.Dispose();
+            d.Frames.WaitAll();
+            Assert.Equal(0, d.Allocator.Transient.ImageCount);
+            Assert.Equal(0, d.Allocator.Transient.BlockCount);
+        }
+
+        ExpectClean(d);
+    }
 }

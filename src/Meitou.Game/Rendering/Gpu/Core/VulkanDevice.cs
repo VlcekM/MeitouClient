@@ -348,6 +348,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
 
         var alloc = entry.Allocation;
+        if (alloc is { Aliased: true }) Allocator.Transient.Retire(alloc);
         Frames.DeferDelete(() =>
         {
             lock (_tableGate)
@@ -2235,7 +2236,11 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// <summary>
     /// Frees the image once every frame that could use it has finished.
     /// </summary>
-    public void DeferFree(ImageAllocation i) => Frames.DeferDelete(() => Allocator.Free(i));
+    public void DeferFree(ImageAllocation i)
+    {
+        if (i.Aliased) Allocator.Transient.Retire(i);
+        Frames.DeferDelete(() => Allocator.Free(i));
+    }
 
     /// <summary>
     /// Waits through this function instead of the driver's <c>vkDeviceWaitIdle</c> when set (Streamline's proxy with DLSS frame generation, whose
