@@ -173,6 +173,16 @@ public sealed class Platoon
     /// </summary>
     public bool Imprisoned { get; set; }
     /// <summary>
+    /// Every member of the saved platoon sat in a cage when the save was read (Meitou's reading, never saved): the original sets
+    /// <see cref="Imprisoned"/> only at an unload, so a platoon loaded when the game was saved has it clear with its prisoner caged. Cleared when
+    /// the platoon unloads, which sets <see cref="Imprisoned"/> afresh.
+    /// </summary>
+    public bool CagedAtLoad { get; set; }
+    /// <summary>
+    /// The stand-in stays put: <see cref="Imprisoned"/> or <see cref="CagedAtLoad"/>.
+    /// </summary>
+    public bool Captive => Imprisoned || CagedAtLoad;
+    /// <summary>
     /// The platoon is persistent without a save's record to say so (the flag a prisoner's own platoon takes from its old platoon or its unique
     /// member, <c>FUN_14079c1c0</c>): the original never removes one.
     /// </summary>
