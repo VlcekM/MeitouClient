@@ -681,6 +681,10 @@ Each frame it builds a velocity from forces, not a path:
   (dot > 0.5) the ramp, backing (dot < −0.5) 16, sideways 18; not running at most 18. Over the cap the velocity is cut to it.
 - **Smoothing**: x and z each through a `MotionFilter` (10 samples, newest first, weights 0.8^k, normalised; per frame).
 - The caller then ×speed mult (×0.75 / 0.5 / 0.4 in movement levels 1–3), caps at the animation's max speed and hands it to the nav agent.
+  **Verified** (decompile of `FUN_14065ffa0`): the multiplier `FUN_14065dba0` is CharMovement `+0x35c` (the race's `combat move speed mult`,
+  read in `FUN_1406628e0`) × that water factor, and the length is then cut to the animation's `+0x19c` (S, [speed](pathfinding.md#speed-and-orders))
+  in both steering branches, so a race with a mult over 1 fights and chases no faster than its run speed. Meitou: `MovementSystem.SteerFight`
+  cuts it to the mover's top speed; before, a Skimmer chased a runner at over its run speed (#1584).
 
 Meitou (`CombatSteering`, `Fighting.Steer`, `MovementSystem`): melee fighters in the footwork (not running, not stunned or holding), and runners leading a fleeing target ([Combat stance](#combat-stance)), steer
 this way while in the same place as the target with a clear navmesh line of sight to it (`CombatSystem.SteersAt` → `IWalkability.LineOfSight`, `NavLineOfSight`: the original's face walk, [Combat stance](#combat-stance): a line of no width from the face nearest each character, within 4, walked across edges into the face behind, a neighbour or a tile or zone link as the path search's portals, near-miss seams and interior joins included; blocked across an edge with nothing behind, into a closed door's face (face data 5, the world's `EdgeFilter` `FUN_1403b58e0`, **Verified** decompile) or when it ends in a face other than the target's; a character with no face near blocks it, as an invalid face key does; no height test; outside the loaded zones it is clear. **Observed** on 3000 random outdoor point pairs 10-100 apart round Heft and the Hub: about 99% clear, within 0.5% of the step-and-sweep test it replaced); rechecked

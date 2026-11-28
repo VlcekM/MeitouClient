@@ -34,8 +34,8 @@ namespace Meitou.Simulation.Movement;
 /// an answer is applied in a serial step, so a path is never read while it is replaced.</item>
 /// </list>
 /// Water states cap or replace the top speed, inside S (<see cref="WaterStateAt"/>, <see cref="Bodies.TopSpeedDelay"/>). In water a fighter's
-/// footwork is scaled too (x0.75 / 0.5 / 0.4). Not modelled yet (Unknown or later): slopes (the original has no slope penalty), the RACE <c>combat move speed mult</c>. Far
-/// trips take the roads in the path layer (<see cref="CharacterCold.RoadPreference"/>).
+/// footwork is scaled too (x0.75 / 0.5 / 0.4), as by the RACE <c>combat move speed mult</c>, and then cut to the top speed. No slope term (the
+/// original has none). Far trips take the roads in the path layer (<see cref="CharacterCold.RoadPreference"/>).
 /// <item>Followers (the original's <c>Task_Follow</c>, docs/game/pathfinding.md "Squads travelling together"): a squad mate aims at its
 /// <see cref="Formation.Layout"/> slot turned onto a heading that eases toward the leader's, one second ahead of the leader; anyone else keeps a
 /// drawn 20..40 from its target. Its speed is the original's desired speed (<see cref="FollowSpeedFor"/>), capped by its top speed only (engine
@@ -2017,7 +2017,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         // "Fight steering").
         if (s.Water > 0) v *= s.Water switch { 1 => 0.75f, 2 => 0.5f, _ => 0.4f };
 
+        // Then it cuts the velocity to the top speed (the animation's max speed, FUN_14065ffa0), after the race's combat move speed mult: a race
+        // whose mult is over 1 chases no faster than it runs (#1584).
         float vs = v.Length();
+        if (vs > n.MaxSpeed) (v, vs) = (v * (n.MaxSpeed / vs), n.MaxSpeed);
+
         (s.Dir, s.Speed) = vs > 1e-4f ? (v / vs, vs) : (Vector2.Zero, 0f);
 
         if (face != Vector2.Zero)
