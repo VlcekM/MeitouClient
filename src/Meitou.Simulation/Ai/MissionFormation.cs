@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Population;
@@ -92,18 +93,41 @@ static class MissionFormation
     }
 
     /// <summary>
-    /// Whether every other intact platoon of the campaign is within <see cref="ColumnRange"/> of the leader platoon (the intact flag as the serial
-    /// campaign step last stored it, <see cref="Platoon.IntactFlag"/>; a dead platoon is not intact).
+    /// Whether every other intact platoon of the campaign is within <see cref="ColumnRange"/> of the leader platoon (<c>FUN_1409c3910</c>,
+    /// <b>Verified</b>): the intact flag as the serial campaign step last stored it (<see cref="Platoon.IntactFlag"/>; a dead platoon is not intact),
+    /// and a loaded platoon whose members are all down does not count (<see cref="AllDown"/>). The original also skips an off-screen platoon not on
+    /// job 5 / 6, but an off-screen campaign platoon's job is the campaign's (slot 12), always 5 or 6, so none is skipped for it.
     /// </summary>
     static bool ColumnTogether(World world, Platoon lead)
     {
         foreach (int id in lead.Campaign!.Platoons)
         {
-            if (id == lead.Id || world.Platoons.Find(id) is not { } other || other.Dead || !other.IntactFlag) continue;
+            if (id == lead.Id || world.Platoons.Find(id) is not { } other || other.Dead || !other.IntactFlag || AllDown(world, other)) continue;
             if (Vector2.Distance(other.Position, lead.Position) > ColumnRange) return false;
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Platoon vfunc 0x30 (<c>FUN_140998b00</c>, <b>Verified</b>): loaded with members, every one of them down (<see cref="CharacterFacts.Down"/>,
+    /// Character vfunc 0x30); false off screen or with none.
+    /// </summary>
+    static bool AllDown(World world, Platoon platoon)
+    {
+        if (platoon.State != PlatoonState.Loaded || world.Squads.Find(platoon.SquadId) is not { } squad) return false;
+
+        var table = world.Characters;
+        bool any = false;
+        foreach (var m in squad.Members)
+        {
+            if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } cold) continue;
+            if (!CharacterFacts.Down(cold)) return false;
+
+            any = true;
+        }
+
+        return any;
     }
 
     /// <summary>
