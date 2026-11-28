@@ -109,7 +109,7 @@ public class MyGuiTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "No Kenshi install configured.");
-        var resources = OgreScriptResources.ForInstall(install, Data.LoadOrder.FromInstall(install));
+        var resources = OgreScriptResources.ForInstall(install, Data.LoadOrder.BaseGame(install));
         var ui = MyGuiResources.Load("kenshi_init.xml", name => resources.Find(name));
         Assert.Contains("Middle", ui.Layers);
         Assert.Contains("Kenshi_Button1Skin", ui.Skins.Keys);

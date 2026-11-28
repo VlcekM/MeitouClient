@@ -22,7 +22,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "No Kenshi install configured");
-        var resources = OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install));
+        var resources = OgreScriptResources.ForInstall(install, LoadOrder.BaseGame(install));
         var ui = new PlayerInterface(session, (_, _) => 0, c => c.Position) { Width = 1600, Height = 900 };
         ui.LoadUi(UiMode.Faithful, name => resources.Find(name));
         ui.Frontend.ConfigureFrontend(SyntheticTown.Database(), () => [], "");

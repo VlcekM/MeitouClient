@@ -601,7 +601,7 @@ public class DialogueInstallTests
         world.Commands.Enqueue(new TalkOrder(hero, guard) { Tick = world.Tick });
 
         // Show the gear, then take the first reply each time until the guard orders the seizure ("/SEIZE/" says "Attack"); every line on the way
-        // re-checks DC 69.
+        // re-checks DC 69. The order has no replies, so it ends the talk and is said as the guard's bubble (FUN_1406839a0).
         var posted = new List<string>();
         string said = "";
         for (int step = 0; step < 12 && !said.StartsWith("Attack", StringComparison.Ordinal); step++)
@@ -609,8 +609,11 @@ public class DialogueInstallTests
             world.RunTicks(2);
             posted.AddRange(world.TakeMessages());
             var talk = dialogue.PublishConversation();
-
-            Assert.NotNull(talk);
+            if (talk is null)
+            {
+                said = dialogue.PublishSpeech().Single(b => b.Speaker == guard).Text;
+                break;
+            }
 
             said = talk.Text;
             int gear = talk.Choices.ToList().FindIndex(t => t.Contains("Show him your gear", StringComparison.Ordinal));
