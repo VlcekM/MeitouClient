@@ -6818,3 +6818,11 @@ msgstr "被释放的奴隶保持自由"
 #. machine-translated
 msgid "A slave you set free from a cage stops obeying its owner, so it can run off. In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it."
 msgstr "你从笼子里释放的奴隶不再服从主人，因此可以逃走。在游戏中它仍会服从，农场奴隶会径直走回笼子，笼子随即在它身后锁上。"
+
+#. machine-translated
+msgid "Base game, changed by: {1}"
+msgstr "原版游戏，修改者：{1}"
+
+#. machine-translated
+msgid "Mod: {1}, changed by: {2}"
+msgstr "模组：{1}，修改者：{2}"

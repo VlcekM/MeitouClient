@@ -1301,7 +1301,7 @@ sealed partial class GameHost(
         // Kept per item with the shown text revision it was made at, since the race names in it are shown text.
         var specialFoodRaces = new System.Collections.Concurrent.ConcurrentDictionary<string, (int Revision, string Text)>(StringComparer.Ordinal);
         ui.TooltipRuntime.ItemRecordOf = id => PopData?.Db.Find(id);
-        ui.TooltipRuntime.RecordMods = record => PopData?.Db.ModsOf(record) ?? [];
+        ui.TooltipRuntime.RecordModsLine = record => PopData?.Db is { } db ? Ui.RecordModsText.Of(db, record) : "";
         ui.TooltipRuntime.SpecialFoodRaces = id =>
         {
             if (PopData is not { } d) return "";

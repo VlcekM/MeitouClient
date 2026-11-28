@@ -765,6 +765,10 @@ msgstr ""
 msgid "Balanced: more resident detail than Safe, with some headroom for macOS and other apps."
 msgstr ""
 
+#: src/Meitou.Game/Ui/RecordModsText.cs
+msgid "Base game, changed by: {1}"
+msgstr ""
+
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkScenario.cs
 msgid "Bases"
 msgstr ""
@@ -3492,6 +3496,10 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/RecordModsText.cs
 msgid "Mod: {1}"
+msgstr ""
+
+#: src/Meitou.Game/Ui/RecordModsText.cs
+msgid "Mod: {1}, changed by: {2}"
 msgstr ""
 
 #: src/Meitou.Game/Title/DataLoadErrors.cs

@@ -5988,3 +5988,11 @@ msgstr "Befreite Sklaven bleiben frei"
 #. machine-translated
 msgid "A slave you set free from a cage stops obeying its owner, so it can run off. In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it."
 msgstr "Ein Sklave, den du aus einem Käfig befreist, gehorcht seinem Besitzer nicht mehr und kann fliehen. Im Spiel gehorcht er weiter, und ein Farmsklave geht sofort zurück in seinen Käfig, der sich hinter ihm verschließt."
+
+#. machine-translated
+msgid "Base game, changed by: {1}"
+msgstr "Basisspiel, geändert von: {1}"
+
+#. machine-translated
+msgid "Mod: {1}, changed by: {2}"
+msgstr "Mod: {1}, geändert von: {2}"

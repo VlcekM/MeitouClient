@@ -53,7 +53,7 @@ public static class BuildingDescriptions
         if (db.Find(stringId) is not { } record) return "";
 
         string description = Of(record);
-        string mods = Ui.RecordModsText.Of(db.ModsOf(record));
+        string mods = Ui.RecordModsText.Of(db, record);
         if (mods.Length == 0) return description;
         return description.Length == 0 ? mods : description + "\n\n" + mods;
     }
