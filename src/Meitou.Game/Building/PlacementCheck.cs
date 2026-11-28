@@ -350,7 +350,7 @@ public static class PlacementCheck
 
     /// <summary>
     /// The game's own first reason the ghost cannot stand, in the original's order (town, ownership, resources, incomplete site, the centre, inside
-    /// only, overlap, ground, slope), each passed over when a mod's rule lifts it; None when it can.
+    /// or outside only, overlap, ground, slope), each passed over when a mod's rule lifts it; None when it can.
     /// </summary>
     static PlacementFailure GameVerdict(PlacementQuery q)
     {
@@ -387,6 +387,10 @@ public static class PlacementCheck
         // Interior-only furniture must stand on a building's floor; what may also stand outside (exterior furniture or a node) goes either way.
         if (parent is null && b.IsInteriorFurniture && !b.IsExteriorFurniture && !b.IsNode && Refused(q, PlacementFailure.MustBeInside))
             return PlacementFailure.MustBeInside;
+
+        // A rain collector may not stand on a building's floor; a roof or wall top (a raised surface outside the rooms) is outside.
+        if (q.On is not null && b.IsRainCollector && Refused(q, PlacementFailure.MustBeOutside))
+            return PlacementFailure.MustBeOutside;
 
         var overlap = hull is null ? PlacementFailure.None : HullBlock(q, hull, at, parent);
         if (Refused(q, overlap)) return overlap;

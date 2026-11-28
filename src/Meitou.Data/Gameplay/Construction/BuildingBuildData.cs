@@ -175,6 +175,12 @@ public sealed record BuildingBuildData
     public bool HasGunTurret { get; init; }
 
     /// <summary>
+    /// Whether the functionality's <c>function</c> is <c>BF_RAIN_COLLECTOR</c> (26): the ghost may not stand on a building's floor
+    /// (docs/game/buildings-production.md "Placement"). Read only by <see cref="From(GameRecord, GameDatabase)"/>.
+    /// </summary>
+    public bool IsRainCollector { get; init; }
+
+    /// <summary>
     /// The site's target: the sum of the required amounts (0 completes at once).
     /// </summary>
     public float Target
@@ -249,7 +255,17 @@ public sealed record BuildingBuildData
     }
 
     /// <summary>
+    /// <see cref="From(GameRecord)"/> plus the fields that follow the record's references into <paramref name="db"/> (its functionality).
+    /// </summary>
+    public static BuildingBuildData From(GameRecord r, GameDatabase db)
+    {
+        var function = r.GetReferences("functionality") is [var link, ..] ? db.Find(link.TargetStringId) : null;
+        bool rain = function?.GetInt("function", -1) == MachineData.RainCollectorFunction;
+        return From(r) with { IsRainCollector = rain };
+    }
+
+    /// <summary>
     /// Every BUILDING of the database, in its order.
     /// </summary>
-    public static List<BuildingBuildData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.Building).Select(From)];
+    public static List<BuildingBuildData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.Building).Select(r => From(r, db))];
 }
