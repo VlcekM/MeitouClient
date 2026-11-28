@@ -6021,3 +6021,11 @@ msgstr "Окно постройки над панелью сведений"
 #. machine-translated
 msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
 msgstr "Окно постройки открывается над панелью сведений, пока она развёрнута, и движется вместе с ней, чтобы не закрывать кнопки постройки, например «Улучшить». В игре оно всегда стоит над свёрнутой панелью."
+
+#. machine-translated
+msgid "One storage window at a time"
+msgstr "Одно окно хранилища за раз"
+
+#. machine-translated
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
+msgstr "Если выбрать здание, пока рядом с инвентарём персонажа открыто хранилище или контейнер, они закрываются и окно выбранного здания показывается одно. В игре окно выбранного здания открывается вдобавок, и на экране сразу два окна хранилищ."

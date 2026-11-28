@@ -6018,3 +6018,11 @@ msgstr "Finestra dell'edificio sopra il pannello informazioni"
 #. machine-translated
 msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
 msgstr "La finestra di un edificio si apre sopra il pannello informazioni quando è espanso e si sposta con esso, così non copre i pulsanti dell'edificio come Migliora. Il gioco la mette sempre sopra il pannello chiuso."
+
+#. machine-translated
+msgid "One storage window at a time"
+msgstr "Una finestra di deposito alla volta"
+
+#. machine-translated
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
+msgstr "Selezionare un edificio mentre un deposito o un contenitore è aperto accanto all'inventario di un personaggio li chiude e mostra da sola la finestra dell'edificio selezionato. Il gioco apre anche la finestra dell'edificio selezionato, così si vedono due finestre di deposito insieme."

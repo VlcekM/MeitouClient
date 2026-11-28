@@ -3937,6 +3937,10 @@ msgstr ""
 msgid "On: render below the screen's size and upscale (MetalFX or TAA), with a render scale to choose. Off: render at the screen's size, or in full screen at a fraction of it with a resolution to choose."
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "One storage window at a time"
+msgstr ""
+
 #: src/Meitou.Game/Ui/TooltipRuntime.cs
 msgid "Only for:"
 msgstr ""
@@ -4883,6 +4887,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Selected"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
 msgstr ""
 
 #: src/Meitou.Game/Ui/FeedbackPanel.cs

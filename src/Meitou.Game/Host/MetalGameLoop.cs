@@ -1179,6 +1179,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             GreyUnavailableVerbs = host.Config.GreyUnavailableVerbs,
             FixLockpickLabel = host.Config.FixLockpickLabel,
             FixBuildingWindowClear = host.Config.FixBuildingWindowClear,
+            FixReplaceTargetWindow = host.Config.FixReplaceTargetWindow,
             FeedbackButtonInPlay = host.Config.FeedbackButton,
             XpLabel = Settings.SkillXp.Label(host.Config),
         };

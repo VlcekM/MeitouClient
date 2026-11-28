@@ -126,8 +126,23 @@ sealed class ProductionWindows(PlayerInterface player)
         var selected = SiteMachine(MachineSiteOf(focus));
         if (selected is { Inputs.Count: 0, Output: null, HasStorage: false, Craft: null }) selected = null;
 
+        if (player.FixReplaceTargetWindow) ReplaceTargetBySelection(selected);
         SyncShownMachine(selected);
         SyncOwnMachine(selected);
+    }
+
+    /// <summary>
+    /// Meitou fix (<see cref="PlayerInterface.FixReplaceTargetWindow"/>): selecting another machine while an order's target is shown closes the
+    /// target and the looter's inventory with it, so the selection's window then opens alone (<see cref="SyncShownMachine"/>) rather than as the
+    /// selected building's own window beside them (<see cref="SyncOwnMachine"/>).
+    /// </summary>
+    void ReplaceTargetBySelection(MachineSnapshot? selected)
+    {
+        if (selected is null || selected.Site == ShownMachine || selected.Site == _targetSelection) return;
+        if (!ShownIsTarget() || Machine(ShownMachine) is not { } shown) return;
+
+        player.FaithfulScreens.Close(MachineScreen(shown));
+        ShownMachineClosed(shown);
     }
 
     /// <summary>

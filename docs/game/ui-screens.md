@@ -1002,8 +1002,8 @@ window closes the target and closing the target closes the main one (`FUN_1406e5
 (`FUN_1407918a0`: loot, container, storage, trade) first closes every inventory window (`FUN_1406e5740`), then opens the looter at the margin
 (bag first) and the target at its right edge (`FUN_1406e4960`). Selecting a building opens its own window (`FUN_1406e6640`) beside a target
 already shown, and a selection change closes only that own window (`FUN_140729c80` → `FUN_1406e67f0`), so a storage opened by order stays
-open. Opening the own window sets only its own position; nothing else moves. Every inventory window is entered in the manager's link table
-when made (`FUN_1406e5260` → `FUN_14070f2a0`; an order then sets the pair's trade and take/put flags), and a right click on an item moves it
+open ([Meitou fix](../optional-fixes.md#two-storage-windows-at-once-1590)). Opening the own window sets only its own position; nothing else
+moves. Every inventory window is entered in the manager's link table when made (`FUN_1406e5260` → `FUN_14070f2a0`; an order then sets the pair's trade and take/put flags), and a right click on an item moves it
 to the first other window in that table, that window's bag first (`FUN_140714a20` → `FUN_14070dcd0`, the move `FUN_140713d20`). The table
 is a tree keyed by the window's address, so with three windows of different owners open the partner is not fixed. Meitou (`WorldMap`): an
 item of the inventory goes to the shown (target) window, one of a machine window to the inventory. Esc (`FUN_140917120`): with an inventory window, the prospecting window, the options panel or the overview shown, one press closes every

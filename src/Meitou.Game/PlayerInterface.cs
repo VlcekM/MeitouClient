@@ -385,6 +385,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public bool FixBuildingWindowClear { get; set; } = true;
 
     /// <summary>
+    /// Selecting another building replaces an order's storage or container window and the looter's inventory with the selected building's window
+    /// (<see cref="UserConfig.FixReplaceTargetWindow"/>); off, the selected building's own window opens beside them as in the original.
+    /// </summary>
+    public bool FixReplaceTargetWindow { get; set; } = true;
+
+    /// <summary>
     /// The button during play (<see cref="UserConfig.FeedbackButton"/>); off, it still shows on the title and with the game menu open.
     /// </summary>
     public bool FeedbackButtonInPlay { get; set; } = true;

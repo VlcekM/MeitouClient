@@ -868,6 +868,7 @@ sealed partial class GameHost(
         Player.GreyUnavailableVerbs = Config.GreyUnavailableVerbs;
         Player.FixLockpickLabel = Config.FixLockpickLabel;
         Player.FixBuildingWindowClear = Config.FixBuildingWindowClear;
+        Player.FixReplaceTargetWindow = Config.FixReplaceTargetWindow;
         Player.FeedbackButtonInPlay = Config.FeedbackButton;
         Player.XpLabel = SkillXp.Label(Config);
         Player.Frontend.FixLoadButton = Config.FixLoadButton;

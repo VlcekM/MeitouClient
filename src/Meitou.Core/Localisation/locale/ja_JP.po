@@ -6015,3 +6015,11 @@ msgstr "建物ウィンドウを情報パネルの上に表示"
 #. machine-translated
 msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
 msgstr "情報パネルを広げている間、建物のウィンドウはその上に開き、パネルと一緒に動くので、アップグレードなどの建物のボタンを隠しません。ゲームでは常に畳んだパネルの上に置かれます。"
+
+#. machine-translated
+msgid "One storage window at a time"
+msgstr "保管庫ウィンドウは一度に一つ"
+
+#. machine-translated
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
+msgstr "キャラクターのインベントリの横に保管庫やコンテナが開いているときに建物を選択すると、それらを閉じて選択した建物のウィンドウだけを表示します。ゲームでは選択した建物のウィンドウも開くため、保管庫のウィンドウが二つ同時に表示されます。"

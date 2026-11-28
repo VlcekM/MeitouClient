@@ -6848,3 +6848,11 @@ msgstr "建筑窗口位于信息面板上方"
 #. machine-translated
 msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
 msgstr "信息面板展开时，建筑的窗口在其上方打开并随之移动，不会遮住建筑的按钮（如升级）。游戏中它总是放在收起的面板上方。"
+
+#. machine-translated
+msgid "One storage window at a time"
+msgstr "一次只开一个储存窗口"
+
+#. machine-translated
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
+msgstr "在角色物品栏旁打开着储存或容器时选择一座建筑，会将它们关闭，只显示所选建筑的窗口。游戏中所选建筑的窗口会一并打开，因此同时出现两个储存窗口。"

@@ -821,6 +821,11 @@ sealed class GamePages(SettingsMenu menu)
             + "building's buttons such as Upgrade. The game always places it above the collapsed panel.",
             Toggle: new("Building window above the information panel", () => menu.Config.FixBuildingWindowClear,
                 v => menu.Player.FixBuildingWindowClear = menu.Config.FixBuildingWindowClear = v, Remaster: true, OnOff: true)));
+        result.Add(new("One storage window at a time",
+            "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected "
+            + "building's window alone. The game opens the selected building's window as well, so two storage windows show at once.",
+            Toggle: new("One storage window at a time", () => menu.Config.FixReplaceTargetWindow,
+                v => menu.Player.FixReplaceTargetWindow = menu.Config.FixReplaceTargetWindow = v, Remaster: true, OnOff: true)));
         result.Add(new("Lockpick chance on the pointer",
             "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. "
             + "The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%.",

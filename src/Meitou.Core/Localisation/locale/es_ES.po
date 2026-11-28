@@ -6018,3 +6018,11 @@ msgstr "Ventana del edificio sobre el panel de información"
 #. machine-translated
 msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
 msgstr "La ventana de un edificio se abre sobre el panel de información mientras está desplegado y se mueve con él, para no tapar los botones del edificio, como Mejorar. El juego siempre la coloca sobre el panel plegado."
+
+#. machine-translated
+msgid "One storage window at a time"
+msgstr "Una ventana de almacén a la vez"
+
+#. machine-translated
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
+msgstr "Al seleccionar un edificio mientras un almacén o contenedor está abierto junto al inventario de un personaje, ambos se cierran y la ventana del edificio seleccionado se muestra sola. El juego abre también la ventana del edificio seleccionado, así que se ven dos ventanas de almacén a la vez."

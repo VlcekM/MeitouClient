@@ -704,6 +704,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixBuildingWindowClear { get; set; } = true;
     /// <summary>
+    /// Selecting another building while an order's storage or container is open beside the inventory closes them and shows the selected building's
+    /// window alone (Fixes settings; off: its window opens beside them, two storage windows at once, as the game does; docs/optional-fixes.md).
+    /// </summary>
+    public bool FixReplaceTargetWindow { get; set; } = true;
+    /// <summary>
     /// The information panel was last left extended (its ^ button), written at every press; read at start while <see cref="KeepInfoPanel"/> is on.
     /// </summary>
     public bool InfoPanelExtended { get; set; }

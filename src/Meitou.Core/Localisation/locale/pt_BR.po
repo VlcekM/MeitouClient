@@ -6445,3 +6445,11 @@ msgstr "Janela do prédio acima do painel de informações"
 #. machine-translated
 msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
 msgstr "A janela de um prédio abre acima do painel de informações enquanto ele está expandido e se move com ele, para não cobrir os botões do prédio, como Melhorar. O jogo sempre a coloca acima do painel recolhido."
+
+#. machine-translated
+msgid "One storage window at a time"
+msgstr "Uma janela de depósito por vez"
+
+#. machine-translated
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
+msgstr "Selecionar uma construção enquanto um depósito ou contêiner está aberto ao lado do inventário de um personagem fecha ambos e mostra sozinha a janela da construção selecionada. O jogo também abre a janela da construção selecionada, então duas janelas de depósito aparecem ao mesmo tempo."

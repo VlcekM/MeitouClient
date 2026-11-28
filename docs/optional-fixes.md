@@ -22,6 +22,17 @@ original's behaviour), or is to get one.
   extended the point is the extended panel's top less 1 % of the screen height; each ^ press moves an open building window still on the old point
   to the new one (a dragged or linked window stays); a window taller than the room keeps its top on the screen.
 
+## Two storage windows at once (#1590)
+
+- **Original** (**Verified**, decompile of 1.0.68 `kenshi_x64.exe`): a storage or container order (`FUN_1407918a0`) closes every inventory
+  window, then opens the looter's window and the target's (`FUN_1406e6820` / `FUN_1406e6af0`), neither in the manager's own-window slot
+  (`+0xe0`). Selecting a building (`FUN_1405504a0`, `FUN_140729c80`) calls `FUN_1406e6640`, which brings forward a window the building already
+  has and otherwise closes only the previous own window and opens the building's beside the target ([inventory windows](game/ui-screens.md)).
+  So a storage opened by order and a second storage then selected show two STORAGE windows.
+- **Fix** (Fixes setting "One storage window at a time", `UserConfig.FixReplaceTargetWindow`, on by default): selecting another building
+  with a window while an order's storage or container is shown closes it and the looter's inventory (a container closes in the world), and the
+  selected building's window opens alone, as a left click on it does with nothing open.
+
 ## Freed slaves walk back into a cage (#1575)
 
 - **Original** (**Verified**, decompile of 1.0.68 `kenshi_x64.exe` and a headless probe of the #1575 save): Set Free (`Task_ReleasePrisoner`, start

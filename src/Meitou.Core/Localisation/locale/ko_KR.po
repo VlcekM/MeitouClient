@@ -6015,3 +6015,11 @@ msgstr "건물 창을 정보 패널 위에 표시"
 #. machine-translated
 msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
 msgstr "정보 패널이 펼쳐져 있으면 건물 창이 그 위에 열리고 패널을 따라 움직여 업그레이드 같은 건물 버튼을 가리지 않습니다. 게임에서는 항상 접힌 패널 위에 놓입니다."
+
+#. machine-translated
+msgid "One storage window at a time"
+msgstr "저장고 창은 한 번에 하나"
+
+#. machine-translated
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
+msgstr "캐릭터의 인벤토리 옆에 저장고나 컨테이너가 열려 있을 때 건물을 선택하면 그것들을 닫고 선택한 건물의 창만 표시합니다. 게임에서는 선택한 건물의 창도 함께 열려 저장고 창 두 개가 동시에 표시됩니다."

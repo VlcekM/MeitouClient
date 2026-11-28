@@ -1823,6 +1823,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.KeepInfoPanel = true;
         Player.FixLockpickLabel = Config.FixLockpickLabel = true;
         Player.FixBuildingWindowClear = Config.FixBuildingWindowClear = true;
+        Player.FixReplaceTargetWindow = Config.FixReplaceTargetWindow = true;
         Config.FixRaidClocks = true;
         Config.FixArrestLifts = true;
         Config.FixArrestChases = true;

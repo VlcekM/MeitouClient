@@ -6018,3 +6018,11 @@ msgstr "Gebäudefenster über dem Infofeld"
 #. machine-translated
 msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
 msgstr "Das Fenster eines Gebäudes öffnet sich über dem Infofeld, solange es ausgeklappt ist, und wandert mit ihm, damit es die Knöpfe des Gebäudes wie Aufwerten nicht verdeckt. Im Spiel liegt es immer über dem eingeklappten Feld."
+
+#. machine-translated
+msgid "One storage window at a time"
+msgstr "Ein Lagerfenster zur Zeit"
+
+#. machine-translated
+msgid "Selecting a building while a storage or container is open beside a character's inventory closes them and shows the selected building's window alone. The game opens the selected building's window as well, so two storage windows show at once."
+msgstr "Wird ein Gebäude ausgewählt, während ein Lager oder Behälter neben dem Inventar einer Figur offen ist, schließen sich beide und das Fenster des ausgewählten Gebäudes erscheint allein. Im Spiel öffnet sich das Fenster des ausgewählten Gebäudes zusätzlich, sodass zwei Lagerfenster gleichzeitig offen sind."
