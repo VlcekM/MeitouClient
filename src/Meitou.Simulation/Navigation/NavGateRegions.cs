@@ -13,7 +13,7 @@ public sealed class NavGateRegions : IGateRegions
     /// <summary>
     /// No gates and no navmesh: every point is off the navmesh (-1).
     /// </summary>
-    public static readonly NavGateRegions Empty = new(NavWorld.Empty, [], [], [], []);
+    public static readonly NavGateRegions Empty = new(NavWorld.Empty, [], [], [], [], []);
 
     /// <summary>
     /// The navmesh the codes label; points are looked up on it.
@@ -27,16 +27,21 @@ public sealed class NavGateRegions : IGateRegions
     /// The interior polygons' codes, their buildings' (<see cref="GateInteriorCodes"/>).
     /// </summary>
     readonly Dictionary<long, int> _inside;
+    /// <summary>
+    /// The gates' side points, by building.
+    /// </summary>
+    readonly Dictionary<string, GateSide> _sides;
 
     /// <summary>
     /// Wraps a pass's result.
     /// </summary>
-    NavGateRegions(NavWorld world, Dictionary<long, int> codes, Dictionary<long, int> inside, IReadOnlyList<GateLink> gates,
-            IReadOnlyList<string> log)
+    NavGateRegions(NavWorld world, Dictionary<long, int> codes, Dictionary<long, int> inside, IReadOnlyList<GateSide> sides,
+            IReadOnlyList<GateLink> gates, IReadOnlyList<string> log)
     {
         _world = world;
         _codes = codes;
         _inside = inside;
+        _sides = sides.ToDictionary(g => g.Building, StringComparer.Ordinal);
         Gates = gates;
         Log = log;
     }
@@ -48,6 +53,9 @@ public sealed class NavGateRegions : IGateRegions
     /// What the pass reported, in the original's words where it logs (a flood without a start face, a flood that failed, several code 0 regions).
     /// </summary>
     public IReadOnlyList<string> Log { get; }
+
+    /// <inheritdoc/>
+    public GateSide? SidesOf(string building) => _sides.TryGetValue(building, out var sides) ? sides : null;
 
     /// <summary>
     /// The code of an object at <paramref name="at"/>: <c>NavMesh::getGateCode</c> there, except that in an interior it is its building's
@@ -68,12 +76,12 @@ public sealed class NavGateRegions : IGateRegions
     public static NavGateRegions Label(NavWorld world, float footprint = GateCodeFlood.DefaultFootprint)
     {
         var gates = GatesOf(world);
-        if (gates.Count == 0) return new NavGateRegions(world, [], GateInteriorCodes.Of(world, []), [], []);
+        if (gates.Count == 0) return new NavGateRegions(world, [], GateInteriorCodes.Of(world, []), [], [], []);
 
         var pass = new GateCodePass(world, gates, footprint);
         pass.Run();
         var links = gates.Select((g, i) => new GateLink(g.Building, [pass.First[i], pass.Second[i]])).ToList();
-        return new NavGateRegions(world, pass.Codes, GateInteriorCodes.Of(world, pass.Codes), links, pass.Log);
+        return new NavGateRegions(world, pass.Codes, GateInteriorCodes.Of(world, pass.Codes), gates, links, pass.Log);
     }
 
     /// <summary>

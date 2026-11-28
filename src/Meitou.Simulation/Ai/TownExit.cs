@@ -10,9 +10,9 @@ namespace Meitou.Simulation.Ai;
 /// A town's point outside its gates (<c>Town::getPositionOutsideTownGates(dist)</c>, <c>FUN_140927120</c> over <c>FUN_140929560</c>,
 /// docs/game/factions-squads-towns.md): the first of the town's gate set (its <c>is gateway</c> buildings, <see cref="TownBuilding.IsGateway"/>; Town
 /// <c>+0x390</c>, which <c>FUN_140929560</c> walks), in list order, that is a gate outside the walls (its own gate code 0) or a wall with an
-/// interior, moved <see cref="Offset"/> outward from the town's position; the town's position when there is none. It takes only the town, so
-/// every walker is given the same point (<b>Verified</b>; no walkability test anywhere, and the original's cache of the point is <b>Unknown</b>, not
-/// modelled). The patrols, the throwing out of an intruder (274), the travel rows 53 / 130, the war point and the homeward walks use it; for a town
+/// interior, moved <see cref="Offset"/> outward (<see cref="GatePoint"/>, <see cref="Away"/>); the town's position when there is none. It takes
+/// only the town, so every walker is given the same point (<b>Verified</b>; no walkability test anywhere, and the original's cache of the point is
+/// <b>Unknown</b>, not modelled). The patrols, the throwing out of an intruder (274), the travel rows 53 / 130, the war point and the homeward walks use it; for a town
 /// without gates the original's waypoint (Town <c>+0x38</c>) is the door point of the building under its position, for which the town's position
 /// stands (engine reading).
 /// </summary>
@@ -24,8 +24,7 @@ public static class TownExit
     public const float Offset = 200;
 
     /// <summary>
-    /// A placed town's point. Engine choice: an unknown gate code (no labelling listed the gate, or no gate regions) counts as outside the walls; the
-    /// building's origin stands for the door point and "outward" is away from the town's position (<b>Observed</b>).
+    /// A placed town's point. Engine choice: an unknown gate code (no labelling listed the gate, or no gate regions) counts as outside the walls.
     /// </summary>
     public static Vector2 Of(TownSite town, IGateRegions? regions, Func<TownBuilding, bool>? destroyed = null)
     {
@@ -34,7 +33,8 @@ public static class TownExit
         {
             if (!b.IsGateway || !Qualifies(b, regions, destroyed)) continue;
 
-            return Away(centre, new Vector2(b.Position.X, b.Position.Z));
+            var at = new Vector2(b.Position.X, b.Position.Z);
+            return b.IsGate ? GatePoint(centre, at, b.Key, regions) : Away(centre, at);
         }
 
         return centre;
@@ -84,7 +84,7 @@ public static class TownExit
     {
         if (town.Site >= 0) return Of(data.Sites[town.Site], regions, world.Fixtures.IsDestroyed);
 
-        return Of(Centre(world, data, town), PlayerExits(world, data, regions, town, cache));
+        return PlayerPoint(world, data, regions, town, cache);
     }
 
     /// <summary>
@@ -131,21 +131,42 @@ public static class TownExit
     }
 
     /// <summary>
-    /// The player town's complete buildings of its gate set (<c>is gateway</c>) as exit candidates: each one's point and whether it gives the point
-    /// (a gate outside the walls; any other a linking building with an interior).
+    /// A player town's point over its complete buildings of its gate set (<c>is gateway</c>) in list order: the first gate outside the walls
+    /// (<see cref="GatePoint"/>) or other linking building with an interior (<see cref="Away"/>); the town's centre with neither.
     /// </summary>
-    static IEnumerable<(Vector2, bool)> PlayerExits(World world, PopulationData data, IGateRegions? regions, CampaignTown town,
-        Dictionary<string, GameRecord?> cache)
+    static Vector2 PlayerPoint(World world, PopulationData data, IGateRegions? regions, CampaignTown town, Dictionary<string, GameRecord?> cache)
     {
+        var centre = Centre(world, data, town);
         foreach (var site in world.Buildings.All)
         {
             if (site.Town != town.PlayerTown || !site.Complete || data.Db.Find(site.Record) is not { } r || !r.GetBool("is gateway")) continue;
 
-            bool qualifies = TownBuildings.IsGate(data.Db, r, cache)
-                ? !(OwnCode(regions, site.Id) > 0)
-                : r.GetBool("links together") && r.GetReferences("interior").Count > 0;
-            yield return (Flat(site.Position), qualifies);
+            var at = Flat(site.Position);
+            bool gate = TownBuildings.IsGate(data.Db, r, cache);
+            if (gate && !(OwnCode(regions, site.Id) > 0)) return GatePoint(centre, at, site.Id, regions);
+            if (!gate && r.GetBool("links together") && r.GetReferences("interior").Count > 0) return Away(centre, at);
         }
+
+        return centre;
+    }
+
+    /// <summary>
+    /// A gate's point (<c>FUN_140929560</c>, <b>Verified</b> by disassembly): its first door's outer marker (<c>doorClosedPositionOut</c>
+    /// <c>+0x3bc</c>) moved <see cref="Offset"/> along the horizontal way from its inner marker (<c>+0x3c8</c>) to it, so outward through the gate
+    /// whatever the town's position. Engine choice: a gate the labelling did not list (its zone's navmesh not built) uses <see cref="Away"/> from the
+    /// gate's origin.
+    /// </summary>
+    static Vector2 GatePoint(Vector2 centre, Vector2 origin, string building, IGateRegions? regions)
+    {
+        if (regions?.SidesOf(building) is not { } sides) return Away(centre, origin);
+
+        // The side points are the markers pushed apart by half their distance, so the outer marker lies a quarter of the way back from the second.
+        var through = sides.Second - sides.First;
+        var outer = sides.Second - through / 4;
+        var way = new Vector2(through.X, through.Z);
+        if (way.LengthSquared() == 0) return Away(centre, origin);
+
+        return Flat(outer) + Vector2.Normalize(way) * Offset;
     }
 
     /// <summary>
@@ -155,7 +176,7 @@ public static class TownExit
 
     /// <summary>
     /// The point <see cref="Offset"/> beyond <paramref name="at"/> on the way out from <paramref name="centre"/>; the centre when the two are
-    /// the same.
+    /// the same. A wall's point (<c>FUN_140929560</c>, <b>Verified</b>: its position moved along its position minus the town's).
     /// </summary>
     static Vector2 Away(Vector2 centre, Vector2 at)
     {

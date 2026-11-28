@@ -890,9 +890,11 @@ turret finder uses it so far (the others read the squad's home, which a player s
   (`TownPositionCacher`, Town +0xc0) and, for a town with gates (vtable +0x2f0 `hasGates`: its gate set Town +0x390 is not empty), takes
   `Town::getPositionOutsideTownGates(200)` (vtable +0x290, `FUN_140929560`): one pass over the gate set (the `is gateway` buildings only,
   [dialogue](dialogue.md#conditions) DC 49), returning at the first entry that is either a gateway (`isGate`, Building slot 123) with
-  `amInsideTownWalls` 0 and a door (`getDoor`), whose door point +0x3bc is moved 200 along a normalised direction (its origin is dropped
-  by the decompile; outward from the town is **Observed** from the name), or another building that is a wall (`isAWall`) whose BUILDING record has `interior` references (`myInterior` +0x1f0, created only then by `Building::setup` `FUN_140551b20`), whose position
-  is moved the same way; a gateway inside the walls or without a door (a ruin, [locks](locks.md#doors)) is passed over, never taken as a wall; neither: the town position. A town without gates: a door point of the object under the town position
+  `amInsideTownWalls` 0 and a door (`getDoor`), whose outer marker `doorClosedPositionOut` +0x3bc is moved 200 along the flattened, normalised
+  +0x3bc − +0x3c8 (outer minus inner marker, [door markers](pathfinding.md#gate-codes)), so through the gate whatever the town's position, or another
+  building that is a wall (`isAWall`) whose BUILDING record has `interior` references (`myInterior` +0x1f0, created only then by `Building::setup`
+  `FUN_140551b20`), whose position is moved 200 along its position minus the town's (**Verified**, disassembly of `FUN_140929560`); the point's height
+  is the ground's (`FUN_1409b3710`); a gateway inside the walls or without a door (a ruin, [locks](locks.md#doors)) is passed over, never taken as a wall; neither: the town position. A town without gates: a door point of the object under the town position
   (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So the Hub, whose gate set holds only its two `Defensive Gate IV`, gets a point beyond one of
   them while it has a door, else its town position, and Skinhouse HQ, which has no gateway building (its first wall with an interior, a `Defensive Wall IV` 3700 from its centre, is none), takes the gateless branch
   (**Verified**, the data).
@@ -901,8 +903,8 @@ turret finder uses it so far (the others read the squad's home, which a player s
   #1399 with the Hub's two gates stood up by The Hub Re-Established's residents, `gatecode0` 1 on both): they label [1, 0] with both origins in region 1, so the
   point is beyond the first, not the town position inside the walls (where 273 would lift the intruders 274 drops).
   Meitou: `TownExit` (Town +0x38 and +0x290 alike: the patrols, the intruder errand 274, the travel rows 53 / 130, the war point and the homeward walks; placed towns by
-  their level buildings in list order, a player town by its complete sites; a gate's own code from the last labelling that listed it, unknown counting as outside; engine
-  readings: list order for the set's, and the town position for the door point of a town without gates).
+  their level buildings in list order, a player town by its complete sites; a gate's own code and door markers from the last labelling that listed it (`IGateRegions.SidesOf`), unknown counting as outside; engine
+  readings: list order for the set's, the town position for the door point of a town without gates, and an unlisted gate's point 200 beyond its origin away from the town position).
   The move: `CharMovement::setPatrolInput` (`FUN_14065eaa0`, vtable +0xa0) in mode 3 (a `PatrolInfo` with a biome group) draws the point
   above and sends the character to it exactly; it redraws (up to 10 times) only a point whose ground is present and below 95 when the
   byte at +0x79 of the object at Character +0x2e0 is set (a race flag, water below 95: **Observed**), else accepts it (**Verified**). The

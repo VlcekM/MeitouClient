@@ -17,6 +17,11 @@ public interface IGateRegions
     /// The gates of the pass, each with its first and second code.
     /// </summary>
     IReadOnlyList<GateLink> Gates { get; }
+    /// <summary>
+    /// The side points of gate <paramref name="building"/> (its placement key) as the pass took them, from its first door's markers; null for a gate
+    /// the pass did not list.
+    /// </summary>
+    Navigation.GateSide? SidesOf(string building) => null;
 }
 
 /// <summary>
