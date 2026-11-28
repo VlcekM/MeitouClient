@@ -226,8 +226,9 @@ sealed class AgentWorld(GameHost host)
             "JSON array of the entities near a point (default: the camera pivot, radius 300, characters, 50), nearest first; world pick: "
             + "what a click at a screen pixel hits", ControlWorld);
 
-        Add("entity-screen", "entity-screen <id>", "the entity's on-screen rect [x,y,w,h] and centre in screen pixels, or state offscreen; "
-            + "characters also report occluded (something else is under the centre)", ControlEntityScreen);
+        Add("entity-screen", "entity-screen <id>", "the part on screen of the entity's rect [x,y,w,h] and the point a click "
+            + "on it takes (center; a building's is a point a pick takes it at), in screen pixels, or state offscreen; characters also report "
+            + "occluded (something else is under the centre)", ControlEntityScreen);
 
         Add("camera", "camera | camera set [--pos x z] [--yaw d] [--pitch d] [--zoom v] | rotate <deg> | pitch <deg> | zoom <v> | focus <id | x z> | "
             + "orbit <id | x z> <yawDeg>  [--over <s>]",
@@ -361,7 +362,7 @@ sealed class AgentWorld(GameHost host)
         string? entity = null;
         if (args.Count == 3 && args[1].Equals("--entity", StringComparison.OrdinalIgnoreCase))
         {
-            // Pick at the centre of an entity's on-screen rect (what a click on it would hit); the reply says whether that is the entity itself.
+            // Pick at an entity's click point (entity-screen's center: what a click on it would hit); the reply says whether that is the entity itself.
             entity = args[2];
             if (host.Player.AgentOrders.ControlEntityScreenJson(entity) is not { } rect)
             {

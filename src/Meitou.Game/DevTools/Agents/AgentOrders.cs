@@ -34,6 +34,12 @@ sealed class AgentOrders(PlayerInterface player)
     sealed record ControlBuilding(string Id, string Name, string? Record, Vector3 Position, Vector2[]? Hull);
 
     /// <summary>
+    /// An entity's box for <see cref="ControlEntityScreenJson"/>: its world corners, the world points a click on a building tries before the
+    /// middle of its box, and the character it is, if one.
+    /// </summary>
+    readonly record struct ScreenTarget(Vector3[] Corners, Vector3[] Anchors, CharacterSnapshot? Character);
+
+    /// <summary>
     /// The buildings seen by the control channel, by id.
     /// </summary>
     readonly Dictionary<string, ControlBuilding> _controlBuildings = [];
@@ -86,7 +92,7 @@ sealed class AgentOrders(PlayerInterface player)
     /// <summary>
     /// Whether screen point <paramref name="s"/> is inside the window.
     /// </summary>
-    bool OnScreen(Vector2 s) => s.X >= 0 && s.X <= player.Width && s.Y >= 0 && s.Y <= player.Height;
+    bool OnScreen(Vector2 s) => s.X >= 0 && s.X < player.Width && s.Y >= 0 && s.Y < player.Height;
 
     /// <summary>
     /// Writes <paramref name="p"/> as an array named <paramref name="name"/>, one decimal.
@@ -284,93 +290,198 @@ sealed class AgentOrders(PlayerInterface player)
     }
 
     /// <summary>
-    /// The on-screen rectangle of an entity (JSON, the part on screen, <see cref="ScreenRect"/>), or <c>offscreen</c>; null when the id names
-    /// nothing. A character reports whether the nearest thing under its centre is something else.
+    /// The on-screen rectangle of an entity (JSON, the part on screen, <see cref="ScreenRect"/>) and the point a click on it takes, or
+    /// <c>offscreen</c>; null when the id names nothing. A character reports whether the nearest thing under its centre is something else.
     /// </summary>
     public string? ControlEntityScreenJson(string id)
     {
-        Vector3[] corners;
-        Vector3? anchor = null;
-        CharacterSnapshot? character = null;
-        if (id.StartsWith("b:", StringComparison.OrdinalIgnoreCase))
-        {
-            if (ControlPosition(id) is not { } pos) return null;
-            anchor = pos + new Vector3(0, 6, 0);
-            var hull = _controlBuildings.TryGetValue(id, out var known) ? known.Hull : null;
-            if (hull is null && player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => "b:" + s.Id == id) is { } site
-                && player.Build.Services is { } host
-                && (host.Placement.Footprint(site.Record) ?? host.Placement.Plot(site.Record)) is { } footprint)
-                hull = footprint.Place(site.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation)));
-            corners = hull is { Length: > 0 } ? [.. hull.Select(p => new Vector3(p.X, pos.Y, p.Y)),
-                .. hull.Select(p => new Vector3(p.X, pos.Y + 12, p.Y))] : [pos, pos + new Vector3(0, 12, 0)];
-        }
-        else
-        {
-            if (!TryParseCharacter(id, out var cid) || ControlCharacter(cid) is not { } c) return null;
-            character = c;
-            var at = player.Where(c);
-            const float half = 3.5f;
-            corners = [at + new Vector3(-half, 0, -half), at + new Vector3(half, 0, -half), at + new Vector3(-half, 0, half),
-                at + new Vector3(half, 0, half),
-                at + new Vector3(-half, PlayerInterface.CharacterHeight, -half), at + new Vector3(half, PlayerInterface.CharacterHeight, -half),
-                    at + new Vector3(-half, PlayerInterface.CharacterHeight, half), at + new Vector3(half, PlayerInterface.CharacterHeight, half)];
-        }
-        var pixels = corners.Select(player.Project).Where(p => p is not null).Select(p => p!.Value).ToList();
+        var target = id.StartsWith("b:", StringComparison.OrdinalIgnoreCase) ? BuildingTarget(id) : CharacterTarget(id);
+        if (target is not { } t) return null;
+
+        var pixels = ProjectClipped(t.Corners, player.ViewProjection, new Vector2(player.Width, player.Height));
         using var stream = new MemoryStream();
         using (var w = new Utf8JsonWriter(stream))
         {
             w.WriteStartObject();
             w.WriteString("id", id);
-            if (pixels.Count == 0)
-            {
-                w.WriteBoolean("onScreen", false);
-                w.WriteString("state", "offscreen");
-                w.WriteEndObject();
-                w.Flush();
-                return Encoding.UTF8.GetString(stream.ToArray());
-            }
-            float x0 = pixels.Min(p => p.X), x1 = pixels.Max(p => p.X), y0 = pixels.Min(p => p.Y), y1 = pixels.Max(p => p.Y);
-            bool visible = x1 >= 0 && x0 <= player.Width && y1 >= 0 && y0 <= player.Height;
-            w.WriteBoolean("onScreen", visible);
-            if (!visible) w.WriteString("state", "offscreen");
-            else
-            {
-                var point = anchor is { } a && player.Project(a) is { } at && OnScreen(at) ? at : (Vector2?)null;
-                var (rect, centre) = ScreenRect(x0, y0, x1, y1, new Vector2(player.Width, player.Height), point);
-                w.WriteString("state", "onscreen");
-                w.WriteStartArray("rect");
-                foreach (float v in new[] { rect.X, rect.Y, rect.Z, rect.W }) w.WriteNumberValue((int)MathF.Round(v));
-                w.WriteEndArray();
-                w.WriteStartArray("center");
-                w.WriteNumberValue(centre.X);
-                w.WriteNumberValue(centre.Y);
-                w.WriteEndArray();
-                if (character is not null)
-                {
-                    // Occluded: what a click at the rect's centre takes first is not this character (or the centre is under the HUD).
-                    var front = player.Picking.PickWhereAt(centre, _ => true);
-                    bool occluded = front is null || front.Value.Id != character.Id;
-                    w.WriteBoolean("occluded", occluded);
-                    if (front is { } f && f.Id != character.Id) w.WriteString("front", CharacterKey(f.Id));
-                    w.WriteBoolean("overHud", player.OverHud(centre));
-                }
-            }
+            WriteEntityScreen(w, id, t, pixels);
             w.WriteEndObject();
         }
+
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>
-    /// The part on a <paramref name="screen"/>-sized screen of an entity's projected box (x, y, width, height) and the point a click on it takes:
-    /// its own <paramref name="point"/> when on screen, else the middle of that part. A building reaching toward the camera has corners near its
-    /// plane that project tens of thousands of pixels off, so the box's own middle can lie off screen while the building fills it.
+    /// A building's box: its hull (known from a pick, else its site's footprint) 12 m tall, else a 12 m post at its position; null when the id
+    /// names nothing. A click tries the hull's middle 2 m up (inside a wall or a shack), then 6 m up.
     /// </summary>
-    internal static (Vector4 Rect, Vector2 Centre) ScreenRect(float x0, float y0, float x1, float y1, Vector2 screen, Vector2? point)
+    ScreenTarget? BuildingTarget(string id)
     {
-        (x0, y0, x1, y1) = (MathF.Max(x0, 0), MathF.Max(y0, 0), MathF.Min(x1, screen.X), MathF.Min(y1, screen.Y));
-        var centre = point ?? new Vector2((x0 + x1) / 2, (y0 + y1) / 2);
+        if (ControlPosition(id) is not { } pos) return null;
 
-        return (new Vector4(x0, y0, x1 - x0, y1 - y0), new Vector2(MathF.Round(centre.X), MathF.Round(centre.Y)));
+        var hull = _controlBuildings.TryGetValue(id, out var known) ? known.Hull : null;
+        hull ??= SiteHull(id);
+        if (hull is not { Length: > 0 })
+            return new ScreenTarget([pos, pos + new Vector3(0, 12, 0)], [pos + new Vector3(0, 2, 0), pos + new Vector3(0, 6, 0)], null);
+
+        var middle = hull.Aggregate(Vector2.Zero, (sum, p) => sum + p) / hull.Length;
+        Vector3[] corners = [.. hull.Select(p => new Vector3(p.X, pos.Y, p.Y)), .. hull.Select(p => new Vector3(p.X, pos.Y + 12, p.Y))];
+        Vector3[] anchors = [new(middle.X, pos.Y + 2, middle.Y), new(middle.X, pos.Y + 6, middle.Y)];
+
+        return new ScreenTarget(corners, anchors, null);
+    }
+
+    /// <summary>
+    /// The placed footprint (or plot) of the player's building site <paramref name="id"/>; null when it is not one or has none.
+    /// </summary>
+    Vector2[]? SiteHull(string id)
+    {
+        if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => "b:" + s.Id == id) is not { } site) return null;
+        if (player.Build.Services is not { } host) return null;
+        if ((host.Placement.Footprint(site.Record) ?? host.Placement.Plot(site.Record)) is not { } footprint) return null;
+
+        return footprint.Place(site.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation)));
+    }
+
+    /// <summary>
+    /// A character's box: 7 m wide, as tall as a character, where it is drawn; null when the id names no character.
+    /// </summary>
+    ScreenTarget? CharacterTarget(string id)
+    {
+        if (!TryParseCharacter(id, out var cid) || ControlCharacter(cid) is not { } c) return null;
+
+        var at = player.Where(c);
+        const float half = 3.5f;
+        var corners = new List<Vector3>();
+        foreach (float y in new[] { 0f, PlayerInterface.CharacterHeight })
+        {
+            foreach (float z in new[] { -half, half })
+            {
+                corners.Add(at + new Vector3(-half, y, z));
+                corners.Add(at + new Vector3(half, y, z));
+            }
+        }
+
+        return new ScreenTarget([.. corners], [], c);
+    }
+
+    /// <summary>
+    /// Writes an entity's state, rect, centre and (for a character) what covers its centre.
+    /// </summary>
+    void WriteEntityScreen(Utf8JsonWriter w, string id, ScreenTarget target, List<Vector2> pixels)
+    {
+        var screen = new Vector2(player.Width, player.Height);
+        if (pixels.Count == 0 || ScreenRect(pixels, screen) is not { } rect)
+        {
+            w.WriteBoolean("onScreen", false);
+            w.WriteString("state", "offscreen");
+            return;
+        }
+
+        var centre = ClickPoint(id, target, rect, screen);
+        w.WriteBoolean("onScreen", true);
+        w.WriteString("state", "onscreen");
+        w.WriteStartArray("rect");
+        foreach (float v in new[] { rect.X, rect.Y, rect.Z, rect.W }) w.WriteNumberValue((int)MathF.Round(v));
+        w.WriteEndArray();
+        w.WriteStartArray("center");
+        w.WriteNumberValue(centre.X);
+        w.WriteNumberValue(centre.Y);
+        w.WriteEndArray();
+
+        if (target.Character is { } character) WriteOcclusion(w, character, centre);
+    }
+
+    /// <summary>
+    /// Writes whether a click at <paramref name="centre"/> takes something other than <paramref name="character"/> first (or lands on the HUD).
+    /// </summary>
+    void WriteOcclusion(Utf8JsonWriter w, CharacterSnapshot character, Vector2 centre)
+    {
+        var front = player.Picking.PickWhereAt(centre, _ => true);
+        bool occluded = front is null || front.Value.Id != character.Id;
+        w.WriteBoolean("occluded", occluded);
+        if (front is { } f && f.Id != character.Id) w.WriteString("front", CharacterKey(f.Id));
+        w.WriteBoolean("overHud", player.OverHud(centre));
+    }
+
+    /// <summary>
+    /// Where a click on an entity goes: for a building the first of its anchors, then the middle of its rect, at which a pick takes that building;
+    /// else (or when none does) its first anchor on screen, else the middle of its rect.
+    /// </summary>
+    Vector2 ClickPoint(string id, ScreenTarget target, Vector4 rect, Vector2 screen)
+    {
+        var middle = new Vector2(rect.X + rect.Z / 2, rect.Y + rect.W / 2);
+        var candidates = target.Anchors
+            .Select(player.Project)
+            .Where(p => p is { } s && OnScreen(s))
+            .Select(p => p!.Value)
+            .Append(middle)
+            .Select(p => Pixel(p, screen))
+            .ToList();
+        if (target.Character is not null) return candidates[0];
+
+        foreach (var pixel in candidates)
+            if (player.BuildingSelection.PickBuilding(pixel) is { } hit && string.Equals("b:" + hit.Instance, id, StringComparison.OrdinalIgnoreCase))
+                return pixel;
+
+        return candidates[0];
+    }
+
+    /// <summary>
+    /// <paramref name="p"/> rounded to a pixel that exists on a <paramref name="screen"/>-sized screen.
+    /// </summary>
+    static Vector2 Pixel(Vector2 p, Vector2 screen) =>
+        new(Math.Clamp(MathF.Round(p.X), 0, screen.X - 1), Math.Clamp(MathF.Round(p.Y), 0, screen.Y - 1));
+
+    /// <summary>
+    /// The screen points of a convex set of world <paramref name="corners"/> with the part behind the camera cut away: the corners in front and,
+    /// for each pair split by the near plane (clip w = 0.1, <see cref="PlayerInterface.Project"/>'s cut), the point where it crosses. Their box
+    /// is the box of what is in front, where dropping the corners behind would leave only the far side's.
+    /// </summary>
+    internal static List<Vector2> ProjectClipped(Vector3[] corners, Matrix4x4 viewProjection, Vector2 screen)
+    {
+        const float near = 0.1f;
+        var clip = corners.Select(c => Vector4.Transform(new Vector4(c, 1), viewProjection)).ToArray();
+        var pixels = clip.Where(c => c.W > near).Select(c => ToPixel(c, screen)).ToList();
+        if (pixels.Count == clip.Length) return pixels;
+
+        for (int i = 0; i < clip.Length; i++)
+        {
+            for (int j = i + 1; j < clip.Length; j++)
+            {
+                if ((clip[i].W > near) == (clip[j].W > near)) continue;
+
+                float t = (near - clip[i].W) / (clip[j].W - clip[i].W);
+                pixels.Add(ToPixel(Vector4.Lerp(clip[i], clip[j], t), screen));
+            }
+        }
+
+        return pixels;
+    }
+
+    /// <summary>
+    /// The screen point of clip-space point <paramref name="c"/> (w &gt; 0).
+    /// </summary>
+    static Vector2 ToPixel(Vector4 c, Vector2 screen) =>
+        new((c.X / c.W * 0.5f + 0.5f) * screen.X, (0.5f - c.Y / c.W * 0.5f) * screen.Y);
+
+    /// <summary>
+    /// The part on a <paramref name="screen"/>-sized screen of the box around <paramref name="pixels"/> (x, y, width, height); null when none of
+    /// it is (a box only touching the right or bottom edge is not). A building reaching toward the camera has corners near its plane that project
+    /// tens of thousands of pixels off, so the whole box's middle can lie off screen while the building fills it. A building without a hull is a
+    /// post, a box of no width, and stays on screen.
+    /// </summary>
+    internal static Vector4? ScreenRect(IReadOnlyCollection<Vector2> pixels, Vector2 screen)
+    {
+        float x0 = pixels.Min(p => p.X);
+        float y0 = pixels.Min(p => p.Y);
+        float x1 = pixels.Max(p => p.X);
+        float y1 = pixels.Max(p => p.Y);
+        if (x1 < 0 || y1 < 0 || x0 >= screen.X || y0 >= screen.Y) return null;
+
+        (x0, y0, x1, y1) = (MathF.Max(x0, 0), MathF.Max(y0, 0), MathF.Min(x1, screen.X), MathF.Min(y1, screen.Y));
+
+        return new Vector4(x0, y0, x1 - x0, y1 - y0);
     }
 
     #endregion
