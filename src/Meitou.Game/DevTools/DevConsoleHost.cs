@@ -390,6 +390,10 @@ sealed class DevConsoleHost(GameHost host)
 
         Add("heal", "heal", "heal the selected characters fully (else the inspected one)", ConsoleHeal);
 
+        Add("relation", "relation <faction> <other|all> [value]", "the F10 Faction relations: print two factions' relation both ways, or set it "
+            + "both ways (-100 to 100, with the game's threshold messages); a faction by name or record id, player for the player's; all (with a "
+            + "value) sets it with every other faction", ConsoleRelation);
+
         Add("gigachadmode", "gigachadmode [on|off]", "the menu's Set stats to 1000 and Auto heal together, "
             + "for every player character (also later recruits): all stats 1000 (10 x the game's maximum), healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each "
             + "character's own stats; no argument toggles; reports the state", ConsoleGigachadmode);
@@ -581,6 +585,80 @@ sealed class DevConsoleHost(GameHost host)
     {
         if (!Need(args, 1, 1, Self("money"))) return;
         Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Money, args[0]));
+    }
+
+    /// <summary>
+    /// The <c>relation</c> command (usage and help at its registration in <see cref="RegisterConsoleCommands"/>): reads the relations the F10
+    /// sub-view shows and sets them with its command (<see cref="DebugSetRelation"/>).
+    /// </summary>
+    void ConsoleRelation(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Need(args, 2, 3, Self("relation"))) return;
+        if (host.PopData?.Relations is not { } relations || host.Session.World.Player.Faction < 0)
+        {
+            con.Error("relation: no game loaded");
+            return;
+        }
+
+        bool all = args[1].Equals("all", StringComparison.OrdinalIgnoreCase);
+        if (RelationFaction(relations, args[0], con) is not { } a) return;
+        int? b = all ? null : RelationFaction(relations, args[1], con);
+        if (!all && b is null) return;
+
+        if (args.Count == 2) PrintRelation(relations, a, b, con);
+        else SetRelation(relations, a, b, args[2], con);
+    }
+
+    /// <summary>
+    /// The relation of <paramref name="a"/> and <paramref name="b"/> both ways; with every faction (<paramref name="b"/> null) there is nothing
+    /// to print.
+    /// </summary>
+    static void PrintRelation(FactionRelations relations, int a, int? b, DevConsole con)
+    {
+        if (b is not { } other)
+        {
+            con.Error("relation: all needs a value to set");
+            return;
+        }
+
+        var inv = CultureInfo.InvariantCulture;
+        con.Print($"{relations.Factions[a].Name} -> {relations.Factions[other].Name}: {relations.Get(a, other).ToString("0.#", inv)}, "
+            + $"back: {relations.Get(other, a).ToString("0.#", inv)}");
+    }
+
+    /// <summary>
+    /// Queues the relation of <paramref name="a"/> and <paramref name="b"/> (every faction when null) set to <paramref name="text"/> both ways,
+    /// applied at once while paused as the F10 sub-view does.
+    /// </summary>
+    void SetRelation(FactionRelations relations, int a, int? b, string text, DevConsole con)
+    {
+        if (!float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) || value < -100 || value > 100)
+        {
+            con.Error("relation: the value is a number from -100 to 100");
+            return;
+        }
+
+        Send(tick => new DebugSetRelation(a, b, value) { Tick = tick });
+        host.DebugMenu.ApplyWhilePaused();
+        string whom = b is { } other ? relations.Factions[other].Name : "every faction";
+        con.Print($"{relations.Factions[a].Name} and {whom}: {value.ToString("0.#", CultureInfo.InvariantCulture)}");
+    }
+
+    /// <summary>
+    /// The faction a <c>relation</c> argument names (<c>player</c>, a record id or a name, any case); else prints the error and returns null.
+    /// </summary>
+    int? RelationFaction(FactionRelations relations, string name, DevConsole con)
+    {
+        if (name.Equals("player", StringComparison.OrdinalIgnoreCase)) return host.Session.World.Player.Faction;
+
+        for (int i = 0; i < relations.Count; i++)
+        {
+            var f = relations.Factions[i];
+            if (f.Id.Equals(name, StringComparison.OrdinalIgnoreCase) || f.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) return i;
+        }
+
+        con.Error($"relation: no faction '{name}'");
+        return null;
     }
 
     /// <summary>
