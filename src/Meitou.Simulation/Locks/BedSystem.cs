@@ -604,14 +604,15 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         if (!MayUse(world, bed, faction)) return -1;
 
         // The building's record: the template of the last squad assigned to it and the designation it was given first (FUN_140330ab0 reads the house,
-        // not its residents); a building with no record falls back to its residents (docs/game/locks.md).
+        // not its residents); a building with no record falls back to its residents, the squads given it as home (a bar squad's home is Meitou's
+        // engine choice, docs/game/locks.md).
         var record = world.Fixtures.RecordOf(bed.Building);
         string? templateId = record?.Template;
         if (templateId is null)
         {
             foreach (var squad in world.Squads.All)
             {
-                if ((squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key == bed.Building)
+                if (squad.HomeBuilding?.Key == bed.Building)
                 {
                     templateId = squad.TemplateId;
                     break;

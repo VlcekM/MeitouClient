@@ -4552,6 +4552,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         CurrentTown(world, at) is { IsNone: false } town ? town : StatusTownAt(data, world, at, CampaignTown.None);
 
     /// <summary>
+    /// Whether a squad given <paramref name="building"/> as its home notes its template there on attaching: when the building has no record (a
+    /// save from before records), or when the record's template is no other squad's that has the building as its given home: a homeless squad's
+    /// stamp, which saves from before #1567 hold (engine choice: such a record is repaired by the residents).
+    /// </summary>
+    static bool NeedsNote(World world, string building, SquadTemplate template)
+    {
+        if (world.Fixtures.RecordOf(building) is not { } record) return true;
+        if (record.Template is not { } stamped || stamped == template.Id) return false;
+
+        foreach (var other in world.Squads.All)
+            if (other.TemplateId == stamped && other.HomeBuilding?.Key == building) return false;
+        return true;
+    }
+
+    /// <summary>
     /// Gives a squad its AI: its home (assigned, or the one its town gave it), whose template and initial door state apply, and a new blackboard of
     /// its template's packages and its faction's <c>AI fallback</c> (<see cref="AiDatabase.Packages(SquadTemplate, string, bool)"/>), taken as
     /// already in the town it starts in; a saved squad's AI state is applied to it.
@@ -4565,9 +4580,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         bool given = squad.HomeBuilding is not null;
         var home = PlatoonOf(world, squad) is null && packages.Count > 0 ? AssignHome(world, squad, template) : squad.HomeBuilding;
 
-        // A building the squad claims itself takes its template (FUN_140553210); one its town gave it was noted when it was made, a saved squad's
-        // (from a save with no building record) now.
-        if (home is not null && template is not null && (!given || world.Fixtures.RecordOf(home.Key) is null))
+        // Only a home the squad was given is an assignment (FUN_140553210): one its town gave it was noted when it was made, a saved squad's now
+        // when its record needs it. A bar squad or roamer has no home in the original, so the building AssignHome picks for it (engine choice)
+        // keeps its residents' record (#1567: a Mercenary guild squad's template on Blister Hill's bar refused its beds).
+        if (given && home is not null && template is not null && NeedsNote(world, home.Key, template))
             world.Fixtures.NoteAssigned(home.Key, template);
 
         // The template's initial door state applies to the home it is given (docs/game/locks.md "Doors"); the first squad's wins, a saved building
