@@ -152,6 +152,23 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// </summary>
     const float FreezePending = 4.6f;
     /// <summary>
+    /// Meitou (<see cref="Bodies.BodyOptions.AdvancedRagdolls"/>, <b>engine choice</b>): a whole body resting on nothing (<see cref="Rests"/>) does
+    /// not freeze before this age (game seconds); its freeze window starts again each tick until it lands. The timers run on game time and the
+    /// physics on real time, so at 5x the window ends 1.4 real seconds after the fall began, and a body thrown off a wall by the blow was frozen in
+    /// the air by the ground ray (upstream #1574), one at the top of its arc by the still share. Past this age the original's rules alone decide, so
+    /// a body caught on something <see cref="Rests"/> misses still freezes.
+    /// </summary>
+    const float MidAirLimit = 30;
+    /// <summary>
+    /// A body rests when its centre is at most its own reach (<see cref="Reach"/>) and this much more above the terrain or a building's collision
+    /// under it (<see cref="Rests"/>).
+    /// </summary>
+    internal const float RestGap = 3;
+    /// <summary>
+    /// The reach <see cref="Rests"/> gives each body when the ragdoll definition is not known (a save's pose before its ragdoll is made).
+    /// </summary>
+    const float UnknownReach = 10;
+    /// <summary>
     /// Meitou (<b>engine choice</b>): a collapsed limb of a character still up dangles only within this of the camera
     /// (<see cref="World.ViewPosition"/>; about where the human body's first reduced mesh level starts), and one already dangling until 10 % farther;
     /// beyond, the limb follows the animation and the physics need not step for it. The original dangles them at any distance (docs/game/ragdolls.md
@@ -689,7 +706,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         if (r is null) return;
 
         var placement = Placement(r, cold, next[i]);
-        var animated = wanted != r.Mask ? Remask(world, r, cold, ref next[i], wanted, placement, restore, blow, advanced) : prepared.Animated;
+        var animated = wanted != r.Mask
+            ? Remask(world, r, cold, ref next[i], wanted, placement, restore, blow, advanced, env)
+            : prepared.Animated;
         if (r.Mask == RagdollPart.None) return;
 
         if (thaw && r.Frozen && r.Unloaded)
@@ -755,7 +774,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         // starts next tick, its blow and saved pose kept); a settled frozen saved one needs none, and a get-up, a limb's dangle or a lift never waits.
         bool falls = (wanted & RagdollPart.Whole) != 0 && (wanted & RagdollPart.CarryMode) == 0;
         bool fell = r is not null && (r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0;
-        bool settledSave = cold.Save?.Ragdoll is { Frozen: true, Age: >= FreezeEarliest };
+        bool settledSave = cold.Save?.Ragdoll is { Frozen: true, Age: >= FreezeEarliest } saved
+            && Rests(env, saved.Pose, null, buildings: false);
         bool starts = falls && (!fell && !settledSave || thaw);
         if (starts)
         {
@@ -810,7 +830,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// A mask change: the get-up, the let-go, the rebuild (from a saved pose when one fits); returns the animated pose it used.
     /// </summary>
     RigidTransform[] Remask(World world, Ragdoll r, CharacterCold cold, ref CharacterHot hot, RagdollPart wanted, Matrix4x4 placement,
-        SavedRagdoll? restore, RagdollBlow blow, bool advanced)
+        SavedRagdoll? restore, RagdollBlow blow, bool advanced, IRagdollEnvironment env)
     {
         // Getting up: the whole body leaves the ragdoll and blends back into the animation, facing from the root to the head (not when it is
         // laid in a bed or a cage, which places it).
@@ -827,8 +847,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         {
             // A settled pose comes back frozen with its age. An unsettled one settles again with the timers of a new ragdoll, as the original's
             // ragdoll made on load: its bodies start still, and with its saved age the first tick before a physics step (2x, 5x) froze it in the air
-            // (#1388).
-            if (restore!.Frozen && restore.Age >= FreezeEarliest)
+            // (#1388). So does a frozen one resting on nothing, frozen in the air before the falling test (#1574).
+            if (restore!.Frozen && restore.Age >= FreezeEarliest && Rests(env, restore.Pose, r.Definition, buildings: true))
             {
                 (r.Age, r.WindowStart) = (restore.Age, FreezeEarliest);
                 Freeze(r);
@@ -1625,6 +1645,12 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     bool Settles(Ragdoll r, IRagdollEnvironment env, Vector3 root)
     {
         if (r.Age < FreezeEarliest) return false;
+        if (_options is { AdvancedRagdolls: true } && r.Age < MidAirLimit && !Rests(env, r.Pose, r.Definition, buildings: true))
+        {
+            r.WindowStart = r.Age;
+            return false;
+        }
+
         if (r.Age - r.WindowStart <= FreezeWindow) return StillShare(r) >= FreezeShare;
 
         var top = root + new Vector3(0, FreezeRayRise, 0);
@@ -1640,6 +1666,40 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         r.WindowStart = r.Age;
         return false;
     }
+
+    /// <summary>
+    /// Whether a pose rests on something (upstream #1574): a body's centre within its reach and <see cref="RestGap"/> above the terrain under it or,
+    /// with <paramref name="buildings"/>, above a building's collision (collision still being read counts as resting). Without the
+    /// <paramref name="definition"/> each body reaches <see cref="UnknownReach"/>.
+    /// </summary>
+    internal static bool Rests(IRagdollEnvironment env, ReadOnlySpan<RigidTransform> pose, RagdollDefinition? definition, bool buildings)
+    {
+        for (int b = 0; b < pose.Length; b++)
+        {
+            var at = pose[b].Position;
+            float gap = (definition is null ? UnknownReach : Reach(definition.Bodies[b])) + RestGap;
+            if (at.Y - env.GroundHeight(at.X, at.Z, at.Y) <= gap) return true;
+            if (!buildings) continue;
+
+            var down = new Vector3(0, -gap, 0);
+            float hit = Combat.SolidHits.BuildingHit(env, at, down, out bool ready);
+            if (!ready || hit >= 0) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// How far a body's shape reaches from its centre at most: a sphere's radius, a capsule's radius and half length, half a box's diagonal, a hull's
+    /// farthest point.
+    /// </summary>
+    internal static float Reach(RagdollBody body) => body.Type switch
+    {
+        PhysicsShapeType.Sphere => body.Size.X,
+        PhysicsShapeType.Capsule => body.Size.X + body.Size.Y / 2,
+        PhysicsShapeType.Mesh when body.Hull is { Length: > 0 } hull => hull.Max(p => p.Length()),
+        _ => body.Size.Length() / 2,
+    };
 
     /// <summary>
     /// Freezes a settled ragdoll: the joints go and the bodies stay as still kinematic ones, which others still land on.
