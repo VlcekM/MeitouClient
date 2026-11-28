@@ -1098,7 +1098,7 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   (mode 1); nearer, a straight move at it at the campaign leader's current speed (× 0.9 under 70). The campaign leader (the leader platoon's squad
   leader, else its first living uncaged member in a loaded zone; CampaignInstance slot 5) uses `travel speed loaded` while every intact platoon (loaded,
   or unloaded on job 5/6) is within 6000 of the leader platoon (`FUN_1409c3910`; a loaded platoon whose members are all down, Platoon vfunc 0x30
-  `FUN_140998b00` on the `Platoon` vtable `0x141718808`, does not count; off screen the job is the campaign's slot 12 `FUN_1409d4cc0`, which
+  `FUN_140998b00` on the `Platoon` vtable `0x141718808` (its RTTI in the exe; `0x1416e2e08` is `ActivePlatoon`, the +0x1d8 part), does not count; off screen the job is the campaign's slot 12 `FUN_1409d4cc0`, which
   `FUN_1407ee790` asks first, so 5 for the lead platoon and 6 for the others, and loading drops the off-screen part, +0x1e0, `FUN_1407ebdf0`;
   **Verified**, decompile; Meitou `MissionFormation.ColumnTogether`), else stops within 8294.4 of its destination (plain distance), else
   walks; its task is done when its movement arrives, and it is finished at once for the campaign leader (`FUN_140349de0`), so the scorer drops it once
