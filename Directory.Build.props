@@ -24,7 +24,7 @@
        the baseline release's package is gone, unless the project's CompatibilitySuppressions.xml lists it. Release.yml requires the baseline
        to be the last full release. -->
   <PropertyGroup>
-    <MeitouApiBaseline>0.23.2</MeitouApiBaseline>
+    <MeitouApiBaseline>0.24.0</MeitouApiBaseline>
     <ApiCompatValidateAssemblies Condition="$([System.String]::Copy(';Meitou.Core;Meitou.Data;Meitou.Simulation;Meitou.Game;').Contains(';$(MSBuildProjectName);'))">true</ApiCompatValidateAssemblies>
   </PropertyGroup>
 

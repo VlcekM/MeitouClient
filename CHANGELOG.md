@@ -3,6 +3,22 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.24.1
+
+- Code mods: full-screen post passes, lighting hooks with their own textures, look presets with mod settings, and mod settings on the Graphics tabs
+- Letterbox setting; graphics presets reworked; launcher look row lists the enabled mods' presets
+- VRAM rework stutters fixed; terrain shadow map no longer stalls the render thread on rebuilds
+- macOS: Metal terrain, haze, water and character depth fixes and speedups
+- Lua mods call loaded functions instead of recompiling each frame; the Lua HUD no longer closes on Escape
+- Build menu search bar (Meitou interface); rain collectors refused on building floors
+- Builders name missing materials; turrets and crossbows leave targets hidden in other buildings alone (#1548, #1557)
+- Repair offered on any damaged or broken door; an own locked door shows Unlock alone (#1571)
+- Freed slaves stay free and no longer walk back into cages (#1575)
+- Ragdolls resting on nothing no longer freeze in mid-air; loaded characters no longer start in the bash swing pose (#1574)
+- Parallel thinks no longer crash reading shared beds (#1568)
+- The lost-limb line is said at the cut, however the limb comes off; worn fist weapons show their material's icon at every grade
+- Meitou's paper text stays readable under UI mods that darken it
+
 ## v0.24.0
 
 - Much lower VRAM use: texture quality split by kind, compressed formats and buffers, aliased render targets, leaner ray tracing and streaming
