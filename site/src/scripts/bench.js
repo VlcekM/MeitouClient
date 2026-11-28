@@ -54,6 +54,7 @@
    * The legacy kit (benchmark version 0) is always the last item.
    */
   const RANGES = [
+    { bench: 1, since: "0.24.1" },
     { bench: 1, since: "0.24.0" },
     { bench: 1, since: "" }
   ];
