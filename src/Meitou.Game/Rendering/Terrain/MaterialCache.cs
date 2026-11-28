@@ -71,7 +71,7 @@ sealed class MaterialCache : IDisposable
     readonly Vector4[] _cacheOrigin = new Vector4[CacheLevels];
 
     /// <summary>
-    /// Per level: the origin a first bake draws to.
+    /// Per level: the origin a first bake draws to, or will once it starts (the eye's, followed each frame until then).
     /// </summary>
     readonly Vector2[] _cacheTarget = new Vector2[CacheLevels];
 
@@ -223,7 +223,7 @@ sealed class MaterialCache : IDisposable
         if (current.W > 0)
         {
             var have = new Vector2(current.X, current.Y);
-            if (MathF.Abs(want.X - have.X) >= side || MathF.Abs(want.Y - have.Y) >= side)
+            if (Apart(want, have, side))
             {
                 // Nothing of it is still in place (a jump): built again.
                 _cacheOrigin[k] = default;
@@ -235,9 +235,21 @@ sealed class MaterialCache : IDisposable
                 return;
             }
         }
+
+        // A first bake the eye has left by a whole side starts again round it: finished, it would hold none of what is drawn.
+        if (_cacheBuilt[k] >= 0 && Apart(want, _cacheTarget[k], side)) _cacheBuilt[k] = -1;
+
+        // Until its first bake starts, the square it will bake follows the eye: Apply passes it as pending, so its pixels shade the layers.
+        if (_cacheBuilt[k] < 0) _cacheTarget[k] = want;
+
         if (build <= 0) return;
         BakeFirstChunk(k, want, texel, rects, ref cmd, ref c, ref build);
     }
+
+    /// <summary>
+    /// Whether two origins of a level of side <paramref name="side"/> share no texel.
+    /// </summary>
+    static bool Apart(Vector2 a, Vector2 b, float side) => MathF.Abs(a.X - b.X) >= side || MathF.Abs(a.Y - b.Y) >= side;
 
     /// <summary>
     /// The strips a level gained as it moved from <paramref name="have"/> to <paramref name="want"/>, and its share of the refresh rows.
@@ -453,7 +465,9 @@ sealed class MaterialCache : IDisposable
 
     /// <summary>
     /// The cache's levels for the patches' colour programs (<see cref="TerrainRenderer.MaterialConstants"/>); none in the texture field (its tiles
-    /// are not blended) or a debug view.
+    /// are not blended) or a debug view. A level not yet whole goes as pending (the square its first bake is for, the side negated): a pixel there
+    /// shades the layers. Read from the next coarser level instead, the ground went blurred and flat for every frame of the bake (issue #1614:
+    /// a zoom moved the eye a whole side of the finer levels).
     /// </summary>
     public void Apply(ref TerrainConstants c)
     {
@@ -461,8 +475,9 @@ sealed class MaterialCache : IDisposable
         bool any = false;
         for (int k = 0; k < CacheLevels; k++)
         {
-            c.BakeOrigin[k] = _cacheOrigin[k];
-            any |= _cacheOrigin[k].W > 0;
+            bool whole = _cacheOrigin[k].W > 0;
+            c.BakeOrigin[k] = whole ? _cacheOrigin[k] : new Vector4(_cacheTarget[k], CacheTexel * (1 << k), -CacheSide);
+            any |= whole;
         }
         if (!any) return;
         (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach, c.BakeBias) =

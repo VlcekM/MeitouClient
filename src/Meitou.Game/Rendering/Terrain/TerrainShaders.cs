@@ -832,7 +832,7 @@ static partial class TerrainShaders
         uniform sampler2DArray uBakeAlbedo;   // the material cache (TerrainRenderer.MaterialCache), a layer per level, addressed toroidally: albedo, gloss
         uniform sampler2DArray uBakeNormal;   // its shading normal (xyz * 0.5 + 0.5) and rain absorbance
         uniform int uBakeLevels;              // its levels (0: none, every pixel shades the layers)
-        uniform vec4 uBakeOrigin[8];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid)
+        uniform vec4 uBakeOrigin[8];          // per level: x, z of its first texel's corner, the texel size, the side in texels (0: not valid; negative: being baked, side negated)
         uniform float uBakeBias;              // the upscaler's texture bias (negative): the layers' sampler takes it, so the cache level is chosen that much finer
         uniform float uBakeReach;             // the cache is read nearer than this: beyond it a biome's distance fade (which the bake has not) may begin
 
@@ -855,6 +855,15 @@ static partial class TerrainShaders
 
         // Whether cache level k holds xz, its margin in from its edges (bakeMargin).
         bool bakeHolds(int k, vec2 xz) { return bakeHoldsBy(k, xz, 0.0); }
+
+        // Whether cache level k is under its first bake round xz (w negative: xy the square it is baked for, -w its side; MaterialCache.Apply): the
+        // point's level is not there yet, so the layers are shaded rather than a coarser level read (a blurred, flat ground until it is whole).
+        bool bakePending(int k, vec2 xz)
+        {
+            vec4 o = uBakeOrigin[k];
+            vec2 r = (xz - o.xy) / o.z;
+            return o.w < 0.0 && all(greaterThan(r, vec2(0.0))) && all(lessThan(r, vec2(-o.w)));
+        }
 
         // How near xz is to the edge of level k's square: 0 further than a quarter of the side in from where bakeHolds stops holding it, rising smoothly to 1 there.
         // The cache blends towards the next coarser level over it, so the step to that level at the edge (which it reads alone beyond) is not a line.
@@ -1618,7 +1627,11 @@ static partial class TerrainShaders
                 cacheLive = smoothstep(0.8 * uBakeReach, uBakeReach, distance);
                 int k = clamp(int(floor(level)), 0, uBakeLevels - 1);
                 float t = clamp(level - float(k), 0.0, 1.0);
-                while (k < uBakeLevels && !bakeHolds(k, texWorld.xz)) { k++; t = 0.0; }
+                while (k < uBakeLevels && !bakeHolds(k, texWorld.xz))
+                {
+                    if (bakePending(k, texWorld.xz)) k = uBakeLevels;
+                    else { k++; t = 0.0; }
+                }
                 if (k + 1 < uBakeLevels && bakeHolds(k + 1, texWorld.xz)) t = max(t, bakeEdge(k, texWorld.xz));
                 // The coarsest level has none to blend towards: the layers' share rises over its edge instead.
                 if (k == uBakeLevels - 1) cacheLive = max(cacheLive, bakeEdge(k, texWorld.xz));
@@ -3157,7 +3170,7 @@ struct TerrainConstants
 
 /// <summary>
 /// The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[8]</c>, up to <c>MaterialCache.CacheLevels</c> used): x, z
-/// of the first texel's corner, the texel, the side (0: not valid).
+/// of the first texel's corner, the texel, the side (0: not valid; negative: a first bake under way over that square, the side negated).
 /// </summary>
 [System.Runtime.CompilerServices.InlineArray(8)]
 struct BakeOrigins
