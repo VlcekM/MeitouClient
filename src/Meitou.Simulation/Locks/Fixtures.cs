@@ -270,9 +270,14 @@ public sealed class Fixture
     /// </summary>
     internal List<(int Node, double Stamp)>? BadNodes;
     /// <summary>
-    /// The backing set of <see cref="Occupants"/>, in entry order.
+    /// The backing set of <see cref="Occupants"/>, in entry order. Copy-on-write: parallel thinks read a bed's occupants while another partition's
+    /// think gets a sleeper out of it (#1568), so a change publishes a new array and a reader keeps the one it took.
     /// </summary>
-    readonly List<CharacterId> _occupants = [];
+    CharacterId[] _occupants = [];
+    /// <summary>
+    /// Serialises the changes to <see cref="_occupants"/> (two sleepers of one shared bed may leave it from different partitions).
+    /// </summary>
+    readonly Lock _occupantsGate = new();
     /// <summary>
     /// The fixture's id (see the class remarks).
     /// </summary>
@@ -451,11 +456,14 @@ public sealed class Fixture
     /// </summary>
     public CharacterId Occupant
     {
-        get => _occupants.Count > 0 ? _occupants[0] : CharacterId.None;
+        get
+        {
+            var occupants = Volatile.Read(ref _occupants);
+            return occupants.Length > 0 ? occupants[0] : CharacterId.None;
+        }
         set
         {
-            _occupants.Clear();
-            if (!value.IsNone) _occupants.Add(value);
+            lock (_occupantsGate) Volatile.Write(ref _occupants, value.IsNone ? [] : [value]);
         }
     }
 
@@ -463,7 +471,7 @@ public sealed class Fixture
     /// Cages and beds: everyone in it, in the order they entered (the original's occupant set, UseableStuff slot 159 <c>FUN_1400f8030</c>); a bed
     /// holds up to <see cref="Capacity"/>. An entry may be stale (gone, or no longer held here): <see cref="FixtureRegistry.Holds"/> tells.
     /// </summary>
-    public IReadOnlyList<CharacterId> Occupants => _occupants;
+    public IReadOnlyList<CharacterId> Occupants => Volatile.Read(ref _occupants);
 
     /// <summary>
     /// How many it holds at once: a bed's <c>max operators</c> (<see cref="BedData.Operators"/>, at least 1), 1 for anything else.
@@ -475,18 +483,36 @@ public sealed class Fixture
     /// </summary>
     internal void AddOccupant(CharacterId id)
     {
-        if (!id.IsNone && !_occupants.Contains(id)) _occupants.Add(id);
+        if (id.IsNone) return;
+
+        lock (_occupantsGate)
+        {
+            if (Array.IndexOf(_occupants, id) >= 0) return;
+
+            Volatile.Write(ref _occupants, [.. _occupants, id]);
+        }
     }
 
     /// <summary>
     /// Takes <paramref name="id"/> out; the others keep their order.
     /// </summary>
-    internal void RemoveOccupant(CharacterId id) => _occupants.Remove(id);
+    internal void RemoveOccupant(CharacterId id)
+    {
+        lock (_occupantsGate)
+        {
+            if (Array.IndexOf(_occupants, id) < 0) return;
+
+            Volatile.Write(ref _occupants, Array.FindAll(_occupants, o => o != id));
+        }
+    }
 
     /// <summary>
     /// Drops the entries <paramref name="stale"/> names (gone, or no longer held here).
     /// </summary>
-    internal void PruneOccupants(Predicate<CharacterId> stale) => _occupants.RemoveAll(stale);
+    internal void PruneOccupants(Predicate<CharacterId> stale)
+    {
+        lock (_occupantsGate) Volatile.Write(ref _occupants, Array.FindAll(_occupants, o => !stale(o)));
+    }
     /// <summary>
     /// Cages: a torture rack (<see cref="Meitou.Data.World.TownBuildings.IsRack"/>); derived from the data.
     /// </summary>
@@ -534,7 +560,8 @@ public sealed class Fixture
         }
 
         h.Add(Occupant);
-        for (int i = 1; i < _occupants.Count; i++) h.Add(_occupants[i]);
+        var occupants = Volatile.Read(ref _occupants);
+        for (int i = 1; i < occupants.Length; i++) h.Add(occupants[i]);
 
         if (Rack)
         {
