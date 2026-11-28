@@ -9,7 +9,7 @@ namespace Meitou.Simulation.Locks;
 
 /// <summary>
 /// Pick the lock of <see cref="Prisoner"/>'s cage (the original's Task_PickLock with a character target): the characters (the selection when empty)
-/// walk to it, or a caged one picks its own.
+/// walk to it, or a caged one picks it where it stands: its own, or another in its reach (<see cref="LockSystem"/>'s <c>PrisonerReaches</c>).
 /// </summary>
 public sealed record PickLockOrder(IReadOnlyList<CharacterId> Characters, CharacterId Prisoner) : OrderCommand
 {
@@ -115,7 +115,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     }
 
     /// <summary>
-    /// A pick-lock order: the first character listed that can reach the cage (its own, for a prisoner) picks its lock.
+    /// A pick-lock order: the first character listed that can reach the cage (for a prisoner, its own or one in its reach) picks its lock.
     /// </summary>
     void PickLockInput(World world, PickLockOrder pick)
     {
@@ -139,7 +139,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     || !c.CarriedBy.IsNone)
                 continue;
 
-            if (c.IsImprisoned && c.InWhat != cage.Id) continue;   // a prisoner reaches only its own cage
+            if (c.IsImprisoned && !PrisonerReaches(world, c, cage, table.Next[s].Position)) continue;
 
             // One picker per order (the nearest is not looked for: the first listed whose repertoire has row 76); a prisoner picks
             // where it stands.
@@ -147,6 +147,21 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     queued: pick.Queued, point: OrderEntry.AtBuilding(world, pick, cage.Position)))
                 break;
         }
+    }
+
+    /// <summary>
+    /// Whether a prisoner standing at <paramref name="at"/> reaches <paramref name="cage"/> to work its lock: its own always, another while it is
+    /// <c>isAtLocation</c> for a character that is not moving (<c>AI::isWithinChoppingRange</c>, <c>FUN_14059c6d0</c>, <b>Verified</b>): the flat
+    /// distance to the cage's position marker nearest it below twice the cage's <c>use range</c>, on the cage's floor. No walk can bring it there:
+    /// the walks that give <c>isAtLocation</c> (1, 29, 67) are not in the imprisoned or chained repertoire (#1594).
+    /// </summary>
+    static bool PrisonerReaches(World world, CharacterCold prisoner, Fixture cage, Vector3 at)
+    {
+        if (prisoner.InWhat == cage.Id) return true;
+
+        var marker = world.Fixtures.PositionMarker(cage.Id, at) ?? cage.Position;
+        float reach = cage.UseRange * FixtureRegistry.StillReachFactor;
+        return Vector2.Distance(Flat(at), Flat(marker)) < reach && world.Fixtures.OnCageFloor(cage, at, world.Walkability);
     }
 
     /// <summary>
@@ -210,8 +225,8 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     }
 
     /// <summary>
-    /// Each tick: a character in reach of the lock it picks (a prisoner at its own cage where it stands) works it; one downed or carried, or whose
-    /// lock is gone, gives up, and one sent elsewhere on its walk there drops it.
+    /// Each tick: a character in reach of the lock it picks (a prisoner where it stands) works it; one downed or carried, or whose lock is gone or
+    /// out of a prisoner's reach, gives up, and one sent elsewhere on its walk there drops it.
     /// </summary>
     void LockPickers(World world)
     {
@@ -236,6 +251,11 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                 }
 
                 if (next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
+            }
+            else if (!PrisonerReaches(world, c, f, next[s].Position))
+            {
+                c.PickingLock = null;
+                continue;
             }
 
             if (c.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the picking

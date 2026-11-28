@@ -1426,8 +1426,8 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   one only when the door is its faction's (78 needs isObjectMine) (#816); then it walks to the gate guard's place (`AiSystem.FrontOf`; its post
   without a gate) and stands; a gate shut again is opened again; a walk that ends short (a round's or its own) is a lost walk (see "Engine goals").
   An arrest's guard walking to a cage behind its faction's shut doors has them opened at once. Act-outs and locked homes are hashed only while any exist.
-- **Lock orders** (`LockSystem`, context-menu verbs on a caged character): `PickLockOrder` (the prisoner its own cage, a mate
-  walks to it; `Lockpicking.Step` each tick in reach, floaters "Pick success!"/"Pick failed"), `GetOutOrder` (order 207, [order queue](#order-queue): held while
+- **Lock orders** (`LockSystem`, context-menu verbs on a caged character): `PickLockOrder` (a prisoner its own cage or one in its reach where it
+  stands, [locks](game/locks.md#lockpicking-task_picklock-76-task_picklock_shackles-201); a mate walks to it; `Lockpicking.Step` each tick in reach, floaters "Pick success!"/"Pick failed"), `GetOutOrder` (order 207, [order queue](#order-queue): held while
   locked; any other than a kidnap victim whose sentence is not served, or whose cage owner is not real or a bandit faction, books a pending Escaping Prison (refused for a
   lawless owner) and sets `Escaped` unless the cage owner is not real; [locks](game/locks.md#cages-and-beds)).
   `Imprison` clears `Escaped`; being outside every town does (`ArrestSystem.DropTownStatusOutsideTowns`, as for `Freed`); an engine release (trade, recruit,

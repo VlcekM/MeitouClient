@@ -112,7 +112,11 @@ Save sample (one of the owner's games, 51 zone files): `lock lvl` values span 0.
 - **Target** (`Task_PickLock` slot 5): a building handle (a door resolves to its lock-owning object) or a **character**, meaning
   that character's cage (only when they are in a building prison). Shackles: the item handle, or a character, meaning their
   worn shackles. Self-targets are allowed: the caged character picks its own cage, a shackled one its own shackles (both
-  task rows carry the -10 penalty when caged). Task list B also needs `hasOneWorkingArm` and no weapon equipped.
+  task rows carry the -10 penalty when caged). A caged character picks another cage where it stands while row 76's `isAtLocation` holds for it
+  (`AI::isWithinChoppingRange` `FUN_14059c6d0`, not moving): flat distance to that cage's use node nearest it below twice its `use range` (25 for
+  cages, so 50), on its floor; the walks that give `isAtLocation` (1, 29, 67: category 0x63) are not in the imprisoned (4) or chained (0x10)
+  repertoire, so a farther cage has no plan (**Verified**, decompile and the row table; #1594). Meitou: `LockSystem.PrisonerReaches`.
+  Task list B also needs `hasOneWorkingArm` and no weapon equipped.
 - **Crime** (**Observed**: `FUN_140852c80`, the pending-crime setter of [economy](economy.md#116-booking-factions-and-police-hits-observed),
   called on every update of the task, before the roll): a building owned by another faction -> code 2 (Burglary) against the
   owner faction; a cage holding a character -> code 7 against the captive's `+0x1a0 -> +0xe0`. The task's target resolves to a character (the captive, or the picker itself on a self-pick) and the victim faction is that character's slave owner, not the cage's owner; a captive that is no slave books nothing in Meitou (`SetPending` refuses faction -1). Meitou: `Lockpicking.Crime`. Another character's shackles (`Task_PickLock_Shackles` `FUN_140359d90`, `Task_CutShackles` `FUN_140359f80`,
