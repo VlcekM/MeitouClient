@@ -69,7 +69,7 @@ translucency (ears). The `chars2` switch lifts both (below).
 
 ### Hair, cloth, skin and eyes (Meitou `chars2` switch, off by default)
 
-Compared on and off in the studio on 6 race and sex pairs and in the world on `siwa-test6` (**Observed**; cost not measured). `pc.fill.a` carries the switch; `CharacterSurface` holds the GLSL and adds to `kenshiLight` and `lampLight`, for the
+Compared on and off in the studio on 6 race and sex pairs and in the world in one scene (**Observed**; cost not measured). `pc.fill.a` carries the switch; `CharacterSurface` holds the GLSL and adds to `kenshiLight` and `lampLight`, for the
 character fragment only, what each light gains (`surfaceSun`, `surfaceSpecular`): the sun's after its shadow, a lamp's as is, the same function for both. World, Meitou stage
 and portraits; never the game's stage or the icons.
 
@@ -115,7 +115,7 @@ clothes darker and glossier up to the chest, the shoulders dry. Not ported: Kens
 ### Precision
 
 Far from the world's origin a float steps by about 0.004 units at 50000 (0.016 at 200000); a character 4 units from the eye moves 1.5 px for one step.
-**Observed** in a paused close-up at x 57000 (`siwa-test6`, offscreen frames of the live loop, no upscaler and TAA alike): the character jumped ±2 px every few
+**Observed** in a paused close-up at x 57000 (offscreen frames of the live loop, no upscaler and TAA alike): the character jumped ±2 px every few
 frames while the background moved under 0.05 px. Cause: the frame's camera and characters are drawn between two ticks with `Vector3.Lerp`, which computes
 a (1 - t) + b t; with both ticks' states equal to the bit the result still landed a step off for some alphas, so a still camera (and a still character) moved
 a step as the frame's alpha changed. Everything drawn between ticks now uses `Interp.Lerp` (a + (b - a) t, exact for equal ends): the camera state, the
@@ -142,7 +142,7 @@ masks) draws forward. Needs Vulkan with ray query (meshes read by device address
   pixel the triangle's corners by address (`GpuVertex` character layout), the vertex program's
   text on each, its outputs interpolated, then the colour pass's `main` text: its lookups and derivatives are macros (`TEXG`, `DFDX`, `FWIDTH`, ...) that the
   colour pass expands to its original text (the preprocessed program is unchanged) and the resolve to gradients from the triangle: implicit lookups the
-  coarse ones, `dFdx`/`fwidth` the fine ones. A hair card's mipmap bias widens the lookup's derivatives (`hairTexGrad`, by 2^bias): a gradient lookup takes no bias. **Observed** (save flickering-hair): a second texture entry with the bias in its sampler was freed under the records that held it (the cache keeps two entries a texture), and hair drew black whenever the buffer came on.
+  coarse ones, `dFdx`/`fwidth` the fine ones. A hair card's mipmap bias widens the lookup's derivatives (`hairTexGrad`, by 2^bias): a gradient lookup takes no bias. **Observed**: a second texture entry with the bias in its sampler was freed under the records that held it (the cache keeps two entries a texture), and hair drew black whenever the buffer came on.
   Where the colour pass takes a derivative inside a branch the resolve applies the quad rule below: the worn items' blood splatter lookup, and the blood film's
   edge and slope, whose neighbour values come from probes (the colour pass's `main` run up to the film at the quad's three other lanes).
 - **Observed** (RTX 4090, same-frame captures of both paths): an implicit lookup's level of detail is the coarse derivatives' (gradients from
@@ -150,12 +150,12 @@ masks) draws forward. Needs Vulkan with ray query (meshes read by device address
   the fine one (replacing them changed no pixel); inside divergent control flow a derivative is 0 for every lane of a quad unless all four lanes took the
   branch (the blood film's: 0 on all 578 lanes of partly active quads, non-zero on 2068 of 2360 in whole ones); a text edit that leaves a program's meaning
   moves about 11 % of character pixels by rounding.
-- **Observed** cost (2560x1440, paused, alternated in one session): heavy-scene's characters stage 6.2 -> 2.1 ms, frame 32.4 -> 28.4 ms (about one
-  triangle a pixel: the colour pass shaded quads of tiny triangles and hidden surfaces); the studio close-ups (`lamp`, `studio view 5 2 11` and `5 0 5`,
+- **Observed** cost (2560x1440, paused, alternated in one session): a dome lit by lamps, characters stage 6.2 -> 2.1 ms, frame 32.4 -> 28.4 ms (about one
+  triangle a pixel: the colour pass shaded quads of tiny triangles and hidden surfaces); the studio close-ups (`studio view 5 2 11` and `5 0 5`,
   large triangles) 0.55 -> 0.61 and 0.80 -> 0.85 ms: the id pass and three corners a pixel cost more than the quads saved.
 - **Observed** picture: not bit-identical. The resolve interpolates its inputs itself, so most differences are a float's last bits (median 0.07 % of a
   pixel's value: the close-ups 1 % of character pixels a level of 255 off after a tone map, a handful more, none over 15; screenshots within the
-  temporal floor). Steep functions of them (the blood film's edge, its slope's normal) make about 300 pixels of heavy-scene's 830000 differ by more than
+  temporal floor). Steep functions of them (the blood film's edge, its slope's normal) make about 300 pixels of the dome scene's 830000 differ by more than
   8 levels. Not emulated (gaps): derivatives after a cut-out's discard, in the skin's light-through shadow, at the traced sun's boundary and in the wet
   beads (all where part of a quad left early).
 
@@ -169,10 +169,10 @@ depth), then the colour program without the late depth, its depth test kept (les
 shaded. The two pipelines' depths must be the same: the vertex program's position is `invariant` (MSL `[[position, invariant]]`, its library compiled with
 `preserveInvariance`). **Observed** (M6, Metal, 1080p High, paused): a depth bias of 4 units with slope 4 instead let heads through their helmets;
 without invariance a near-clipped plate dithered away, and with the prepass's depth written by its fragment program (`gl_FragCoord.z`) a skin-and-chain
-pair did. With both in place, prepass on against off in one launch (`big_squad` save, 7 views from zoom 15 to 689): at most 64 of 8.3 M pixels differ.
+pair did. With both in place, prepass on against off in one launch (20 characters in open desert at (36282, -50663), 10:18, 7 views from zoom 15 to 689): at most 64 of 8.3 M pixels differ.
 The chain mail's clip cut-outs show the skin under them as without it (the discards reject before the rasterizer's depth is written).
-- **Cost** (**Observed**, same session, on against off in one launch; two launches, the squad's idle poses differ between them): `big_squad` zoom 689
-  116-118 -> 123 frames a second, zoom 100 68-80 -> 84-104, zoom 40 44-51 -> 68-86; `fps_issue` save zoom 31 99 -> 106. The characters' colour pass
+- **Cost** (**Observed**, same session, on against off in one launch; two launches, the squad's idle poses differ between them): the squad at zoom 689
+  116-118 -> 123 frames a second, zoom 100 68-80 -> 84-104, zoom 40 44-51 -> 68-86; 8 characters on open ground at (-11270, 24317), 11:00, zoom 31: 99 -> 106. The characters' colour pass
   at zoom 40 was about 11 ms (a flat-colour program instead: 44 -> 90 frames a second), 4 ms of it the late depth alone.
 
 ## Content, LOD and memory
@@ -194,7 +194,7 @@ the throttling for presentation actors, the first 10 of the player's characters 
 other squads in order) and the first selected one (`PlayerInterface.FullRateCharacters`). Shadow LOD doubles choice with cascade floors.
 A character that cannot show (`CharacterRenderer.Shown`: its sphere, its shadow swept from the light, its water mirror image all outside the view; no portrait) is not
 posed at all, its held palette still drawn (far cascades are reused for up to 32 frames), and is posed without motion the frame it returns; the host fills no poses or
-ragdoll beyond the draw distance + 2000 (`InReach`): it lists those in `CharacterDrawList.Distant`, once a tick, which the renderer scans only when it changes (looks to build, kept-point textures). Engine choices. **Observed** (stutter final boss save, ~1000 characters, ~400 in reach, ~280 of them off screen).
+ragdoll beyond the draw distance + 2000 (`InReach`): it lists those in `CharacterDrawList.Distant`, once a tick, which the renderer scans only when it changes (looks to build, kept-point textures). Engine choices. **Observed** (a scene of ~1000 characters, ~400 in reach, ~280 of them off screen).
 F11's characters line counts what the last colour view culled in (frustum and fog only: those behind terrain or buildings and sub-pixel ones count too);
 its `[ ] boxes` checkbox outlines those over everything (`CountedBoxes`).
 Clamp stored bounds to real mesh extent. Animation rendering does not independently integrate
@@ -237,7 +237,7 @@ lengths; off for animals, portraits, ragdolls and characters under 40 px tall.
   (`AddSwayColliders`, `SwayCollider`), the gear its span along its axis with half its box's least side; it turns about its pivot, away from the bone it hangs from, by the
   least angle up to 40° that gives it the clearance it has in the binding pose (at most 0: gear placed touching a limb stays so), and the swing hangs from there. The pose
   fixes the gear to one bone and the others move into it: a long blade on the back went through the hips and the legs in a stance that pushes them back, in the original
-  too (**Observed**, the user's save `leviathan bug`, four views, sway off against on: through the trousers off, along the buttock and thigh on, the guard in place at the
+  too (**Observed**, a user's save, four views, sway off against on: through the trousers off, along the buttock and thigh on, the guard in place at the
   shoulder). The point itself is the weapon's grip, which a hip point holds out in front of the hip: turned about it the sheath left the belt. The swing turns every part of
   the group about the pivot. **Observed** (sandbox, a staff at the hip, run and turn, sway on against off on the same paused frames): the difference is a wedge with its tip at
   the hip.
@@ -264,7 +264,7 @@ texture image (another file, an image where there was none, more pixels) changes
 The texture cache swaps a character texture for a smaller image of the same file while the characters are far from the camera and back when they
 are near (`WorldTextureCache` replacing/refining), so a travelling camera swapped the images of all 15-20 squad portraits together: they all redrew in one
 frame, 4-5 ms of GPU each (studio shadow, sky, depth, occlusion, the 1024 px portrait, resolve), a 50-90 ms frame every 0.4-1.5 s (**Observed**, play
-bench `settle,idle,pan,travel`, save 111, Mac mini M6, Medium tier, 1080p native, a Metal System Trace; the log of which `Due` condition fired named the
+bench `settle,idle,pan,travel`, a test scene, Mac mini M6, Medium tier, 1080p native, a Metal System Trace; the log of which `Due` condition fired named the
 swapped textures, 182 smaller and 131 bigger swaps in a run). A cell already showing the larger image is not stale (`CharacterRenderer.Sharper`), and
 refreshes caused by textures alone draw at most one a frame (`PortraitsPerFrame`, not under a loading screen); a new cell, another character,
 appearance or camera still draws at once. **Observed** (same run, before -> after): travel frames over 30 ms of GPU 23 -> 0, over 33 ms of frame time

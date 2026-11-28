@@ -74,7 +74,7 @@ public sealed unsafe class DeviceFault
         try
         {
             lines.Add(Summary(what));
-            Markers?.Describe(lines);
+            Markers?.Describe(lines, Addresses);
             AddFaultInfo(lines);
         }
         catch (Exception e)

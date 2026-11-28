@@ -320,6 +320,20 @@ public sealed unsafe class VulkanDevice : IDisposable
     public TextureEntry TextureAt(int index) => _textureTable[index];
 
     /// <summary>
+    /// Diagnostic (<c>MEITOU_DIAG_FAULT=1</c>): the image a view was cut from and its texture's name; default for the null view or one gone.
+    /// </summary>
+    internal (ulong Image, string Name) ImageOfView(int view)
+    {
+        lock (_tableGate)
+        {
+            if (view <= 0 || !_viewKeys.TryGetValue(view, out var key)) return default;
+
+            var entry = _textureTable[key.Texture];
+            return (entry.Image.Handle, entry.Desc.Name ?? "");
+        }
+    }
+
+    /// <summary>
     /// Adds a texture to the table and returns its index. Any thread.
     /// </summary>
     public int AddTexture(Image image, ImageAllocation? allocation, bool owned, TextureDesc desc)
@@ -349,7 +363,8 @@ public sealed unsafe class VulkanDevice : IDisposable
 
         var alloc = entry.Allocation;
         if (alloc is { Aliased: true }) Allocator.Transient.Retire(alloc);
-        Frames.DeferDelete(() =>
+        bool inFrame = Frames.InFrame;
+        long after = Frames.DeferDeleteAfter(() =>
         {
             lock (_tableGate)
             {
@@ -370,6 +385,7 @@ public sealed unsafe class VulkanDevice : IDisposable
 
             if (alloc is not null) Allocator.Free(alloc);
         });
+        AddressLog?.Released(ObjectType.Image, entry.Image.Handle, after, inFrame);
     }
 
     /// <summary>
@@ -2239,7 +2255,9 @@ public sealed unsafe class VulkanDevice : IDisposable
     public void DeferFree(ImageAllocation i)
     {
         if (i.Aliased) Allocator.Transient.Retire(i);
-        Frames.DeferDelete(() => Allocator.Free(i));
+        bool inFrame = Frames.InFrame;
+        long after = Frames.DeferDeleteAfter(() => Allocator.Free(i));
+        AddressLog?.Released(ObjectType.Image, i.Image.Handle, after, inFrame);
     }
 
     /// <summary>

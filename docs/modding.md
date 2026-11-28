@@ -2157,7 +2157,7 @@ come back. Last, it runs the game without mods: if that differs too, the fault i
 - The parallel phases cut slots into partitions of at least 32, so a world under 64 characters runs them as one partition and cannot show
   a threading mistake; the command warns.
 - It sees only hashed state: a mod's unhashed state, or a patch that changes nothing hashed, passes.
-- **Observed** (2026-11-04, win-x64, saves `autosave0`, `Gigachad`, `260`): a clean scratch mod passes; a mod rolling `Random.Shared` in
+- **Observed** (2026-11-04, win-x64, three saves): a clean scratch mod passes; a mod rolling `Random.Shared` in
   `SlowWorld` differs from tick 1 in both comparisons and is named; a mod whose `Act` writes one field from every partition differs only
   across thread counts once the population passes 64 characters (tick 152) and is named; the game alone agrees.
 - **Observed** (2026-11-20, win-x64, two saves of 22 and 75 characters, a scratch mod planting each fault from tick 100): a `Random.Shared`

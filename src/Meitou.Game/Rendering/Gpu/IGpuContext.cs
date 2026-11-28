@@ -34,6 +34,12 @@ public interface IGpuContext
     void ReleaseTexture(GpuTexture texture);
 
     /// <summary>
+    /// Diagnostic: the open native segment <paramref name="cmd"/> goes on as the step <paramref name="label"/> in a lost device's report (Vulkan with
+    /// <c>MEITOU_DIAG_FAULT=1</c>; elsewhere nothing). Outside any rendering.
+    /// </summary>
+    void MarkStep(IGpuCommandList cmd, string label) { }
+
+    /// <summary>
     /// Marks the start of an intra-frame transient phase: on Vulkan, transitions every live aliased image whose
     /// <see cref="TransientLifetime.First"/> equals <paramref name="phase"/> from <c>UNDEFINED</c> to <c>GENERAL</c>
     /// with an aliasing memory barrier (at most once per frame per phase). No-op on backends without transient aliasing.

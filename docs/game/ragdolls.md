@@ -53,7 +53,7 @@ foliage group 6 or passable parts. A living character's only PhysX shape is its 
 body is left out of the movement avoidance list, so it blocks no walker
 ([pathfinding](pathfinding.md#bodies-in-the-way)).
 
-Meitou's building floors: **Observed** (`--load` mec-tou-nu2, a knocked-out character on The Hub's gate walkway, root 1636 over terrain 1511, per-part heights against the collision triangles at freeze):
+Meitou's building floors: **Observed** (a knocked-out character on The Hub's gate walkway, root 1636 over terrain 1511, per-part heights against the collision triangles at freeze):
 with the zone's building collision gathered the 13 parts end 0 below the floor (none by more than 0.3), so the group set, the shapes and the transforms are fine. When the body started while its tile
 still had ground only (the zone is gathered on a worker the first time a ragdoll moves near it, 10 ticks here), 2 parts ended up to 3.7 units under the floor. A whole body now starts only
 when every tile near it has its buildings (`RagdollPhysics.Covered`); the character animates until then.
@@ -80,7 +80,7 @@ also uses 0x8000 internally as "release all".
   opposite request for the same parts cancels both, a duplicate is dropped. Only when the character
   has a visual or is dead (slot 31) and, for "on", is not in furniture (Character `+0x2f8`, the
   bed/cage state of [carry-loot](carry-loot.md)).
-  Meitou (`RagdollSystem.Wanted`): a bed or cage occupant never ragdolls, and the animation poses it by the fixture's clip, not the layers it went down with (`AnimationSystem.Update`; #733: a body laid in a bed kept its lying clip on the floor by the bed). **Observed** (harness `cage-in --record` in a real world, a placed Prisoner Cage and Prisoner Pole; debug `ko` and `stealth-ko`): the KO'd occupant keeps its fixture position (cage: the `foetal` clip; pole: standing bound), no ragdoll, no slide. A report of a KO'd caged character ragdolling out of the cage was not reproduced.
+  Meitou (`RagdollSystem.Wanted`): a bed or cage occupant never ragdolls, and the animation poses it by the fixture's clip, not the layers it went down with (`AnimationSystem.Update`; #733: a body laid in a bed kept its lying clip on the floor by the bed). **Observed** (harness, a local recorded caging run in a real world, a placed Prisoner Cage and Prisoner Pole; debug `ko` and a stealth knock-out): the KO'd occupant keeps its fixture position (cage: the `foetal` clip; pole: standing bound), no ragdoll, no slide. A report of a KO'd caged character ragdolling out of the cage was not reproduced.
 
 - The queue is drained at the sync point `FUN_1407d2380` → `FUN_1405d2c30` → setter `FUN_1405d0db0`,
   which keeps a request queued while the skeleton is not ready or a get-up blend runs.
@@ -322,7 +322,7 @@ Engine feature behind the same switch (`BodyOptions.AdvancedRagdolls`; Faithful:
 
 ### Rest poses of the spine
 
-Reported: knocked-out and dead bodies often end with a rounded ("arched") back. **Observed** in the hidden game (`ragdoll-dump`; Siwa plus 12 spawned Dust Bandits of `t_flats_shore`, standing still ("stand") or
+Reported: knocked-out and dead bodies often end with a rounded ("arched") back. **Observed** in the hidden game (`ragdoll-dump`; Siwa plus 12 spawned Dust Bandits on a test save on a shore, standing still ("stand") or
 ordered to run for 40 ticks ("run"), then `ko`, dumped 300 ticks later). "Rounded" = lumbar twist minus thoracic twist above 40 degrees (forward flexion is positive for `Spine1 -> Bip01` and negative for
 `Spine1 -> Spine2` and `Spine2 -> Neck`; limits +-37 and +-30). One run of 13 bodies per cell: the rest pose depends strongly on small differences, so read the counts as indications.
 

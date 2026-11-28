@@ -85,7 +85,7 @@ The game speed is an input of one system: the ragdoll physics steps in real time
 [ragdolls](game/ragdolls.md)), so a ragdoll's outcome, and the position of a body that follows it, differs between speeds, as in the original. Runs at one speed, headless runs and the goldens are unaffected.
 
 **Verified** original clock: 1200/11 seconds per game hour ([game-loop.md](game/game-loop.md)).
-`BodySystem.HoursPerTick=11/36000`; the medical tick takes `TickSeconds` plus the update budget's turns (`MedicalTimeBudget`, [character-stats](game/character-stats.md#time)). Population and assets split: **simulation = original**: a town site unloads with its zones (`TownUnloadGraceSeconds` = 0; the zones lapse 4-6 s after the camera / player timers, [character-stats](game/character-stats.md#time)), and its squads become pinned platoons; wild sites and roaming squads keep an engine-choice grace on game time (60 s, 10 s). **Asset cache = Meitou engine choice**: a left zone's navmesh stays loaded 120 s (real time, at most 60 zones, oldest dropped first; then the disk cache), so a return does not rebuild; render assets follow the camera, not the sim zones. **Observed** (save mec-tou-nu2, Release): a town's unload costs ~0.02 ms, a second spawn of a town 0.06-12 ms, the first spawn of a town with 8 squads 65 ms (JIT included).
+`BodySystem.HoursPerTick=11/36000`; the medical tick takes `TickSeconds` plus the update budget's turns (`MedicalTimeBudget`, [character-stats](game/character-stats.md#time)). Population and assets split: **simulation = original**: a town site unloads with its zones (`TownUnloadGraceSeconds` = 0; the zones lapse 4-6 s after the camera / player timers, [character-stats](game/character-stats.md#time)), and its squads become pinned platoons; wild sites and roaming squads keep an engine-choice grace on game time (60 s, 10 s). **Asset cache = Meitou engine choice**: a left zone's navmesh stays loaded 120 s (real time, at most 60 zones, oldest dropped first; then the disk cache), so a return does not rebuild; render assets follow the camera, not the sim zones. **Observed** (Release, a game at The Hub): a town's unload costs ~0.02 ms, a second spawn of a town 0.06-12 ms, the first spawn of a town with 8 squads 65 ms (JIT included).
 `RequestedPause` is independent of remembered nonzero speed. Render previous/current states
 with simulation alpha; camera uses control alpha. Positions are float world coordinates;
 rendering is camera-relative.
@@ -605,7 +605,7 @@ Eight Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns
   first time it leaves, travels on as them and comes back as them (moved along with its stand-in); saves write it as a new platoon (`sqt` 2,
   `persistent` false). Faithful (the original): a platoon that is not a town's own is despawned as it leaves, and a stand-in out of range for
   60 s is despawned (the orphan timer); a save's despawned platoon leaves the save; loaded towns refill their pools. **Observed** (headless):
-  Meitou brings back the same characters; Faithful replaces them from the pool, and save 2 loses 15 of its 15 travelling platoons in six minutes.
+  Meitou brings back the same characters; Faithful replaces them from the pool, and a test save loses 15 of its 15 travelling platoons in six minutes.
   A platoon kept only by this switch, the wild one or a code mod's spawn stays loaded while a member lies knocked out inside the loaded zones
   (not one the unload splits off as a captive), where the original's member-by-member thinning keeps such a member unless he lies out of view
   within 600 of the departed leader ([off-screen world](game/factions-squads-towns.md#off-screen-world)). **Observed** (headless, a reporter's
@@ -675,8 +675,8 @@ Implemented (`PopulationRoaming.cs`):
   characters' records as they left (`FUN_14036bad0`), and the load starts the unloaded platoon at that saved place (`FUN_1407f85f0` ->
   `FUN_1407ef4b0`), so only the travel after the load moves them. Meitou the same: `SaveCapture` writes a travelled stand-in's place and its
   characters where they left.
-- **Cost** (**Observed**, headless, save 2 with 2000 extra travelling stand-ins, warm): the step 0.08-0.1 ms per look at 1 or 8 threads (too little
-  work for the threads to pay), pools and fights 0.23-0.26 ms per look (fights run every 4th look), about 0.03 ms a tick in all; save 2 alone
+- **Cost** (**Observed**, headless, a test save with 2000 extra travelling stand-ins, warm): the step 0.08-0.1 ms per look at 1 or 8 threads (too little
+  work for the threads to pay), pools and fights 0.23-0.26 ms per look (fights run every 4th look), about 0.03 ms a tick in all; the save alone
   0.08-0.1 ms per look. Not measured in the viewer's bench harness, which does not run the population.
 - **Pools** (`PopulationPools.cs`): every town and nest has the original's two pools (residents `pop`/`popd`, roaming `pop2`/`popd2`),
   read from the save's town and nest states and written back, with `started`, `ded`, `tod`; the hour they last grew is not saved (set at load,
@@ -1159,7 +1159,7 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
   were gathered; a tile asking for buildings not yet gathered costs nothing) and starts at most 4 whole bodies falling (a knockdown, a put-down, a stored
   squad's downed member coming back); one whose tiles the budget did not reach, or whose tiles still lack their buildings (`RagdollPhysics.Covered`), starts on a later tick, the character animating meanwhile; a save's frozen
   ragdoll is not counted, and a get-up, a limb's dangle or a lift never waits. **Observed** (headless flight probe, the
-  stutter save's flights): a zone's downed characters re-ragdoll when it loads, asked for 80-100 tiles and 20 builds in one tick (45-60 ms; after the budgets
+  flights of a save with about 1000 characters): a zone's downed characters re-ragdoll when it loads, asked for 80-100 tiles and 20 builds in one tick (45-60 ms; after the budgets
   the setup loop is at most 3.4 ms a tick), and 20 whole bodies then fall for up to 7 s (the step 0.4 -> 1.3 ms a tick); a build is 0.7 ms (bodies, joints, the
   ground probe, which reads heightmap blocks on demand: 5 ms for the first in a new area). **Threads** (`RagdollSystem.ThreadedBodies`): the step runs on the calling thread below 256 awake bodies and on the world's thread count above (**Observed**,
   the probe: single-threaded costs the same below 300 awake bodies, 0.4-0.8 ms, and 0.2 ms more at 1,100; the dispatcher's signals and waits are 0.3 ms a step,
@@ -1197,7 +1197,7 @@ animal's; the victim may be a player character), a landed blow between it and a 
 (`CrimeSystem.Hit`), and an NPC looter its Looting ([NPC looting](#carrying-rescue-and-looting)); both are booked like a player's (**Verified**, the witness function `FUN_140854d10` ends in the booking call with no player test; a Bandit, Diplomat or LawEnforcement class is never booked).
 Every witness that sees the culprit reacts, not only the first after the booking (the witness function runs per looker, `FUN_1408580d0`): with a
 stop there, a police 1480 off in sight range booked a slave hunter's assault at Sho-Battai's gate and the gate guards 40 away never reacted
-(**Observed**, headless, a player quicksave).
+(**Observed**, headless, a player save).
 The setter itself refuses no NPC code (**Verified**, `FUN_140852c80`): any other crime a caller sets on an NPC (the cuffing task's Enslaving) is pending too and witnessed the same.
 An Assault on a Diplomat standing in its faction's `biomes` is set as code 9, Terrorism ([economy 11.6](game/economy.md#116-booking-factions-and-police-hits-observed), `CrimeSystem.DiplomatVictim`). A police-like witness not fighting re-fires the witness event (41 for an Assault or code 9, 42 for a Looting) at it every
 sweep, since the guards' lines (e.g. "Shek guard witness crime": DA 29, 33, 6) need it within 260 and not running; not a Trespassing
@@ -1694,7 +1694,7 @@ slave's: its master's Slave list) or own lists hold it in its hours; its act-out
 (`DutyGoals.Done`) at the original's end. Cages are those of the squad's town (`Fixture.Site`) unless said otherwise. A walk to a cage ends within `use range` + 15, or a walk that ended within 200; a
 job's walk that ends short of its place is a lost walk ([engine goals](#engine-goals)); its own faction's shut doors are unlocked first. A job gives up after 600 game s (engine).
 A job's walk is its own, run as the job's row (`CaptiveSystem.WalksOwn`): one the worker was on when the job started, its AI's or an errand's, is replaced at once, as a
-goal taken up ends the plan before it ([precedence](game/ai-tasks.md#precedence)). **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): the workmasters take their
+goal taken up ends the plan before it ([precedence](game/ai-tasks.md#precedence)). **Observed** (a local probe's state 0.5 hold, Rebirth, N = 1): the workmasters take their
 gather jobs while walking home under 43, and a job that waited on that walk reached its cage only after about 90 of the hold's 110 s.
 - **Look**: every 30 ticks on its slot's turn, and after its job ends, a serial look (`CaptiveGoals.Look`) keeps for each listed goal its desire and its finder's
   target (the job's while the goal holds the member: the original keeps the running goal's finder hand); the think reads only those picks and its own state; hashed
@@ -1740,7 +1740,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   skip a cage on the gatherer's give-up list (`FUN_1408db510` -> `FUN_1405b0290`, **Verified**), so one whose walk was lost waits out its 20 s
   instead of being picked again next tick (#1383). Player captives are gathered too: 173's finder excludes player-owned cages, not player occupants
   (`FUN_1408db680` -> `FUN_1408db510`, **Observed**, 1.0.68 decompile); 217 still excludes player occupants (engine choice).
-  **Observed** (KenshiOracle hold, Rebirth, 2026-11-09): the original's gathered slaves keep their squads all hour (Pao 40, Mu 44).
+  **Observed** (a local probe's hold, Rebirth, 2026-11-09): the original's gathered slaves keep their squads all hour (Pao 40, Mu 44).
   **Observed** (probe): the Slave Farm's workmasters take the caged slaves out by day; at night their slaves' 172 puts them back.
 - **Deliver** (192, the squad leader under a shipping package): its plan's 53 is the travel task (`TownTravel.StepGoal`, [town goals](game/ai-tasks.md#town-goals)): to the squad's town (the shipping package's mission town: the nearest slave camp, or for signal 28 a nearer TOWN with slave pens, [packages](game/ai.md#prisoner-and-slaver-packages)) by its waypoint at the functor's pace, done once state 36 holds; a walk with no path to the town is a lost walk. **Sell** (194,
   or 218 in a prison or slave camp): the finder (`FUN_1408ca950`, **Verified**) picks at random a slave pen (a house of designation 10 in the 3x3 zone cells round the

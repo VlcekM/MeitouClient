@@ -316,7 +316,12 @@ public sealed unsafe class FrameRing : IDisposable
     /// Runs <paramref name="destroy"/> once every frame that could use the resource has finished: on the current
     /// slot's list inside a frame, else on the most recently submitted slot's list, else at once.
     /// </summary>
-    public void DeferDelete(Action destroy)
+    public void DeferDelete(Action destroy) => DeferDeleteAfter(destroy);
+
+    /// <summary>
+    /// <see cref="DeferDelete"/>, returning the frame whose end runs <paramref name="destroy"/> (-1: it ran now).
+    /// </summary>
+    internal long DeferDeleteAfter(Action destroy)
     {
         lock (_gate)
         {
@@ -325,18 +330,19 @@ public sealed unsafe class FrameRing : IDisposable
                 if (_inFrame)
                 {
                     _slots[Slot].Deletions.Add(destroy);
-                    return;
+                    return _slots[Slot].Frame;
                 }
                 if (_lastSubmitted >= 0 && _slots[_lastSubmitted].InFlight)
                 {
                     _slots[_lastSubmitted].Deletions.Add(destroy);
-                    return;
+                    return _slots[_lastSubmitted].Frame;
                 }
             }
         }
 
         // Nothing in flight (or the last frame was already retired by WaitAll): safe now.
         destroy();
+        return -1;
     }
 
     /// <summary>

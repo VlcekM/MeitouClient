@@ -155,7 +155,7 @@ World-state replacement towns and faction ownership affect both population and b
 - Housing (`FUN_1409370d0`, **Verified** by decompile) runs over a list of the town's buildings: it re-owns them (Building slot 0xa0,
   `FUN_140557950`), then houses each template's home through `FUN_14092e4b0`, which destroys the interior's item groups and part of its internal
   buildings (`FUN_14054f4d0` with 1), clears the interior and exterior layout lists and sets the template's names (`FUN_140552140`); then each
-  building's interior is loaded (`FUN_14057f820`). The list covers all the town's zones (**Observed**, Beep Fan Club 1, an original save after
+  building's interior is loaded (`FUN_14057f820`). The list covers all the town's zones (**Observed**, an original save after
   Stack's and Okran's Shield's overrides): every home of the replacement, in each of Stack's 4 zones, holds its template's layout names and that
   layout's objects (105 of 107 entries in `19.29:10`, 7 of 7 in `20.29:1021`), those of the trimmed zone numbered 109394 to 111201, also where
   the name stayed (`19.29:10` Bar); `19.29:14` 'Old Storm House', which the replacement does not house and Stack's own TOWN houses as a General
@@ -164,8 +164,8 @@ World-state replacement towns and faction ownership affect both population and b
   machines take none of the save's state, and a save drops the saved objects inside it and its `serialised interior`,
   so the original lays it out from the names ([save](../formats/save.md#zone-files)); a standing furnished building no template takes keeps its layout
   and its saved objects, with the level's naming (Stack's `19.29:14`: `squad template` empty as the original's, the interior layout name written).
-  **Observed** (headless, METARU, the same load order, Stack registered and its takeover applied): the save gives each of Stack's homes in the 4
-  zones Beep Fan Club 1's `destroyed`, interior layout name and `squad template`, with no saved object inside and no `serialised interior`;
+  **Observed** (headless, an unmodded save, the same load order, Stack registered and its takeover applied): the save gives each of Stack's homes in the 4
+  zones that original save's `destroyed`, interior layout name and `squad template`, with no saved object inside and no `serialised interior`;
   `19.29:14` keeps its 46 entries; a reload stands `20.29:1019` with its 11 layout objects, and a second save writes the same zone files. A
   second override of the registered town (the takeover's other variant) gives the same-named homes (`20.28:97` Faction HQ, `19.29:22` Bar,
   `19.29:8` Weapon Shop) new machines for their objects, one each as before.
@@ -484,7 +484,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 
 **Placement order** (**Verified**, `FUN_14057f820`:86-103, `FUN_140583a10`:413-420, `FUN_1409fcd20`:197-205): the platoon point of a resident squad is a random free node of its building tried in the order type 0 shopkeeper, 2 guard post, 1 general, else the building origin (Meitou `PopulationHomes.SpotIn`); each member is placed apart at a random general node, else a shopkeeper node, else the platoon point (Meitou `MemberSpot`, one draw per member). A bar squad asks the town's node map for a random node and, when none comes back, uses the town's own position with no offset (Meitou: a node of one of its bars, else the town's position).
 
-**Building owner after populate** (**Verified**, `FUN_1409370d0`:35-75, `FUN_140557950` owner setter, `FUN_14092e4b0` → `FUN_140552140`:23; and against the original's save METARU, `meitou-tools probe <save> owners`: the rule gives the saved owner of all its 3244 town buildings): the town resident driver gives the town's faction (Town slot 0x58) to every building of the town whose current owner is not the player's (faction +0x250 == 0); housing then gives each home the faction its residents template's `faction` names, the town's when it names none ([layouts](#town-residents)), and the setter hands it to the building's doors and interior furniture. So whatever faction the level data names, a home of another faction's residents is theirs and every other non-player building the town's: Sho-Battai's Slave Shop, whose level state names the Tech Hunters, is the Slave Traders', its General Shop the Traders Guild's. The player's own keep theirs, a saved owner still overrides afterwards, and a save holds the live owner. Meitou: `PopulationData.LevelOwnerOf` (fixtures, seats and item slots, the table finder), saved by `FixtureRegistry.WriteOwners`; a saved owner that is the level state's own string and not the player's is not believed (`FixtureRegistry.SavedOwner`: Meitou's saves up to 0.22.2 kept the level's string, and the rule then gives what the original would have saved). A table of a building whose faction is hostile to the squad's (relation at most -30, `FUN_1408ca670` / `FUN_1406b26d0`) is skipped by the bar table finder (`AiSystem.PickTable`; **Verified**, the filter's other parts are not decoded).
+**Building owner after populate** (**Verified**, `FUN_1409370d0`:35-75, `FUN_140557950` owner setter, `FUN_14092e4b0` → `FUN_140552140`:23; and against a save of the original, `meitou-tools probe <save> owners`: the rule gives the saved owner of all its 3244 town buildings): the town resident driver gives the town's faction (Town slot 0x58) to every building of the town whose current owner is not the player's (faction +0x250 == 0); housing then gives each home the faction its residents template's `faction` names, the town's when it names none ([layouts](#town-residents)), and the setter hands it to the building's doors and interior furniture. So whatever faction the level data names, a home of another faction's residents is theirs and every other non-player building the town's: Sho-Battai's Slave Shop, whose level state names the Tech Hunters, is the Slave Traders', its General Shop the Traders Guild's. The player's own keep theirs, a saved owner still overrides afterwards, and a save holds the live owner. Meitou: `PopulationData.LevelOwnerOf` (fixtures, seats and item slots, the table finder), saved by `FixtureRegistry.WriteOwners`; a saved owner that is the level state's own string and not the player's is not believed (`FixtureRegistry.SavedOwner`: Meitou's saves up to 0.22.2 kept the level's string, and the rule then gives what the original would have saved). A table of a building whose faction is hostile to the squad's (relation at most -30, `FUN_1408ca670` / `FUN_1406b26d0`) is skipped by the bar table finder (`AiSystem.PickTable`; **Verified**, the filter's other parts are not decoded).
 
 **Observed** (kenshi-named dump) unless marked; Meitou: `PopulationHomes.cs`.
 
@@ -525,12 +525,11 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   template's `building name` when it has one. Each home has one template (the chooser skips buildings holding another), so the last housing wins:
   the default resident pass only takes buildings with none. A building housed by nobody keeps the level state's names, except that a candidate whose
   level state names a `squad template` is vacated: no template, both layout names empty, nothing furnished, and its building record's name (**Observed**,
-  unmodded saves METARU and redev: World's End's L-House `26.13:748-`, Mud Town's Swamp Dome `22.40:2-` and Trader's Edge's Bughouse `42.22:3119-`,
+  two unmodded saves: World's End's L-House `26.13:748-`, Mud Town's Swamp Dome `22.40:2-` and Trader's Edge's Bughouse `42.22:3119-`,
   level-named bars and a noble house; Black Scratch's Y-House `50.32:7-`, level-named Ranger Shop, stands empty as `Y-House` in a reporter's video of the original, #922;
-  base data has 16 such buildings). **Observed**, saves (METARU,
-  autosaves 1 and 2, redev, Beep Fan Club 1; level buildings of the saved zones): the saved interior name equals the saved `squad template`'s
-  `layout interior` for 318 of 324 standing homes in METARU, and the level
-  state's for 590 of 592 buildings with no template (the other 2 are METARU's vacated L-House and Swamp Dome). The 6 that differ are [homes saved under a housemate's template](#whose-template-a-home-carries). Meitou's housing (base data) changes 223 homes' interior name, clears 21, names 156 the level state
+  base data has 16 such buildings). **Observed**, five saves (level buildings of the saved zones): the saved interior name equals the saved `squad template`'s
+  `layout interior` for 318 of 324 standing homes in one of them, and the level
+  state's for 590 of 592 buildings with no template (the other 2 are that save's vacated L-House and Swamp Dome). The 6 that differ are [homes saved under a housemate's template](#whose-template-a-home-carries). Meitou's housing (base data) changes 223 homes' interior name, clears 21, names 156 the level state
   leaves empty (among them every Ash Dome, Cat-Lon's Exile and Ashland Domes I..IV, and the Ancient Tech Lab at zone 2.46: templates `Throne`, `lab`,
   `Lab no.2`); exteriors: 86 replaced, 50 cleared, 67 named.
 - **Chooser** (`FUN_14092e870`, **Verified**): a template with `layout interior` needs a building offering it (own layouts or
@@ -556,7 +555,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
     the state reader takes the `residents` handle, and the system message queue binds platoons to their buildings again (`FUN_1407b65b0`, case 1,
     which also calls `FUN_140553210`).
   - **Observed**unmodded saves: `squad template` equals `residents template` in every building state and is set exactly on the states with a
-    `residents` handle (METARU 18518 states, 381 set; redev 21320, 421). Of METARU's 32 homes with platoons of several templates, 26 carry their own
+    `residents` handle (one 18518 states, 381 set; another 21320, 421). Of the first's 32 homes with platoons of several templates, 26 carry their own
     template and 6 a housemate's (`ninja guards` in two World's End `Adventurer Waystation Bar`s, `lost armoury security` x2, `hive soldiers`,
     `Tech Hunter Guards small`): all guard squads.
   - **Read by** (**Verified**): the squads made for a building (`FUN_14057f820`), the chooser's free test, and
@@ -581,9 +580,9 @@ Meitou: [ground items](../simulation.md#items-and-eating).
 - **New game vs level data**: level-data building states carry `residents template` / `squad template`, but the state reader `FUN_140552b70`
   looks the `residents template` up only when the string is empty (**Verified**, disassembly `0x14055312d`: `cmp [node+0x38], 0; jne` past the
   lookup), so a level building starts with none and every town is housed afresh from its table. The outcome is the same in every new game: a
-  level building's handle serial is its level state's `handleS` (**Verified**: all 412 / 473 level buildings of the saves METARU / redev carry
-  it), and the rules here over the buildings in that order give the saved `residents template` of every home of the unmodded saves: METARU 380
-  of 380, redev 420 of 420, autosave1 360 of 360, autosave2 38 of 38 (a home saved under its housemate's template counted as its own, see
+  level building's handle serial is its level state's `handleS` (**Verified**: all 412 / 473 level buildings of two saves carry
+  it), and the rules here over the buildings in that order give the saved `residents template` of every home of the unmodded saves: 380
+  of 380, 420 of 420, 360 of 360 and 38 of 38 (a home saved under its housemate's template counted as its own, see
   Layouts); the level data's own names match 232 / 248 / 221 / 38. Destroyed buildings stay candidates (the Hub's ruins house squatters).
 - **Meitou**: `ResidentHomes.Assign` takes the buildings in that serial order (ties and stateless buildings by key), so the boot can lay out the
   [ruins the homes make](buildings-production.md#ruined-by-residents) and name the homes' layouts, display `name` and `squad template` as above (`ResidentRuins.Apply`, before anything reads the
@@ -603,7 +602,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   2. `roaming military` forces mode 2; `dont multiply` makes the size multiplier 1; the platoon gets its home and, with a home building, the member origin moves to a GENERAL else SHOPKEEPER node + (0, 10, 0).
   3. `leader` (first entry only; a missing record is logged, no member and the index stays 0), then `num random chars` (between min and max when min < max) picks through `FUN_14057fd40`; the first member made with no leader yet is role 2, later ones 0.
   4. `squad` (role 0), `squad2` (role 1), `animals` (age = roll x `animal age random` - 0.1 + v2 / 100, at least 0; the first with no leader yet is role 2, else 0), `animals2` (role 1, spacing 5); counts: v0, or a roll in [v0, v1] when 0 < v1 != 100, times the multiplier, at least 1 when above 0.
-     **Leader** (**Observed**): the platoon's leader is its first member made, whatever these role writes say: `ActivePlatoon::addActiveObject` (`FUN_140797240`) calls the leader setter `FUN_1407917a0` when the member count becomes 1, and the save's `is leader` is that leader slot (`Character::serialise` `FUN_1406280a0`, platoon `+0xa0`). Vanilla saves (METARU, autosaves 1 and 2, redev), templates with no `leader` or `choosefrom list` but `squad2` or `animals`: a `squad` member leads in all 43 platoons that still have one (`farm shop UC`: the Shop Guard, not its Garru; the 44th has only its Bonedog left), an animal in the 61 animal-only ones. Meitou `SquadFactory.Plan`: the first animal leads only as the first member; otherwise a squad with no leader-role member takes its first non-animal (`SquadRegistry.Successor`).
+     **Leader** (**Observed**): the platoon's leader is its first member made, whatever these role writes say: `ActivePlatoon::addActiveObject` (`FUN_140797240`) calls the leader setter `FUN_1407917a0` when the member count becomes 1, and the save's `is leader` is that leader slot (`Character::serialise` `FUN_1406280a0`, platoon `+0xa0`). Four vanilla saves, templates with no `leader` or `choosefrom list` but `squad2` or `animals`: a `squad` member leads in all 43 platoons that still have one (`farm shop UC`: the Shop Guard, not its Garru; the 44th has only its Bonedog left), an animal in the 61 animal-only ones. Meitou `SquadFactory.Plan`: the first animal leads only as the first member; otherwise a squad with no leader-role member takes its first non-animal (`SquadRegistry.Successor`).
   5. `slaves`: each a platoon of its own (the slave template's `faction`, else the owner's), its squad made recursively, every member role 4, owned by the squad; `prisoners`: only with a home, into free cages.
   6. Tail: a non-player owner with vendor lists or specials and a home but no member made stocks the home like section 1; with members (or no home) `FUN_1404ff5e0(squad, 1)` fills the squad's own or home stock ([shops](economy.md#building-shops-observed-decompile)).
   Meitou: `SquadFactory.Plan` (3, 4), `PopulationSystem.MakePrisoners` / `MakeSlaves` (5), `TradeSystem` (1, 6).
@@ -731,7 +730,7 @@ turret finder uses it so far (the others read the squad's home, which a player s
   `RenewRoamer`, and a nest's (`RegenerateWild`), in platoon id order and of any faction on the town's side; a declared-dead platoon is out of its pool and not looked at. A marked
   platoon is remade into itself (`TakeRemade`): its old characters leave, and a save writes the new squad into its record, name and handle kept (**Observed** headless:
   bench-bases Squin, a marked `Shek Town Guard` came back as 5 in `Shek Kingdom_289` and kept that name and the 5 through a second save and load). **Observed** headless
-  with the counts above: bench-bases Squin, `Shek Town Guard` saved with 3 of 4 dead, and METARU's Hub, `Mercenary guild` saved with 4 of 6 dead, are not marked at the
+  with the counts above: bench-bases Squin, `Shek Town Guard` saved with 3 of 4 dead, and another game's Hub, `Mercenary guild` saved with 4 of 6 dead, are not marked at the
   load (their `char count` holds the dead).
 - **Despawn cost** (**Verified**, `FUN_1406bab60`, `FUN_140796b30`): a non-kept platoon that leaves while not intact (the platoon flag, below)
   is taken out of its pool (platoon +0xa8: 1 residents, 2 roaming) and, while that pool is above 0, lowers it by its living members (no floor);
@@ -745,7 +744,7 @@ turret finder uses it so far (the others read the squad's home, which a player s
   save's nest platoon in the world counts its living now for the nest's budget (`HoldOf`). **Observed** headless (#1033's save, `probe nests`):
   the 8 members in the world of a `Nest of Beak Things` (15) killed, its pool goes 15 to 7 and it makes one squad of 1 once the pool passes
   the 6 living elsewhere; a `Boneyard Wolf Den` (10) with all 10 killed goes to 0 and is wiped out.
-- **Town pools in saves** (**Observed**, saves 1, 2, wade): every town has `pop` = `popd`, `started` true when populated, `popd2` 0 (none of
+- **Town pools in saves** (**Observed**, three of the owner's saves): every town has `pop` = `popd`, `started` true when populated, `popd2` 0 (none of
   304), while `read_roaming_population_n4` (`0x1408f98d0`) would set pool 2 to the faction's `roaming population`. `pop` is near the living members of the town's resident platoons (`is resident`) of the town's own faction:
   save 2 Squin 36 = 36, the Hub 12 vs 10, Stack 93 vs 95 (Squin without a Tech Hunters resident shop of 4).
 - **Town wipe** (**Verified**, `TownPopulationManager::vfunc_4` `FUN_1408f7a80`): once started, roaming `pop` <= 3, <= 25 roaming living and no intact resident platoon
@@ -828,7 +827,7 @@ turret finder uses it so far (the others read the squad's home, which a player s
   amount` over the loaded zones of the island; while below, one sector is picked by weight max(0, P × amount + 1 − load), halved when its own town stands in it (`FUN_1408f62e0`; only a
   sector the flag leaves free, e.g. Ruins), (w + 1) × 2 when its load is 0 (**Verified**, `FUN_1408f9240`), and one squad is made there (`FUN_1408f8060`) if its intact count is below P × amount, retrying other sectors when that
   fails: the draw takes each sector out of the tree and loops while `FUN_1408f8060` returns 0 (no template left, no spot `FUN_1408f50d0`, or the spot inside a town, `FUN_140926d50`; 1
-  only after the squad is created; **Verified**), so one 2 s tick ends with a squad or an empty tree. Meitou: the sectors in weighted draw order without replacement, built in turn by one job until one makes a squad. The load counts a save's homeless platoons like the squads made since (`AddPlatoonLoad`; **Observed**, KenshiOracle hold of a save at Sho-Battai: beside its 12 saved desert squads the original made 6 in an hour, 18 in all). Sectors a town stands in never enter the pick: `Town::setup` (`FUN_1409353c0`) sets sector byte +0x30 for every sector of the
+  only after the squad is created; **Verified**), so one 2 s tick ends with a squad or an empty tree. Meitou: the sectors in weighted draw order without replacement, built in turn by one job until one makes a squad. The load counts a save's homeless platoons like the squads made since (`AddPlatoonLoad`; **Observed**, a local probe's hold of a save at Sho-Battai: beside its 12 saved desert squads the original made 6 in an hour, 18 in all). Sectors a town stands in never enter the pick: `Town::setup` (`FUN_1409353c0`) sets sector byte +0x30 for every sector of the
   town's zone list (or of its position), +0x31 when the Town int at +0xd8 is 1 (its type, **Observed**), unless the type (+0xd8) is 4 (Ruins) or 9 (point of interest), so a
   Ruins town does not block its sectors and a nest marker (type 8, which `setup` handles itself) does; the pick, the spot fallbacks `FUN_1408f6350` / `FUN_1408fc1a0` and
   the patrol's town branch (below) read it (**Verified**, decompile). Meitou gives a sector

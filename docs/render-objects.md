@@ -242,7 +242,7 @@ built by `BuildingMaterial.FromFarmSpec` (normal-alpha cut-out, two-sided, no ve
 levels, `DrawReal` picks level 0) and with no part distance (only the real-object range). The original draws one merged mesh per farm with
 a `plantData` shader array; Meitou instances each plant (batched by mesh). Its back faces flip their normal (the DX11 game's do not). Each plant's colour (`FarmLayout.Tint`, the death tint and brightness of
 [farm plants](game/buildings-production.md#farm-plants)) multiplies its albedo, packed into a negative spare `M44`
-(`FarmPlants.PackTint`: 8 bits per channel over [0, 1.275]). A plant's material is cut out by its normal map's alpha (threshold `alpha threshold`, 128 when absent) and two-sided whatever its `material type` (`PlacedMesh.FarmPlant`, `BuildingMaterial.FromSpec`): **Verified** against the installed `foliage.material` `FarmPlants` (cull none, `Object_DoubleSided_Coloured_FP` = `TRANSPARENCY,COLOURING,DOUBLESIDED2`, `objects.hlsl` `clip(normalTex.a - threshold)`); with the spec's own type the Wheat's cards drew as solid quads (**Observed**, save grass-through interior). The loose instances are in the traced scene (`WorldObjectRenderer.RayInstances`), so the crops cast traced sun and lamp shadows.
+(`FarmPlants.PackTint`: 8 bits per channel over [0, 1.275]). A plant's material is cut out by its normal map's alpha (threshold `alpha threshold`, 128 when absent) and two-sided whatever its `material type` (`PlacedMesh.FarmPlant`, `BuildingMaterial.FromSpec`): **Verified** against the installed `foliage.material` `FarmPlants` (cull none, `Object_DoubleSided_Coloured_FP` = `TRANSPARENCY,COLOURING,DOUBLESIDED2`, `objects.hlsl` `clip(normalTex.a - threshold)`); with the spec's own type the Wheat's cards drew as solid quads (**Observed**, the scene of the Bughouse's interior). The loose instances are in the traced scene (`WorldObjectRenderer.RayInstances`), so the crops cast traced sun and lamp shadows.
 
 ## Doors
 
@@ -320,7 +320,7 @@ so no GI, traced sun or contact sun), the objects' colour and solid programs, th
 and the characters' world colour program (not a portrait's) are swapped for ones built with `LIGHTING_LEAN` (`LeanLighting`,
 `AtmosphereShaders.kenshiLight`): the shadow lookup, the traced-sun share and the probe reads are compiled out; the lamps, sky, haze and reflections'
 surface target stay. Decided each frame (`WorldFrame.PrepareTracedSun`), made the first frame it applies; A/B `lean-lighting`.
-**Observed** (2026-11-23, Iris Xe, `--low-end` 1920x1080 at scale 0.83, save "fps"'s spot, camera 800 units off, paired A/B): objects 6.79 -> 5.69 ms,
+**Observed** (2026-11-23, Iris Xe, `--low-end` 1920x1080 at scale 0.83, a test scene's spot, camera 800 units off, paired A/B): objects 6.79 -> 5.69 ms,
 GPU frame 21.2 -> 19.7; 10 pixels differ, by 1 / 255. With the terrain too: terrain 4.97 -> 4.50 ms there, 9.43 -> 7.98 from the viewer's default
 distance (GPU 16.0 -> 14.4; 193 scattered pixels differ, as the dust's from run to run). Play bench idle (one run each): GPU 18.1 -> 17.0 ms, 53 -> 56 fps. Stripping the paths one by one in separate runs: the shadow lookup and the probe and traced paths
 about 1 ms together, the lamps about 0.4 more (kept: the night needs them); the ambient map and cloud shadow nothing. The lookups cost their registers

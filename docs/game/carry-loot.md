@@ -501,7 +501,7 @@ bandit nest's own faction answers event 45 there (`SightCrimes`); it is no town 
 
 Loading can free an escaped slave at once, because the clock is restored to the minute while the stamp is not. **Observed** with a "The Slaves" save written right after New Game:
 - the save holds `ssct` 34.00063 and the clock day 1 10:00, which is 34.0 h;
-- both escaped player characters were free within 120 calendar seconds of the load, in 5 runs out of 5, read with the KenshiOracle probe.
+- both escaped player characters were free within 120 calendar seconds of the load, in 5 runs out of 5, read with a local probe.
 
 What state 3 does elsewhere (**Observed**, the 64 callers of the getter `FUN_1405c8aa0` in 1.0.68): most tests are `== 1`, `== 2` or `!= 0`, so an ex-slave counts as unfree wherever the
 test is `!= 0` / `> 0` (a police carrier's cage desire 1.4 `FUN_1405a0f10`, the refugee package `FUN_140288ed0`, slave processing `FUN_1408cd630`, prison hunger 1.15 `FUN_1405c9ca0`) and as

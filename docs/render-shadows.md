@@ -33,7 +33,7 @@ texels: a 0.06° sun turn changed 0.36 % of a Hub view by more than 8 levels, 0.
 With no caster bias the casters' `gl_FragDepth` write is the clamped rasterised depth the depth clamp gives anyway, so the Meitou
 cascades' pass is `DrawState.CasterBiasFree` and Metal binds each caster program's fragment stage without the write
 (`MetalProgram.BiasFreeFragment`; landmarks and the faithful atlas keep it): a shader depth write turns Apple's early depth test and
-hidden-surface removal off. **Verified** (save 111 offscreen, M6): bit-identical picture; **Observed** (Metal System Trace, orbit):
+hidden-surface removal off. **Verified** (a test scene offscreen, M6): bit-identical picture; **Observed** (Metal System Trace, orbit):
 the cascade encoder 1.88 -> 1.23 ms. Vulkan still writes it.
 
 Receiver plane (`msTileV`; **Code reading**, not compared on a GPU): the filter's taps and the blocker search shift their reference depth by the receiver plane's tilt along
@@ -69,7 +69,7 @@ terrain term and landmark term each cost under 0.05 ms. The full-tier filter tak
 points first and returns when all 8 agree, adding the odd 8 only in a penumbra (same sum there):
 terrain -0.1 ms, screenshots within 7 levels.
 
-Metal receiver cost (**Observed** 2026-11-13, Mac mini M6, save `111`, 1920x1080 no upscaler, shadow map 2048, filter 1, 4 cascades; dev switches cutting
+Metal receiver cost (**Observed** 2026-11-13, Mac mini M6, a test scene, 1920x1080 no upscaler, shadow map 2048, filter 1, 4 cascades; dev switches cutting
 `kenshiShadowMeitou` at one point each, play bench idle / orbit GPU 15.5 / 17.0 ms): the whole receiver 1.4 / 1.0 ms (returning 1 at once); the plane from derivatives
 and the noise 0; the cascades 1.1 / 0.7; the terrain and landmark terms 0.3 (far pixels); the blocker search 0.2 / 0.14 of the cascades. Cascade casting 0.5 ms, blockers and
 terrain sweep under 0.1, shafts 0.6 (a Metal System Trace with named encoders). Tried, no gain (within 0.1 ms): the coarse cascades' and the landmark's 8 taps as 4 + 4 with an early
@@ -85,12 +85,12 @@ ground's relief self-shadow stay, and the probes' sun term keeps its own rays (t
 
 Runs when the `gi` scene and the GI resolve run, on the Meitou shadows, with ray queries and storage for RGBA16F (`WorldFrame.BeginFrame`); else the frame is the cascades'.
 Metal: the same passes ([render-gi](render-gi.md#metal)). `--debug-shadows 4` draws over the scene: blue where the cascades light the sun, green where the rays let it through, red where they block it, dim where no sun
-falls; with it the log prints every 120th frame whether the frame traces and why (`LogTraced`). **Observed** (siwa-test6 save, 08:40): traced over every lit surface of the view; against the cascades its mean change is 0.17/255 there, a close-up whose first cascade is already fine.
+falls; with it the log prints every 120th frame whether the frame traces and why (`LogTraced`). **Observed** (a close-up on sand, 08:40): traced over every lit surface of the view; against the cascades its mean change is 0.17/255 there, a close-up whose first cascade is already fine.
 
 **Frame.** `kenshiLight` leaves the sun out of the colour of every lit surface but impostors (`atmoReceiver` -1: the quad is not the surface), at every depth
 (`ShadowPass.TracedWhole`), and writes it, shadowless but for clouds, relief, the terrain map and the landmark map (the cascades left out, `msTraced`), to a third scene
 attachment (RGBA32F, location 2, `WithAlbedo`), before the haze. Its alpha is not the sun's: it packs three log levels in 24 exact bits and the sign, `log2(1 + 256 x L) / 12` as whole numbers (`GiResolveShaders.giPackTerm`, read by `TermLuminances`), plus 1 (0: nothing written): the lamps' diffuse light the fragment took (1023 levels, steps of 0.8 %, the channels' mean; `lampDiffuseOut`), their specular's luminance (8 bits, the eighth the sign, rounded up so it is never read back short; `lampSpecularOut`) and what it took of the sky beside its diffuse light (7; `ambientGlossOut`). The [lamp shadows](render-lights.md#traced-lamp-shadows) and the [characters' gather](render-gi.md#characters) read them back. Bit 16 of the surface target (RGBA32UI) marks such a pixel, bits 17-18 its receiver (0 solid, 1 grass,
-A receiver that is no interior's and no character is not shaded by what the floor view hides when its ray starts in or right under such a part (`solidBlocks` `open`: asked only of a ray a hidden part blocks, a second ray of 12 units against the hidden parts, then the ray again without them). **Observed**: no visible change on the band it was made for (save grass-through interior); kept as the cache's rule, unmeasured cost.
+A receiver that is no interior's and no character is not shaded by what the floor view hides when its ray starts in or right under such a part (`solidBlocks` `open`: asked only of a ray a hidden part blocks, a second ray of 12 units against the hidden parts, then the ray again without them). **Observed**: no visible change on the band it was made for (the Bughouse's interior); kept as the cache's rule, unmeasured cost.
 2 foliage, 3 character). After the characters, before `CaptureScene` (refraction sees the sun), a compute pass traces one ray a pixel into an RGBA16F mask (visibility,
 blocker distance), the penumbra filter softens it, and a fullscreen pass adds term x mask x the haze's multiplier (`atmoApplyCoefficients`).
 
@@ -109,7 +109,7 @@ and skip 3 footprints plus 0.5. Queries, each after the last missed:
   foot see the sun through the cliff; the coarse grid (`0x08`) from 320 along the ray. Back faces are skipped as the probes skip them, but not from interiors (bit 9);
 - grass (`0x20`), only as far as the ray can stay under the tallest blade, fading out by amount (not noise) over the last quarter of its reach.
 
-**Casters by size on screen** (`GiScene.CasterPixels`, 3): small foliage and characters cast while their bounds are at least 3 pixels across at the frame's lens (`PixelsPerRadian`), up to the shadow distance; small foliage takes the largest on screen first within what the scene's instances leave it (`GiScene.MaxInstances` 32768). At 16384 a stand of bushes overflowed it and the bushes left out, the smallest on screen, changed as the eye moved: their shadows came and went (**Observed**, save trees-shadows, traced sun, the camera turned round its target: 12200 to 15200 small casters in reach for about 11300 places, 1600 to 1900 trees; now all of them, GI stage 1.56 to 1.58 ms at 2560x1440). Fixed ranges (3000 for small foliage, 4000 for characters) left a tree or a character plainly in view without a shadow, further off or through a long lens (**Verified**, t_flats_shore, the same tree and character from 2500, 5000 and 9000 units at a matching lens: shadows at 2500 only before, at all three after). Through a lens longer than the game's the object range grows by the lens's factor, to 24000 at most. Cost at Gut (13184 foliage instances against 4326 with no small foliage): 0.02 ms of GPU (**Verified**, paused pair).
+**Casters by size on screen** (`GiScene.CasterPixels`, 3): small foliage and characters cast while their bounds are at least 3 pixels across at the frame's lens (`PixelsPerRadian`), up to the shadow distance; small foliage takes the largest on screen first within what the scene's instances leave it (`GiScene.MaxInstances` 32768). At 16384 a stand of bushes overflowed it and the bushes left out, the smallest on screen, changed as the eye moved: their shadows came and went (**Observed**, a scene of bushes and trees, traced sun, the camera turned round its target: 12200 to 15200 small casters in reach for about 11300 places, 1600 to 1900 trees; now all of them, GI stage 1.56 to 1.58 ms at 2560x1440). Fixed ranges (3000 for small foliage, 4000 for characters) left a tree or a character plainly in view without a shadow, further off or through a long lens (**Verified**, t_flats_shore, the same tree and character from 2500, 5000 and 9000 units at a matching lens: shadows at 2500 only before, at all three after). Through a lens longer than the game's the object range grows by the lens's factor, to 24000 at most. Cost at Gut (13184 foliage instances against 4326 with no small foliage): 0.02 ms of GPU (**Verified**, paused pair).
 
 **Characters** (receiver class 3): a low-poly body's facet can face away from the sun while its smooth shading (and skin's band past the terminator) is still lit; a
 ray from it stopped inside the body, a dark triangle (**Observed** on a face: eye corners, nostrils, the temple). There the ray starts under the facet, the nearest back of a
@@ -153,13 +153,13 @@ GI sees them; an object's texture tile is not read in the alpha test. The penumb
 surface keeps its hard edge there. **Observed** costs: see Measured.
 
 **Observed** (RTX 4090, 1920 x 1080 with DLSS, the median GPU frame time of 36, a still camera, shafts on). Cascades / traced / Off: the Hub at 17:12
-2.47 / 2.08 / 1.71 ms, the siwa-test6 close-up 2.34 / 2.37 / 1.94, dunes at 06:24 2.04 / 1.62 / 1.34. Traced passes (an earlier run): rays and penumbra 0.07-0.10 ms,
+2.47 / 2.08 / 1.71 ms, the close-up on sand 2.34 / 2.37 / 1.94, dunes at 06:24 2.04 / 1.62 / 1.34. Traced passes (an earlier run): rays and penumbra 0.07-0.10 ms,
 the volume 0.09-0.11 ms, a close-up character 0.06 ms. With a still camera the frame-to-frame change is DLSS's own (0.09-0.16/255 mean), traced or cascades alike.
 
 ## Traced near, cascades far
 
 `TracedFarCascades` (the switch of the sun shadows' fourth position, "Traced near, cascades far": Meitou engine choice, off by default, on in the
-Meitou-local (this branch): no tier turns the far cascades on (`QualityTiers`); the switch stays. **Observed** (save trees, 2560x1440): with them the shadows of trees turn from sharp to soft blobs in the band at view depth 1600-2000, which moves over the trees with the camera (10,900 pixels differ by more than 15 levels against the rays at every depth), and the frame cost more (12.1 ms against 10.0).
+Meitou-local (this branch): no tier turns the far cascades on (`QualityTiers`); the switch stays. **Observed** (a scene with trees, 2560x1440): with them the shadows of trees turn from sharp to soft blobs in the band at view depth 1600-2000, which moves over the trees with the camera (10,900 pixels differ by more than 15 levels against the rays at every depth), and the frame cost more (12.1 ms against 10.0).
 tiers that trace the sun, Ultra and Extreme; `ShadowPass.FarCascades`): the rays take the sun to view depth 2000 (`ShadowPass.TracedHandoff`)
 and four cascades (`HandoffCascades`) from 1600 to the shadow range, split by the practical scheme without the focus rule (`CascadeSplits`), drawn, cached and filtered as the Meitou cascades are (their blocker search included). `atmoTracedShare` falls from 1 to 0 over 1600-2000 (cascade 0's
 first depth to `msHandoff`), the colour taking the cascades' share; past 2000 no pixel is marked traced, so the rays and the grass reach (`TracedDepth` 2000) end there. The

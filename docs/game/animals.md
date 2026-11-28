@@ -122,7 +122,7 @@ from the start.
 - `+0x138` is the saved item key `death` (read/written by `FUN_140761550` / `FUN_1407609e0`) (**Observed**). In saves these items
   take ordinary grid cells beside carried goods, each entry one stack of its whole quantity whatever the item's `stackable`
   (Electrical Components 4, Iron Plates 6, `stackable` 1), and a stack of the same record without the flag stays a separate stack
-  (**Verified**, METARU and quicksave platoon files: 144 / 187 flagged items, none overlapping).
+  (**Verified**, two saves' platoon files: 144 / 187 flagged items, none overlapping).
 - Item lookups by type (`FUN_1407465d0`, used by `Task_grabOneFood` and `CharacterAnimal::vfunc_94`) skip flagged items while the
   owner is alive (`+0x5bc`) (**Observed**); a dead owner's count (**Verified**, `FUN_140748d70` and `FUN_1407465d0` read the owner's dead byte), so a squad mate eats from a dead mate's backpack (`FeedSystem.Best`).
 - Taking one out (`FUN_14075e7e0`, from the inventory's remove functions) clears the flag; when the owner is alive and down

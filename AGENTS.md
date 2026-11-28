@@ -14,6 +14,8 @@ drop-in replacement that runs original content and mods unchanged.
 - Whenever you learn something about the original game's files or behaviour (a field's meaning, a
   layout, a merge rule, a disproved guess), write it into the matching doc in the same change.
   Create a new doc in `docs/formats/` for a new format and link it from `docs/README.md`.
+- Evidence names only what a reader can get: the game's files, the repo, the bench's published save. A local save, file or uncommitted script is
+  described instead, never named: where and when the scene is, what is in it, the camera.
 - Mark each claim **Verified** (say against which files and how) or **Observed**. Don't promote a guess to Verified
   without a test that checks it.
 - Don't write unknowns, open questions or guesses into the docs. When the original's behaviour is unknown, work it out

@@ -214,6 +214,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
         // The colour attachments: the main one, then the extra one (location 1) when there is one.
+        _device.Faults.Markers?.Rendered([d.Colour.View.Index, d.Extra.View.Index, d.Extra2.View.Index, d.Depth.View.Index]);
         var colours = stackalloc RenderingAttachmentInfo[3];
         colours[0] = ColourAttachment(d.Colour);
         colours[1] = ColourAttachment(d.Extra);

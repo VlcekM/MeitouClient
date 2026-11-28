@@ -65,7 +65,7 @@ has no player case). Meitou
 (`FixtureRegistry.RegisterPlayerBuilding`): a fixture `<site>` with that roll once the building is finished (engine: doors likewise), a cage then working as a town one; a safe's
 fixture has no grid (its items are the machine's storage), so it gets no container verbs. Saved with the building's own lock keys (below).
 
-Save sample (autosave of the owner's game, 51 zone files): `lock lvl` values span 0..100 with most at 15..50 (**Observed**).
+Save sample (one of the owner's games, 51 zone files): `lock lvl` values span 0..100 with most at 15..50 (**Observed**).
 
 ## Lockpicking (Task_PickLock 76, Task_PickLock_Shackles 201)
 

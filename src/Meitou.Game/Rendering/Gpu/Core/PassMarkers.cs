@@ -35,6 +35,10 @@ public sealed unsafe class PassMarkers
     /// </summary>
     readonly List<string>[] _labels;
     /// <summary>
+    /// Per frame slot, per pass (as <see cref="_labels"/>): the images its renderings wrote (handle and name), under the labels' lock.
+    /// </summary>
+    readonly List<List<(ulong Image, string Name)>>[] _written;
+    /// <summary>
     /// Per frame slot: the number of the frame the labels belong to (0: none yet).
     /// </summary>
     readonly long[] _frames;
@@ -49,7 +53,8 @@ public sealed unsafe class PassMarkers
         _buffer = dev.Allocator.CreateBuffer((ulong)slots * SlotBytes, BufferUsageFlags.TransferDstBit, MemoryKind.Readback, "pass markers");
         new Span<byte>(_buffer.Mapped, (int)((ulong)slots * SlotBytes)).Clear();
         _labels = new List<string>[slots];
-        for (int i = 0; i < slots; i++) _labels[i] = [];
+        _written = new List<List<(ulong, string)>>[slots];
+        for (int i = 0; i < slots; i++) (_labels[i], _written[i]) = ([], []);
         _frames = new long[slots];
     }
 
@@ -62,6 +67,7 @@ public sealed unsafe class PassMarkers
         lock (_labels[slot])
         {
             _labels[slot].Clear();
+            _written[slot].Clear();
             _frames[slot] = _dev.Frames.FrameNumber;
         }
     }
@@ -77,6 +83,7 @@ public sealed unsafe class PassMarkers
         lock (_labels[slot])
         {
             _labels[slot].Add(label);
+            _written[slot].Add([]);
             id = Marker(_frames[slot], (uint)Math.Min(_labels[slot].Count, (int)MaxIndex));
         }
 
@@ -91,9 +98,38 @@ public sealed unsafe class PassMarkers
         _dev.Vk.CmdFillBuffer(cb, _buffer.Buffer, (ulong)_dev.Frames.Slot * SlotBytes + 4, 4, marker);
 
     /// <summary>
+    /// Ends the pass with <paramref name="marker"/> and begins the step <paramref name="label"/> in its place, at this point of <paramref name="cb"/>
+    /// (outside any rendering): a native segment's parts told apart. Returns the step's marker.
+    /// </summary>
+    public uint Step(CommandBuffer cb, uint marker, string label)
+    {
+        End(cb, marker);
+        return Begin(cb, label);
+    }
+
+    /// <summary>
+    /// A rendering of the pass begun last writes the images of <paramref name="views"/> (0: none), for the report.
+    /// </summary>
+    public void Rendered(ReadOnlySpan<int> views)
+    {
+        int slot = _dev.Frames.Slot;
+        lock (_labels[slot])
+        {
+            if (_written[slot].Count == 0) return;
+
+            var written = _written[slot][^1];
+            foreach (int view in views)
+            {
+                var image = _dev.ImageOfView(view);
+                if (image.Image != 0 && !written.Contains(image)) written.Add(image);
+            }
+        }
+    }
+
+    /// <summary>
     /// One line per frame slot, oldest frame first: how many passes the frame recorded and which the GPU began and finished last.
     /// </summary>
-    internal void Describe(List<string> lines)
+    internal void Describe(List<string> lines, GpuAddressLog? addresses)
     {
         var words = new ReadOnlySpan<uint>(_buffer.Mapped, _frames.Length * 2);
         foreach (int slot in Enumerable.Range(0, _frames.Length).OrderBy(s => _frames[s]))
@@ -106,7 +142,26 @@ public sealed unsafe class PassMarkers
                 var labels = _labels[slot];
                 string began = Pass(labels, frame, words[slot * 2]), finished = Pass(labels, frame, words[slot * 2 + 1]);
                 lines.Add($"frame {frame}: {labels.Count} passes recorded; the GPU began {began}, finished {finished}");
+                DescribeWritten(slot, frame, words[slot * 2], words[slot * 2 + 1], addresses, lines);
             }
+        }
+    }
+
+    /// <summary>
+    /// Under the slot's lock: when the GPU is inside a pass of <paramref name="frame"/> (began it, not finished it), every pass's label up to it and
+    /// the images the pass in progress writes, with their addresses.
+    /// </summary>
+    void DescribeWritten(int slot, long frame, uint began, uint finished, GpuAddressLog? addresses, List<string> lines)
+    {
+        uint index = began & MaxIndex;
+        bool otherFrame = began >> IndexBits != (uint)frame << IndexBits >> IndexBits;
+        if (began == finished || otherFrame || index == 0 || index > _labels[slot].Count) return;
+
+        lines.Add($"  passes: {string.Join(", ", _labels[slot].Take((int)index).Select((l, i) => $"{i + 1} '{l}'"))}");
+        foreach (var (image, name) in _written[slot][(int)index - 1])
+        {
+            string where = addresses?.Locate(ObjectType.Image, image) ?? "address tracking off";
+            lines.Add($"  pass {index} writes '{name}' (image 0x{image:x}): {where}");
         }
     }
 

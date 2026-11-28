@@ -360,7 +360,7 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   biome's slots, a character on a building floor refused (`CharacterAudio.FloorSurface`, the null-handle test), the 100-instance pool kept by counting kicks for 10 s of the frame
   clock, `Dustkick01` fired with `Burst` for 0.25 s (its emitters are forced). With `contactfoam` a foot over wet ground takes the shallow splash instead of dust. A machine's ground
   events (the farms' `Impact Farm`, no bone, speed 0) ride on the operator's clip as its sounds do; only a biome slot with min speed 0 kicks dust for a farmer (**Verified**:
-  `FUN_140065330` reads the biome only). Debug: `ground-at`, `dust-stats` ([agent-playtest](agent-playtest.md)). **Observed** (`t_desert_gold`, a runner on sand): a faint cloud
+  `FUN_140065330` reads the biome only). Debug: `ground-at`, `dust-stats` ([agent-playtest](agent-playtest.md)). **Observed** (a runner on sand): a faint cloud
   behind each step, 9 kicks in about a second of running.
 
 Meitou (`CharacterSounds`, `AnimationSoundEvents`, `GroundSurfaces` in `Meitou.Game.Audio`; `CharacterAudio`): characters within 1100 units of the eye get an object (dropped past 1400, or when they leave the snapshot);

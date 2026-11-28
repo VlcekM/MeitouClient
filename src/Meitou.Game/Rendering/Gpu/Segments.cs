@@ -84,6 +84,17 @@ public sealed unsafe partial class GpuContext
     }
 
     /// <summary>
+    /// Diagnostic (<c>MEITOU_DIAG_FAULT=1</c>): the open native segment <paramref name="cmd"/> goes on as the step <paramref name="label"/>, so a lost
+    /// device's report tells its parts apart (<see cref="Core.PassMarkers.Step"/>). Outside any rendering; no barrier.
+    /// </summary>
+    public void MarkStep(IGpuCommandList cmd, string label)
+    {
+        if (Device.Faults.Markers is not { } markers || _segment is null || !ReferenceEquals(cmd, _segment)) return;
+
+        _segmentMarker = markers.Step(_segment.Handle, _segmentMarker, label);
+    }
+
+    /// <summary>
     /// A guest's segment in the open host pass: draws only (no rendering, barriers, copies or dispatches), with the host's targets and state
     /// (<see cref="CurrentTargets"/>, <see cref="CurrentState"/>). Inside a rendering with secondaries it is a secondary of its own, executed in its
     /// place. Without a host pass it throws. Closed by <see cref="EndGuest"/>.

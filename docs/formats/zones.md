@@ -94,7 +94,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `destroyed` | bool | +0x1a1 |
 | `town` | handle | its town (outpost), only when the building is not inside another one (**Observed** condition) |
 | `flags` | int | bit0 is outside (+0x240), bit1 foliage, bit2 +0x241 ; old saves use bools `is outside` / `foliage` |
-| (a layout object's state) | | An `interiors.level` instance can list several states (a later file adds its own; a container lists its INVENTORY_STATE first). The object is made from the last GAMESTATE_BUILDING (an item slot: the last ITEM_PLACEMENT_GROUP): its `floornum`, and `flags` bit 0 alone, a state with only the old `is outside` giving an inside object (**Verified**, `meitou-tools probe METARU interiors`: the saved `floornum` and `flags` of all 14660 generated furniture entries and 5627 groups; reading the first state missed 904 and 232). Meitou `BuildingLayouts.StateOf`. |
+| (a layout object's state) | | An `interiors.level` instance can list several states (a later file adds its own; a container lists its INVENTORY_STATE first). The object is made from the last GAMESTATE_BUILDING (an item slot: the last ITEM_PLACEMENT_GROUP): its `floornum`, and `flags` bit 0 alone, a state with only the old `is outside` giving an inside object (**Verified**, `meitou-tools probe <save> interiors` on one of the owner's games: the saved `floornum` and `flags` of all 14660 generated furniture entries and 5627 groups; reading the first state missed 904 and 232). Meitou `BuildingLayouts.StateOf`. |
 | `serialised interior` | int 1 | when not in interior edit mode, followed by the interior layout records; on load 1 keeps the saved furniture, anything else makes the building generate its interior (**Verified** by code, [zone files](save.md#zone-files)) |
 | `construction progress` | float | progress in material units |
 | `is complete` | bool | absent means complete |
@@ -133,9 +133,9 @@ serialise context `FUN_140386d20` (Building, item, character serialise), TownBas
 `FUN_1406bf1a0`), makes `0-buildinglist` (`FUN_1406c0750`: one number), then serialises each building of the zone into it (`FUN_14036c9e0`, slot 17,
 `FUN_140552320`): a new id is checked against that fresh list, then the `<id>-S23` state record (`FUN_140387610`) takes the next number. Every record
 the save makes takes one, and `GameDataContainer::save` (`FUN_1406bd570`) writes the counter as the file's `nextId`. **Observed** (original saves
-bench-bases-2026-10-27, METARU, Barkeeper-test-1; scratch probe of their 326 non-empty zone files): every file's highest record int id is `nextId` or
+bench-bases-2026-10-27 and two of the owner's games; scratch probe of their 326 non-empty zone files): every file's highest record int id is `nextId` or
 `nextId` - 1; every gap in its run of record ids is the number of a `-zoneX.Y-INGAME` building id of its list (38 of 38 files with gaps); in
-Barkeeper-test-1 each such building's `-S23` state has its id's number + 1 (1314 of 1314); counters reach 378329 (bench-bases zone 20.32). **Observed**
+the last of them each such building's `-S23` state has its id's number + 1 (1314 of 1314); counters reach 378329 (bench-bases zone 20.32). **Observed**
 (merged base-game level data, probe of the `0-buildinglist` records): 107 building-list
 entries in 28 zones have `-zoneX.Y-INGAME` ids (one, `2-zone52.55-INGAME`, cleared); some lie above their zone's `nextId` (zone 14.56: `2459`,
 `nextId` 1949, rebirth's 1940). Instance ids are unique only within one zone file: **Observed** (base load order, scratch probe over
@@ -159,11 +159,11 @@ zone file ([player outposts](save.md#player-outposts)); the buildings' `town` ha
 - Building ground (`UtilityT::getTerrainWithWaterHeight`, `FUN_1409b3720`): max(100, the zone's height grid at X/Z). The grid (`ZoneMap::getTerrainHeight`,
   `FUN_1407eac60`, filled by `FUN_1407eab40` from `Terrain::getRawData`) holds every other heightmap sample, 129 x 129 per zone, 36 units apart, read
   bilinearly; with no grid the terrain plugin's own height is used. It is up to ~16 units off the full heightmap on steep ground.
-- **Verified** against original saves (scratch probe; Beep Fan Club 1, METARU, autosave1): every level placement with its level instance Y (3205, 3412,
+- **Verified** against original saves (scratch probe; three of the owner's games): every level placement with its level instance Y (3205, 3412,
   3268; 364-408 of them inside or mounted on a building of their zone, at the parent's height + instance Y) and every game-made one (269) has saved
   `world Y pos` = that height within 0.05, none off; the four mounted lights of 22.26 moved with their wall. Stale level values are written back at that height
   (46.16 `677-Newwworld-INGAME` 23.6 higher, 24.40 `901`/`903-rebirth-INGAME`). Pontoon Bridges 27.40 `6`/`10-Newwworld-INGAME` (instance Y -92726,
-  -86557) are missing from METARU's zone file, which keeps the zone's other three.
+  -86557) are missing from one of those saves' zone file, which keeps the zone's other three.
 - **Observed**: 1904 outdoor placements of the base load order have a `world Y pos` more than 0.05 off building ground + instance Y, many from rebirth.mod: the Cannibal
   Village (16.8, 17.10) and Cannibal Capital (18.7) about 25 lower, the 24 Spiked Cages of 16.8 18-28 lower. The original's baked navmesh on the six
   Cannibal Shacks of 16.8 lies 52-54 above building ground + instance Y and 72-78 above `world Y pos`.
@@ -296,7 +296,7 @@ TownBase, Town, Nest and TownNull), which seeds `rand()` from the town's positio
     campfire, stools and camp bed and the debris round it vanish at the purchase, its squatters stay. The building's bounding box there is the
     merge of its part entities' world boxes (`FUN_140549480`); a part placed for its collision only (`FUN_14055f6e0` mode 2) makes no entity.
 - Persistence: the items are saved with the nest as their `persist` handle ([save](save.md)); the buildings are not saved.
-- A resident template's `nest` (a TOWN link on SQUAD_TEMPLATE) has its `loot spawn` laid at the town that lists the template in `residents` (**Observed**, METARU: The Old
+- A resident template's `nest` (a TOWN link on SQUAD_TEMPLATE) has its `loot spawn` laid at the town that lists the template in `residents` (**Observed**, a player save: The Old
   Prison holds 16 loose items with the town's own `persist` handle, all from the lists of `nest armoury ruin`, the `nest` of its resident `ruin- tech loot`; the Infested Lab's 17
   match `nest spiders`, the `nest` of `Ancient Lab n.5 empty spiders`; neither TOWN has lists of its own). Its `debris building` and `debris` meshes stand round each home too (**Observed**, 1.0.65 through KenshiHarness, a Wanderer save at The
   Hub, 2026-11-15: the four `hub squatters` ruins, Bughouse, Old Storm House, Stationhouse and Snailhouse, hold `nest housecamp`'s campfire, stools, camp beds and trash
