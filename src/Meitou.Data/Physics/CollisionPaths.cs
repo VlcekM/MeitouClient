@@ -14,6 +14,11 @@ public static class CollisionPaths
     const string DefaultGroup = "General";
 
     /// <summary>
+    /// The resource group the game opens a race's editor data XML in (<c>AppearanceManager::loadEditorXMLData</c>).
+    /// </summary>
+    const string EditorGroup = "Editor";
+
+    /// <summary>
     /// The mods found per install root, with the newer write time of its <c>mods</c> and Workshop folders when they were scanned.
     /// </summary>
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Stamp, Dictionary<string, string> Mods)> ModCache = new();
@@ -96,6 +101,22 @@ public static class CollisionPaths
         string name = Path.GetFileName(recordPath.Replace('\\', '/'));
         if (CookedSource(resources, name) is { } cooked) return cooked;
         if (resources.Find(name, DefaultGroup) is { } byName && File.Exists(byName)) return Rebound(install, resources, byName);
+
+        return Resolve(install, recordPath);
+    }
+
+    /// <summary>
+    /// The editor data XML a race's <c>editor limits</c> names, as docs/formats/overview.md "Resource lookup" describes the game opening it: by its
+    /// bare name in group <c>Editor</c>, the other groups after it (the last enabled mod holding it wins, so a mod's <c>editor/</c> copy replaces the
+    /// base game's; or an enabled mod's rebind of it); a file outside the resource folders by <see cref="Resolve"/>. Null when none is found.
+    /// </summary>
+    public static string? ResolveEditorData(GameInstall install, string recordPath)
+    {
+        if (string.IsNullOrWhiteSpace(recordPath)) return null;
+        if (Index(install) is not { } resources) return Resolve(install, recordPath);
+
+        string name = Path.GetFileName(recordPath.Replace('\\', '/'));
+        if (resources.Find(name, EditorGroup) is { } byName && File.Exists(byName)) return Rebound(install, resources, byName);
 
         return Resolve(install, recordPath);
     }

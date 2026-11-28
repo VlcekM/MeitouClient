@@ -272,7 +272,7 @@ public sealed class CharacterDraft
         if (race.GetPath("editor limits") is not { Length: > 0 } path) return null;
         try
         {
-            return AppearanceLimits.Read(CharacterGenerator.Resolve(installRoot, path), female,
+            return AppearanceLimits.Read(CharacterGenerator.ResolveLimits(installRoot, path), female,
                     GameConstants.FromDatabase(db).AppearanceRandomDeviation);
         }
         catch (Exception e) when (e is IOException or System.Xml.XmlException or UnauthorizedAccessException)

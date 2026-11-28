@@ -41,9 +41,9 @@ Discovery (`FUN_14086f7a0`, launcher `FUN_140127890`) uses one name-keyed table:
 **Meitou difference:** `LoadOrder` cannot query subscriptions; it scans every downloaded item
 in `GameInstall.WorkshopDirectory`, in folder-name order. Each loaded mod retains its folder
 for art, translations and its world layer ([zones](zones.md#mods)). A record path `.\mods\<name>\x` resolves into that mod's folder (Workshop or
-local; `CollisionPaths.Resolve`), used for collision, interiors, body files, attachment points and race `editor limits` (#93). A path found
+local; `CollisionPaths.Resolve`), used for collision, interiors, body files and attachment points (#93). A path found
 nowhere as written falls back to its bare file name in the resource index (`GameResources`). Collision files go by bare name first, as the
-original opens them ([collision](collision.md#file-lookup), `CollisionPaths.ResolveCollision`).
+original opens them ([collision](collision.md#file-lookup), `CollisionPaths.ResolveCollision`), and race `editor limits` too (below).
 
 **Verified** launcher (`FUN_140125df0`, save `FUN_140120bd0`): active entries first in cfg order,
 remaining mods dependency-sorted; unknown dependency names dropped, cycles omitted (saving
@@ -91,6 +91,7 @@ How the game opens its other files decides whether a mod can replace them (**Ver
 | File | Opened by | Mod copy applies |
 |---|---|---|
 | `.material`, `.program`, `*.pu` scripts | Ogre script parse of every location, mods' too | material: first definition wins (mods cannot redefine); PU system: last wins (`createParticleSystemTemplate` deletes the old template) |
+| race `editor limits` XML | `AppearanceManager::loadEditorXMLData` (`FUN_140077090`): `StringUtil::splitFilename`, then `openResource(bare name, "Editor", search other groups)` and `Document::open(IDataStream*)` | yes (**Verified**, disassembly and imports): the last enabled mod's `editor/` copy replaces the base game's, as More Character Making Sliders (Workshop 2361361299) ships them; Meitou: `CollisionPaths.ResolveEditorData` |
 | `names*.txt`, `tips.txt` | `resourceExists`/`openResource`, group General (`FUN_140641d80`, `FUN_14091a280`) | yes |
 | `areasmap.tga` | `Image::load`, group Overlaymaps (`FUN_140408fa0`, `FUN_140408970`) | yes; mods may ship it RLE-compressed (TGA type 10) |
 | `biomemap.png`, `blendMap.png`, `new_overlay.X.Y.png`, `watercolourmap.png` | the same image loader, group Overlaymaps (biome and blend maps `FUN_140408fa0`; overlay tiles `FUN_140a145b0`; water colour map `FUN_1409d70f0`) | yes (**Observed**: a mod's `newland/land/overlaymaps/watercolourmap.png` recolours the water); Meitou reads all four through the same lookup (`TerrainMaps.Overlaymap`), the install's files when no mod ships one |
@@ -111,9 +112,11 @@ holding files to matching base resource group, default General. Skip `leveldata`
 
 ## MyGUI XML
 
-**Observed** (`AppearanceManager::loadEditorXMLData`, `FUN_140077090`): the game reads XML such as a race's `editor limits` with
+**Verified** (`AppearanceManager::loadEditorXMLData`, `FUN_140077090`, imports): the game reads XML such as a race's `editor limits` with
 `MyGUI::xml::Document::open` and reads attributes with `Element::findAttribute`. A tag may repeat an attribute; the first is used.
 AnimeRace Face+'s `asd*_EditorData.xml` (Workshop 3660471163) repeat `mid` on `Neck width`, which a strict XML parser rejects.
+**Verified** (MyGUI 3.2 source, `Document::parseTag`, `checkPair`): after a quoted value the next attribute starts at once, so attributes need
+no white space between them; More Character Making Sliders' `editor_data_*.xml` write `max="100"mid="0"name="..."` (Meitou: `MyGuiXml`).
 
 ## Format inventory
 

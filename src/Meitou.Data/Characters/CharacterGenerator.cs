@@ -182,7 +182,7 @@ public static class CharacterGenerator
         {
             try
             {
-                limits = AppearanceLimits.Read(Resolve(installRoot, limitsPath), female, GameConstants.FromDatabase(db).AppearanceRandomDeviation);
+                limits = AppearanceLimits.Read(ResolveLimits(installRoot, limitsPath), female, GameConstants.FromDatabase(db).AppearanceRandomDeviation);
             }
             catch (Exception e)
                 when (e is IOException or System.Xml.XmlException or UnauthorizedAccessException)
@@ -690,7 +690,21 @@ public static class CharacterGenerator
     /// </summary>
     internal static string Resolve(string installRoot, string fcsPath) =>
         (Content.GameInstall.IsValid(installRoot) ? Physics.CollisionPaths.Resolve(Content.GameInstall.Open(installRoot), fcsPath) : null)
-        ?? Path.Combine(installRoot, fcsPath.Replace('\\', Path.DirectorySeparatorChar).TrimStart('.', Path.DirectorySeparatorChar));
+        ?? InstallPath(installRoot, fcsPath);
+
+    /// <summary>
+    /// The editor data XML a race's <c>editor limits</c> names, by its bare name as the game opens it, so a mod's copy replaces the base game's
+    /// (<see cref="Physics.CollisionPaths.ResolveEditorData"/>; #1583); the install-relative path when none is found.
+    /// </summary>
+    internal static string ResolveLimits(string installRoot, string fcsPath) =>
+        (Content.GameInstall.IsValid(installRoot) ? Physics.CollisionPaths.ResolveEditorData(Content.GameInstall.Open(installRoot), fcsPath) : null)
+        ?? InstallPath(installRoot, fcsPath);
+
+    /// <summary>
+    /// A record's path taken as relative to the install.
+    /// </summary>
+    static string InstallPath(string installRoot, string fcsPath) =>
+        Path.Combine(installRoot, fcsPath.Replace('\\', Path.DirectorySeparatorChar).TrimStart('.', Path.DirectorySeparatorChar));
 
     #endregion
 }
