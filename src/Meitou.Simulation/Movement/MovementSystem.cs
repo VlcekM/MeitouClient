@@ -18,9 +18,10 @@ namespace Meitou.Simulation.Movement;
 /// that speed at once (the nav agent, Observed), speeds up by 15 units/s per second only in combat (<see cref="Acceleration"/>, the combat steering),
 /// and stops at once on arrival.</item>
 /// <item>Separation: the repulsion along self-other is nonzero only closer than R and proportional to 100 x (1 - d/R), over at most
-/// 26 neighbours (Observed); R is the two footprint radii, 8 for two humans (<see cref="SeparationRadius"/>; the nav agent's avoidance circle is
-/// the other's footprint plus its own), and the scale from that proportionality to a speed is an engine choice
-/// (<see cref="SeparationStrength"/>).</item>
+/// 26 neighbours (Observed); R is the two radii (footprint x size), 8 for two humans (<see cref="SeparationRadius"/>; the nav agent's avoidance
+/// circle is the other's radius plus its own), and the scale from that proportionality to a speed is an engine choice
+/// (<see cref="SeparationStrength"/>). One standing still out of a fight is not pushed: the original's avoidance moves only an agent whose
+/// velocity is set.</item>
 /// <item>Body contact (engine choice; the original only avoids the standing bodies round a character, no physical collision was found:
 /// docs/game/pathfinding.md "Bodies in the way"): two standing bodies (<see cref="BodyShare"/> of their footprints) do not stay overlapped. Each
 /// takes half of the overlap between its stepped position and the other's last position, averaged over the bodies it overlaps, so a walker shoves a
@@ -2294,9 +2295,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         // Closing on its spot it is not held off by those standing round it (they are pushed aside as it arrives); a sitter is not moved at all.
         bool seated = Seated(n, cold);
 
-        // A steering fighter keeps it too: its repulsion is too weak to keep bodies apart in a crowd, and without it Contact shoves back out what
+        // One standing still out of a fight is not pushed either: the original's avoidance moves only an agent whose velocity is set (#1585).
+        // A steering fighter keeps it: its repulsion is too weak to keep bodies apart in a crowd, and without it Contact shoves back out what
         // the steering walks in.
-        if (s.Closing || seated) push.Sum = Vector2.Zero;
+        if (s.Closing || seated || StandsStill(cold, s)) push.Sum = Vector2.Zero;
 
         var at = new Vector2(p.Position.X, p.Position.Z);
         bool walker = s.AgentWalk && !cold.InCombat;
@@ -2326,6 +2328,12 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         if (step != Vector2.Zero) Place(world, i, p, ref n, cold, ref s, x, y, z, stands);
     }
+
+    /// <summary>
+    /// Whether a character stands still out of a fight this tick (no speed, no footwork), so the separation does not move it (<see cref="StepBody"/>):
+    /// the original's avoidance push-out runs in the nav agent's velocity setter (docs/game/pathfinding.md "Bodies in the way").
+    /// </summary>
+    static bool StandsStill(CharacterCold cold, in StepState s) => !s.Steering && !cold.InCombat && s.Speed <= 0;
 
     /// <summary>
     /// A refused step from <paramref name="from"/> turned along what refuses it, as the original's agent turns the rest of a step along the wall it
@@ -2598,9 +2606,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static float BodyRadius(CharacterCold cold) => BodyShare * Footprint(cold);
 
     /// <summary>
-    /// A body's footprint radius (a human's when it has no race data).
+    /// A body's radius, its footprint (a human's when it has no race data) times its size k: the original's <c>getRadius</c>, which its
+    /// avoidance circle takes (docs/game/pathfinding.md "Bodies in the way"), so a young Bonedog counts less than its race's 10.
     /// </summary>
-    static float Footprint(CharacterCold? cold) => cold?.FootprintRadius > 0 ? cold.FootprintRadius : CombatTuning.DefaultFootprint;
+    static float Footprint(CharacterCold? cold) =>
+        (cold?.FootprintRadius > 0 ? cold.FootprintRadius : CombatTuning.DefaultFootprint) * (cold?.Medical?.ScaleK ?? 1);
 
     /// <summary>
     /// How far a character stepped to <paramref name="at"/> is put out of the standing bodies among its separation neighbours (partition-safe: the

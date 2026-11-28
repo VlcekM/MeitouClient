@@ -90,7 +90,10 @@ characters round its owner and tests each as a circle (its footprint radius plus
   `FUN_1401468a0` stores that owner object from `FUN_140661f90`, which takes it from Character vfunc `0x68` (`FUN_1405c8700`, the object `FUN_1402e9740` reads as the fight's flocking list). The
   list is filled by `FUN_14085a070` ([combat](combat.md), "Deciding"): every other character except one for which `FUN_1407d1440` holds (**ragdolled** by a WHOLE/CARRY_MODE request, or
   **carried** `+0x3d4`, [ragdolls](ragdolls.md#ragdollpart-and-requests)), in a **bed or cage** (`+0x2f8` != 0), or **sitting** (status `+0xb8`, `isSitting`), within the two radii + 40 horizontally and 20 up.
-  Each entry is then re-tested by `FUN_1401476f0`: status `+0xb8` clear again, Character `+0x1a9` set (the character is near the camera or an active zone: a level-of-detail flag from `FUN_1405c9f60`) and not carried.
+  Each entry is then re-tested by `FUN_1401476f0`: status `+0xb8` clear again, Character `+0x1a9` set (the character is near the camera or an active zone: a level-of-detail flag from `FUN_1405c9f60`) and not carried. Its circle is the
+  other's `getRadius` (`FUN_1405c83b0`: footprint × size) plus the agent's own radius (`+0x70`); of the bodies overlapping it, it keeps the deepest overlap and the
+  way out of it, which the velocity setter `FUN_140147ca0` adds to the agent's own position, so only an agent whose velocity is set is pushed.
+  **Observed** (#1585, the original): a Bonedog run to one spot with its owner stops behind or beside her and neither drifts.
 - **Observed**: a living character is a `PhysicsHullT` box ("hull size X/Y/Z" of the race, `FUN_140661a70` -> `FUN_1404ccb50`), a kinematic PhysX actor in group 0 that rays hit
   ([combat](combat.md#line-of-fire-and-the-hit-shape)); a ragdoll's
   shapes are group 3/4, which skip groups 0 and 1 ([ragdolls](ragdolls.md#collision-groups)). Nothing found makes a body physically stop a walker, and the root-motion step goes through the same agent.

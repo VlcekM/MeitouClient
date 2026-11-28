@@ -835,9 +835,12 @@ turned onto `FollowHeading`, one second of the leader's travel ahead; anyone els
 a squad's slaves go with the head (Meitou's slave owner is a faction); CARAVAN side members are placed even without a SQUAD_2 member; the building-door
 aim (`ShutOutAim`) counts a building as shut when all its doors are locked and whole, and takes the outer of the door's points (15 either side of the leaf) as the side away from the leader; within `DirectDistance` 50 it steers straight, farther, or for `FollowPathSeconds` 3 after a blocked step, it takes paths.
 A `FollowOrder` (the context menu's Follow, order 31) makes a character follow another the same way (`CharacterCold.FollowOrder` replaces the leader; a leader following a squad mate makes that mate the formation's head) until a move order replaces it or the target is gone (then Idle); not saved.
-Separation (`MovementSystem.AddSeparation`): a neighbour pushes within the two footprint radii (8 for two humans; the original's agent tests each body as a
-circle of its footprint plus its own radius, [bodies in the way](game/pathfinding.md#bodies-in-the-way)); each character looks within twice its own footprint, at
-least 8, so a larger body finds the smaller ones round it and gives way itself (engine choice). With a fixed 8, Beak Things (footprint 16) leading a runner came
+Separation (`MovementSystem.AddSeparation`): a neighbour pushes within the two radii, footprint × size (8 for two humans; the original's agent tests each body as a
+circle of its radius plus its own, [bodies in the way](game/pathfinding.md#bodies-in-the-way)); each character looks within twice its own radius, at
+least 8, so a larger body finds the smaller ones round it and gives way itself (engine choice). One standing still out of a fight (no speed, no
+footwork) is not pushed, as the original's push-out moves only an agent whose velocity is set: with the raw footprint and standers pushed, a player's
+Bonedog (race footprint 10) ordered with its owner to one spot (a pair's second point is always 5 from the first, `Formation.Scatter`) shoved
+her out to 14 after both stopped (#1585). With a fixed 8, Beak Things (footprint 16) leading a runner came
 as close as 2.5 to 6 and five of them failed the [body room](game/combat.md#attack-slots-and-circling) on every ask (4251 refusals in 30 s, no bite); now the
 closest pair stays 16 to 19 apart and the pack takes its bites in turn (**Observed**, headless probe, #1419).
 Body contact (engine choice): standing bodies are solid over `BodyShare` 0.6 of the footprint (2.4 for a human). After its step, each
