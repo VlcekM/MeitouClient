@@ -538,6 +538,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? MissingMaterialsChanged { get; init; }
 
     /// <summary>
+    /// Applies the builders' full fetch fix (<see cref="UserConfig.FixFetchAll"/>).
+    /// </summary>
+    public Action<bool>? FetchAllChanged { get; init; }
+
+    /// <summary>
     /// Applies the freed-slave fix (<see cref="UserConfig.FixFreedSlaves"/>).
     /// </summary>
     public Action<bool>? FreedSlavesChanged { get; init; }
@@ -1809,6 +1814,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         PickUpTheftChanged?.Invoke(true);
         Config.FixMissingMaterials = true;
         MissingMaterialsChanged?.Invoke(true);
+        Config.FixFetchAll = true;
+        FetchAllChanged?.Invoke(true);
         Config.FixFreedSlaves = true;
         FreedSlavesChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;

@@ -184,6 +184,10 @@ msgid "A blow that destroys a character's head cuts it off, by the same rule the
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
 msgstr ""
 
@@ -923,6 +927,10 @@ msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Builders fetch all they need"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs

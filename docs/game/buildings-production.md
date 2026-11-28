@@ -110,7 +110,11 @@ from the character; mode 0 `(18 + 40 + 5)`, mode 1 `(18 + 200 + 5)` (AI+8 = 18, 
 Task 247 is `Task_EmptyMachine_BuildMats` (+0x78 clear) for a building target, `Task_Pickup` for an item. At the building
 the update lists its records (a storage: every record it holds; a production building: its output), takes the first
 record whose count (slot 5, `FUN_1403411c0`: always 2) is above 0, i.e. the first listed record, and moves up to 2 units
-while the character has room, then ends. Meitou takes the material instead of the first listed record (engine choice). Looting food (284, `Task_EmptyMachine` with flag +0x78 = 1, `FUN_14033cd10`, **Verified**) takes the first listed record (the storage's distinct records in inventory item order, `FUN_140299990`, no food filter) the same way but up to 10 units, one per pass, ending when the building no longer holds it or there is no room.
+while the character has room, then ends. Meitou takes the material instead of the first listed record (engine choice). Meitou fix (Fixes page
+`Builders fetch all they need`, on by default; `World.FetchAllFix`, #1545): the builder takes the units of the material the site still owes
+(required - delivered over its entries of that record, rounded up), less what it already carries, while it has room, so a farm upgrade or an
+Iron Plates wall is one trip instead of one per 2 units; builders sharing a site each take the full amount (engine choice), the surplus staying
+in their inventories. Looting food (284, `Task_EmptyMachine` with flag +0x78 = 1, `FUN_14033cd10`, **Verified**) takes the first listed record (the storage's distinct records in inventory item order, `FUN_140299990`, no food filter) the same way but up to 10 units, one per pass, ending when the building no longer holds it or there is no room.
 
 Missing-material speech: **Verified** text in the original `locale/zh_CN/LC_MESSAGES/main.po`, source annotation
 `character.cpp:3412`: "I don't have any building materials." / "我没有建筑材料了。" The separate GOAP.cpp:490

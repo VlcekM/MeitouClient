@@ -541,6 +541,7 @@ sealed class GameLoop(GameHost host)
             BagSearchChanged = on => host.Session.World.BagSearchFix = on,
             PickUpTheftChanged = on => host.Session.World.PickUpTheftFix = on,
             MissingMaterialsChanged = on => host.Session.World.MissingMaterialsFix = on,
+            FetchAllChanged = on => host.Session.World.FetchAllFix = on,
             FreedSlavesChanged = on => host.Session.World.FreedSlaveFix = on,
             CounterTalkChanged = on => host.Session.World.CounterTalk = on,
             TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,

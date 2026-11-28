@@ -5993,3 +5993,11 @@ msgstr "기본 게임, 변경한 모드: {1}"
 #. machine-translated
 msgid "Mod: {1}, changed by: {2}"
 msgstr "모드: {1}, 변경한 모드: {2}"
+
+#. machine-translated
+msgid "Builders fetch all they need"
+msgstr "건설자가 필요한 만큼 모두 가져옴"
+
+#. machine-translated
+msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
+msgstr "창고에서 자재를 가져오는 건설자는 건물에 아직 필요한 양 중 들 수 있는 만큼 모두 가져갑니다. 게임에서는 한 번에 두 개씩만 가져가므로 철판이나 작물 두 개마다 창고를 오갑니다."

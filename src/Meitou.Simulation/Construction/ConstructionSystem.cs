@@ -1612,7 +1612,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             case CharacterTask.Build: BuildStep(world, i, cold, site, dt); break;
             case CharacterTask.DeliverMaterials: DeliverStep(world, i, cold, site, dt); break;
             case CharacterTask.Dismantle: DismantleStep(world, i, cold, site, dt); break;
-            case CharacterTask.FetchMaterials: FetchStep(world, i, cold); break;
+            case CharacterTask.FetchMaterials: FetchStep(world, i, cold, site); break;
         }
     }
 
@@ -2057,51 +2057,98 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// A fetcher at its source: a loose item goes into the inventory whole (what does not fit stays on the ground, <c>Task_Pickup</c>); a building
-    /// gives up to <see cref="PickupUnits"/> units while the character has room (<b>Verified</b>, <c>Task_EmptyMachine</c> update
-    /// <c>FUN_14033cd10</c>; the original takes the first record the building lists, Meitou the material). With something taken it goes back to the
-    /// site, else the work ends.
+    /// gives up to <see cref="PickupUnits"/> units, or with <see cref="World.FetchAllFix"/> the units the site still owes, while the character has
+    /// room (<b>Verified</b>, <c>Task_EmptyMachine</c> update <c>FUN_14033cd10</c>; the original takes the first record the building lists, Meitou the
+    /// material). With something taken it goes back to the site, else the work ends.
     /// </summary>
-    void FetchStep(World world, int slot, CharacterCold cold)
+    void FetchStep(World world, int slot, CharacterCold cold, BuildSite site)
     {
         var table = world.Characters;
-        ref var n = ref table.Next[slot];
         int taken = 0;
         if (cold.Inventory is { } inv && cold.FetchRecord is { } record)
         {
-            if (cold.FetchItem is { } id && world.GroundItems.Find(id) is { } loose)
-            {
-                int before = loose.Item.Quantity;
-                if (inv.Add(loose.Item))
-                {
-                    world.GroundItems.Take(id);
-                    taken = before;
-                }
-                else taken = before - loose.Item.Quantity;
-                if (taken > 0) world.EmitSound(SoundKind.PickedUp, slot, n.Position);
-            }
+            if (cold.FetchItem is { } id && world.GroundItems.Find(id) is { } loose) taken = PickUpLoose(world, slot, inv, id, loose);
             else if (cold.FetchSite is { } from && world.Machines.Find(from) is { } m)
             {
-                for (; taken < PickupUnits; taken++)
-                {
-                    if (m.Storage is { } storage && m.Data.IsStorage)
-                    {
-                        if (Stack(storage, record) is not { } stack || !inv.Add(stack.WithQuantity(1))) break;
-                        storage.RemoveOne(stack);
-                    }
-                    else if (m.Output is { Count: > 0 } output && output.Recipe.Item == record && _items.Create(record, 1) is { } unit)
-                    {
-                        if (!inv.Add(unit)) break;
-                        output.Count--;
-                    }
-                    else break;
-                }
-
-                if (taken > 0) world.Machines.Touch();
+                int limit = world.FetchAllFix ? Owed(site, record) - Count(inv, record) : PickupUnits;
+                taken = TakeFrom(world, m, inv, record, limit);
             }
         }
 
         if (taken > 0) BackToSite(table, slot, cold);
         else End(world, slot);
+    }
+
+    /// <summary>
+    /// Picks up a loose material item whole, or what of it fits (<c>Task_Pickup</c>); the units taken.
+    /// </summary>
+    static int PickUpLoose(World world, int slot, Inventory inv, int id, GroundItem loose)
+    {
+        int before = loose.Item.Quantity;
+        int taken;
+        if (inv.Add(loose.Item))
+        {
+            world.GroundItems.Take(id);
+            taken = before;
+        }
+        else taken = before - loose.Item.Quantity;
+
+        if (taken > 0) world.EmitSound(SoundKind.PickedUp, slot, world.Characters.Next[slot].Position);
+        return taken;
+    }
+
+    /// <summary>
+    /// Moves up to <paramref name="limit"/> units of <paramref name="record"/> from a storage's grid or a machine's output into the inventory, one
+    /// at a time while it has room; the units taken.
+    /// </summary>
+    int TakeFrom(World world, Production.Machine m, Inventory inv, string record, int limit)
+    {
+        int taken = 0;
+        for (; taken < limit; taken++)
+        {
+            if (m.Storage is { } storage && m.Data.IsStorage)
+            {
+                if (Stack(storage, record) is not { } stack || !inv.Add(stack.WithQuantity(1))) break;
+                storage.RemoveOne(stack);
+            }
+            else if (m.Output is { Count: > 0 } output && output.Recipe.Item == record && _items.Create(record, 1) is { } unit)
+            {
+                if (!inv.Add(unit)) break;
+                output.Count--;
+            }
+            else break;
+        }
+
+        if (taken > 0) world.Machines.Touch();
+        return taken;
+    }
+
+    /// <summary>
+    /// The whole units of <paramref name="record"/> the site still owes (required less delivered, over all its entries of that record).
+    /// </summary>
+    static int Owed(BuildSite site, string record)
+    {
+        float owed = 0;
+        foreach (var m in site.Materials)
+            if (m.Item == record && m.Required > m.Delivered) owed += m.Required - m.Delivered;
+        return (int)MathF.Ceiling(owed);
+    }
+
+    /// <summary>
+    /// The units of <paramref name="record"/> in the inventory and its backpack, as delivery finds them (<see cref="Find"/>).
+    /// </summary>
+    static int Count(Inventory inv, string record)
+    {
+        int count = 0;
+        foreach (var item in inv.Items)
+            if (item.Record == record && item.Contents is null) count += item.Quantity;
+        if (inv.Backpack?.Contents is { } bag)
+        {
+            foreach (var item in bag.Items)
+                if (item.Record == record) count += item.Quantity;
+        }
+
+        return count;
     }
 
     /// <summary>

@@ -6826,3 +6826,11 @@ msgstr "原版游戏，修改者：{1}"
 #. machine-translated
 msgid "Mod: {1}, changed by: {2}"
 msgstr "模组：{1}，修改者：{2}"
+
+#. machine-translated
+msgid "Builders fetch all they need"
+msgstr "建造者取足所需材料"
+
+#. machine-translated
+msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
+msgstr "从仓库取材料的建造者会拿走建筑仍需要的、且自己装得下的全部材料。游戏中一次只拿两个，因此每两块铁板或作物都要在仓库之间来回跑一趟。"

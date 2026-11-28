@@ -526,6 +526,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool MissingMaterialsFix { get; set; } = true;
     /// <summary>
+    /// A builder fetching a material from a storage or a machine takes all the site still owes of it that fits (Fixes settings, Meitou); off, it
+    /// takes 2 units a trip, as the game does (docs/game/buildings-production.md "Material delivery").
+    /// </summary>
+    public bool FetchAllFix { get; set; } = true;
+    /// <summary>
     /// A slave a player-faction character sets free stops obeying its owner (job 187 ended, as DA 28's split does), so it stays out of its cage
     /// until its thanks line runs (Fixes settings, Meitou); off, it stays obedient and its master's 172 walks it back in, as the game does
     /// (docs/optional-fixes.md "Freed slaves walk back into a cage").

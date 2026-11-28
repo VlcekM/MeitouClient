@@ -644,6 +644,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixMissingMaterials { get; set; } = true;
     /// <summary>
+    /// A builder fetching a material from a storage or a machine takes all the site still owes of it that fits (Fixes settings; off: 2 units a
+    /// trip, as the game does; docs/game/buildings-production.md "Material delivery").
+    /// </summary>
+    public bool FixFetchAll { get; set; } = true;
+    /// <summary>
     /// A slave the player sets free stops obeying its owner, so it stays out of its cage (Fixes settings; off: it walks back in, as the game does;
     /// docs/optional-fixes.md "Freed slaves walk back into a cage").
     /// </summary>

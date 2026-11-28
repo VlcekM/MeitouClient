@@ -1927,8 +1927,8 @@ optional), `EdgeGap` (site, point -> gap to its footprint hull; the host's).
   [original's finder](game/buildings-production.md#material-delivery) for each owed material in list order: a loose item
   of it within 1200 of the builder (engine: the nearest), else the nearest player storage holding it, else the nearest
   player machine whose output holds it, both within squared distance 4.246733e7 (the AI's default range mode; engine:
-  no town filter, no remembered source, exact record). At a building it takes up to 2 units while it has room, a loose
-  item whole (the rest stays); with something taken it walks back as *Build*, else the work ends. *Dismantle*: a complete site first
+  no town filter, no remembered source, exact record). At a building it takes up to 2 units (`World.FetchAllFix`: what the site
+  still owes of that record, less what it carries) while it has room, a loose item whole (the rest stays); with something taken it walks back as *Build*, else the work ends. *Dismantle*: a complete site first
   becomes incomplete with progress at most target - 1; then progress -= dt x `lerp(0.05, 4, e/100)` x 4 x rate (no option
   or constant), XP as building; at 0 the delivered materials come back and the site is removed. The `medic` clip plays
   for building and delivering, `stonemine` for dismantling and for a door or wall basher in reach (an animal: its bash technique's clip,

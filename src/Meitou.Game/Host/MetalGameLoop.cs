@@ -832,6 +832,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.Session.World.BagSearchFix = host.Config.FixBagSearch;
         host.Session.World.PickUpTheftFix = host.Config.FixPickUpTheft;
         host.Session.World.MissingMaterialsFix = host.Config.FixMissingMaterials;
+        host.Session.World.FetchAllFix = host.Config.FixFetchAll;
         host.Session.World.FreedSlaveFix = host.Config.FixFreedSlaves;
         host.Session.World.CounterTalk = host.Config.CounterTalk;
         host.Session.World.TakeIntoBackpack = host.Config.TakeIntoBackpack;
@@ -1402,6 +1403,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             BagSearchChanged = on => host.Session.World.BagSearchFix = on,
             PickUpTheftChanged = on => host.Session.World.PickUpTheftFix = on,
             MissingMaterialsChanged = on => host.Session.World.MissingMaterialsFix = on,
+            FetchAllChanged = on => host.Session.World.FetchAllFix = on,
             FreedSlavesChanged = on => host.Session.World.FreedSlaveFix = on,
             CounterTalkChanged = on => host.Session.World.CounterTalk = on,
             TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,

@@ -6423,3 +6423,11 @@ msgstr "Jogo base, alterado por: {1}"
 #. machine-translated
 msgid "Mod: {1}, changed by: {2}"
 msgstr "Mod: {1}, alterado por: {2}"
+
+#. machine-translated
+msgid "Builders fetch all they need"
+msgstr "Construtores pegam tudo o que precisam"
+
+#. machine-translated
+msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
+msgstr "Um construtor que busca materiais num armazém pega tudo o que a construção ainda precisa deles e que cabe com ele. No jogo ele pega dois de cada vez, então vai e volta ao armazém a cada duas placas de ferro ou colheitas."

@@ -5993,3 +5993,11 @@ msgstr "ベースゲーム、変更元：{1}"
 #. machine-translated
 msgid "Mod: {1}, changed by: {2}"
 msgstr "MOD：{1}、変更元：{2}"
+
+#. machine-translated
+msgid "Builders fetch all they need"
+msgstr "建築者が必要な分をすべて運ぶ"
+
+#. machine-translated
+msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
+msgstr "倉庫から資材を取りに行く建築者は、建物にまだ必要な分のうち持てるだけすべてを取ります。ゲームでは一度に2個しか取らないため、鉄板や作物2個ごとに倉庫との間を往復します。"

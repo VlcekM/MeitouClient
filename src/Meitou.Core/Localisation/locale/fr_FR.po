@@ -5996,3 +5996,11 @@ msgstr "Jeu de base, modifié par : {1}"
 #. machine-translated
 msgid "Mod: {1}, changed by: {2}"
 msgstr "Mod : {1}, modifié par : {2}"
+
+#. machine-translated
+msgid "Builders fetch all they need"
+msgstr "Les bâtisseurs prennent tout le nécessaire"
+
+#. machine-translated
+msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
+msgstr "Un bâtisseur qui va chercher des matériaux dans un stockage prend tout ce dont le bâtiment a encore besoin et qu'il a la place de porter. Dans le jeu, il en prend deux à la fois et fait l'aller-retour au stockage pour chaque paire de plaques de fer ou de récoltes."

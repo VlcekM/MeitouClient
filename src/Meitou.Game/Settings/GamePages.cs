@@ -787,6 +787,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game always says it has no building materials, even when it carries Building Materials and the site wants something else.",
             Toggle: new("Builders name missing materials", () => menu.Config.FixMissingMaterials,
                 v => { menu.Config.FixMissingMaterials = v; menu.MissingMaterialsChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Builders fetch all they need",
+            "A builder fetching materials from a storage takes all the building still needs of them that it has room for. "
+            + "The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops.",
+            Toggle: new("Builders fetch all they need", () => menu.Config.FixFetchAll,
+                v => { menu.Config.FixFetchAll = v; menu.FetchAllChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Freed slaves stay free",
             "A slave you set free from a cage stops obeying its owner, so it can run off. "
             + "In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it.",
