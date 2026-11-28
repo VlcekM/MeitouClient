@@ -57,7 +57,8 @@ static partial class GameConsole
     }
 
     /// <summary>
-    /// Starts log.txt (after <see cref="AttachToParent"/>): output and error go to it as well, and so does an exception that ends the game.
+    /// Starts log.txt (after <see cref="AttachToParent"/>): output and error go to it as well, and so does an exception that ends the game; the
+    /// previous run's crash recorded by Windows is written to it (<see cref="PreviousCrash"/>).
     /// </summary>
     public static void StartLog()
     {
@@ -69,6 +70,7 @@ static partial class GameConsole
         s_log = shared;
         Bind(Console.Out, Console.Error);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => shared.WriteLine($"unhandled {e.ExceptionObject}");
+        if (file.PreviousStart is { } previous) PreviousCrash.ReportSince(previous);
     }
 
     /// <summary>

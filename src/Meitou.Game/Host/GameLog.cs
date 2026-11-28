@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace Meitou.Game.Host;
@@ -79,6 +80,11 @@ sealed class GameLog : TextWriter
     public override Encoding Encoding => _writer.Encoding;
 
     /// <summary>
+    /// When the previous run that wrote this file started (its header, local time); null for a new file.
+    /// </summary>
+    public DateTime? PreviousStart { get; private init; }
+
+    /// <summary>
     /// The log of this run, or null when it cannot be opened (another game has it, or the folder is read-only): log.txt, or another log
     /// (<paramref name="name"/>, a path relative to the executable's folder, its folder made when missing: log_actions.txt) kept the same way.
     /// </summary>
@@ -89,9 +95,10 @@ sealed class GameLog : TextWriter
             string path = Path.Combine(AppContext.BaseDirectory, name);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
-            HideEarlier(file);
+            string earlier = ReadEarlier(file);
+            HideEarlier(file, earlier);
             file.Seek(0, SeekOrigin.End);
-            var log = new GameLog(file);
+            var log = new GameLog(file) { PreviousStart = LastStart(earlier) };
             log.WriteLine($"==== {DateTime.Now:yyyy-MM-dd HH:mm:ss} meitou{Arguments(name)}");
             return log;
         }
@@ -108,16 +115,39 @@ sealed class GameLog : TextWriter
     static string Arguments(string name) => name == "log.txt" ? " " + string.Join(' ', Environment.GetCommandLineArgs().Skip(1)) : "";
 
     /// <summary>
-    /// Rewrites the lines earlier runs left in <paramref name="file"/> with the user name hidden (<see cref="UserName"/>) when they hold it: a game
-    /// from before the logs hid it wrote it, and the file is kept across runs until it passes <see cref="Cap"/>.
+    /// What earlier runs left in <paramref name="file"/>; empty for a new file.
     /// </summary>
-    static void HideEarlier(FileStream file)
+    static string ReadEarlier(FileStream file)
     {
-        if (file.Length == 0) return;
+        if (file.Length == 0) return "";
 
-        string text;
-        using (var reader = new StreamReader(file, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false, leaveOpen: true))
-            text = reader.ReadToEnd();
+        using var reader = new StreamReader(file, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    /// When the last run in <paramref name="text"/> started, from its <c>==== </c> header (local time); null without one.
+    /// </summary>
+    static DateTime? LastStart(string text)
+    {
+        const string header = "==== ", format = "yyyy-MM-dd HH:mm:ss";
+        int at = text.StartsWith(header, StringComparison.Ordinal) ? 0 : -1;
+        int last = text.LastIndexOf("\n" + header, StringComparison.Ordinal);
+        if (last >= 0) at = last + 1;
+        if (at < 0 || text.Length < at + header.Length + format.Length) return null;
+
+        string stamp = text.Substring(at + header.Length, format.Length);
+        return DateTime.TryParseExact(stamp, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var start) ? start : null;
+    }
+
+    /// <summary>
+    /// Rewrites the lines earlier runs left in <paramref name="file"/> (<paramref name="text"/>) with the user name hidden (<see cref="UserName"/>)
+    /// when they hold it: a game from before the logs hid it wrote it, and the file is kept across runs until it passes <see cref="Cap"/>.
+    /// </summary>
+    static void HideEarlier(FileStream file, string text)
+    {
+        if (text.Length == 0) return;
+
         string hidden = UserName.Hide(text);
         if (ReferenceEquals(hidden, text)) return;
 
