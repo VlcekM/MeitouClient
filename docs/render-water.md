@@ -80,7 +80,7 @@ against the appropriate air/water bounds; ordinary camera fog cannot be applied 
 Both waters measure their depth as the game does ([terrain](formats/terrain.md) "LOD, water and sun"): the distance
 along the view ray from the surface to what is behind it, from the scene depth copied before the water
 (`CaptureScene`: Vulkan's image copy, Metal's depth blit; Meitou without refraction keeps the slant path to the terrain's height). **Observed**
-(save water_day, a pond in the dunes, Metal against Vulkan): the same clear shallows, blue deeper water and wet band.
+(a pond in the dunes, Metal against Vulkan): the same clear shallows, blue deeper water and wet band.
 Faithful uses it as the game's alpha. Meitou absorbs along it and fades the last 2 units into the scene behind
 (0.5 for the swash); both widen that fade to the two stored depths' precision (`2 * depthStep`, derived: 2.4e-7 z on
 Vulkan's reversed float depth, 0.03 units at 120000; 2.4e-7 z^2 / near on Metal's conventional one), so distant shores
@@ -97,8 +97,8 @@ pass restart was there), 0.05 ms with Faithful (a pass restart plus a full-size 
 
 ## Contact foam, wakes and ripples
 
-Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam, wakes and ripples"), off by default, on both backends (Metal: the same programs and ripple kernel, the depth from `CaptureScene`; **Observed** in save
-water_day: the foam band at a wading character's waterline as on Vulkan). A second Meitou program pair
+Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam, wakes and ripples"), off by default, on both backends (Metal: the same programs and ripple kernel, the depth from `CaptureScene`; **Observed** at
+the pond: the foam band at a wading character's waterline as on Vulkan). A second Meitou program pair
 (`WATER_CONTACT`, made on first use), so off the water has none of it. Contact foam and the field's foam reach 1200 units, fading over the last 400, and join the foam
 `amount`, so they take the lace, light and colour of the water's other foam.
 
@@ -159,14 +159,14 @@ eye by an angle g is drawn only out to the reach / sin g (the reach past a quart
 whole grid when the eye is within the reach above the level or under it. **Verified** (logged): the significant
 height is 21.1 units at the strongest wind (20 m/s) and 6.5 at 5.7 m/s, where the reach came to 50.8 (breakers 14.9). **Verified** (M6, Metal, Bark, paused,
 8 views from 8° to 70° pitch, 200 to 2000 zoom, the reach against a fixed 200): no difference on the water; 0.01 to 0.05 % of pixels differ, on object
-and shadow edges, between the two launches. **Observed** (M6, `fps_issue` save, 1080p High, the eye 67 units over the water level, no water in
+and shadow edges, between the two launches. **Observed** (M6, 8 characters on open ground at (-11270, 24317), 11:00, 1080p High, the eye 67 units over the water level, no water in
 sight): 61.2 -> 63.8 frames a second at zoom 31, 74.4 -> 78.5 at zoom 300; the Xcode trace gave the grid's vertex stage 11 % of the frame before.
 **Observed** (the same view, the slices and the spacing by height against the rings alone): 26 % of the indices at zoom 31 (the eye 29 units over
 the reach), 15 % at zoom 300; about 63 -> 65 to 67 frames a second at zoom 31, 79.5 -> 83 at zoom 300. **Verified** (M6, Metal, paused, against the
 rings alone): Bark, 8 views from 10° to 80° pitch, 120 to 2000 zoom, the sea in 3: under 0.1 % of pixels differ, on object and shadow edges, none on
 the water; the open sea east of Bark at the strongest wind, 8 views from 15° to 85° pitch, 60 to 2000 zoom: at most 0.13 % of pixels differ, the sun's
 glint (its sparkles a pixel aside, the same to the eye). **Verified** (2026-11-16,
-siwa-test6, paused, 5 views from 20° to 88° pitch with water in view, rings on against off: differences at the same-state noise floor).
+a test scene, paused, 5 views from 20° to 88° pitch with water in view, rings on against off: differences at the same-state noise floor).
 **Observed** (RTX 4090, 2560x1440): the whole grid (1.46 M vertices) cost 0.33 ms whatever the view; a town view with no water in
 sight draws 25 to 33 % of the indices, 0.14 to 0.16 ms; about 0.1 ms of the pass is not the grid.
 

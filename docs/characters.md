@@ -206,7 +206,7 @@ Engine extension, not in the original: a WEAPON of `skill category` 5 (Unarmed; 
 texture or part mesh; `items` resolves each worn ARMOUR/CONTAINER's material (7,370 of 13,107 mesh fields name no material list and take the mesh's own material: not a failure);
 `specs` counts the paint factors of coloured materials; `record <name|id>[|...]` prints a record. **Observed** (owner's mods): the only people/animals failing were the 4 all-0-chance
 animals (animals.md). Samurai Clothpants' `color samurai armour nopaint faction painted` has `dont colorise` false, so a worn pair takes the wearer's faction scheme (a
-white second colour for Bounty Hunters), which paints the colour map's second region white over the light texture. **Verified** (decompile `FUN_140536210`): the original reads `paint factor 1/2` from the item's record (`+0x78`, 0 for every item) and the colour map from the material (`+0xb0`); the colours come from the colour record at `+0xb8`, so the inputs are ours. **Observed** (controlled scene, siwa-test6 at 13:00, four people side by side in Bloodraiders): the pants draw textured and tinted red, so the white pair of Trak is his stored white scheme, not a render fault.
+white second colour for Bounty Hunters), which paints the colour map's second region white over the light texture. **Verified** (decompile `FUN_140536210`): the original reads `paint factor 1/2` from the item's record (`+0x78`, 0 for every item) and the colour map from the material (`+0xb0`); the colours come from the colour record at `+0xb8`, so the inputs are ours. **Observed** (controlled scene at 13:00, four people side by side in Bloodraiders): the pants draw textured and tinted red, so the white pair of Trak is his stored white scheme, not a render fault.
 
 ### Characters that cannot be drawn
 
@@ -439,7 +439,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
 - **Meitou validation** (`CharacterEditing.Apply`, `CharacterDraft.Sanitize`): player character with a person's look; creation only while
   `PlayerState.InCreation` (new game until CONFIRM) and within the start's force races; surgery needs the surgeon alive within 60 units
   (engine choice), the same race and gender, money > price, and takes the price. Head/hair/beard must be the race's, sliders and poses are
-  clamped to the limits, the name to 30 characters. **Verified** by a scratch round trip on save 2: edit, capture, load gives the edited
+  clamped to the limits, the name to 30 characters. **Verified** by a scratch round trip on a test save: edit, capture, load gives the edited
   values with the original key set.
 
 ### Import and export

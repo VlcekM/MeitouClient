@@ -179,7 +179,7 @@ those passes (SSAO, the shafts' atlases, the merged layers) the negated up axis,
 sky pixels were pulled in to the water plane (`sceneDistance`) and the shafts' and fog's rays were wrong. **Observed** (owner, Metal, before: dark streaks and banded copies in the sky
 that moved with the camera's pitch); after the change the streaks are gone (**Observed**, owner, in play). The blue fringes round far objects in fog were a different
 bug ([metal-backend](metal-backend.md) "Encoders and program state").
-**Observed** (2026-11-13, Mac mini M6, save `111`, no upscaler, 1920x1080 scene in 3840x2160, 3 runs after a warm-up, `--play-bench` idle / orbit): GPU 17.92 / 19.57 ms
+**Observed** (2026-11-13, Mac mini M6, a test scene, no upscaler, 1920x1080 scene in 3840x2160, 3 runs after a warm-up, `--play-bench` idle / orbit): GPU 17.92 / 19.57 ms
 -> 15.47 / 17.10 (-2.4 ms), fps 52.0 / 50.7 -> 60.3 / 58.1; 1920x1080 screenshots of both builds at one view differ by a mean of 0.06/255 (0.02 % of pixels over 12/255).
 
 ## Contact shadows
@@ -256,8 +256,8 @@ brightness in sun and in shade, near and far, and showed through fog banks. With
 centre, one value per sprite) takes the light shafts' darkening
 (the sun's share of the light) where it is shadowed, a glow towards the sun (1 + 0.5 cos⁸) where it is not, then the haze and the
 placed fog volumes in front of each corner (`atmoApplyCoefficients`, `fogVolumesAccumulate`) as `colour · mul + add`; additive
-sprites take only the haze's and the volumes' `mul`. **Observed** (mec-tou-nu save): distant clouds fade into the haze like the land
-behind them, dust over shaded slopes darker; mec-tou-nu2 (Skinner's Roam, a fog bank): the dark dust that showed through it gone;
+sprites take only the haze's and the volumes' `mul`. **Observed** (a desert view with dust): distant clouds fade into the haze like the land
+behind them, dust over shaded slopes darker; Skinner's Roam in a fog bank: the dark dust that showed through it gone;
 the Hub at 14:00 within 0.7/255 (99th percentile). Read per fragment instead, the shadow printed each tree's and rock's outline on
 every flat sprite: **Observed** (2026-11-07, dust over a cliff and a canyon, shafts off) as blurred, offset tree silhouettes in the dust.
 The Metal chain has no copy: its sprites stay hard-edged.
@@ -265,13 +265,13 @@ The Metal chain has no copy: its sprites stay hard-edged.
 **Lit dust** (`PostOptions.LitDust`, the `dustlight` switch, on by default; engine choice): the dust a foot kicks up and the spray it throws
 from water (`Dustkick01`, the biomes' `water effects`: bursts fired with `scatters`, `EffectUnit.Scatters`) are additive, unlit
 (`lighting off`, `scene_blend add`: **Verified**, `particles/materials/Dustkick01.material`, `Dustkick_streak.material`), so they add the same
-light by night as by day and the night exposure turned them into glowing patches (**Observed**, the user's image at night; save multi at
+light by night as by day and the night exposure turned them into glowing patches (**Observed**, the user's image at night; a test scene at
 23:00: a yellow-white blob beside the runner). Meitou multiplies such a sprite by the light at its centre against the noon's in the open
 (`ParticleRenderer` `dustLight`): the sun's light through the volume's visibility (`particleSun`), the clouds' shadow and the glow towards
 it, times pi; the sky's irradiance from above times the environment factor; the lamps from both sides of the plane facing the eye; both the
 light and the noon's (`SkyRenderer.NoonLight`: the sun's light at the zenith, the noon environment factor with the ambient slider) times the
 ambient map as the ground takes it, at most twice the noon's. Such a burst is no fire (its own reactive coverage, its size by the sprites'
-rule). **Observed** (save multi, open ground, paired runs): at 12:00 the kicks unchanged to the eye, at 23:00 a faint puff the colour of the
+rule). **Observed** (the same scene, open ground, paired runs): at 12:00 the kicks unchanged to the eye, at 23:00 a faint puff the colour of the
 ground's light.
 
 Fog shading rate (`FogShadingRate`): build tile rates from completed scene depth/fog; frame N's
@@ -280,7 +280,7 @@ support; absent support uses normal shading. Excludes reflection, shadow, partic
 pipeline whose fragment stage can discard (`VulkanProgram.FragmentDiscards`: OpKill, OpTerminateInvocation or
 OpDemoteToHelperInvocation in its SPIR-V), which keeps its own 1x1 rate: a coarse fragment takes one alpha test
 for its block, so reeds, grass and ruins' windows were cut in steps of 2 and 4 pixels in a heavy fog
-(**Observed**, save fog-pixelated, a mod's green gas weather: blocky against the fogged sky with it, smooth without).
+(**Observed**, a mod's green gas weather: blocky against the fogged sky with it, smooth without).
 
 ## Colour, night and particles
 
@@ -288,7 +288,7 @@ Game HDR exposure is the reference; tone mapping/grading are Meitou controls, no
 Both auto-exposure ping-pong targets are seeded before smoothing starts, and the adaptation reads
 the previous frame's output rather than the target it is writing; either mistake flickers dark/bright.
 **Indoor exposure** (`PostProcess.IndoorExposure`, Meitou, with Indoor GI): the game's band minimum is set for a room lit evenly by its ambient. While GI is active, Indoor GI is on and the interior view is not empty (`WorldFrame.Draw`), the adaptation's lower bound is the smoothed mean luminance times `IndoorExposureScale` 2.9, kept within `IndoorExposureFloor` 1/3 of the minimum and the minimum (`PostProcessShaders.Adapt` `uIndoor`, `MergedKernels` `ExposurePush`); a held exposure is left alone. The lower bound goes no lower than the night's minimum times 1/3 whatever the hour (`IndoorExposureMin`: a room's lamps are the same by day, when a third of the day's minimum left the room 2.4 times darker than at midnight). In the merged kernel the rooms are exposed apart: taps on a room's pixel (below) make the rooms' mean, the others alone set the adapted luminance by the game's rule (held when next to none is in view; the band's minimum when there is nothing to hold, as after the targets are remade by an anti-aliasing switch: holding the new target's 0 left the picture black), and the rooms' pixels are scaled by `adapted / rooms' adapted`, at most `IndoorExposureMaxGain` 8, in the scene colour before the upscaler, or before the chain reads the scene without one (`MergedKernels.InteriorGain`; the gain lives in the exposure state buffer: kept while no room is in view, taken at once by a room coming into view, then eased with the adaptation). Looking into a building no longer changes the exposure of what is outside (the user: "je n'aime pas que l'exposition change a l'exterieur quand on regarde a l'interieur"). The unmerged passes keep one exposure for the picture. **Observed** (the editor's bar at night, 4 lamps: minimum 1 x night darkness 0.42, mean before exposure 0.14, so the exposure was fixed at the minimum): the minimum no longer pins a lamp-lit room to one exposure; the scale 2.9 is the minimum over the mean the room had under the game's ambient (0.1435). **Observed** (Heft's Armory with the interior view held, dust storm, headless Vulkan): anti-aliasing off, FXAA and SMAA expose the room as TAA and DLSS do. **Unknown**: other interiors, a lit room by day.
-- A room's pixel (`Gi.RoomMaskPass`, `PostProcess.RunRoomMask`, an R32F mask at the render size, made while an interior is in view and the traced scene exists): lit as an interior (surface bit 9) and under a part the floor view hides. One ray straight up from the pixel, 0.3 units off its drawn plane (from the depth), against the objects of the traced scene, which keeps the hidden floors; it passes every shown part and stops at a record with `GeometryRecord.Interior` bit 1 (`WorldObjectRenderer.RayHidden`: `InteriorHidden` or `StandsAbove`). Where it finds none, six rays 40 degrees from the upright, round it, look again (`RoomMaskPass.TiltDegrees`): under a stairwell's opening the upright ray left the room through it, so the stairs and the floor under them took the street's exposure, a dark band the opening's shape (**Observed**, save lamp, the Storm House, the stairs and the floor under the opening dark before, lit after). An open roof has none beside it either (**Observed**, same save, the Storm House's roof furniture at view 1: the same with the gain and without). So what stands on an open roof or terrace, furniture in a building seen from outside and a building held open with every floor shown (the 10 s after its last occupant left) are no rooms. With the eye itself inside a viewed building and under its cover (`WorldObjectRenderer.EyeIndoors`: the character editor's bar, whose every floor is shown) every interior pixel is a room's, no ray asked. The own shell of a building in the interior view (`WorldObjectRenderer.ViewedShell`, the instance's half in its fourth value) is split by its triangles' planes (`atmoStreet`, `BuildingLodShaders`; not the shading normal: a smooth bevel and a rough stone's normal map left lines and speckles): a steep face that does not face the upright through the building's origin (an outer wall) and every face turned up (a plinth, a ledge, the top of a wall the view cuts) are the street's, lit as the outside (no bit 9, surface bit 30 set: the traced sun's rays pass what the view hides, `TracedSunShaders`) and so no room's pixel. **Observed** (saves The boys 123, lamp, grass-through interior): lit as the room these took the room's gain (light squares and rims on the outside, the user's images 98 and 99); lit as the outside under the hidden floors they were black. A building whose rooms are its shell (`InteriorVolume.ShellHoldsRooms`: a mask mesh and an `interior` list that draws nothing; the Ash Dome, the Ash Dome Ruin and the Ancient Factory, **Verified** by a scan of the merged records) keeps its faces turned up in the room (the instance's three quarters): **Observed** (issue #1027, the Ash Dome at floor 0) as the street's, its floor took the dark dome's outdoor probes in full and was black at any hour, lit with Indirect light off. **Observed** (save lamp, the Hub's tower by day, `door.sh`; Squin's square, `squin.sh`): with bit 9 alone as the test the furniture and characters on every roof were scaled by the room's gain (blown white on the tower's terrace, awnings 2.8 times the street's level in Squin) while any interior was in view or held; the tops of the walls the view cuts were black (now the room's). Cost: 1.06 ms at 2560x1440 with a room over the whole picture (save heavy-scene, RTX 4090).
+- A room's pixel (`Gi.RoomMaskPass`, `PostProcess.RunRoomMask`, an R32F mask at the render size, made while an interior is in view and the traced scene exists): lit as an interior (surface bit 9) and under a part the floor view hides. One ray straight up from the pixel, 0.3 units off its drawn plane (from the depth), against the objects of the traced scene, which keeps the hidden floors; it passes every shown part and stops at a record with `GeometryRecord.Interior` bit 1 (`WorldObjectRenderer.RayHidden`: `InteriorHidden` or `StandsAbove`). Where it finds none, six rays 40 degrees from the upright, round it, look again (`RoomMaskPass.TiltDegrees`): under a stairwell's opening the upright ray left the room through it, so the stairs and the floor under them took the street's exposure, a dark band the opening's shape (**Observed**, the Storm House, the stairs and the floor under the opening dark before, lit after). An open roof has none beside it either (**Observed**, the Storm House's roof furniture at view 1: the same with the gain and without). So what stands on an open roof or terrace, furniture in a building seen from outside and a building held open with every floor shown (the 10 s after its last occupant left) are no rooms. With the eye itself inside a viewed building and under its cover (`WorldObjectRenderer.EyeIndoors`: the character editor's bar, whose every floor is shown) every interior pixel is a room's, no ray asked. The own shell of a building in the interior view (`WorldObjectRenderer.ViewedShell`, the instance's half in its fourth value) is split by its triangles' planes (`atmoStreet`, `BuildingLodShaders`; not the shading normal: a smooth bevel and a rough stone's normal map left lines and speckles): a steep face that does not face the upright through the building's origin (an outer wall) and every face turned up (a plinth, a ledge, the top of a wall the view cuts) are the street's, lit as the outside (no bit 9, surface bit 30 set: the traced sun's rays pass what the view hides, `TracedSunShaders`) and so no room's pixel. **Observed** (three test scenes, the Bughouse's interior one of them): lit as the room these took the room's gain (light squares and rims on the outside, the user's images 98 and 99); lit as the outside under the hidden floors they were black. A building whose rooms are its shell (`InteriorVolume.ShellHoldsRooms`: a mask mesh and an `interior` list that draws nothing; the Ash Dome, the Ash Dome Ruin and the Ancient Factory, **Verified** by a scan of the merged records) keeps its faces turned up in the room (the instance's three quarters): **Observed** (issue #1027, the Ash Dome at floor 0) as the street's, its floor took the dark dome's outdoor probes in full and was black at any hour, lit with Indirect light off. **Observed** (the Hub's tower by day; Squin's square): with bit 9 alone as the test the furniture and characters on every roof were scaled by the room's gain (blown white on the tower's terrace, awnings 2.8 times the street's level in Squin) while any interior was in view or held; the tops of the walls the view cuts were black (now the room's). Cost: 1.06 ms at 2560x1440 with a room over the whole picture (a dome lit by lamps, RTX 4090).
 Night grading weights scotopic luminance (Jensen2001 night-sky model evaluated at sRGB primaries)
 using measured scene luminance/adaptation; daylight contribution must fade to zero. Night red
 terrain can be original ambient-map colour rather than lamp/emissive input. Haze follows weather
@@ -306,10 +306,10 @@ nearest texels, both draws weighted bilinearly and by how close each draw's dept
 ridge the near draw's, on the land behind it the far draw's, which holds what lies between them. A farthest-only reduction let dust
 behind thin characters bleed onto their silhouettes; one draw against a checkerboard of the two depths (with a joint bilateral 4x4
 filter at depth edges) left the matching texels every other one along an edge, so the dust behind a dune ridge followed it in steps
-(**Observed**, mec-tou-nu save, Vulkan: the ridge's outline in front of the far dust stepped, then smooth; the Metal chain's is not run).
+(**Observed**, a dune ridge in front of far dust, Vulkan: the ridge's outline in front of the far dust stepped, then smooth; the Metal chain's is not run).
 Where a block's two depths lie within 4 % (or it is all sky) its farthest is written as 0, so the second draw rejects every fragment there and
 shades only along depth edges; likewise the filtered composite evaluates the four render pixels' surfaces only where they differ by
-more than 4 %. **Observed** (mec-tou-nu, 2560 x 1440, DLSS, 4090): the particle draws 0.05 → 0.04 ms (master 0.02, the rest the
+more than 4 %. **Observed** (the same view, 2560 x 1440, DLSS, 4090): the particle draws 0.05 → 0.04 ms (master 0.02, the rest the
 lighting below), the picture within 1/255 (99th percentile); the particle passes together within the run-to-run noise of master's.
 A draw's size follows its sprites' mean screen size (half from 20 px, quarter from 80), capped by its texture's detail
 (`ParticleTextureDetail`, measured at decode: the fewest pixels across, halving from the texture's size, whose box-reduced copy brought back
@@ -326,22 +326,22 @@ DLSS took drifting see-through dust as standing still (its default preset ignore
 it (the jitter undone), weighted bilinearly, then last frame's result (reprojected by the closest surface's motion, kept within the four
 values, widened by the layer at the nearest and farthest surface of the 3 x 3 render pixels round them) blended in at 0.1. From the four
 alone, a pixel beside an outline whose four all fell on one side (as the jitter decides) clamped its history to that side and the outline
-kept a one-pixel staircase (**Observed**, mec-tou-nu save, still camera: hard steps, then intermediate shades as the upscaler's own edge). One surface per pixel (the nearest of the 2 x 2, before) put a hard pixel edge back on the upscaler's smooth
+kept a one-pixel staircase (**Observed**, ridges in front of dust, still camera: hard steps, then intermediate shades as the upscaler's own edge). One surface per pixel (the nearest of the 2 x 2, before) put a hard pixel edge back on the upscaler's smooth
 outline wherever a ridge stood in front of the dust: a staircase. Off an outline the four agree, so drifting dust does not trail.
 On an outline (`outlineLayer`) the upscaler's pixel C already mixes the near surface with the far one without its dust, so a plain mix of the
 layers at the two surfaces let the bare far colour through: a line of sky colour round every ridge in front of dust (user report, 2026-11-08).
 There the layer is chosen so that "over" C gives b (near layer over R) + (1 - b) (far layer over K): R and K the mean scene colours of the 3 x 3
 render pixels on each side (depth split at the geometric mean), b C's share of R (C projected on K → R; the bilinear share where R and K look
 alike). Its colour gains b (1 - b) (far alpha - near alpha) (R - K), floored so the result stays non-negative. **Observed** (user, DLSS, 2026-11-08): the outline gone.
-**Observed** (mec-tou-nu save, DLSS, 1600 x 900): flicker between frames in the dust (99.9th percentile of the second difference) still
+**Observed** (a desert view with drifting dust, DLSS, 1600 x 900): flicker between frames in the dust (99.9th percentile of the second difference) still
 camera 6.5 → 2.5/255, 0.25°-a-frame orbit 25 → 20.5; turning 1.5° and panning 30 units a frame, no trails. A vendor upscaler that fails
 that frame gets them in the scene before the TAA. Effect units beyond 4000 units are stepped at 20 Hz, beyond 9000 at 10 Hz (the cost);
 their particles are drawn ahead along their velocity by the time queued since the unit's last step (up to 0.1 s), so they move every
-frame instead of in jumps (**Observed**, mec-tou-nu save: the far dust's change from frame to frame, its spread over its mean 0.45 → 0.26;
+frame instead of in jumps (**Observed**, the same view: the far dust's change from frame to frame, its spread over its mean 0.45 → 0.26;
 stepping every unit every frame gave 0.36). An effect is simulated only while the camera is within the active radius (6912) plus its view
 distance of its bounds, and stopped past 1.15 times that: a unit coming into range appeared with its whole cloud (its age caught up at
 once) and one leaving vanished. With the Meitou `fog` switch each unit is drawn faded by its distance, full to 85 % of that range and
-gone at it (`EffectUnit.RangeFade`), so both happen out of sight (**Observed**, mec-tou-nu save, the camera moving 40 units a frame: every
+gone at it (`EffectUnit.RangeFade`), so both happen out of sight (**Observed**, over the desert, the camera moving 40 units a frame: every
 unit stopped was at fade 0, every one started with an age at fade 0.2 or less). **Observed** (a Hub
 storm, DLSS): the dust the same as blended in the scene (mean difference 1.2/255, the dust's shapes only). TAA keeps them in the scene: its
 output is its next history. Texture anisotropy caps mipmapped samplers, distinct from texture
@@ -356,8 +356,8 @@ without its gain rain's streaks fade; a distant torch a few pixels high flickers
 ### Adaptive exposure
 
 `exposure` switch (Meitou, on; Graphics > Colour; `PostOptions.AdaptiveExposure`, `WorldFrame.ShadeExposure`). The game's daytime band
-minimum 0.8 holds nearly every daytime view: the new game's open desert at 10:00 measures a mean of 0.567 (0.574 all Faithful), save
-`dark` (a cliff canyon at 12:02) 0.276 (0.311 with Indirect light off), so the game shows both at one fixed exposure and the canyon is
+minimum 0.8 holds nearly every daytime view: the new game's open desert at 10:00 measures a mean of 0.567 (0.574 all Faithful), a save
+of a cliff canyon at 12:02 0.276 (0.311 with Indirect light off), so the game shows both at one fixed exposure and the canyon is
 near black (**Observed**, `ReadExposure` after offscreen shots). Meitou's adaptation target under the band's minimum is the mean times
 `Exposure.Min / ShadeExposureReference` (0.8 / 0.57: a scene darker than that desert is shown as bright as it), no lower than the daytime
 minimum over the **Adaptive exposure strength** slider (1 to 3x, default 1.7: 0.47) nor the night's minimum, the band's own at or above its
@@ -365,8 +365,8 @@ minimum. The adaptation is smoothed towards the target, not clamped after it, at
 1.2 s; the game's 0.5 / s took 4.6 s) (`PostProcessShaders.Adapt` `uShade`, `MergedKernels` `ShadeScale`,
 `PostComposite` on Metal). A held exposure and the unmerged pass with an interior in view keep the game's rule; the rooms' own exposure is
 unchanged. **Observed** (offscreen 1280x720, Meitou against `--faithful exposure`): new game at 10:00, 17:00 and 23:00 pixel-identical;
-at 18:30 (mean 0.457, band still 0.8 until sunY 0.2) 1.25x; `dark` and the shaded `quicksave` lifted 1.7x. The night minimum as the floor
-(2.9x in `dark`) showed the canyon brighter than an open sunny view, the sunlit wall blown; a floor without the reference lifted the open
+at 18:30 (mean 0.457, band still 0.8 until sunY 0.2) 1.25x; the canyon and a shaded save lifted 1.7x. The night minimum as the floor
+(2.9x in the canyon) showed the canyon brighter than an open sunny view, the sunlit wall blown; a floor without the reference lifted the open
 desert 1.4x too.
 
 ## Bloom
@@ -460,7 +460,7 @@ grade and photo mode's filter, before the dither, in every camera of a whole sce
 - **Grain:** a value noise of the interleaved gradient noise, cells of 1.5 pixels (times `PictureScale` in a larger photo), a new offset each frame, added with amplitude
   `0.2 x strength x (0.3 + 2.8 l (1 - l))`, l the pixel's luminance: strongest in the mid-tones.
 
-**Observed** (`t_desert_gold`, photo mode): the corners darken at strength 0.8; the grain shows over sepia and noir pictures.
+**Observed** (a test scene, photo mode): the corners darken at strength 0.8; the grain shows over sepia and noir pictures.
 
 **Metal:** the same composite shader. `CompositeLook.Of` makes the filter, vignette and grain uniforms for both backends (`PostProcess.SetLook`, `PostComposite.SetLook`); the Metal chain
 says whether a scene was drawn (`SceneInputs.HaveScene`), as Vulkan's `_haveScene`. **Observed** (2026-11-20, `--renderer metal`, photo mode, 1280x720 MetalFX temporal): sepia at 100 %, vignette 0.8 and

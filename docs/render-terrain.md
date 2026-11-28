@@ -33,7 +33,7 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
   both tiers read the file's own mips, so from that level down they are the same texels. A resized layer is filtered separately at each size, so
   a faint seam is possible there.
 - **BC1 normal blocks** (`TerrainTextures.LoadNearNormal`, `Deblock`): a 4 x 4 block of the game's BC1 normal maps holds four colours, so magnified it lights as a flat facet with hard edges.
-  **Verified** on the siwa-test6 sand (displaced ground, DLSS and TAA): the shading normal set to the smooth terrain normal removes the facets, a constant albedo keeps them, and the facet size
+  **Verified** on a sand scene (displaced ground, DLSS and TAA): the shading normal set to the smooth terrain normal removes the facets, a constant albedo keeps them, and the facet size
   matches a block on screen. Reading a coarser mip with a spline (an earlier try) only makes bigger world-aligned squares, as that mip is BC1 too. So the near normal layers are decoded at load, made unit vectors (`Normalise`: the game lights with `normalize(rgb * 2 - 1)`, **Verified** in `terrainfp4.hlsl`,
   `gbuffer.hlsl` and `deferred.hlsl`, and 132 of the 165 normal maps of `newland/land/textures` store a blue of 1 over any x and y, mean lengths up to 1.34, **Verified** by decoding them at 512²:
   x and y kept as stored with z rebuilt gave a mean tilt of 61 degrees where the game has 38 on `CinderSurface01_NML`, 90 where it has about 47 at the 90th percentile of 18 maps; the material cache's bake normalises its blended normal for the same reason),
@@ -46,7 +46,7 @@ where occluders justify it. A depth prepass is extra geometry, not automatically
     Detail finer than a block is not in the file; it is smoothed away, not recovered.
   **Disk cache** (`NormalCachePath`): each deblocked layer is kept in `%LOCALAPPDATA%\Meitou\terrain\normals\<hash>.bc5` (magic `MNB5`, level count, each level's length and blocks; 5.6 MB a 2048² layer),
   hash of a version tag (`NormalCacheVersion`, bump it when `Deblock` or the encoding changes), the size and the source file's path, length and write time, so a mod's replacement gets its own
-  file; a missing or misfitting file is rebuilt and written. **Observed** (siwa-test6 start, same machine): a hit takes 3-79 ms of worker time, a miss 100-430 ms.
+  file; a missing or misfitting file is rebuilt and written. **Observed** (the sand scene's start, same machine): a hit takes 3-79 ms of worker time, a miss 100-430 ms.
   **Observed** VRAM: the log line for 32 near and 152 far slots went from 332 MB (BC3+BC1) to 417 MB with BC5 near layers; at 96 slots the formula gives about 1365 MB instead of 1024 MB.
   **Observed** cost: the viewer bench (`--world --at 57400,-119500`, 2560x1440, FSR 0.67, sand views at distance 60 and 400) varies by streaming more than by this change (terrain stage medians
   0.14 ms close and 0.7-0.9 ms mid with the BC5 build against 0.18 and 2.0 ms for a BC1 build of an older commit with other terrain changes): no cost from BC5 is measurable there.
@@ -188,7 +188,7 @@ With the parallax on (60 m, displacement 60 m), nearly all the visible terrain i
 same register file use, with the SM throughput at 20% (39%). On the RTX path the march's sampling hardly counts: no self-shadow, or the base layer alone,
 changed nothing. The march runs before any biome is shaded, so its state does not sit on the shading's: terrain 4.4 -> 4.0 ms, the picture
 unchanged. One march a pixel instead of one a biome, the biome threshold and the layer derivatives taken once from the point's (chain rule):
-terrain 3.90 -> 3.77 ms (**Observed**, `--play-bench` idle/orbit on save "stutter final boss", RTX 4070 1080p DLSS; screenshot diff 0.001% of pixels
+terrain 3.90 -> 3.77 ms (**Observed**, `--play-bench` idle/orbit on a scene of about 1000 characters, RTX 4070 1080p DLSS; screenshot diff 0.001% of pixels
 over 12/255). Drawing patches beyond the parallax's end with the march-free program saved nothing there.
 **Metal (Observed, 2026-10-25, a town view at 1024x640 scene / 2560x1600 output):** the interior-cut colour draw took 11.25 ms of a 31.03 ms frame,
 with a 6.2 KB register spill. With the march off it took 4.28 ms and the frame 19.75 ms, the spill 48 B. That run used an 8/4-step, three-layer march; Metal's shader compiler and tile-memory architecture make the march much more expensive than the RTX path.
@@ -222,10 +222,10 @@ Meitou (`TerrainRenderer.Resolve`, `IWorldPostChain.TerrainResolveTargets`: `Pos
   where two frames of the same setting differ by 0.21, at most 24 / 255 on about 150 pixels along ripple crests (the steps across an outline).
 - Not in the reflection, the viewer's other views or with the wireframe: those draw the patches' colour as before (`ResolveInputs` null).
 - **Metal**: the same passes; its targets' row 0 is the top (`IGpuContext.RenderTargetsBottomUp` false), so the resolve's programs turn a pixel's clip y round
-  (`RESOLVE_ROWS_DOWN`): unturned, every point was unprojected mirrored and the ground came out streaked and flat. **Verified** (M-series, `fps_issue` save, 1080p,
+  (`RESOLVE_ROWS_DOWN`): unturned, every point was unprojected mirrored and the ground came out streaked and flat. **Verified** (M-series, 8 characters on open ground at (-11270, 24317), 11:00, 1080p,
   High, paused, zoom 31 and 300): against the patches' second pass, about 100 of 8.3 M pixels differ by more than 3 %. The split's near rectangle
   (`NearScissor`, the scissor of the relief pass and the near program) counts its rows from the top there too: counted from the bottom, a zoomed-out view
-  (where the split runs) showed the sky through the near ground, bounded by the march's distance (**Observed**, `big_squad` save, zoom 689; whole at 300 to 2000 after).
+  (where the split runs) showed the sky through the near ground, bounded by the march's distance (**Observed**, 20 characters in open desert at (36282, -50663), 10:18, zoom 689; whole at 300 to 2000 after).
 - **Split at the march's distance** (`TerrainShaders.ResolvePart`, `TerrainRenderer.NearRect`, switch `TerrainResolveSplit`): with the ground parallax on, the
   resolve is two triangles. The far program is built without the march (`NO_MARCH`) and leaves out the pixels the march's own test takes
   (`uParallax > 0.0 && distance < uParallaxEnd`); the near program is the full one, drawn last, keeps those pixels and a unit more (so the two programs' rounding leaves
@@ -234,9 +234,9 @@ Meitou (`TerrainRenderer.Resolve`, `IWorldPostChain.TerrainResolveTargets`: `Pos
   A rectangle over 60 % of the picture: the one full program as before (the far pass would mostly find pixels to leave: +0.06 to 0.08 ms in close views).
   **Why**: the march's registers are the whole program's ("Registers"), so every pixel paid for it, reached or not. **Observed** (RTX 4090, 2560x1440, paused):
   a town seen from 170 m 2.18 -> 1.58 ms of terrain (night 2.35 -> 1.79), a dune field from 180 m 1.43 -> 0.92, from 250 m 1.41 -> 0.87 (the cost with the
-  parallax off); from 130 m 1.46 -> 1.40; nearer, and city-night, unchanged. **Verified** (2026-11-16, siwa-test6 and "The boys 123", 10 paused views with a
-  partial rectangle, split against one program in the same session): no hole; 0.09 % of the pixels differ by more than 2 / 255 where two frames of one setting
-  differ on 0.03 %, scattered on cliff faces, no shift of the mean.
+  parallax off); from 130 m 1.46 -> 1.40; nearer, and a town at night, unchanged. **Verified** (2026-11-16, the sand scene and a second scene, 10 paused
+  views with a partial rectangle, split against one program in the same session): no hole; 0.09 % of the pixels differ by more than 2 / 255 where two
+  frames of one setting differ on 0.03 %, scattered on cliff faces, no shift of the mean.
 - **Relief pass** (`TerrainRenderer.RecordReliefPass`, `TerrainShaders.ReliefFragmentNative`, switch `TerrainReliefPass`, on Metal by default;
   `MEITOU_TERRAIN_RELIEF_PASS=0` or `1` forces it off or on, for comparing): with the parallax on, the layers' ground march (`pixelRelief`) runs first in a full-screen pass of its own over the pixels the marching
   part shades (the whole picture, or the near side's rectangle when split). It is the resolve's program (`RELIEF_PASS`) up to the march: the material cache's
@@ -246,15 +246,16 @@ Meitou (`TerrainRenderer.Resolve`, `IWorldPostChain.TerrainResolveTargets`: `Pos
   mark is within the march's reach (`trailWithin`) at the unmoved point where the cache and the layers blend; the resolve tests it where the cache's march
   moved it. The test has a margin of 3 units, so only a mark at the very edge of its reach could differ.
   **Why**: the march's registers weigh on all the shading after it (Metal: at Low quality the march alone took about 1.5 ms, but the resolve with it took about 8 ms
-  more than without the parallax). **Verified** (M-series, Metal, `fps_issue` save, 3840x2160 shown at 1920x1080, High, paused): the pictures with and without
+  more than without the parallax). **Verified** (M-series, Metal, 8 characters on open ground at (-11270, 24317), 11:00, 3840x2160 shown at 1920x1080, High, paused): the pictures with and without
   the pass differ on 43 of 8.3 M pixels by more than 3 %. **Observed** (same session setup, frames a second): zoom 31, 48.0 -> 53.1 (the patches' second pass
-  51.1); zoom 300, 63.1 -> 70.0 (65.4). Vulkan untested.
-  Vulkan marches in the resolve: with the pass, a GPU write to memory just freed lost the device (**Observed**, Radeon 8060S, `big_squad` after
-  a staged fight, the blood's static depth copy freed: 9 of 9 runs of builds with the pass, from its first commit; 0 of 4 on master, 0 with
-  the pass off or with `MEITOU_NO_ALIAS=1`).
+  51.1); zoom 300, 63.1 -> 70.0 (65.4).
+  Vulkan marches in the resolve: there the pass costs more than it saves. **Observed** (Radeon 8060S, Vulkan, High, 1920x1080, paused, 20 characters in open desert
+  at (36282, -50663), 10:18, the camera on their lead at yaw/pitch/zoom -25/35/31, 60/20/48 and 140/45/300; two runs each
+  with the pass off and on, alternating, three 120-frame GPU means a view): terrain +0.68, +0.70 and +0.50 ms with the pass, every run's mean
+  outside the other setting's range.
 - **No arrays in the march** (`Relief`'s layers are the fields `l0`..`l4`, every use written out per field up to `RELIEF_CAP`, the quality's count; `blendSlot`
   picks components by comparison): the layers were an array read with a loop's index, so the struct lived in memory, and the Metal translation copies a
-  struct argument at every call: a copy before each of the march's height reads. **Observed** (Xcode GPU trace, M6, `fps_issue`, High, zoom 31): the relief
+  struct argument at every call: a copy before each of the march's height reads. **Observed** (Xcode GPU trace, M6, the same scene, High, zoom 31): the relief
   pass took 38.7 % of the frame, 250 registers and 2.89 KiB spilled a thread; the resolve 20 %, 252 registers and 240 bytes. With the fields: zoom 31 High
   53.1 -> 61.4 frames a second, Medium 60.0 -> 66.7, Low 60.2 -> 70.1; the picture unchanged (about 150 of 8.3 M pixels over 3 %, as two runs of one build).
 
@@ -265,8 +266,8 @@ material is baked into world-space levels round the eye, and a patch pixel withi
 to 14 layer samples each.
 - **Levels**: 7 of 2048² texels (1024² on budgets up to 6 GiB), level k's texel 0.03125 × 2^k units (finer than a layer's, about 0.049), RGBA8
   albedo + gloss and RGBA8 tangent-space normal x, y (z follows), rain absorbance, relief height: 224 MiB (56 MiB at 1024²). With level 0 at 0.25
-  (4 levels) a footprint finer than it, within about 23 m of a 1080p camera, shaded the layers (below, Draw): **Observed** (M6, Metal, `fps_issue` save, 1080p High,
-  a character at zoom 31): 64 -> 83 frames a second, 81 -> 103 at zoom 300; without a focus at zoom 31, settled, orbiting and panning alike 67 -> 73
+  (4 levels) a footprint finer than it, within about 23 m of a 1080p camera, shaded the layers (below, Draw): **Observed** (M6, Metal, 8 characters on open ground at (-11270, 24317), 11:00, 1080p High,
+  the camera on one at zoom 31): 64 -> 83 frames a second, 81 -> 103 at zoom 300; without a focus at zoom 31, settled, orbiting and panning alike 67 -> 73
   (the finer levels' strips cost nothing seen). The live layers were 1.7 ms of the resolve there (its material replaced by a constant: 63.8 -> 71
   frames a second). Pressure releases the cache and terrain shades the layers live. It can rebuild once the ranges recover. Each is addressed toroidally (repeat
   sampler, texel = world mod side), its origin snapped to 64 texels round the eye moved towards the camera's focus (`Camera.Target`) by at most a quarter of the level's side (`MaterialCache.Centre`: the
@@ -287,19 +288,19 @@ to 14 layer samples each.
   beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
   **Observed** (title screen, DLSS 0.67, `LodBias` -1.58): the layers' sampler takes the upscaler's bias, so the live layers are sharper than a cache level at the pixel's footprint; the level is chosen with the bias (`uBakeBias`), and a level more than one level coarser than that (a close ground beyond the fine levels' square, from a raised eye: the title's nearest band read level 3 for a pixel wanting level 0.6) is not read, the layers are shaded. Edge measure of that band 4.3 (cache) to 5.9 (layers, equal to the cache off).
   (an xz texel spans 1 / n.y of the face: **Observed**, cliffs smeared into vertical streaks, their parallax wavy), the layers are shaded. A footprint
-  finer than level 0's texel reads level 0 magnified: its texel is finer than a layer's, so it is as sharp (**Observed**, M6, Metal, `fps_issue` and Bark,
+  finer than level 0's texel reads level 0 magnified: its texel is finer than a layer's, so it is as sharp (**Observed**, M6, Metal, the open ground at (-11270, 24317) and Bark,
   10 views against the layers shaded there: under 0.02 % of pixels over 3 % on the ground, the nearest ground's specks and stones the same; zoom 31
   86 -> 91-98 frames a second, without a focus 73 -> 102 settled, orbiting and panning). With level 0 at 0.25 units, about 5x a layer's texel
   (tiling 50: 2048 texels over 100 units), read magnified it blurred the near ground (**Observed**, 2026-11-07), and such footprints shaded the layers. The
   parallax marches the cached height with the march's steps and self-shadow (the sun's from two levels coarser; where displaced, only what the level
   holds finer than one at half the mesh spacing): one read a step, no per-biome work. A per-pixel gather (cliff layers live over a cached ground,
   per-biome fade) cost as much as it saved: terrain 4.0 ms against 3.9 live.
-- **Differences** (**Observed**, M6, Metal, paused, 7 levels against 4 with the near layers live: `fps_issue` 6 views from 8° to 60° pitch, zoom 31 to 300, and
+- **Differences** (**Observed**, M6, Metal, paused, 7 levels against 4 with the near layers live: 8 characters on open ground at (-11270, 24317), 11:00, 6 views from 8° to 60° pitch, zoom 31 to 300, and
   Bark 4 views, zoom 40 to 900): 0.003 to 0.08 % of pixels over 3 %, thin lines along the relief's edges (ripples, stones), the same to the eye.
   (**Observed**, viewer A/B stills, 1920x1080 DLSS, before near footprints shaded the layers): mean 0.8-1.1 / 255, 0.35-1.4% of pixels over 12; the ripples' parallax phase
   and self-shadow shift slightly; a slope's parallax (n.y over 0.5) follows the height field instead of the cliff's projections. After a 90 m flight at 12 units a
   frame: mean 1.27 against the live picture, no stale strips. The game's `--screenshot` does not run the cache (its frames skip the hook).
-- **Cost** (**Observed** before near footprints shaded the layers, `--play-bench` on save "stutter final boss", RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms
+- **Cost** (**Observed** before near footprints shaded the layers, `--play-bench` on the scene of about 1000 characters, RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms
   idle, orbit 3.98 -> 2.23, pan 3.77 -> 1.77; GPU frame 7.85 -> 6.20; frame p99 unchanged. Viewer A/B at two views: terrain -0.39 and -0.88 ms.
 
 ## Simple material
@@ -310,7 +311,7 @@ biome's, so loading ones weigh as in the full blend), and in it the base layer, 
 the cliff's stronger projection; no normal-map samples. Its own compiled colour and resolve programs (`TERRAIN_SIMPLE`, `TerrainPrograms` keys sets by
 it), so the full blend's programs carry none of it. Map features, the material cache's bake and the rock bake keep the full material. Without sun shadows and probe GI the colour programs are also
 built lean ([render-objects](render-objects.md#lean-lighting)).
-- **Cost** (**Observed**, 2026-11-23, Iris Xe, 1920x1080 at scale 0.83, `--low-end`, save "fps"): viewer A/B at the save's spot, terrain 6.65 -> 5.23 ms
+- **Cost** (**Observed**, 2026-11-23, Iris Xe, 1920x1080 at scale 0.83, `--low-end`): viewer A/B at a test scene's spot, terrain 6.65 -> 5.23 ms
   with the camera 800 units off, 15.1-15.9 -> 8.9-9.8 from the viewer's default distance (two runs). Play bench against master: terrain 13.4 -> 7.4 ms
   idle, idle 38 -> 53 fps. The same choice as a uniform branch in the full programs saved only 2.0-2.7 ms far: the branch's registers were the program's.
 - **Picture** (same A/B): close mean 0.37 / 255, 1,214 pixels over 12; far mean 2.5 / 255, 68,000 pixels over 12, at the borders between biomes.
@@ -323,7 +324,7 @@ or save change, and marks are lost when the window moves past them. Both hosts m
 image's row 0 at clip -1 and turn the clip y round on top-down targets (Metal's, `IGpuContext.RenderTargetsBottomUp`), so the terrain's lookup finds a mark
 where it was made. The footfall detection also runs without the renderer while the bloody footprints want it, on both hosts, and hands each human footfall to them ([blood-decals.md](game/blood-decals.md#bloody-footprints-meitou)).
 
-Cost and the marks' grid: the colour programs read the two images at every step of the ground's march (eight taps a step). **Observed** (desert outpost, 2560x1440, paired switch): 1.5 ms of the terrain's 3.8 ms; with the reads stubbed in the shader the terrain is 2.3 ms, and skipping single reads behind a one-tap test gains next to nothing: what pays is a pixel whose march reads no mark at all. So `TerrainTrailRenderer` keeps a grid over the coarse window (`CellsSide` 256 cells of 2 units, R8, `uTrailCells`) of the cells a stamp wrote to and has not worn away since (`MarkLife`), from the stamps' boxes on the CPU, with coarser levels holding the largest of their four cells; the programs ask it once a pixel, at the level whose cells are twice the march's reach wide (`trailWithin`: the view's march plus the sun's, 3 units more), and leave the images alone when it answers no. A stamp's box is what `StampFragment` writes (a body's rim out to `BodyWritten` texels of its stadium, not its whole quad) plus a texel and the bicubic read's three. **Observed** (terrain stage, before and after): views with few marks in sight -0.3 to -0.9 ms (coast 4.11 -> 3.27, `blocky` 4.14 -> 3.20, `light-shafts` 2.79 -> 1.87, `missing-grass` 3.20 -> 2.46); views on a squad walking about are unchanged (marks within reach of nearly every pixel). **Verified** (one paused frame, the grid against every cell marked, three views, alternated): the pictures differ no more than two captures of the same mode.
+Cost and the marks' grid: the colour programs read the two images at every step of the ground's march (eight taps a step). **Observed** (desert outpost, 2560x1440, paired switch): 1.5 ms of the terrain's 3.8 ms; with the reads stubbed in the shader the terrain is 2.3 ms, and skipping single reads behind a one-tap test gains next to nothing: what pays is a pixel whose march reads no mark at all. So `TerrainTrailRenderer` keeps a grid over the coarse window (`CellsSide` 256 cells of 2 units, R8, `uTrailCells`) of the cells a stamp wrote to and has not worn away since (`MarkLife`), from the stamps' boxes on the CPU, with coarser levels holding the largest of their four cells; the programs ask it once a pixel, at the level whose cells are twice the march's reach wide (`trailWithin`: the view's march plus the sun's, 3 units more), and leave the images alone when it answers no. A stamp's box is what `StampFragment` writes (a body's rim out to `BodyWritten` texels of its stadium, not its whole quad) plus a texel and the bicubic read's three. **Observed** (terrain stage, before and after): views with few marks in sight -0.3 to -0.9 ms (coast 4.11 -> 3.27, three other views 4.14 -> 3.20, 2.79 -> 1.87 and 3.20 -> 2.46); views on a squad walking about are unchanged (marks within reach of nearly every pixel). **Verified** (one paused frame, the grid against every cell marked, three views, alternated): the pictures differ no more than two captures of the same mode.
 
 - **Image** (`TerrainTrailRenderer`): two levels, each 2048² and addressed toroidally as the material cache's levels, the origin snapped to 64 texels. **Coarse**: R16F (8 MB), texel 0.25 units, a height: 0
   untouched, -1 pressed in full (1.2 units, 12 cm), above 0 a rim; it reaches 240 units from the camera's target (the strategy camera's pivot; not the eye, so zooming keeps the marks) and shows fading over the
@@ -335,7 +336,7 @@ Cost and the marks' grid: the colour programs read the two images at every step 
   A capsule whose underside is within 0.5 units (5 cm) of the terrain under its ends and under 2.5 cm (sink over 0.5 of 1) is cut at that plane. Its speed over the ground, per second
   (frame rate does not matter), against the body's own: over 1.2 times (+3 units/s) it **swings**: nothing; over 0.4 times (+1 unit/s) it **slides**; else it is **planted**.
   A planted part **prints once**, and never again until it has swung, slid or left the ground (a character turning on the spot does not rewrite its prints; a lying body stamps once).
-  **Upright** characters (standing, walking, all animals) only press: among their contacts one with a lower contact of the same body close beside it (a shin over a foot) is left out, and a print within 0.6 of its length of one of the body's last 8 is the same footfall. Capsules are grouped by **limb** from the skeleton (a bone's furthest ancestor within 0.17 of the body's size: a foot takes in its toes, not the knee): a limb prints **once per footfall**, 0.12 game seconds after landing (a foot lands on its heel and rolls flat), at once if a capsule lies whole on the ground, or as it leaves if it never settled. A planted limb prints an **imprint**: its own posed mesh as worn (`CharacterRenderer.RenderImprints`, bare foot, boot, stick leg, paw or hoof alike, no shape is drawn by hand), seen from under the ground in an orthographic 128-pixel tile (8 x 8 per frame) over a band from 0.4 units under the ground to 0.9 above it (the sole, not the foot's sides or the ankle); the depth presses the ground (0.6 of a full mark, about 7 cm), the lowest parts deepest, with a rim where the shape is near, the outline averaged over a disc (0.4 units in the fine image, 0.9 in the coarse). **Observed** (siwa-test6): read bilinearly, the coarse image drew stairs along the outline of prints made outside the fine image; parallax and displacement made no difference; the coarse image is now read through the same cubic B-spline as the fine one. Lying bodies
+  **Upright** characters (standing, walking, all animals) only press: among their contacts one with a lower contact of the same body close beside it (a shin over a foot) is left out, and a print within 0.6 of its length of one of the body's last 8 is the same footfall. Capsules are grouped by **limb** from the skeleton (a bone's furthest ancestor within 0.17 of the body's size: a foot takes in its toes, not the knee): a limb prints **once per footfall**, 0.12 game seconds after landing (a foot lands on its heel and rolls flat), at once if a capsule lies whole on the ground, or as it leaves if it never settled. A planted limb prints an **imprint**: its own posed mesh as worn (`CharacterRenderer.RenderImprints`, bare foot, boot, stick leg, paw or hoof alike, no shape is drawn by hand), seen from under the ground in an orthographic 128-pixel tile (8 x 8 per frame) over a band from 0.4 units under the ground to 0.9 above it (the sole, not the foot's sides or the ankle); the depth presses the ground (0.6 of a full mark, about 7 cm), the lowest parts deepest, with a rim where the shape is near, the outline averaged over a disc (0.4 units in the fine image, 0.9 in the coarse). **Observed** (the sand scene): read bilinearly, the coarse image drew stairs along the outline of prints made outside the fine image; parallax and displacement made no difference; the coarse image is now read through the same cubic B-spline as the fine one. Lying bodies
   (crawling, down, dead, ragdoll) press a stadium per part (rims first, then cores, so overlapping parts leave one bowl) and **plough** (a swept stadium from last frame's contact,
   heaped front and sides, feathered rear) where a part slides. A character with no pose (not drawn) leaves no print (only a crawler's furrow). No stamp above 2.5 units over
   the terrain (floors, roofs) or under the water line. **Observed** only on offscreen frames; the thresholds are tuned by eye. CPU **Observed**: 0.11 ms per frame for 37 characters

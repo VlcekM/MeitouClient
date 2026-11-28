@@ -30,8 +30,12 @@ Lost device: submissions, fence waits, acquire and present go through `VulkanDev
 before the call throws (`vulkan    device lost at ...`: frames, video memory, then VK_EXT_device_fault's description, fault addresses and vendor
 codes where the device has the extension). `MEITOU_DIAG_FAULT=1` adds what the addresses need to be read: `GpuAddressLog` (the ranges the driver
 reports bound and unbound, VK_EXT_device_address_binding_report, plus the allocator's placement of each image and buffer in its block; the last
-16384 unbound of each are kept) and `PassMarkers` (a host-visible word filled when the pre-frame buffer and each native segment begins, another
-when it ends: per frame slot, the pass the GPU began and finished last).
+16384 unbound of each are kept; a freed image's line says when and on which thread its release was asked for and which frame's end was to run
+it) and `PassMarkers` (a host-visible word filled when the pre-frame buffer and each native segment begins, another when it ends: per frame
+slot, the pass the GPU began and finished last). A segment's parts can be told apart with `IGpuContext.MarkStep` (the terrain resolve marks its
+relief pass and its shading). For the pass the GPU is inside, the report lists the passes up to it and the images its renderings write, with
+their addresses. A segment begins after a full barrier, so a segment begun and not finished holds the fault; the steps within one have no
+barrier between them, so the step named is where the GPU had got to, not proof that the fault is in it.
 
 ## Synchronization and shaders
 

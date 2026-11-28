@@ -986,6 +986,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         bool relief = ReliefTargets is { } reliefTargets && marched is { } reliefRect
             && RecordReliefPass(cmd, reliefTargets, reliefRect, in binding, constants);
 
+        _gpu.MarkStep(cmd, "terrain resolve, shading");
         cmd.BeginRendering(targets.Rendering);
         var state = DrawState.SceneDepth(targets.Formats, DrawState.Rgb) with { DepthTest = false, DepthWrite = false, Cull = CullMode.None };
         state.Record(cmd, targets);
@@ -1032,6 +1033,7 @@ public sealed unsafe class TerrainRenderer : IDisposable
         (GpuSet Set, uint Offset) constants)
     {
         var state = DrawState.For(reliefTargets.Formats, false);
+        _gpu.MarkStep(cmd, "terrain relief pass");
         cmd.BeginLabel("terrain relief pass");   // its own encoder's name in a GPU trace
         cmd.BeginRendering(reliefTargets.Rendering);
         state.Record(cmd, reliefTargets);

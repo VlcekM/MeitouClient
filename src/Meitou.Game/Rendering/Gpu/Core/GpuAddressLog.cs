@@ -21,10 +21,17 @@ public sealed unsafe class GpuAddressLog : IDisposable
     readonly record struct Range(ObjectType Type, ulong Handle, ulong Base, ulong Size, long Bound, long Gone, string? Name);
 
     /// <summary>
-    /// Where the allocator put an image or buffer: the memory block, the offset and size in it, and the frames it was made and freed in
-    /// (<c>Freed</c> -1 while alive).
+    /// Where the allocator put an image or buffer: the memory block, the offset and size in it, the frames it was made and freed in
+    /// (<c>Freed</c> -1 while alive) and how its release was asked for (<see cref="Release"/>; null when not seen).
     /// </summary>
-    readonly record struct Placement(ObjectType Type, ulong Handle, string Name, ulong Memory, ulong Offset, ulong Size, long Made, long Freed);
+    readonly record struct Placement(ObjectType Type, ulong Handle, string Name, ulong Memory, ulong Offset, ulong Size, long Made, long Freed,
+        Release? Asked = null);
+
+    /// <summary>
+    /// A release asked for: the frame being recorded or last recorded then, whether inside a frame, the thread, and the frame whose end was to run
+    /// it (-1: at once).
+    /// </summary>
+    readonly record struct Release(long Frame, bool InFrame, string Thread, long After);
 
     /// <summary>
     /// How many unbound ranges and freed placements are kept (the newest).
@@ -65,6 +72,10 @@ public sealed unsafe class GpuAddressLog : IDisposable
     /// The live images and buffers by object.
     /// </summary>
     readonly Dictionary<(ObjectType, ulong), Placement> _placed = [];
+    /// <summary>
+    /// The releases asked for and not yet carried out, by object.
+    /// </summary>
+    readonly Dictionary<(ObjectType, ulong), Release> _asked = [];
     /// <summary>
     /// The placements freed last, a ring written at <see cref="_freedCount"/>.
     /// </summary>
@@ -161,6 +172,19 @@ public sealed unsafe class GpuAddressLog : IDisposable
     }
 
     /// <summary>
+    /// A release of the object was asked for, to run at the end of frame <paramref name="after"/> (-1: at once); noted for its placement's line.
+    /// </summary>
+    public void Released(ObjectType type, ulong handle, long after, bool inFrame)
+    {
+        var thread = Thread.CurrentThread;
+        var release = new Release(Frame, inFrame, thread.Name ?? $"#{thread.ManagedThreadId}", after);
+        lock (_gate)
+        {
+            if (_placed.ContainsKey((type, handle))) _asked[(type, handle)] = release;
+        }
+    }
+
+    /// <summary>
     /// The allocator destroyed the object: its placement and any range the driver did not report unbound join the past ones.
     /// </summary>
     public void Forget(ObjectType type, ulong handle)
@@ -173,7 +197,8 @@ public sealed unsafe class GpuAddressLog : IDisposable
                 foreach (var r in ranges) Unbound(r, frame);
             }
 
-            if (_placed.Remove((type, handle), out var p)) _freed[_freedCount++ % Kept] = p with { Freed = frame };
+            _asked.Remove((type, handle), out var asked);
+            if (_placed.Remove((type, handle), out var p)) _freed[_freedCount++ % Kept] = p with { Freed = frame, Asked = asked };
         }
     }
 
@@ -280,6 +305,32 @@ public sealed unsafe class GpuAddressLog : IDisposable
     }
 
     /// <summary>
+    /// Where the image or buffer <paramref name="handle"/> sits in GPU addresses (its block's bound range plus its offset), with its name and state.
+    /// </summary>
+    internal string Locate(ObjectType type, ulong handle)
+    {
+        lock (_gate)
+        {
+            if (!_placed.TryGetValue((type, handle), out var p))
+            {
+                for (long i = _freedCount - 1; i >= Math.Max(_freedCount - Kept, 0); i--)
+                {
+                    var gone = _freed[i % Kept];
+                    if (gone.Type == type && gone.Handle == handle) return $"'{gone.Name}' FREED in frame {gone.Freed}";
+                }
+
+                return "not placed by the allocator";
+            }
+
+            if (!_bound.TryGetValue((ObjectType.DeviceMemory, p.Memory), out var ranges) || ranges.Count == 0)
+                return $"'{p.Name}' in block 0x{p.Memory:x} +0x{p.Offset:x}, {p.Size / 1024.0:0.#} KB (block address unknown)";
+
+            ulong start = ranges[0].Base + p.Offset;
+            return $"'{p.Name}' 0x{start:x}..0x{start + p.Size:x} ({p.Size / 1024.0:0.#} KB), alive since frame {p.Made}";
+        }
+    }
+
+    /// <summary>
     /// Whether the range of <paramref name="size"/> bytes at <paramref name="start"/> reaches into <paramref name="low"/>..<paramref name="high"/>.
     /// </summary>
     static bool Covers(ulong start, ulong size, ulong low, ulong high) => start <= high && start + size > low;
@@ -322,8 +373,15 @@ public sealed unsafe class GpuAddressLog : IDisposable
     static void DescribePlacement(Placement p, List<string> lines)
     {
         string life = p.Freed < 0 ? $"alive since frame {p.Made}" : $"FREED in frame {p.Freed} (made in frame {p.Made})";
-        lines.Add($"    {p.Type} 0x{p.Handle:x} '{p.Name}' at +0x{p.Offset:x}, {p.Size / 1024.0:0.#} KB, {life}");
+        lines.Add($"    {p.Type} 0x{p.Handle:x} '{p.Name}' at +0x{p.Offset:x}, {p.Size / 1024.0:0.#} KB, {life}{Asked(p.Asked)}");
     }
+
+    /// <summary>
+    /// How a freed placement's release was asked for, for its line ("" when not seen).
+    /// </summary>
+    static string Asked(Release? asked) => asked is not { } r ? ""
+        : $"; release asked in frame {r.Frame} ({(r.InFrame ? "recording" : "between frames")}, thread {r.Thread}), "
+            + (r.After < 0 ? "run at once" : $"to run after frame {r.After}");
 
     #endregion
 }

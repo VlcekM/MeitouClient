@@ -346,7 +346,7 @@ skill x 0.8 when treating oneself and q = min(skill, kit quality):
   by q x 0.01 x dt; it is recomputed every medical tick, so Meitou leaves it out.
 - **dt** (**Verified**, `FUN_1405cf130`): the task update gets the character's update time `+0xc4` = the scaled frame time `DAT_142133794` (0.01 when not positive) plus the time summed while the character was not visited (`+0xc0`, cleared), passed on by `FUN_1403563a0`; so its long run is the scaled frame time once, without the medical clock's extra visits ([Time](#time)). Meitou: `FirstAidSystem.Apply`, `MedicalState.CloseWound` / `Treat`, `dt = TickSeconds`.
 
-**Observed** (`wade`, player Metaru's MEDICAL_STATE): injured parts have flesh + bandage ≈100,
+**Observed** (a save's player character, its MEDICAL_STATE): injured parts have flesh + bandage ≈100,
 stun0 and bleeding0; the wounds are already treated. First Aid has nothing left to bandage;
 the HUD's yellow layer shows the treated damage awaiting passive recovery.
 
@@ -761,7 +761,7 @@ constant bytes):
   lerp(level x 0.01, X, X 1).
 - `overall mult` is looked up and discarded.
 
-**Observed**: METARU's Scout Legs (`level` 0, `quality` 95) give legs of 50 HP, the low end of 50/150. Crafted limbs
+**Observed**: a save's Scout Legs (`level` 0, `quality` 95) give legs of 50 HP, the low end of 50/150. Crafted limbs
 take the bench's grade roll ([buildings-production](buildings-production.md)), shop limbs the template's `robotics levels`
 spread ([economy](economy.md) 9.1).
 

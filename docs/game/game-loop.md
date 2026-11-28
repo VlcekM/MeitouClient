@@ -113,7 +113,7 @@ visible-area and frustum tests) and its platoon tests pass. A turn also runs the
 
 ### Update time off screen
 
-**Verified** (decompile, 1.0.68) and **Observed** (Frida on 1.0.65, the oracle-base-cage-blesse save at Rebirth, speed 1):
+**Verified** (decompile, 1.0.68) and **Observed** (Frida on 1.0.65, a save at Rebirth, speed 1):
 - The mover update (`CharMovement` slot 0x58) is called only by Character slot 0xd8 `threadedUpdate` (`FUN_1405c7c30`, the runner's list `+0x1a8`), with the
   character's `+0xc4` as its time. Slot 0xe0 `update` (`FUN_1405cf130`) writes `+0xc4` = `DAT_142133794` + `+0xc0` (0.01 when not above 0). `+0xc0` is the time
   gathered since the character's last turn.
@@ -150,7 +150,7 @@ A zone's loaded flags are set only when the zone manager goes from state 4 to 5,
 - **Loading panel.** `LoadingPanel` is a TextBox of `Kenshi_MainPanel.layout`; the exe replaces its caption "Loading ..." with the catalog's "Loading..." when it builds the HUD. It shows from the recentre until the cycle ends, held or not.
 - **Keys and buttons while held.** The pause key sees the paused byte and resumes at the speed it remembers, which it has just refreshed from the running speed, so nothing changes and the next test holds the game again. A speed button sets its speed and the hold stays; the pause button's 0 outlasts the hold.
 
-**Observed** (harness, 1.0.65, save `redev`, the Re_Dev Teleport after each `kh camera` jump of 5000 east or west, which outruns the zone load):
+**Observed** (harness, 1.0.65, the Re_Dev Teleport after each `kh camera` jump of 5000 east or west, which outruns the zone load):
 - **During the hold:** `paused` true with speed 1, the game hours frozen, "PAUSED" and "Loading..." on screen, the pause button lit and the main bar's speed label still 1x. Camera moves and the Re_Dev window worked; it let go after 2-3 s.
 - **Keys:** Space during the hold left it held and it resumed at 1x; the 5x button set 5x, the hold stayed, and it resumed at 5x.
 - **A pan within the leash:** no hold (pans of 2250 either side of the character, the leash's reach).

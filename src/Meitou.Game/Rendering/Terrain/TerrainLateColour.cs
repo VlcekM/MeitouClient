@@ -28,8 +28,8 @@ public static class TerrainResolveSplit
 
 /// <summary>
 /// The ground march in a pass of its own before the resolve (docs/render-terrain.md "Relief pass"): the resolve reads its result, so the march's
-/// registers do not weigh on the shading. On Metal by default, where it was measured; Vulkan marches in the resolve (the pass lost the device
-/// there). <c>MEITOU_TERRAIN_RELIEF_PASS=0</c> or <c>1</c> forces it off or on, for comparing.
+/// registers do not weigh on the shading. On Metal by default, where it saves time; Vulkan marches in the resolve (measured on a Radeon: the pass
+/// costs more there). <c>MEITOU_TERRAIN_RELIEF_PASS=0</c> or <c>1</c> forces it off or on, for comparing.
 /// </summary>
 public static class TerrainReliefPass
 {

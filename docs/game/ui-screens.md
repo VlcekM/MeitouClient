@@ -447,7 +447,7 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
 - Side-panel rendering follows the [main UI font policy](../formats/mygui.md),
   with 20-pixel row spacing at 1080 lines for name, state, XP and combat stats. Extended
   labels use the same uppercase Main colour as combat stats (**Observed** in the
-  supplied original Metaru screenshot).
+  supplied original screenshot).
 - Medical rows (**Verified**, decompile): Blood (Oil for skeletons) first, then the body parts, Hunger last; each `LifeBarNDatapanel` gets the name centred
   and an arrow string right-aligned in Alert; the number goes in `LifeBarNValue`. Layers are sized as width fractions from the left (Grey is a full-width
   background). Part (H flesh +0x40, S stun +0x44, D bandage +0x48, R rig +0x4c, Mx maximum; **Verified** `FUN_14088a8f0`): Green (H − S)/Mx, Yellow
@@ -1010,7 +1010,7 @@ inventory window (`FUN_1406e5740`) and hides the options, prospecting and in-gam
 opens. **Observed** with the harness (1.0.65, 1920 x 1080, 2026-11-17): Esc with only the overview open closes it and opens no menu; Esc with
 the inventory and the overview, or the inventory and the stats window, closes both in one press, and the next Esc opens the game menu; Esc
 with only the stats window open closes it and opens no menu; the inventory opened with [I] has its top-left corner at (54, 54), the margin.
-A search order on a barrel (Stoat, `Barkeeper-test-1`) opened, top-left corners: the looter's bag (54, 54) 240 x 296, the looter (294, 54)
+A search order on a barrel (Stoat) opened, top-left corners: the looter's bag (54, 54) 240 x 296, the looter (294, 54)
 498 x 618, the barrel's STORAGE (792, 54) 190 x 227, edge to edge. [I] then closed all three; [I] again opened only the bag and the looter, at
 the same places. Meitou (`InventoryLayout.PlaceWindowRow`, `ProductionWindows`
 (`OwnMachine`, the `-own` machine screens), `TradeWindows`, `PlayerInterface.EscapeCloseAll`, #834): the same for loot, containers, storages
@@ -1024,7 +1024,7 @@ opens again on such an order.
 
 ### Character stats runtime layout
 
-**Observed** in the original Metaru screenshot supplied on 2026-10-15 (1920×1080):
+**Observed** in the original screenshot supplied on 2026-10-15 (1920×1080):
 the window is about 980×650, titled with the character name, with no derived-statistics
 column. Attributes use grey painted uppercase labels, ordered Strength, Toughness,
 Dexterity, Perception. Four skill columns use dark standard text and right-aligned
@@ -1040,7 +1040,7 @@ values, with larger red-brown category headings:
 The skills parchment spans the remaining width; the description parchment spans
 the full bottom width.
 
-**Observed** in the supplied Metaru references: the bottom left has the stat name,
+**Observed** in the supplied references: the bottom left has the stat name,
 Stats Affected and Ways To Train headings with bullet rows. The right starts with
 a thin Next Level bar and percentage, followed by Description and wrapped prose.
 Help text is available from the installed [gettext catalog](../formats/gettext.md).
@@ -1370,7 +1370,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     only if the section exists and accepts it (`FUN_14074bc30`: an owned section asks the `RaceLimiter`, so a worn item the wearer's race may not wear is refused and auto-added; **Observed** in 1.0.68, #704: a Small Backpack worn by a bonedog loads into its main grid with its contents), the footprint lies inside the section's width and height and `FUN_1407466f0` finds no item of that section overlapping it. Otherwise it is
     auto-added to the inventory (`FUN_140745c80` to `FUN_14074bd20`: the sections that accept it, the backpack's last, each by `FUN_14074c8b0`), and when nothing has room it is not added (lost). No saved
     cell is ever repaired by sliding. A CONTAINER's contents are a second INVENTORY_STATE read the same way into the bag's own grid, so the contents of a bag carried in `main` and of the worn one are
-    separate grids that both name their items' section `backpack_content`: a window lists only the worn backpack's (a count of cells from both would overlap), **Verified** on the siwa-test save
+    separate grids that both name their items' section `backpack_content`: a window lists only the worn backpack's (a count of cells from both would overlap), **Verified** on a save
     (Trak: 70 items, 18 of them in the Grand sac carried in `main`, the others in the worn bag; no overlap within a grid, 31 overlapping pairs in the save when both bags' items are listed together).
   - Meitou (`SavedKit.Fill`): the same rules, the rejected items auto-added after the others are placed; `Inventory.Shown` is what the windows list (own items and the worn backpack's contents).
   - Trade: a drag buys or sells in place, asking the fence question as the right click does; the quantity is capped by what the payer can afford (the rest stays on the mouse);
@@ -1383,7 +1383,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     next press); right click or Escape puts it back; a stock item goes into a player character's window and such a window's own items onto the stock, the trade passing to that character within 1000 ([simulation](../simulation.md#trade)); give range 1000 (60 for an item out of
     a non-player window) from the window's owner; let go over a squad bar portrait, it is given to that member (same range and room rules; its own portrait puts it back). Race limits: `ItemInstance.WearableBy` (an animal only with its race listed). Not built: section item-count caps (no section is known to set one, above), "That's not for sale." (no trader character window),
     CAMPING buildings.
-- **Observed** in the original Metaru screenshot supplied on 2026-10-15: inventory
+- **Observed** in the original screenshot supplied on 2026-10-15: inventory
   icons have translucent black rectangular backings covering their cell footprints;
   empty clothing cells are pale. The red ones in the Wolf reference below are disabled sections (Disabled slots, below).
 - **Observed** in the vanilla screenshot supplied on 2026-10-15 (Wolf, Thieves Backpack, Armour King): the character title is the character's name; the bag title is its item name;
@@ -1392,7 +1392,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   stock prices are not printed over every icon. A white line over a black full-width track (about 3 px at 1080p) along the bottom edge of an item whose maximum charges are above 1 (food,
   medkits, splint kits, robot repair; stacks too, for their partly used unit); it shrinks: its width is charges / maximum (**Observed**, decompile; `ItemInstance.ChargeFraction`). The 2026-10-18
   vanilla trader screenshot (Swamper Barman) shows it full under food stacks. The stack count shows only from 2. The bag has a 10-by-14 grid with a fitted frame and an ARRANGE footer without the generic layout's editor capacity/type fields.
-  **Observed** (vanilla screenshot supplied 2026-10-21, METARU, Medium Backpack): the bag window sits left of the character window, same top, with no caption buttons; it is married to
+  **Observed** (vanilla screenshot supplied 2026-10-21, Medium Backpack): the bag window sits left of the character window, same top, with no caption buttons; it is married to
   the character window and closed only by OPEN BAG again. Meitou: `MyGuiScreenHost.Follow("bag", "inventory")` (a drag on either moves both; Escape or closing the inventory closes both). Engine choice: OPEN BAG's state is kept per character
   (`InventoryWindows.BagOpen`, not saved), so the bag reopens with that character's inventory or when they are selected again. Advanced → Open bags at once
   (`AutoOpenBags`, a Faithful / Meitou switch, Meitou and on by default): every bag shows until OPEN BAG closes it; Faithful: shut after a load until OPEN BAG is pressed (**Observed**, player report 2026-11-13).

@@ -36,7 +36,7 @@ Part of the world view of `meitou-viewer` (and the game, which shares `src/Meito
   (`--simple-sky` / `B`) was removed.
   Cost: not re-measured after the 2026-10-05 rewrite (the sky's integral now runs per pixel, about 4 × 5 exponentials, instead of
   a table lookup; the haze runs the same 4-sample integral per pixel, only where it blends something in: nearer than its ramp's start, without the weather's
-  fog, `atmoKenshiHaze` returns the colour unchanged without it. **Observed** (M6, Metal, `fps_issue` save, 1080p High, every pixel nearer than the ramp):
+  fog, `atmoKenshiHaze` returns the colour unchanged without it. **Observed** (M6, Metal, 8 characters on open ground at (-11270, 24317), 11:00, 1080p High, every pixel nearer than the ramp):
   83 -> 85.7 frames a second at zoom 31, 103 -> 106.6 at zoom 300; the picture unchanged (10 views: differences only on a character in another idle pose)).
   Passes that need only how much of a point's light reaches the eye (the AO's air visibility, the GI resolve, SSR, the lamp shadows, the characters'
   gathered light, the building LODs) take `atmoTransmittance`, the haze's `mul` without its in-scattered colours, where they evaluated `atmoApply` twice
