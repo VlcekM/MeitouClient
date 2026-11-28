@@ -80,7 +80,7 @@ c help                                # one usage line per command; `c help <nam
 | `navnear` | `navnear <x> <z> [radius]` |
 | `door` | `door <fixture id> \| door nearest <x> <z> [--lock] [--unlock] [--close] [--open] [--break] [--repair] [--all]` |
 | `doors` | `doors [building key]` |
-| `entity-screen` | `entity-screen <id>` |
+| `entity-screen` | `entity-screen <id>` (`rect` is the part on screen; `center` is where a click on it goes: a building's is a point where a pick takes that building when it has one) |
 | `equip` | `equip <item name or record>` |
 | `events` | `events on\|off` |
 | `find-item` | `find-item <text> [--type armour\|weapon\|item\|crossbow\|container] [--limit n] [--stats]` |
