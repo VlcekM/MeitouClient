@@ -110,6 +110,12 @@ sealed class FrontendScreens(PlayerInterface player)
         | (_slotTicks[4] ? Simulation.Saving.ImportOptions.Relations : 0);
 
     /// <summary>
+    /// Whether a load action resets the squads' positions: the load window's Load with its tick set (<c>FUN_14047d540</c> passes the tick to the
+    /// request); Continue (<c>FUN_140914c40</c>) never does.
+    /// </summary>
+    public bool LoadResetsSquads(MyGuiEvent e) => e.Screen == "load" && _slotTicks[0];
+
+    /// <summary>
     /// The open message box: ButtonA confirms (captioned <c>Yes</c>), an optional middle choice (ButtonB), and the last button cancels (Esc presses
     /// it).
     /// </summary>
@@ -450,7 +456,7 @@ sealed class FrontendScreens(PlayerInterface player)
                 _creditsStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 break;
             case "ContinueButton":
-                if (ContinueSlot is { } last) player.RaiseScreenAction(new("load", "LoadButton", "load", last.Folder));
+                if (ContinueSlot is { } last) player.RaiseScreenAction(new("title", "ContinueButton", "load", last.Folder));
                 break;
             case "ExitButton":
                 player.Confirm("EXIT", "Are you sure you want to exit?", () => player.RaiseScreenAction(new("menu", "ExitGameButton", "exit")));

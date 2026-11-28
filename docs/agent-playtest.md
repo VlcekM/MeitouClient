@@ -129,7 +129,7 @@ c help                                # one usage line per command; `c help <nam
 | `root-scan` | `root-scan <x> <z> <radius> [spacing] [length]` (counts free/slid/cut/refused root steps over a grid) |
 | `prospect` | `prospect` |
 | `putdown` | `putdown` |
-| `quickload` | `quickload [name]` |
+| `quickload` | `quickload [name [reset]]` |
 | `quicksave` | `quicksave [name]` |
 | `quit` | `quit` |
 | `ragdoll-dump` | `ragdoll-dump [--id <c:slot.gen>]` (the first selected character's ragdoll: each body's world place and each joint's twist and swing against its limits, degrees) |

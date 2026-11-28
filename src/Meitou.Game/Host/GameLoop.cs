@@ -799,7 +799,7 @@ sealed class GameLoop(GameHost host)
     void OnScreenAction(MyGuiEvent e)
     {
         if (e.Action == "save") host.Saves.SaveRequestedFolder = Data.Save.SaveCatalog.Folder(Simulation.Saving.QuickSave.DefaultRoot, e.Text);
-        else if (e.Action == "load") host.Saves.LoadRequestedFolder = e.Text;
+        else if (e.Action == "load") host.Saves.LoadRequested = (e.Text, host.Player.Frontend.LoadResetsSquads(e));
         else if (e.Action == "import") host.Saves.ImportRequested = (e.Text, host.Player.Frontend.ImportFlags);
         else if (e.Action == "new-game") host.NewGame.NewGameRequested = e.Text;
         else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) host.FeedbackCapture.FeedbackAction(e);

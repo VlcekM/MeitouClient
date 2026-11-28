@@ -104,14 +104,7 @@ public static class SaveImport
     /// Puts the squads of a save <see cref="Filter"/> moved to <see cref="ResetPosition"/> (and their members) on the ground there: the original's
     /// position has no height.
     /// </summary>
-    public static void PlaceOnGround(SaveGame game, Func<float, float, float> groundAt)
-    {
-        foreach (var platoon in game.Platoons)
-        {
-            platoon.Position = platoon.Position with { Y = groundAt(platoon.Position.X, platoon.Position.Z) };
-            foreach (var c in platoon.Characters) c.Position = c.Position with { Y = groundAt(c.Position.X, c.Position.Z) };
-        }
-    }
+    public static void PlaceOnGround(SaveGame game, Func<float, float, float> groundAt) => SquadReset.PlaceOnGround(game.Platoons, groundAt);
 
     /// <summary>
     /// The research of the start: the first finished research and nothing queued or paid.
@@ -200,20 +193,9 @@ public static class SaveImport
         if (keep.Count == 0) throw new InvalidOperationException("The save has no squad of the player's to import.");
 
         game.Quick.Records.RemoveAll(r => r.RecordType == FcsRecordType.Platoon && !keep.Any(p => ReferenceEquals(p.Record, r)));
-        for (int i = 0; i < keep.Count; i++)
-        {
-            var platoon = keep[i];
-            platoon.Record.Ints["squad index"] = i;
-            if ((options & ImportOptions.ResetPositions) == 0) continue;
+        for (int i = 0; i < keep.Count; i++) keep[i].Record.Ints["squad index"] = i;
 
-            var at = ResetPosition + new Vector3(i, 0, i);
-            platoon.Position = at;
-
-            // The members stand with their squad (engine choice: the original moves the squad and the members follow on activation; here each stands
-            // 2 units from the last).
-            for (int m = 0; m < platoon.Characters.Count; m++) platoon.Characters[m].Position = at + new Vector3(2 * m, 0, 0);
-        }
-
+        if ((options & ImportOptions.ResetPositions) != 0) SquadReset.Move(keep, ResetPosition);
         return keep;
     }
 

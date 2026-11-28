@@ -135,7 +135,8 @@ against French 1440-line screenshots. Every caption the code sets is the catalog
   `quick.save`, its name as is; the date is the folder's last write in the user's short date and time with seconds; newest first, names compared
   without case and dates by time (`FUN_14047cdb0`). Nothing is selected on opening and the info box (a DatapanelGUI, not a picture) is empty; a
   selection shows Date, File version ("Ancient" when empty), Faction name, Funds ("c."), Members size, Location, Day, at the DatapanelGUI's default
-  row count 55 (`FUN_1406fce20`; the start window sets 40, the advanced options 30). The Load button is always live (Meitou's
+  row count 55 (`FUN_1406fce20`; the start window sets 40, the advanced options 30). The load window's "Reset squad positions" tick (off) moves the
+  player's squads to the saved camera pivot ([save.md](../formats/save.md#reset-squad-positions-fun_14036b370)). The Load button is always live (Meitou's
   Fixes page "Load button", on by default, keeps it off until a readable save is selected).
 - **Import** (`FUN_14047bad0`, `FUN_140378a30`): ticks reset squad positions (off), buildings, research, dead NPCs, relations (on), flags 0x1, 0x4,
   0x8, 0x10, 0x20 (0x2 always added); Import is live once a save is selected; Advanced options opens its own options window, filled from the save's

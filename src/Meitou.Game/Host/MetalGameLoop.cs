@@ -1312,7 +1312,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _hud.ScreenAction += e =>
             {
                 if (e.Action == "save") host.Saves.SaveRequestedFolder = SaveCatalog.Folder(QuickSave.DefaultRoot, e.Text);
-                else if (e.Action == "load") host.Saves.LoadRequestedFolder = e.Text;
+                else if (e.Action == "load") host.Saves.LoadRequested = (e.Text, _hud.Frontend.LoadResetsSquads(e));
                 else if (e.Action == "import") host.Saves.ImportRequested = (e.Text, _hud.Frontend.ImportFlags);
                 else if (e.Action == "new-game") host.NewGame.NewGameRequested = e.Text;
                 else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) host.FeedbackCapture.FeedbackAction(e);

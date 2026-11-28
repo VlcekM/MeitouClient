@@ -37,10 +37,13 @@ sealed class GameSaves(GameHost host)
     /// </summary>
     bool _autosaveDue;
     /// <summary>
-    /// Requests to save into and to load from a chosen save folder, taken by <see cref="HandleSaves"/>; ReadingFolder is the folder a load or an
-    /// import reads.
+    /// A request to save into a chosen save folder, taken by <see cref="HandleSaves"/>; ReadingFolder is the folder a load or an import reads.
     /// </summary>
-    internal string? SaveRequestedFolder, LoadRequestedFolder, ReadingFolder;
+    internal string? SaveRequestedFolder, ReadingFolder;
+    /// <summary>
+    /// A request to load a chosen save folder, taken by <see cref="HandleSaves"/>, with the load window's "Reset squad positions" tick.
+    /// </summary>
+    internal (string Folder, bool ResetSquads)? LoadRequested;
     /// <summary>
     /// A request to import a save folder into a new world with the given options, taken by <see cref="HandleSaves"/>.
     /// </summary>
@@ -71,10 +74,10 @@ sealed class GameSaves(GameHost host)
             SaveRequestedFolder = null;
             QuickSaveNow(to);
         }
-        if (LoadRequestedFolder is { } sourceFolder)
+        if (LoadRequested is { } load)
         {
-            LoadRequestedFolder = null;
-            BeginQuickLoad(sourceFolder);
+            LoadRequested = null;
+            BeginQuickLoad(load.Folder, load.ResetSquads);
         }
         if (ImportRequested is { } import)
         {
@@ -332,9 +335,9 @@ sealed class GameSaves(GameHost host)
 
     /// <summary>
     /// Starts loading a save under the loading screen (GameHost.Transition.cs): the files are read on a worker, the new world is made, the navmesh
-    /// round the player waits.
+    /// round the player waits. With <paramref name="resetSquads"/> the player's squads start at the saved camera's pivot (<see cref="SquadReset"/>).
     /// </summary>
-    void BeginQuickLoad(string? source = null)
+    void BeginQuickLoad(string? source = null, bool resetSquads = false)
     {
         if (!SavesAvailable(out string reason))
         {
@@ -354,18 +357,29 @@ sealed class GameSaves(GameHost host)
         }
         ReadingFolder = folder;
         Task<SaveGame>? read = null;
+        Vector3? resetAt = null;
         string summary = "";
         host.Sound.AudioGameStarts();
         PreparedSystems? prepared = null;
         host.StartSceneLoad(host.Player.TitleOpen, null,
-            GameHost.Stage("read", () => read = Task.Run(() => SaveGame.Load(SaveFolder.Open(folder), ReadArrivalHour))),
+            GameHost.Stage("read", () => read = Task.Run(() =>
+            {
+                var save = SaveGame.Load(SaveFolder.Open(folder), ReadArrivalHour);
+                if (resetSquads) resetAt = ResetSquads(save);
+                return save;
+            })),
             GameHost.Stage("systems", () =>
             {
                 prepared = PrepareSystems(read!, interactive: true);
                 return null;
             }, duringAscent: true),
-            GameHost.Stage("navmesh", () => NavmeshOfPlayer(read!)),
-            GameHost.Stage("build", () => SwapInSave(read!, interactive: true, out summary, prepared: prepared)),
+            // Squads moved by the reset stand on the ground at its point, whose navmesh is waited for; else the mesh round the player.
+            GameHost.Stage("navmesh", () => resetAt is { } at ? NavmeshAround(at) : NavmeshOfPlayer(read!)),
+            GameHost.Stage("build", () =>
+            {
+                if (resetAt is { } at) GroundResetSquads(read!.Result, at);
+                return SwapInSave(read!, interactive: true, out summary, prepared: prepared);
+            }),
             GameHost.Stage("finishing", () =>
             {
                 host.SettleNewWorld();
@@ -375,6 +389,30 @@ sealed class GameSaves(GameHost host)
                 SaveInUse = folder;
                 return null;
             }));
+    }
+
+    /// <summary>
+    /// A load's "Reset squad positions" (docs/formats/save.md "Reset squad positions"): the player's squads of <paramref name="save"/> moved to the
+    /// saved camera's pivot. Returns the point, or null when the save has no squad to move.
+    /// </summary>
+    static Vector3? ResetSquads(SaveGame save)
+    {
+        var squads = SquadReset.PlayerSquads(save);
+        if (SquadReset.LoadPoint(save.Camera, squads) is not { } at) return null;
+
+        SquadReset.Move(squads, at);
+        return at;
+    }
+
+    /// <summary>
+    /// Stands the squads a load's reset moved to <paramref name="at"/> on the navmesh layer within reach of its height (the ground, or the floor the
+    /// camera looked at), else the lowest.
+    /// </summary>
+    void GroundResetSquads(SaveGame save, Vector3 at)
+    {
+        if (host.Nav is not { } nav) return;
+
+        SquadReset.PlaceOnGround(SquadReset.PlayerSquads(save), (x, z) => nav.Walkability.GroundHeight(x, z, at.Y));
     }
 
     /// <summary>

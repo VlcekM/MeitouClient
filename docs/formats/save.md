@@ -298,7 +298,7 @@ waits and runs when it ends (Meitou: `HandleNewGame` keeps `newGameRequested` wh
 | Kind | Action |
 | --- | --- |
 | 1 | `SaveManager::saveGame` (`FUN_140375360`), then write `continue=<name>` to `settings.cfg` |
-| 2 | `SaveManager::loadGame` (`FUN_140373f00`) |
+| 2 | `SaveManager::loadGame` (`FUN_140373f00`; +0xA4 bit 0: [reset squad positions](#reset-squad-positions-fun_14036b370)) |
 | 3 | `SaveManager::importGame` (`FUN_140378a30`, flags in +0xA4): new world, keeps the player squads and parts of the chosen save ([import](#importing-a-game-savemanagerimportgame-fun_140378a30)) |
 | 4 | New game: sets the version string to "1.0.68", reloads the game data and starts the chosen NEW_GAME_STARTOFF |
 
@@ -348,8 +348,7 @@ Reset squad positions 0x1, Buildings 0x4, Research 0x8, Dead NPCs 0x10, Relation
 9. **Research**: off, research is reset and `_Default Start` is completed; on, the first RESEARCH record is read (`FUN_1408360f0`). Then from CAMERA: `time day/hour/minute` and the sky
    transition (`FUN_14066db50`), money = max(0, `player money`) (+10000 when salvaged), the faction name = `pfaction name` (empty: as step 1), the camera pose
    (`FUN_1407ade60`) and the squad option bools (`FUN_1403ebf50`).
-10. **Reset**: the camera goes to (-43500, 0, -6625) and `FUN_14036b370` puts every player squad at that point + (i, 0, i), i the squad's index in the list (an inactive one is
-    activated there). **Observed** (#734: a 10-unit height grid of the original's zone 22.30 navmesh tile and of Meitou's, sampled by a scratch patch, and headless
+10. **Reset**: the camera goes to (-43500, 0, -6625) and the squads are [reset](#reset-squad-positions-fun_14036b370) to that point. **Observed** (#734: a 10-unit height grid of the original's zone 22.30 navmesh tile and of Meitou's, sampled by a scratch patch, and headless
     walks): the point is walkable ridge (y about 1433); about 90 units east a trench about 100 deep runs north-south (x about -43410..-43280, z at least
     -6380..-6780) with no navmesh in either, so nobody walks into it or out of it.
 11. **Relations**: each GAMESTATE_FACTION of the save is loaded into its faction's relation object with the import flag set (`FUN_1409ef4e0`). Without the tick the factions keep their FACTION record values.
@@ -374,6 +373,20 @@ import filter does not yet write that marker (the NPC platoons are left out, so 
 data, so an import without Relations first sets it back to the FACTION values (`FactionRelations.Reset`), and every other load that applies the save's
 relations starts its change count again (`FactionRelations.RestartChanges`): the state hash reads that count, so it would otherwise depend on the
 games played before in the session.
+
+### Reset squad positions (`FUN_14036b370`)
+
+**Verified** (decompile of `FUN_14036b370` = `Faction::resetSquadPositions`, `FUN_140373f00`, `FUN_14047b210`, `FUN_14047aa80`, the Load button `FUN_14047d540` and
+Continue `FUN_140914c40`; the two calls' third argument read in RE_Kenshi's Steam 1.0.65 exe, at 0x14047cf50 and 0x140913eea): the load window's tick is the
+load request's +0xA4 (the button passes the ticks' OR, the reset tick being bit 0x1); Continue passes 0. Both the import and `loadGame` call
+`FUN_14036b370(player faction, point)`: each entry i of the faction's active-platoon list gets point + (i, 0, i) as its pending position (`+0xd4`, flag `+0xe0`
+set), then each inactive platoon is activated and put at the point. `loadGame` tests the bit after the platoons and the unique table are loaded and takes the
+camera pivot's position, which the save's CAMERA has just set ([camera](camera.md#saved-camera): the saved `pos`, or the fallback when out of bounds).
+
+Meitou (`SquadReset`; the load window's tick through `FrontendScreens.LoadResetsSquads`): the player's loaded squads but the squad of the dead, in the save's
+order, are moved in the read save before the world is made from it, each member 2 units east of the last; the navmesh round the point is waited for and
+they stand on its highest layer within reach of the point's height (else the lowest). A Meitou save without a camera view puts them at the first member's
+place. These are engine choices.
 
 ### Object handles and slot lists
 

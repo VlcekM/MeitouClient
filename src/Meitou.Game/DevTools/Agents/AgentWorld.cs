@@ -253,8 +253,8 @@ sealed class AgentWorld(GameHost host)
 
         Add("quicksave", "quicksave [name]", "queue a quicksave (the F5 key), taken between ticks; with a name, into Meitou's save folder of that "
             + "name instead of the quicksave slot", ControlQuicksave);
-        Add("quickload", "quickload [name]", "queue a quickload (the F9 key); with a name, the save folder of that name written by quicksave "
-            + "<name>", ControlQuickload);
+        Add("quickload", "quickload [name [reset]]", "queue a quickload (the F9 key); with a name, the save folder of that name written by "
+            + "quicksave <name>, and with reset as the load window's Reset squad positions tick", ControlQuickload);
         RegisterControlBaseCommands(Add);
         host.AgentPlay.RegisterControlPlayCommands(Add);
         host.AgentTowns.RegisterControlTownCommands(Add);
@@ -995,9 +995,9 @@ sealed class AgentWorld(GameHost host)
     /// </summary>
     void ControlQuickload(IReadOnlyList<string> args, DevConsole con)
     {
-        if (args.Count > 1)
+        if (args.Count > 2 || args.Count == 2 && args[1] != "reset")
         {
-            con.Error("usage: quickload [name]");
+            con.Error("usage: quickload [name [reset]]");
             return;
         }
 
@@ -1010,8 +1010,9 @@ sealed class AgentWorld(GameHost host)
 
         try
         {
-            host.Saves.LoadRequestedFolder = Data.Save.SaveCatalog.Folder(Simulation.Saving.QuickSave.DefaultRoot, args[0]);
-            con.Print($"load queued: {host.Saves.LoadRequestedFolder}");
+            string folder = Data.Save.SaveCatalog.Folder(Simulation.Saving.QuickSave.DefaultRoot, args[0]);
+            host.Saves.LoadRequested = (folder, args.Count == 2);
+            con.Print($"load queued: {folder}{(args.Count == 2 ? " (squads reset)" : "")}");
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException)
         {
