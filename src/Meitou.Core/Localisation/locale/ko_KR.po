@@ -5957,3 +5957,15 @@ msgstr "카테고리"
 #. machine-translated
 msgid "Subtypes"
 msgstr "하위 유형"
+
+#. machine-translated
+msgid "I don't have any {1}."
+msgstr "{1}이(가) 없어."
+
+#. machine-translated
+msgid "Builders name missing materials"
+msgstr "건설자가 부족한 자재를 말함"
+
+#. machine-translated
+msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
+msgstr "자재 없이 건설을 지시받은 건설자가 철판 등 어떤 자재가 부족한지 말합니다. 게임에서는 건설 자재를 들고 있고 현장에 다른 것이 필요할 때도 항상 건설 자재가 없다고 말합니다."

@@ -5960,3 +5960,15 @@ msgstr "Categorías"
 #. machine-translated
 msgid "Subtypes"
 msgstr "Subtipos"
+
+#. machine-translated
+msgid "I don't have any {1}."
+msgstr "No tengo {1}."
+
+#. machine-translated
+msgid "Builders name missing materials"
+msgstr "Los constructores nombran los materiales que faltan"
+
+#. machine-translated
+msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
+msgstr "Un constructor al que se le ordena construir algo sin tener materiales dice qué materiales faltan, como placas de hierro. El juego siempre dice que no tiene materiales de construcción, incluso cuando lleva materiales de construcción y la obra necesita otra cosa."

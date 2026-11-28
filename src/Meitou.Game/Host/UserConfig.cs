@@ -634,6 +634,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixPickUpTheft { get; set; } = true;
     /// <summary>
+    /// A builder told to build a site it has no material for names the materials the site still owes (Fixes settings; off: "I don't have any
+    /// building materials." whatever the site lacks, as the game says; docs/game/buildings-production.md "Missing-material speech").
+    /// </summary>
+    public bool FixMissingMaterials { get; set; } = true;
+    /// <summary>
     /// A shopkeeper at its counter is talked to from the counter's front (Gameplay settings, Meitou; off: the game's talk reach, so the customer
     /// walks round behind the counter; <c>World.CounterTalk</c>).
     /// </summary>

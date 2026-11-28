@@ -5957,3 +5957,15 @@ msgstr "カテゴリー"
 #. machine-translated
 msgid "Subtypes"
 msgstr "サブタイプ"
+
+#. machine-translated
+msgid "I don't have any {1}."
+msgstr "{1}を持っていない。"
+
+#. machine-translated
+msgid "Builders name missing materials"
+msgstr "建築者が不足資材を名指しする"
+
+#. machine-translated
+msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
+msgstr "資材を持たずに建設を命じられた建築者は、鉄板など、どの資材が足りないかを言います。ゲームでは、建築資材を持っていて現場が別の物を必要としている場合でも、常に建築資材がないと言います。"

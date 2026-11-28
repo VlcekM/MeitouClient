@@ -777,6 +777,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else.",
             Toggle: new("Pick-up thefts from the owner", () => menu.Config.FixPickUpTheft,
                 v => { menu.Config.FixPickUpTheft = v; menu.PickUpTheftChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Builders name missing materials",
+            "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. "
+            + "The game always says it has no building materials, even when it carries Building Materials and the site wants something else.",
+            Toggle: new("Builders name missing materials", () => menu.Config.FixMissingMaterials,
+                v => { menu.Config.FixMissingMaterials = v; menu.MissingMaterialsChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Guards spare their own",
             "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. "
             + "In the game they enslave them too. Arrests that end in slavery are not affected.",

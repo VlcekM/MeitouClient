@@ -351,7 +351,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         var cold = world.Characters.Cold(slot)!;
         if (site.LevelPlacement is not null) Touch(world, site);
         if (site.Stalled && !Carries(cold, site) && Source(world, slot, cold, site) is null)
-            world.Bark(world.Characters.IdOf(slot), Loc.Tr("I don't have any building materials."));
+            world.Bark(world.Characters.IdOf(slot), MissingLine(world, site));
 
         Start(world, slot, new TaskRequest(CharacterTask.Build, TaskType.Build, TaskSource.Order) { Site = site.Id });
     }
@@ -1880,6 +1880,27 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The builder's line for a stalled site it has no material for: the game's "I don't have any building materials.", or with
+    /// <see cref="World.MissingMaterialsFix"/> (Meitou fix) the materials the site still owes, by their shown names in the site's order ("I don't have
+    /// any Iron Plates."), since the game's line reads as a lie from a builder carrying Building Materials for a site that wants Iron Plates.
+    /// </summary>
+    string MissingLine(World world, BuildSite site)
+    {
+        if (!world.MissingMaterialsFix) return Loc.Tr("I don't have any building materials.");
+
+        var names = new List<string>();
+        foreach (var m in site.Materials)
+        {
+            if (m.Required <= m.Delivered) continue;
+
+            string name = ShownText.Record(m.Item, _db.Find(m.Item)?.Name ?? m.Item);
+            if (!names.Contains(name)) names.Add(name);
+        }
+
+        return Loc.Tr("I don't have any {1}.", string.Join(", ", names));
     }
 
     /// <summary>

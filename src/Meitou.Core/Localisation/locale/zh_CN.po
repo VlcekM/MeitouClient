@@ -6790,3 +6790,15 @@ msgstr "类别"
 #. machine-translated
 msgid "Subtypes"
 msgstr "子类型"
+
+#. machine-translated
+msgid "I don't have any {1}."
+msgstr "我没有{1}。"
+
+#. machine-translated
+msgid "Builders name missing materials"
+msgstr "建造者说出缺少的材料"
+
+#. machine-translated
+msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
+msgstr "被命令建造却没有材料的建造者会说出缺少哪些材料，例如铁板。游戏中他总是说自己没有建筑材料，即使他带着建筑材料而工地需要的是别的东西。"

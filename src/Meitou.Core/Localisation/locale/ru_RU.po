@@ -5963,3 +5963,15 @@ msgstr "Категории"
 #. machine-translated
 msgid "Subtypes"
 msgstr "Подтипы"
+
+#. machine-translated
+msgid "I don't have any {1}."
+msgstr "У меня нет: {1}."
+
+#. machine-translated
+msgid "Builders name missing materials"
+msgstr "Строители называют недостающие материалы"
+
+#. machine-translated
+msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
+msgstr "Строитель, которому велели строить без материалов, называет, каких материалов не хватает, например железных пластин. В игре он всегда говорит, что у него нет стройматериалов, даже когда несёт стройматериалы, а стройке нужно другое."

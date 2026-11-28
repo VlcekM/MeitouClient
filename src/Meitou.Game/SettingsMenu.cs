@@ -520,6 +520,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? PickUpTheftChanged { get; init; }
 
     /// <summary>
+    /// Applies the missing-materials line fix (<see cref="UserConfig.FixMissingMaterials"/>).
+    /// </summary>
+    public Action<bool>? MissingMaterialsChanged { get; init; }
+
+    /// <summary>
     /// Applies the shop counter talk reach (<see cref="UserConfig.CounterTalk"/>).
     /// </summary>
     public Action<bool>? CounterTalkChanged { get; init; }
@@ -1774,6 +1779,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         BagSearchChanged?.Invoke(true);
         Config.FixPickUpTheft = true;
         PickUpTheftChanged?.Invoke(true);
+        Config.FixMissingMaterials = true;
+        MissingMaterialsChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;
         Config.FixArmourClipping = Rendering.Characters.ArmourClipFix.Enabled = false;
         Config.KeepInfoPanel = true;

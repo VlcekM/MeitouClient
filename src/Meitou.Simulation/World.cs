@@ -521,6 +521,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool PickUpTheftFix { get; set; } = true;
     /// <summary>
+    /// A builder told to build a stalled site it has no material for names the materials the site still owes (Fixes settings, Meitou); off, it says
+    /// "I don't have any building materials." whatever the site lacks, as the game does (docs/game/buildings-production.md "Missing-material speech").
+    /// </summary>
+    public bool MissingMaterialsFix { get; set; } = true;
+    /// <summary>
     /// A shopkeeper at its counter is talked to and traded with from the counter's front (Gameplay settings, Meitou): its talk reach is
     /// <see cref="Dialogue.DialogueSystem.CounterTalkReach"/>; off, the game's reach, so the customer walks round behind the counter
     /// (docs/game/dialogue.md "Player conversation").

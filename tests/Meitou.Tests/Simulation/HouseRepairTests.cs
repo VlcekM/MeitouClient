@@ -220,7 +220,7 @@ public class HouseRepairTests
             var bubble = Assert.Single(r.World.Snapshot.Speech);
 
             Assert.Equal(r.Builder, bubble.Speaker);
-            Assert.Equal("I don't have any building materials.", bubble.Text);
+            Assert.Equal("I don't have any Building Materials.", bubble.Text);
 
             r.World.RunTicks(20);
 

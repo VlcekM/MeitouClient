@@ -292,6 +292,47 @@ public class ConstructionTests
 
     // ------------------------------------------------------------------ a site built, a building taken apart
 
+    /// <summary>
+    /// A build order the builder can't supply names what the site still owes, once per order: a builder with only Building Materials for the hut
+    /// (planks and iron) names both, and once its planks are in, only the iron.
+    /// </summary>
+    [Fact]
+    public void A_build_order_without_materials_names_the_missing_ones_once_per_order()
+    {
+        using var rig = new Rig(snapshots: true);
+        var builder = rig.Add(1000, 2000, Unit, (BuildingBuildData.BuildingMaterialsItem, 4));
+        rig.Say(new PlaceBuildings([new PlannedBuilding(Hut, HutAt, Quaternion.Identity)]) { Tick = 0 });
+        rig.World.RunTick();
+        var site = Assert.Single(rig.World.Buildings.All);
+
+        rig.Say(new BuildOrder([builder], site.Id) { Tick = rig.World.Tick });
+        rig.World.RunTick();
+
+        var bubble = Assert.Single(rig.World.Snapshot.Speech);
+
+        Assert.Equal(builder, bubble.Speaker);
+        Assert.Equal("I don't have any Plank, Iron.", bubble.Text);
+
+        // The bubble's 5.5 s pass and the order says nothing again.
+        rig.World.RunTicks(300);
+
+        Assert.Empty(rig.World.Snapshot.Speech);
+
+        // Given planks, the builder delivers and builds them; then the site owes only iron.
+        rig.Cold(builder).Inventory!.Add(rig.Items.Create(Plank, 3)!);
+        rig.Say(new BuildOrder([builder], site.Id) { Tick = rig.World.Tick });
+        for (int t = 0; t < 1000 && site.Materials[0].Delivered < 3; t++) rig.World.RunTick();
+        for (int t = 0; t < 4000 && !site.Stalled; t++) rig.World.RunTick();
+        rig.World.RunTicks(300);
+
+        Assert.True(site.Stalled);
+
+        rig.Say(new BuildOrder([builder], site.Id) { Tick = rig.World.Tick });
+        rig.World.RunTick();
+
+        Assert.Equal("I don't have any Iron.", Assert.Single(rig.World.Snapshot.Speech).Text);
+    }
+
     [Fact]
     public void A_builder_completes_a_site_with_the_documented_rates_and_dismantling_refunds_60_to_100_percent()
     {

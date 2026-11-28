@@ -184,6 +184,10 @@ msgid "A blow that destroys a character's head cuts it off, by the same rule the
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow and most at the part that was struck, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard."
 msgstr ""
 
@@ -911,6 +915,10 @@ msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Builders name missing materials"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -2591,6 +2599,10 @@ msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/SettingHints.cs
 msgid "Hybrid tone map: ACES share"
+msgstr ""
+
+#: src/Meitou.Simulation/Construction/ConstructionSystem.cs
+msgid "I don't have any {1}."
 msgstr ""
 
 #: src/Meitou.Game/Title/FrontendScreens.cs src/Meitou.Game/Title/TitleMenu.cs
