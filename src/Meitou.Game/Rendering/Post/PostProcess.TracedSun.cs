@@ -125,11 +125,12 @@ public sealed unsafe partial class PostProcess
         using var batch = Gpu.Uploads.Begin();
         if (_tracedTerm is null)
         {
-            // 32-bit floats: the alpha holds three packed levels (GiResolveShaders.WithAlbedo), exact up to 2^24.
+            // 32-bit floats: the alpha holds three packed levels (GiResolveShaders.WithAlbedo), exact up to 2^24. Live from the opaque scene,
+            // which writes it, to its last readers in FinishScene: the tiled lamp shadows and the character occlusion take it off with their light.
             var desc = new TextureDesc(InternalFormat.Rgba32F, _width, _height, Use: TextureUse.Sampled | TextureUse.ColourTarget,
                 Name: "post traced sun term")
             {
-                Transient = new TransientLifetime(TransientPhase.OpaqueScene, TransientPhase.TracedSun),
+                Transient = new TransientLifetime(TransientPhase.OpaqueScene, TransientPhase.CharacterOcclusion),
             };
             _tracedTerm = new Target2D(batch.Create(desc), TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         }

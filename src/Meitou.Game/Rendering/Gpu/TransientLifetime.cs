@@ -3,7 +3,8 @@ namespace Meitou.Game.Rendering.Gpu;
 /// <summary>
 /// Sequential intra-frame phases during which a transient render target is live. Two transient targets whose
 /// <see cref="TransientLifetime"/> intervals do not overlap may alias the same device-local optimal-image memory on
-/// Vulkan. Never assign a cross-frame history or persistent target to a transient phase.
+/// Vulkan. A target's range runs from the phase of its first writer to that of its last reader: a reader past it sees the memory of
+/// whatever later phase's target shares it. Never assign a cross-frame history or persistent target to a transient phase.
 /// </summary>
 public enum TransientPhase
 {
