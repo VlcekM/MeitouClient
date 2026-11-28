@@ -243,8 +243,8 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// A finished craft (<b>Observed</b>, <c>FUN_1402bcac0</c>): armour of the crafter's tier (one better on a critical), whatever the bench's
     /// tech level (<b>Verified</b>, disassembly: no bench field reaches the factory), and a robotic limb or crossbow of that grade as its level;
-    /// a weapon of the queued model, or when the crafter's skill is below its level and there was no critical, of the best model of the bench at
-    /// or below the skill (engine reading of the model pick); other items as they are. The craft leaves the queue, and with repeat on goes back to
+    /// a weapon of the next model up on a critical, else of the queued model, or when the crafter's skill is below its level, of the best model of
+    /// the bench at or below the skill (<see cref="WeaponModel"/>); other items as they are. The craft leaves the queue, and with repeat on goes back to
     /// its end.
     /// </summary>
     void Finish(World world, Machine m, CraftState state, CraftJob job, float skill)
@@ -295,16 +295,23 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The model a weapon craft comes out as: the queued one, or below the crafter's skill with no critical the best model of the bench at or below
-    /// the skill (else its lowest).
+    /// The model a weapon craft comes out as (<b>Verified</b>, <c>FUN_1402bcac0</c>): on a critical the next model up (<see cref="CraftBench.CriticalModel"/>);
+    /// otherwise the queued one, or below the crafter's skill the best model of the bench at or below the skill (else its lowest).
     /// </summary>
-    internal static CraftOption WeaponModel(CraftBench bench, CraftOption option, float skill, bool critical) =>
-        skill >= option.Level || critical
-            ? option
-            : bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item && o.Level <= skill)
+    internal static CraftOption WeaponModel(CraftBench bench, CraftOption option, float skill, bool critical)
+    {
+        if (critical)
+        {
+            var up = bench.CriticalModel(option.Level, skill);
+            return option with { Model = up.ModelStringId, Level = up.Level };
+        }
+
+        if (skill >= option.Level) return option;
+        return bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item && o.Level <= skill)
                 .OrderByDescending(o => o.Level)
                 .FirstOrDefault()
-                ?? bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item).OrderBy(o => o.Level).First();
+            ?? bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item).OrderBy(o => o.Level).First();
+    }
 
     /// <summary>
     /// The Craft tab's Current Smith per bench: his name, effective level of the bench's stat and its multiplier's penalty, and for each queued craft

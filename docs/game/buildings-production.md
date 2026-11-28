@@ -893,7 +893,9 @@ Function 10, `CraftingBuilding` (**Observed** unless noted).
   the item level. A weapon whose level is above the crafter's skill, with no critical, comes out as a lower model
   (`FUN_1402bcac0` -> `FUN_1402bb020`, **Verified**: the player-weapons maker's highest model level at or below the smith's level and the queued weapon's level whose model the bench lists
   in `weapon crafts` and research has enabled; Meitou: `ProductionSystem.WeaponModel`, the bench's lowest model when none qualifies where the original takes a default record). A critical on a
-  weapon below the smith's level takes a model from `FUN_1402bb2b0` of min(item level, skill) (not read; Meitou keeps the queued model).
+  weapon takes, of the `PLAYER_WEAPONS` `weapon models`, the lowest v0 above min(item level, int skill), the first listed of equal ones, with no
+  bench-list or research test; none above gives `913-gamedata.base` (Rusted Junk), so an Edge Type 3 (80) critical comes out Rusted Junk
+  (`FUN_1402bcac0` -> `FUN_1402bb2b0`, **Verified**, decompile; Mk II 55 -> Mk III 60; Meitou: `CraftBench.CriticalModel`, #1553).
 - **Research** `enable item`, `enable armour`, `enable weapon type`, `enable weapon model`, `enable crossbow`,
   `enable backpack`, `enable robotics` unlock crafts, v0 = the repetition that does it; `repeats` and `repeat mult`
   ([Research](#research) repetitions).

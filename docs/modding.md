@@ -2097,7 +2097,7 @@ established. Where the last column is filled, it is what Meitou does without the
 | `584-gamedata.base` | ITEM Fabrics | armour's `fabrics amount` | original ([buildings-production](game/buildings-production.md)) | |
 | `RESEARCH_TEMPLATE`, `BLUEPRINT_ITEM_ARMOUR`, `BLUEPRINT_ITEM_GEAR`, `BLUEPRINT_ITEM` | RESEARCH, ITEMs | the gear blueprints' research and their look | original ([buildings-production](game/buildings-production.md)) | research without the template's values; the look `BLUEPRINT_ITEM`, without it no blueprint item |
 | `1057-gamedata.base`, `1058-gamedata.base` | WEAPON_MANUFACTURER and model | the weapon factory's fallback | original ([factions](game/factions-squads-towns.md)) | the picked manufacturer |
-| `913-gamedata.base` | weapon model | a weaponsmith's model name with none found | original ([ui-screens](game/ui-screens.md)) | no name |
+| `913-gamedata.base` | weapon model | a weaponsmith's model name with none found; a weapon critical with no model above | original ([ui-screens](game/ui-screens.md), [buildings-production](game/buildings-production.md)) | no name; the critical's model at level 0 |
 | `917-gamedata.base` | WEAPON_MANUFACTURER | a CHARACTER without `weapon level` | original ([characters](characters.md)) | no weapon (a loadout note) |
 | `5460-weather.mod`, `18003-gamedata.base` | WEATHER Default, BIOME_GROUP NONE | a season without weather; the region never named | original ([weather](formats/weather.md), [ui-screens](game/ui-screens.md)) | |
 | `360-gamedata.base`, `742-gamedata.base` | MATERIAL_SPEC | a building part's and a town's material fallback | original ([runtime-materials](formats/runtime-materials.md)) | |

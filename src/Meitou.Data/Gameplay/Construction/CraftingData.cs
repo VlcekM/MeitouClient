@@ -1,4 +1,5 @@
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay.Combat;
 using Meitou.Localisation;
 
 namespace Meitou.Data.Gameplay.Construction;
@@ -93,6 +94,12 @@ public sealed record CraftBench
     public const string Fabrics = "584-gamedata.base";
 
     /// <summary>
+    /// The model a weapon critical gives when no model of <see cref="PlayerWeapons"/> is above the level it starts from, Rusted Junk in the base game
+    /// (<b>Verified</b>: the id is hard-coded in <c>FUN_1402bb2b0</c>).
+    /// </summary>
+    public const string CriticalFallbackModel = "913-gamedata.base";
+
+    /// <summary>
     /// The armour qualities by crafting tier (<b>Verified</b>, the jump table of <c>FUN_14082e6b0</c>): prototype to masterwork.
     /// </summary>
     public static readonly int[] ArmourQualities = [5, 20, 40, 60, 80, 95];
@@ -102,6 +109,12 @@ public sealed record CraftBench
     /// crafts</c>, then the weapons).
     /// </summary>
     public IReadOnlyList<CraftOption> Options { get; init; } = [];
+
+    /// <summary>
+    /// Every <c>weapon models</c> entry of <see cref="PlayerWeapons"/> in list order, whatever the bench lists or research has enabled: where a
+    /// weapon critical picks its model (<see cref="CriticalModel"/>). Empty on a bench without <c>weapon crafts</c>.
+    /// </summary>
+    public IReadOnlyList<WeaponModelEntry> MakerModels { get; init; } = [];
 
     /// <summary>
     /// <c>tech level</c> (0: no cap, read as 100).
@@ -162,8 +175,10 @@ public sealed record CraftBench
         // A weapon bench lists models; it crafts every weapon type of the player's manufacturer in each (Observed, the WEAPON scan of FUN_1402b9aa0;
         // the types come from PLAYER_WEAPONS).
         var models = function.GetReferences("weapon crafts").Select(r => r.TargetStringId).ToHashSet(StringComparer.Ordinal);
+        List<WeaponModelEntry> makerModels = [];
         if (models.Count > 0 && db.Find(PlayerWeapons) is { } maker)
         {
+            makerModels = [.. maker.GetReferences("weapon models").Select(m => new WeaponModelEntry(m.TargetStringId, m.Values.Value0, m.Values.Value1))];
             var levels = maker.GetReferences("weapon models").Where(m => models.Contains(m.TargetStringId)).OrderBy(m => m.Values.Value0).ToList();
             foreach (var type in maker.GetReferences("weapon types"))
                 if (db.Find(type.TargetStringId) is { Type: FcsRecordType.Weapon })
@@ -178,6 +193,7 @@ public sealed record CraftBench
         return new CraftBench
         {
             Options = options,
+            MakerModels = makerModels,
             TechLevel = tech > 0 ? tech : 100,
             OverridesIngredients = overrides,
             OutputWidth = width,
@@ -267,6 +283,23 @@ public sealed record CraftBench
         int s = (int)skill, tier = s > 79 ? 4 : s > 59 ? 3 : s > 39 ? 2 : s > 19 ? 1 : 0;
         if (critical && tier < 5) tier++;
         return ArmourQualities[tier];
+    }
+
+    /// <summary>
+    /// The model a weapon critical makes (<b>Verified</b>, <c>FUN_1402bcac0</c> -> <c>FUN_1402bb2b0</c>, decompile): of <see cref="MakerModels"/>, the
+    /// lowest level above the smaller of the queued weapon's <paramref name="level"/> and the int <paramref name="skill"/> (the first listed of equal
+    /// levels), whatever the bench lists or research has enabled; with none above, <see cref="CriticalFallbackModel"/>. A Mk II (55) from a smith above
+    /// 55 comes out a Mk III (60); an Edge Type 3 (80, the base game's highest) comes out Rusted Junk.
+    /// </summary>
+    public WeaponModelEntry CriticalModel(int level, float skill)
+    {
+        int from = Math.Min(level, (int)skill);
+        WeaponModelEntry? best = null;
+        foreach (var model in MakerModels)
+            if (model.Level > from && (best is null || model.Level < best.Value.Level)) best = model;
+
+        if (best is { } found) return found;
+        return MakerModels.FirstOrDefault(m => m.ModelStringId == CriticalFallbackModel, new WeaponModelEntry(CriticalFallbackModel, 0, 0));
     }
 
     /// <summary>
