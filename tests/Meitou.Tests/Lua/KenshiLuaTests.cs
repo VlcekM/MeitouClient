@@ -229,6 +229,62 @@ public sealed class KenshiLuaTests
     }
 
     /// <summary>
+    /// The overlay is registered as a HUD panel, so Escape does not close it or swallow the key before the game menu opens.
+    /// </summary>
+    [Fact]
+    public void LuaHudOverlay_IsRegisteredAsPanel_AndIgnoresEscape()
+    {
+        LuaHudState hud = new();
+        LuaHudOverlay overlay = new(hud, (_, _) => { });
+        MyGuiScreenHost screens = new(new());
+
+        Assert.True(hud.SetText("kl:Demo", "lbl0", 0.1, 0.1, 0.2, 0.04, "HUD", "#FFFFFF"));
+        overlay.SyncOpen(screens);
+        Assert.True(screens.IsOpen(LuaHudOverlay.ScreenId));
+
+        Assert.False(screens.Escape());
+        Assert.True(screens.IsOpen(LuaHudOverlay.ScreenId));
+    }
+
+    /// <summary>
+    /// Repeated per-frame <see cref="KenshiLuaHost.Tick"/> calls must invoke pre-loaded Lua functions directly without calling
+    /// <c>Script.LoadString</c> (which would grow MoonSharp bytecode and trigger O(N²) <c>SignalByteCodeChange</c> stalls).
+    /// </summary>
+    [Fact]
+    public void Tick_DoesNotCompileBytecodePerFrame_AndStaysConstantTime()
+    {
+        string tmp = Path.Combine(Path.GetTempPath(), "meitou_lua_perf_" + Guid.NewGuid().ToString("N")[..8]);
+        string modDir = Path.Combine(tmp, "PerfMod");
+        Directory.CreateDirectory(Path.Combine(modDir, "scripts", "init"));
+        File.WriteAllText(Path.Combine(modDir, "scripts", "init", "main.lua"), """
+            local n = 0
+            Meitou.spawn(function()
+                while true do
+                    n = n + 1
+                    Meitou.waitFrames(1)
+                end
+            end)
+            """);
+
+        try
+        {
+            using KenshiLuaHost host = new(new FakeWorldBridge(), new LuaHudState(), log: _ => { });
+            Assert.Equal(1, host.DiscoverEnabledMods([("PerfMod", modDir)]));
+            Assert.Contains("PerfMod", host.StartAll());
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 600; i++) host.Tick();
+            sw.Stop();
+
+            Assert.True(sw.ElapsedMilliseconds < 2000, $"600 ticks took {sw.ElapsedMilliseconds} ms (expected constant-time dispatch)");
+        }
+        finally
+        {
+            Directory.Delete(tmp, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// <c>Meitou.spawn</c>, <c>waitFrames</c>, <c>waitUntil</c>, <c>after</c>, and <c>cancel</c> advance cooperatively across frames.
     /// </summary>
     [Fact]
