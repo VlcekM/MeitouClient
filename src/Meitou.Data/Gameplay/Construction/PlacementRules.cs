@@ -88,9 +88,36 @@ public enum PlacementFailure : byte
 public sealed record PlacementReadout(int Resource, float Value, float? CropYield = null, IReadOnlyList<string>? Environment = null);
 
 /// <summary>
-/// A placed town as the placement rules see it.
+/// A town as the placement rules see it: a level town, or an outpost made in play (<see cref="Outpost"/>).
 /// </summary>
-public readonly record struct PlacementTown(TownData Town, Vector2 Position);
+public readonly record struct PlacementTown(TownData Town, Vector2 Position)
+{
+    /// <summary>
+    /// The TOWN record of an outpost made in play: <c>player_town_template</c>, type 1 (<b>Verified</b>, <c>FUN_140934e10</c>).
+    /// </summary>
+    static readonly TownData OutpostTown = new() { Id = "player_town_template", Name = "Your Outpost", Type = TownType.Outpost };
+
+    /// <summary>
+    /// Its radius when not the record's (an outpost's reassessed one, <c>FUN_140926eb0</c>); null: <see cref="TownData.Radius"/>.
+    /// </summary>
+    public float? OwnRadius { get; init; }
+
+    /// <summary>
+    /// Whether a player faction owns it now, whatever its record's faction (an outpost of the player's).
+    /// </summary>
+    public bool PlayerOwned { get; init; }
+
+    /// <summary>
+    /// Its radius: <see cref="OwnRadius"/>, else the record's.
+    /// </summary>
+    public float Radius => OwnRadius ?? Town.Radius;
+
+    /// <summary>
+    /// An outpost made in play, at <paramref name="position"/> with its radius.
+    /// </summary>
+    public static PlacementTown Outpost(Vector2 position, float radius, bool playerOwned) =>
+        new(OutpostTown, position) { OwnRadius = radius, PlayerOwned = playerOwned };
+}
 
 /// <summary>
 /// The deterministic half of the placement checks (docs/simulation.md "Buildings"): pure functions of the data, run by the host for the ghost and
@@ -110,18 +137,32 @@ public static class PlacementRules
     public const float OutpostRadiusFactor = 2.5f;
 
     /// <summary>
+    /// How deep in the town containing it a ghost must stand for that town to be its own instead of the nearest (<b>Verified</b>,
+    /// <c>FUN_1404dba40</c>); <see cref="ContainedLenientFactor"/> when the nearest is ruins or a point of interest.
+    /// </summary>
+    public const float ContainedFactor = 0.9f;
+
+    /// <summary>
+    /// <see cref="ContainedFactor"/> when the nearest town is ruins or a point of interest (<b>Verified</b>, <c>FUN_1404dba40</c>).
+    /// </summary>
+    public const float ContainedLenientFactor = 0.6f;
+
+    /// <summary>
     /// The minimum resource value or crop yield below which a mine or farm is refused (<b>Verified</b>,
     /// docs/game/buildings-production.md "Placement").
     /// </summary>
     public const float MinimumYield = 0.01f;
 
     /// <summary>
-    /// The town block of docs/game/buildings-production.md "Placement" (Towns): a town of another faction blocks within its radius
-    /// (<see cref="TownData.Radius"/>, 0 for a null town which then blocks only outposts); a building that creates a player town within 2.5 x that
-    /// radius (1 x for ruins and points of interest) or <see cref="OutpostMinimumDistance"/> of the centre. Nest markers (never a candidate,
-    /// <c>FUN_140927f10</c>) and towns of the player's faction never block, nor does any town for interior furniture or a node standing in a building
-    /// it may be built in (<paramref name="inOwnedBuilding"/>, <see cref="MayBuildIn"/>; <c>FUN_1404dba40</c>).
-    /// <see cref="PlacementFailure.NotOwnedBuilding"/> (the second text of the first row) is the host's: it needs the building under the ghost.
+    /// The town block of docs/game/buildings-production.md "Placement" (Towns; <b>Verified</b>, <c>FUN_1404dba40</c>): the ghost's town is the
+    /// nearest by centre of every town but nest markers, the player's outposts included (<c>FUN_140927f10</c>, type 10). It blocks a building that
+    /// creates a player town within 2.5 x its radius (1 x for ruins and points of interest) or <see cref="OutpostMinimumDistance"/> of its centre;
+    /// but when the ghost stands within 0.9 x the radius (0.6 x for a nearest ruin or point of interest) of the nearest town containing it that no
+    /// player faction owns (<see cref="Containing"/>), that town is the ghost's. A town a player faction owns never blocks, so building near an
+    /// outpost is free whatever town lies a little farther; other buildings are blocked only within 1 x the radius of the ghost's town. Null towns
+    /// have radius 0 and block only a building that creates a player town, within 2000. No town blocks interior furniture or a node standing in a
+    /// building it may be built in (<paramref name="inOwnedBuilding"/>, <see cref="MayBuildIn"/>). <see cref="PlacementFailure.NotOwnedBuilding"/>
+    /// (the second text of the first row) is the host's: it needs the building under the ghost.
     /// </summary>
     public static PlacementFailure TownBlock(
         BuildingBuildData building, Vector2 at, IReadOnlyList<PlacementTown> towns, string playerFactionId, bool inOwnedBuilding = false)
@@ -129,32 +170,80 @@ public static class PlacementRules
         ArgumentNullException.ThrowIfNull(building);
         ArgumentNullException.ThrowIfNull(towns);
         if (inOwnedBuilding && (building.IsInteriorFurniture || building.IsNode)) return PlacementFailure.None;
+        if (Nearest(towns, at) is not { } nearest) return PlacementFailure.None;
 
-        foreach (var placed in towns)
-        {
-            var town = placed.Town;
-            if (town.Type == TownType.NestMarker) continue;
-            if (playerFactionId.Length > 0 && town.Faction == playerFactionId) continue;
+        bool lenient = nearest.Town.Type is TownType.Ruins or TownType.PointOfInterest;
+        bool close = Vector2.DistanceSquared(at, nearest.Position) < Square(OutpostMinimumDistance);
+        bool near = close || Within(nearest, at, lenient ? 1 : OutpostRadiusFactor);
 
-            float limit = OutpostLimit(building, town);
-            if (Vector2.DistanceSquared(at, placed.Position) < limit * limit) return PlacementFailure.TooCloseToTown;
-        }
+        float depth = lenient ? ContainedLenientFactor : ContainedFactor;
+        var town = Containing(towns, at, playerFactionId) is { } holder && Within(holder, at, depth) ? holder : nearest;
+        if (!near || IsPlayers(town, playerFactionId)) return PlacementFailure.None;
+        if (!building.CreatesPlayerTown && !Within(town, at, 1)) return PlacementFailure.None;
 
-        return PlacementFailure.None;
+        return PlacementFailure.TooCloseToTown;
     }
 
     /// <summary>
-    /// The distance a town blocks at for a building: its radius, or for an outpost the larger of its scaled radius and
-    /// <see cref="OutpostMinimumDistance"/>.
+    /// The town nearest <paramref name="at"/> by centre, nest markers left out (<c>FUN_140927f10</c>); null when there is none.
     /// </summary>
-    static float OutpostLimit(BuildingBuildData building, TownData town)
+    static PlacementTown? Nearest(IReadOnlyList<PlacementTown> towns, Vector2 at)
     {
-        float radius = town.Radius;
-        if (!building.CreatesPlayerTown) return radius;
+        PlacementTown? best = null;
+        float bestDistance = float.MaxValue;
+        foreach (var town in towns)
+        {
+            if (town.Town.Type == TownType.NestMarker) continue;
 
-        float factor = town.Type is TownType.Ruins or TownType.PointOfInterest ? 1 : OutpostRadiusFactor;
-        return MathF.Max(factor * radius, OutpostMinimumDistance);
+            float distance = Vector2.DistanceSquared(at, town.Position);
+            if (distance >= bestDistance) continue;
+
+            best = town;
+            bestDistance = distance;
+        }
+
+        return best;
     }
+
+    /// <summary>
+    /// The town whose radius holds <paramref name="at"/> nearest by centre among those no player faction owns, nests and nest markers left out
+    /// (<c>FUN_140928890</c> with its player filter); null when there is none (the original's <c>NO_TOWN</c>, which has no town to give).
+    /// </summary>
+    static PlacementTown? Containing(IReadOnlyList<PlacementTown> towns, Vector2 at, string playerFactionId)
+    {
+        PlacementTown? best = null;
+        float bestDistance = float.MaxValue;
+        foreach (var town in towns)
+        {
+            if (town.Town.Type is TownType.Nest or TownType.NestMarker || IsPlayers(town, playerFactionId)) continue;
+
+            float distance = Vector2.DistanceSquared(at, town.Position);
+            if (distance > Square(town.Radius) || distance >= bestDistance) continue;
+
+            best = town;
+            bestDistance = distance;
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="at"/> lies strictly within <paramref name="factor"/> x the town's radius of its centre (<c>FUN_140926d50</c>: never
+    /// for a nest marker).
+    /// </summary>
+    static bool Within(PlacementTown town, Vector2 at, float factor) =>
+        town.Town.Type != TownType.NestMarker && Vector2.DistanceSquared(at, town.Position) < Square(town.Radius * factor);
+
+    /// <summary>
+    /// Whether a player faction owns the town: an outpost of the player's, or a town of the player's faction.
+    /// </summary>
+    static bool IsPlayers(PlacementTown town, string playerFactionId) =>
+        town.PlayerOwned || playerFactionId.Length > 0 && town.Town.Faction == playerFactionId;
+
+    /// <summary>
+    /// The square of <paramref name="x"/>.
+    /// </summary>
+    static float Square(float x) => x * x;
 
     /// <summary>
     /// Whether a ghost may stand in a level building (<b>Verified</b> by decompile, <c>FUN_1404d69c0</c>): one a player faction owns; else, for a

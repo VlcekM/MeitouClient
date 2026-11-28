@@ -322,7 +322,10 @@ Reset squad positions 0x1, Buildings 0x4, Research 0x8, Dead NPCs 0x10, Relation
    FACTION records with **no** saved faction states. While background loading is busy the request is retried next frame.
 2. The old `quick.save` is read into the save container. The clock hour is set to 10, then step 8 overwrites the clock.
 3. Towns come from the level data as in a new game. **Buildings**: the save's towns of the player faction that were `discovered` and are not nests are loaded
-   (the outposts the player made are in `GAMESTATE_TOWN_INSTANCE_LIST`, `FUN_140935120`, `FUN_1403722d0`); a player town inside another player town's radius is removed
+   (the outposts the player made are in `GAMESTATE_TOWN_INSTANCE_LIST`, `FUN_140935120`, `FUN_1403722d0`): every list entry makes its town, and
+   only the applying of an undiscovered state of a player town is skipped. An outpost's sparse attached state (`Town` slot 114, `FUN_140371370`:
+   only `instance`, `zone_x_<i>` / `zone_y_<i>`, `zones_count` and the `hand*` handle) has no `discovered`, so Meitou's import keeps a player-owned entry's first
+   state whatever its discovery (#1550: dropping it lost the entry, its outpost and its buildings' town); a player town inside another player town's radius is removed
    (`FUN_14092ae80`, also run by `loadGame`, **Verified** by decompile: in town-list order, each town owned by a player faction is set to the player faction, then the nearest
    other town (XZ) that is not a NEST_MARKER (type 8) and is owned by the player faction is found).
 4. Always (`FUN_140372560`): every non-nest town of the save gives its `discovered` and `explored` to the new town; player towns are set discovered and explored. **Dead NPCs**

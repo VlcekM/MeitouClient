@@ -365,6 +365,12 @@ sealed class BuildingSync(GameHost host)
     int _levelOwnersRevision = -1;
 
     /// <summary>
+    /// The towns <see cref="PlacementTowns"/> last gave, with the population data and the snapshot's outpost list they were made from.
+    /// </summary>
+    (PopulationData? Data, IReadOnlyList<Simulation.Production.OutpostSnapshot>? Outposts, IReadOnlyList<PlacementTown> Towns) _placementTowns =
+        (null, null, []);
+
+    /// <summary>
     /// What the player's build mode needs (docs/simulation.md "Buildings", BuildMode): the catalog of BUILDINGs, their texts and parts, the placement
     /// services (terrain, collision footprints) and the ghost drawing. Null without a game database.
     /// </summary>
@@ -381,7 +387,6 @@ sealed class BuildingSync(GameHost host)
         var parts = new Dictionary<string, IReadOnlyList<PlacedMesh>>(StringComparer.Ordinal);
         var markers = new Dictionary<string, IReadOnlyList<PlacedMesh>>(StringComparer.Ordinal);
         var icons = new BuildingIcons(Path.Combine(host.Install.DataDirectory, "icons", "buildings"));
-        IReadOnlyList<PlacementTown>? towns = null;
         return new Building.BuildServices
         {
             Menu = new Building.BuildMenu([.. BuildData().Values]),
@@ -399,11 +404,31 @@ sealed class BuildingSync(GameHost host)
             IconFile = icons.Find,
             Placement = MakePlacementServices(db, footprints),
             WorldInfo = MakeWorldInfo(db),
-            Towns = () => towns ??= host.PopData is { } d ? [.. d.Sites.Select(s => new PlacementTown(s.Town, new(s.Position.X, s.Position.Z)))] : [],
+            Towns = PlacementTowns,
             PlayerFactionId = () => host.PopData is { } d && d.PlayerFaction is >= 0 and var mine && mine < d.Factions.Count ? d.Factions[mine].Id
                 : "",
             DrawGhosts = draws => host.ActiveObjects?.SetGhosts(draws),
         };
+    }
+
+    /// <summary>
+    /// The towns a ghost is tested against (<see cref="PlacementRules.TownBlock"/>): the latest snapshot's outposts, one of the player's faction
+    /// counting as the player's, then the level's towns; remade when either changes.
+    /// </summary>
+    IReadOnlyList<PlacementTown> PlacementTowns()
+    {
+        var data = host.PopData;
+        var outposts = host.Session.CurrentSnapshot.Outposts;
+        if (ReferenceEquals(data, _placementTowns.Data) && ReferenceEquals(outposts, _placementTowns.Outposts)) return _placementTowns.Towns;
+
+        int player = host.Session.World.Player.Faction;
+        var towns = new List<PlacementTown>();
+        foreach (var outpost in outposts)
+            towns.Add(PlacementTown.Outpost(new Vector2(outpost.Position.X, outpost.Position.Z), outpost.Radius, outpost.Owner == player));
+        foreach (var site in data?.Sites ?? []) towns.Add(new PlacementTown(site.Town, new Vector2(site.Position.X, site.Position.Z)));
+
+        _placementTowns = (data, outposts, towns);
+        return towns;
     }
 
     /// <summary>

@@ -272,22 +272,29 @@ shows the first failing message in this order (**Verified** unless marked):
 | "Ground needs to be more level." | vertical margins or slope (below) |
 
 - **Towns** (`FUN_140926d50`, `FUN_140926eb0`): radius = `town radius mult` x base (town 2500, village 937.5, ruins
-  875, point of interest 437.5, others 1250). A `creates player town` building is blocked within 2.5 x radius (1 x for
-  ruins/POI) or 2000 of the centre; other buildings only within 1 x radius, so they may stand outside any town.
-  Player towns never block. **Verified** (`FUN_140927f10`, `FUN_140926d50`, `FUN_140926eb0`, `FUN_1404dba40`): the ghost's
-  town is the nearest by centre among all types except type 8 `NEST_MARKER` (skipped, so a nest marker never blocks; the
-  ghost's call arguments are not in the decompile, the other callers pass type 10 = any);
-  type 10 null towns have radius 0 (type 8 too), so they block only a `creates player town` building, within 2000.
+  875, point of interest 437.5, others 1250; a player town its reassessed `override`, 2500 while that is at most 1).
+  **Verified** (`FUN_1404dba40`, its call arguments from the disassembly; `FUN_140927f10`, `FUN_140928890`, `FUN_140926d50`,
+  constants read from the binary): the ghost's town T is the nearest by centre of every town but type 8 `NEST_MARKER`
+  (type filter 10, no faction filter), the player's outposts included. The ghost is near T when within 2.5 x its radius
+  (1 x when T is ruins or a point of interest) or within 2000 of its centre. Then the nearest town by centre whose radius
+  holds the ghost (`FUN_140928890` with its player filter on: not a nest marker, not a nest, no player faction owning it;
+  none gives `NO_TOWN`) becomes T when the ghost lies within 0.9 x its radius (0.6 x when the first T was ruins or a
+  point of interest). The ghost is blocked when it was near and T is not owned by a player faction; a building that does
+  not create a player town only when it also stands within 1 x T's radius. So a ghost nearer an outpost's centre than any
+  other town's is never blocked, however close a large town is (#1550: an outpost about 4900 from The Hub and Rebel Base,
+  inside the Hub's 6250). Type 10 null towns have radius 0 (type 8 too), so they block only a `creates player town`
+  building, within 2000.
   No town blocks an `is interior furniture` or `is node` ghost (ghost `+0x109`) whose footprint nodes all stand in one
   building it may be built in (ghost `+0x8b`): `FUN_1404dba40` clears the town, so furniture goes into a bought town house.
+  Meitou (`PlacementRules.TownBlock`): the level's towns and the outposts made in play (an outpost of another faction counts
+  as type 1, the template's); its containing-town lookup reads every town, the original's only those its zone grid lists in
+  the 3 x 3 zones round the ghost.
 - **Building in a building** (**Verified** by decompile, `FUN_1404d69c0`): every footprint node must stand in the same
   building, and that building's owner (Building slot `+0x58`; none means the FACTION `nofac`, "No Faction") is a player
   faction (`+0x250`), or the ghost is not `creates player town` and the building is destroyed (slot `+0x330`, `+0x1a1`,
   the save's `destroyed`) or its owner faction is `not real` (`+0x1d0`, set from the record in `FUN_1407fe270`; `nofac`
   is, so ownerless buildings qualify). Else the ghost is refused, with "Can't place in a building you don't own." when a
   town also blocks (Meitou shows the same). Meitou: `PlacementRules.MayBuildIn`.
-  **Unknown/not modelled:** the original tests only that nearest town (Meitou tests every one), and swaps it for the
-  town containing the ghost (`FUN_140928890`) when inside 0.9 x its radius (0.6 x when the nearest is ruins/POI).
 - **Outposts** (**Verified**, `FUN_1404d6d90` per queued ghost on Confirm, then `FUN_1404db180`): a ghost in or on a
   building takes that building's town when it is within 5000 (X/Z) of the ghost, so furniture in a bought town house
   joins that town and never makes an outpost (Meitou: none, `BuildSite.Town` names player towns only; the parent instance id is unique only per

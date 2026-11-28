@@ -321,15 +321,17 @@ public static class SaveImport
                 continue;
             }
 
+            // An outpost's list entry stays whatever its first state's discovery (FUN_140935120 makes every entry's town; FUN_1403722d0 only skips
+            // applying an undiscovered state): dropping that state would take the entry, and the outpost, with it.
             if (mine && made.Contains(r.StringId))
             {
-                if ((options & ImportOptions.Buildings) != 0 && town.Discovered)
+                if ((options & ImportOptions.Buildings) == 0)
                 {
-                    r.Bools["explored"] = true;
+                    dropped.Add(r);
                     continue;
                 }
 
-                dropped.Add(r);
+                if (town.Discovered) r.Bools["explored"] = true;
                 continue;
             }
 

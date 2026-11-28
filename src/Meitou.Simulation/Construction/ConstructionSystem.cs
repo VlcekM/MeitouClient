@@ -451,7 +451,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         {
             var plan = plans[i];
             if (!float.IsFinite(plan.Position.X) || !float.IsFinite(plan.Position.Y) || !float.IsFinite(plan.Position.Z)) continue;
-            if (Data(plan.Record) is not { } data || Blocked(data, plan) != PlacementFailure.None) continue;
+            if (Data(plan.Record) is not { } data || Blocked(world, data, plan) != PlacementFailure.None) continue;
 
             sites[i] = NewSite(world, plan, data, complete);
             placed.Add(sites[i]!);
@@ -715,7 +715,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             return null;
         }
 
-        var fail = Blocked(data, plan);
+        var fail = Blocked(world, data, plan);
         if (fail != PlacementFailure.None)
         {
             world.Post(PlacementRules.Message(fail));
@@ -726,11 +726,30 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Whether a town keeps the plan off its ground (<see cref="PlacementRules.TownBlock"/>); a plan with a parent stands in a building the host
-    /// found ours.
+    /// Whether a town keeps the plan off its ground (<see cref="PlacementRules.TownBlock"/>, the level's towns and the outposts made in play); a plan
+    /// with a parent stands in a building the host found ours.
     /// </summary>
-    PlacementFailure Blocked(BuildingBuildData data, PlannedBuilding plan) =>
-        PlacementRules.TownBlock(data, new Vector2(plan.Position.X, plan.Position.Z), _towns, _playerFactionId, plan.Parent is not null);
+    PlacementFailure Blocked(World world, BuildingBuildData data, PlannedBuilding plan)
+    {
+        var at = new Vector2(plan.Position.X, plan.Position.Z);
+        return PlacementRules.TownBlock(data, at, TownsWithOutposts(world), _playerFactionId, plan.Parent is not null);
+    }
+
+    /// <summary>
+    /// The level's towns and the world's outposts, an outpost of the player's faction counting as the player's.
+    /// </summary>
+    List<PlacementTown> TownsWithOutposts(World world)
+    {
+        var towns = new List<PlacementTown>(_towns.Count + world.Buildings.Towns.Count);
+        foreach (var town in world.Buildings.Towns)
+        {
+            var at = new Vector2(town.Position.X, town.Position.Z);
+            towns.Add(PlacementTown.Outpost(at, town.Radius, town.Owner == world.Player.Faction));
+        }
+
+        towns.AddRange(_towns);
+        return towns;
+    }
 
     /// <summary>
     /// Adds the plan's site for the player's faction, in its town (<see cref="TownFor"/>): a ghost, or <paramref name="complete"/> built to its
