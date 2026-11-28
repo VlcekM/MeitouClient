@@ -92,7 +92,9 @@ characters round its owner and tests each as a circle (its footprint radius plus
   **carried** `+0x3d4`, [ragdolls](ragdolls.md#ragdollpart-and-requests)), in a **bed or cage** (`+0x2f8` != 0), or **sitting** (status `+0xb8`, `isSitting`), within the two radii + 40 horizontally and 20 up.
   Each entry is then re-tested by `FUN_1401476f0`: status `+0xb8` clear again, Character `+0x1a9` set (the character is near the camera or an active zone: a level-of-detail flag from `FUN_1405c9f60`) and not carried. Its circle is the
   other's `getRadius` (`FUN_1405c83b0`: footprint × size) plus the agent's own radius (`+0x70`); of the bodies overlapping it, it keeps the deepest overlap and the
-  way out of it, which the velocity setter `FUN_140147ca0` adds to the agent's own position, so only an agent whose velocity is set is pushed.
+  way out of it, which is added to the agent's own position: in mode 3 by `FUN_140147fd0` itself, else by the velocity setter `FUN_140147ca0` it calls. The
+  movement update `FUN_14065ffa0` calls `FUN_140147fd0` in each of its movement branches (the path one only for a character near the camera, `+0x1a9`, else
+  `FUN_140148ac0`, not read), so each agent puts itself out of the bodies it overlaps by the overlap, and one walking into another puts itself back out.
   **Observed** (#1585, the original): a Bonedog run to one spot with its owner stops behind or beside her and neither drifts.
 - **Observed**: a living character is a `PhysicsHullT` box ("hull size X/Y/Z" of the race, `FUN_140661a70` -> `FUN_1404ccb50`), a kinematic PhysX actor in group 0 that rays hit
   ([combat](combat.md#line-of-fire-and-the-hit-shape)); a ragdoll's

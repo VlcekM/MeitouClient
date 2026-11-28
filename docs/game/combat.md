@@ -472,7 +472,7 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   swings started before hold none). The +12 while running is in `CombatTuning.StandGap`.
 - **Body room** (`CombatSystem.NearestFriend`, `BodyRoom`): the ask fails while a non-enemy's centre is nearer than footprint + 2.5, ×1.2 in
   state 5 (`CombatSlot.CircleState`: engaged, its last ask failed with no blow coming at it). An AI rule, not collision: Meitou bodies are solid
-  only to `BodyShare` × footprint (2.4 for a human), and the separation push (within the two footprints, 8 for two humans) spreads crowded allies until they have room. Engine
+  only to `BodyShare` × footprint (2.4 for a human), and the separation push (within the two radii, footprint × size, 8 for two humans) spreads crowded allies until they have room. Engine
   readings: an enemy is one of a hostile faction, the target, or one fighting the asker; carried bodies do not count. Out of the list (`CombatSteering.OutOfFlock`): the down,
   caged, in a bed, carried, and those resting on a seat (Meitou's chair or throne sitting).
 

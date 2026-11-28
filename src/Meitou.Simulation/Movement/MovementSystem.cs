@@ -20,8 +20,8 @@ namespace Meitou.Simulation.Movement;
 /// <item>Separation: the repulsion along self-other is nonzero only closer than R and proportional to 100 x (1 - d/R), over at most
 /// 26 neighbours (Observed); R is the two radii (footprint x size), 8 for two humans (<see cref="SeparationRadius"/>; the nav agent's avoidance
 /// circle is the other's radius plus its own), and the scale from that proportionality to a speed is an engine choice
-/// (<see cref="SeparationStrength"/>). One standing still out of a fight is not pushed: the original's avoidance moves only an agent whose
-/// velocity is set.</item>
+/// (<see cref="SeparationStrength"/>). One standing still out of a fight is not pushed (engine choice: the original's push-out is positional, so one
+/// walking into another puts itself back out; this soft push both take shoved a stander aside, #1585).</item>
 /// <item>Body contact (engine choice; the original only avoids the standing bodies round a character, no physical collision was found:
 /// docs/game/pathfinding.md "Bodies in the way"): two standing bodies (<see cref="BodyShare"/> of their footprints) do not stay overlapped. Each
 /// takes half of the overlap between its stepped position and the other's last position, averaged over the bodies it overlaps, so a walker shoves a
@@ -1568,7 +1568,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     public const float Acceleration = 15;
 
     /// <summary>
-    /// R of the separation steering between two humans (footprint radius 4 each); a pair's R is its two footprints (<see cref="AddSeparation"/>).
+    /// R of the separation steering between two humans (radius 4 each); a pair's R is its two radii, footprint x size (<see cref="AddSeparation"/>).
     /// </summary>
     public const float SeparationRadius = 8;
 
@@ -2299,7 +2299,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         // Closing on its spot it is not held off by those standing round it (they are pushed aside as it arrives); a sitter is not moved at all.
         bool seated = Seated(n, cold);
 
-        // One standing still out of a fight is not pushed either: the original's avoidance moves only an agent whose velocity is set (#1585).
+        // One standing still out of a fight is not pushed either: the original's walker puts itself out of a stander (#1585).
         // A steering fighter keeps it: its repulsion is too weak to keep bodies apart in a crowd, and without it Contact shoves back out what
         // the steering walks in.
         if (s.Closing || seated || StandsStill(cold, s)) push.Sum = Vector2.Zero;
@@ -2334,8 +2334,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// Whether a character stands still out of a fight this tick (no speed, no footwork), so the separation does not move it (<see cref="StepBody"/>):
-    /// the original's avoidance push-out runs in the nav agent's velocity setter (docs/game/pathfinding.md "Bodies in the way").
+    /// Whether a character stands still out of a fight this tick (no speed, no footwork), so the separation does not move it (<see cref="StepBody"/>;
+    /// engine choice): the original's push-out is positional, so a walker puts itself out of a stander and the stander stays
+    /// (docs/game/pathfinding.md "Bodies in the way").
     /// </summary>
     static bool StandsStill(CharacterCold cold, in StepState s) => !s.Steering && !cold.InCombat && s.Speed <= 0;
 
