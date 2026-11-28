@@ -782,10 +782,10 @@ public sealed partial class ProductionSystem
             case TaskType.OperateStorage:
                 // On an automatic machine (152's companion, the original's Task_FillMachine into it, which 94 feeds): its inputs.
                 if (m.Data.IsHauledAutomatic) return !AutoWork(world, site, m, cold);
-                if (!m.Data.IsStorage || m.Storage is null) return true;
-                if (cold.Inventory is { } inv && inv.All().Any(i => Takes(world, m, i))) return false;
+                if (!m.Data.IsStorage || m.Storage is null || cold.Inventory is not { } inv) return true;
+                if (inv.All().Any(i => Takes(world, m, i))) return false;
                 if (FetchesLoose(world, cold, id)) return false;
-                return LooseFor(world, cold, at, m) is null && HaulSource(world, site, m) is null;
+                return LooseFor(world, cold, at, m) is null && HaulSource(world, site, m, inv) is null;
             default:
                 return true;
         }
@@ -835,7 +835,7 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Every input holds something or the operator can fill it: it carries the item or, with AutoHaul, <see cref="NearestSource"/> finds it.
+    /// Every input holds something or the operator can fill it: it carries the item or, with AutoHaul, <see cref="CanFetch"/> holds.
     /// </summary>
     bool Supplied(World world, BuildSite site, Machine m, CharacterCold cold)
     {
@@ -843,7 +843,7 @@ public sealed partial class ProductionSystem
         {
             if (input.Rate <= 0 || input.Level + input.Count > 0) continue;
             if (cold.Inventory is { } inv && Carried(inv, input.Item).Any()) continue;
-            if (Settings.AutoHaul && NearestSource(world, site, input.Item, cold, operating: cold) is not null) continue;
+            if (Settings.AutoHaul && CanFetch(world, site, m, cold, input.Item)) continue;
             return false;
         }
 
@@ -851,8 +851,20 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Hauling to (124) at an automatic machine: the character is on a trip for it, carries an item an input has room for, or an empty input has a
-    /// source (<see cref="NearestSource"/>, the trip <see cref="StartHaul"/> makes).
+    /// Whether <paramref name="cold"/> can fetch <paramref name="record"/> for <paramref name="m"/>: <see cref="NearestSource"/> finds it, and
+    /// either a unit fits in its inventory or backpack (state 82) or it carries output of <paramref name="m"/> that a storage takes
+    /// (<see cref="OutputStorage"/>, which <see cref="StartHaul"/> unloads first to make room).
+    /// </summary>
+    bool CanFetch(World world, BuildSite site, Machine m, CharacterCold cold, string record)
+    {
+        if (cold.Inventory is not { } inv) return false;
+        if (NearestSource(world, site, record, cold, operating: cold) is null) return false;
+        return CanFit(inv, record) || OutputStorage(world, site, m, cold) is not null;
+    }
+
+    /// <summary>
+    /// Hauling to (124) at an automatic machine: the character is on a trip for it, carries an item an input has room for, or an empty input can be
+    /// fetched (<see cref="CanFetch"/>, the trip <see cref="StartHaul"/> makes).
     /// </summary>
     bool AutoWork(World world, BuildSite site, Machine m, CharacterCold cold)
     {
@@ -862,7 +874,7 @@ public sealed partial class ProductionSystem
         {
             if (input.Rate <= 0) continue;
             if (input.Count < input.Recipe.Capacity && Carried(inv, input.Item).Any()) return true;
-            if (input.Count == 0 && NearestSource(world, site, input.Item, cold, operating: cold) is not null) return true;
+            if (input.Count == 0 && CanFetch(world, site, m, cold, input.Item)) return true;
         }
 
         return false;
@@ -1002,9 +1014,9 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The player's complete machine (not a storage) nearest a storage within <see cref="InFinderRange"/> whose output (a bench's:
-    /// its finished items) holds items the storage takes (ties: the lower site id).
+    /// its finished items) holds items the storage takes and <paramref name="inv"/> has room to carry (ties: the lower site id).
     /// </summary>
-    string? HaulSource(World world, BuildSite storage, Machine store)
+    string? HaulSource(World world, BuildSite storage, Machine store, Inventory inv)
     {
         string? best = null;
         float bestGap = float.MaxValue;
@@ -1016,7 +1028,7 @@ public sealed partial class ProductionSystem
 
             float gap = Gap(site.Position, storage.Position);
             if (gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0)) continue;
-            if (!InFinderRange(site.Position, storage.Position) || !Offers(s, store)) continue;
+            if (!InFinderRange(site.Position, storage.Position) || !Offers(s, store, inv)) continue;
 
             best = s.Site;
             bestGap = gap;
@@ -1091,7 +1103,7 @@ public sealed partial class ProductionSystem
             return;
         }
 
-        cold.HaulSite = carries ? storage.Id : HaulSource(world, storage, store);
+        cold.HaulSite = carries ? storage.Id : cold.Inventory is { } bag ? HaulSource(world, storage, store, bag) : null;
         _sweep = true;
     }
 
