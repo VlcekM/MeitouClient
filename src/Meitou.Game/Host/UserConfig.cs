@@ -644,6 +644,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixMissingMaterials { get; set; } = true;
     /// <summary>
+    /// A slave the player sets free stops obeying its owner, so it stays out of its cage (Fixes settings; off: it walks back in, as the game does;
+    /// docs/optional-fixes.md "Freed slaves walk back into a cage").
+    /// </summary>
+    public bool FixFreedSlaves { get; set; } = true;
+    /// <summary>
     /// A shopkeeper at its counter is talked to from the counter's front (Gameplay settings, Meitou; off: the game's talk reach, so the customer
     /// walks round behind the counter; <c>World.CounterTalk</c>).
     /// </summary>

@@ -526,6 +526,12 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool MissingMaterialsFix { get; set; } = true;
     /// <summary>
+    /// A slave a player-faction character sets free stops obeying its owner (job 187 ended, as DA 28's split does), so it stays out of its cage
+    /// until its thanks line runs (Fixes settings, Meitou); off, it stays obedient and its master's 172 walks it back in, as the game does
+    /// (docs/optional-fixes.md "Freed slaves walk back into a cage").
+    /// </summary>
+    public bool FreedSlaveFix { get; set; } = true;
+    /// <summary>
     /// A shopkeeper at its counter is talked to and traded with from the counter's front (Gameplay settings, Meitou): its talk reach is
     /// <see cref="Dialogue.DialogueSystem.CounterTalkReach"/>; off, the game's reach, so the customer walks round behind the counter
     /// (docs/game/dialogue.md "Player conversation").

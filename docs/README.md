@@ -31,7 +31,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [modding](modding.md): code mods: `meitou.json`, per-mod load context, one game-shipped Harmony, tick anchors, dialogue codes, sidecar saves, UI, F10 rows
 - [modding-dependencies](modding-dependencies.md): code mods building on code mods: versions, `dependencies`, shared assemblies, Arrange
 - [native-ui](native-ui.md)
-- [optional-fixes](optional-fixes.md): faithful original behaviour that reads as a bug, each to get an opt-in fix
+- [optional-fixes](optional-fixes.md): faithful original behaviour that reads as a bug, each with a Fixes setting or to get one
 - [render-clouds](render-clouds.md)
 - [render-distance-benchmark](render-distance-benchmark.md)
 - [render-foliage](render-foliage.md)

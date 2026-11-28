@@ -5983,3 +5983,11 @@ msgstr "Стрельба в здания"
 #. machine-translated
 msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
 msgstr "Турели и арбалетчики не стреляют в того, кто находится в другом здании и кого они не видят; арбалетчик вместо этого подходит ближе. В игре стены многих зданий задерживают выстрелы только у самого пола, поэтому турели снаружи продолжают попадать сквозь стены в тех, кто внутри."
+
+#. machine-translated
+msgid "Freed slaves stay free"
+msgstr "Освобождённые рабы остаются свободными"
+
+#. machine-translated
+msgid "A slave you set free from a cage stops obeying its owner, so it can run off. In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it."
+msgstr "Раб, которого вы выпустили из клетки, перестаёт подчиняться хозяину и может сбежать. В игре он продолжает подчиняться, и раб с фермы сразу возвращается в свою клетку, которая запирается за ним."

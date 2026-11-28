@@ -6810,3 +6810,11 @@ msgstr "射击建筑内目标"
 #. machine-translated
 msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
 msgstr "炮塔和弩手不会射击位于另一座建筑内且自己看不见的人；弩手会改为靠近。原版游戏中许多建筑的墙壁只在靠近地面处挡住射击，因此外面的炮塔会持续隔墙击中室内的人。"
+
+#. machine-translated
+msgid "Freed slaves stay free"
+msgstr "被释放的奴隶保持自由"
+
+#. machine-translated
+msgid "A slave you set free from a cage stops obeying its owner, so it can run off. In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it."
+msgstr "你从笼子里释放的奴隶不再服从主人，因此可以逃走。在游戏中它仍会服从，农场奴隶会径直走回笼子，笼子随即在它身后锁上。"

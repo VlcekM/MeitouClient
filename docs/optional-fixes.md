@@ -1,7 +1,7 @@
 # Optional fixes
 
-Original behaviour that is faithful but reads as a bug. Meitou keeps the original's behaviour by default. Each entry is to get an opt-in
-setting (off by default) that changes it.
+Original behaviour that is faithful but reads as a bug. Each entry gets a setting on the Fixes page that changes it (off keeps the
+original's behaviour), or is to get one.
 
 ## Robot replies for organic talkers (#1468)
 
@@ -23,4 +23,5 @@ setting (off by default) that changes it.
   0-24, so a slave the player sets free walks back in at once and the cage locks behind it. The event-13 chain's second line, whose three variants
   (3470, 3472, 3474-dialogue-01.mod) carry `change AI` `Escaping slave- run away solo`, comes 2 + 0.12 x length seconds after "I'm free..."
   ([timing](game/dialogue.md)), when the slave is already locked in.
-- **Fix**: a release by a player-faction character ends the slave's obedience (job 187, as DA 28's split does), so it stays out until its line runs.
+- **Fix** (Fixes setting "Freed slaves stay free", `World.FreedSlaveFix`, on by default): a release by a player-faction character ends the
+  slave's obedience (job 187, as DA 28's split does), so it stays out until its line runs.

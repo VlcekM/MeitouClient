@@ -538,6 +538,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? MissingMaterialsChanged { get; init; }
 
     /// <summary>
+    /// Applies the freed-slave fix (<see cref="UserConfig.FixFreedSlaves"/>).
+    /// </summary>
+    public Action<bool>? FreedSlavesChanged { get; init; }
+
+    /// <summary>
     /// Applies the shop counter talk reach (<see cref="UserConfig.CounterTalk"/>).
     /// </summary>
     public Action<bool>? CounterTalkChanged { get; init; }
@@ -1804,6 +1809,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         PickUpTheftChanged?.Invoke(true);
         Config.FixMissingMaterials = true;
         MissingMaterialsChanged?.Invoke(true);
+        Config.FixFreedSlaves = true;
+        FreedSlavesChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;
         Config.FixArmourClipping = Rendering.Characters.ArmourClipFix.Enabled = false;
         Config.KeepInfoPanel = true;

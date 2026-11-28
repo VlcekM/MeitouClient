@@ -787,6 +787,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game always says it has no building materials, even when it carries Building Materials and the site wants something else.",
             Toggle: new("Builders name missing materials", () => menu.Config.FixMissingMaterials,
                 v => { menu.Config.FixMissingMaterials = v; menu.MissingMaterialsChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Freed slaves stay free",
+            "A slave you set free from a cage stops obeying its owner, so it can run off. "
+            + "In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it.",
+            Toggle: new("Freed slaves stay free", () => menu.Config.FixFreedSlaves,
+                v => { menu.Config.FixFreedSlaves = v; menu.FreedSlavesChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Guards spare their own",
             "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. "
             + "In the game they enslave them too. Arrests that end in slavery are not affected.",

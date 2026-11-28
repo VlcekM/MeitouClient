@@ -5980,3 +5980,11 @@ msgstr "Colpi negli edifici"
 #. machine-translated
 msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
 msgstr "Torrette e balestrieri non sparano a qualcuno all'interno di un altro edificio che non riescono a vedere; un balestriere invece si avvicina. Nel gioco i muri di molti edifici fermano i colpi solo vicino al pavimento, quindi le torrette all'esterno continuano a colpire attraverso i muri chi è all'interno."
+
+#. machine-translated
+msgid "Freed slaves stay free"
+msgstr "Gli schiavi liberati restano liberi"
+
+#. machine-translated
+msgid "A slave you set free from a cage stops obeying its owner, so it can run off. In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it."
+msgstr "Uno schiavo che liberi da una gabbia smette di obbedire al suo padrone e può fuggire. Nel gioco continua a obbedire, e uno schiavo della fattoria torna subito nella sua gabbia, che si chiude dietro di lui."

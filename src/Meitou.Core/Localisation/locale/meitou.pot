@@ -283,6 +283,10 @@ msgstr ""
 msgid "A simple stool to sit on."
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "A slave you set free from a cage stops obeying its owner, so it can run off. In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it."
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "A small catchlight on the eyes instead of a mirror of the landscape."
 msgstr ""
@@ -833,7 +837,7 @@ msgstr ""
 msgid "Blood --"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Blood cells"
 msgstr ""
 
@@ -841,15 +845,15 @@ msgstr ""
 msgid "Blood decals drawn"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Blood on surfaces"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Blood on weapons and gear"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs
 msgid "Bloody footprints"
 msgstr ""
 
@@ -873,7 +877,7 @@ msgstr ""
 msgid "Body --"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Bolt tracers"
 msgstr ""
 
@@ -1057,7 +1061,7 @@ msgstr ""
 msgid "Character draw distance"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Character editor bar"
 msgstr ""
 
@@ -1069,7 +1073,7 @@ msgstr ""
 msgid "Character flights"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Character levels"
 msgstr ""
 
@@ -1209,7 +1213,7 @@ msgstr ""
 msgid "Close Doors"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Cloth sheen"
 msgstr ""
 
@@ -1269,7 +1273,7 @@ msgstr ""
 msgid "Conscious"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Contact shadows"
 msgstr ""
 
@@ -1745,7 +1749,7 @@ msgstr ""
 msgid "Extreme"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Eye catchlights"
 msgstr ""
 
@@ -1825,7 +1829,7 @@ msgstr ""
 msgid "Far grass cover"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Far impostors"
 msgstr ""
 
@@ -1965,11 +1969,11 @@ msgstr ""
 msgid "Foliage draw distance x"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Foliage levels"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Foliage ranges"
 msgstr ""
 
@@ -2023,6 +2027,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Frames per second while vertical sync is off."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Freed slaves stay free"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -2093,7 +2101,7 @@ msgstr ""
 msgid "Game time"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Gear sway"
 msgstr ""
 
@@ -2141,7 +2149,7 @@ msgstr ""
 msgid "Giving first aid"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs
 msgid "Glass bottles"
 msgstr ""
 
@@ -2253,7 +2261,7 @@ msgstr ""
 msgid "Ground trails"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Ground-truth occlusion"
 msgstr ""
 
@@ -2301,7 +2309,7 @@ msgstr ""
 msgid "HOME"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Hair highlights"
 msgstr ""
 
@@ -2397,7 +2405,7 @@ msgstr ""
 msgid "High"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "High Altitude Clouds"
 msgstr ""
 
@@ -2593,7 +2601,7 @@ msgstr ""
 msgid "Hybrid"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Hybrid GI"
 msgstr ""
 
@@ -2673,7 +2681,7 @@ msgstr ""
 msgid "Incomplete: both runs are needed to submit."
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Indirect light"
 msgstr ""
 
@@ -2765,7 +2773,7 @@ msgstr ""
 msgid "Italian"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Item icons"
 msgstr ""
 
@@ -3370,7 +3378,7 @@ msgstr ""
 msgid "Meitou: on"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs
 msgid "Mesh welding"
 msgstr ""
 
@@ -3402,11 +3410,11 @@ msgstr ""
 msgid "Metal needs an Apple-silicon Mac; choose Auto or Vulkan."
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs
 msgid "Metal on buildings"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Metal on characters"
 msgstr ""
 
@@ -4177,11 +4185,11 @@ msgstr ""
 msgid "Polearms"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Polished armour"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Portrait and editor sun"
 msgstr ""
 
@@ -4357,7 +4365,7 @@ msgstr ""
 msgid "Raids keep their progress"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Rain drops and puddles"
 msgstr ""
 
@@ -5065,7 +5073,7 @@ msgstr ""
 msgid "Skin scatters light on this race (the default)."
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Skin sheen and glow"
 msgstr ""
 
@@ -5133,7 +5141,7 @@ msgstr ""
 msgid "Soft cascades"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Soft grazing sun"
 msgstr ""
 
@@ -5993,7 +6001,7 @@ msgstr ""
 msgid "Traced near, cascades far"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Traced sun shadows"
 msgstr ""
 
@@ -6329,7 +6337,7 @@ msgstr ""
 msgid "Water & reflections"
 msgstr ""
 
-#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs
 msgid "Water beads"
 msgstr ""
 
@@ -6591,7 +6599,7 @@ msgstr ""
 msgid "built for another version of the game"
 msgstr ""
 
-#: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/LookBar.cs src/Meitou.Game/Settings/LookPresets.cs
+#: launcher/Meitou.Launcher/GraphicsPage.cs launcher/Meitou.Launcher/LookChoices.cs src/Meitou.Game/Settings/LookBar.cs src/Meitou.Game/Settings/LookPresets.cs
 msgid "built in"
 msgstr ""
 

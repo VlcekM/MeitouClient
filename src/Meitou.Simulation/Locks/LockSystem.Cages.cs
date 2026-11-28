@@ -211,12 +211,16 @@ public sealed partial class LockSystem
     /// The start of Task_ReleasePrisoner (<c>FUN_1403570a0</c>, Verified): the prisoner is marked freed (status <c>+0xea</c>, set unconditionally;
     /// the status update drops it outside every town, <see cref="Crime.ArrestSystem"/>), released, then a releaser of a faction that books bounties
     /// tells it it may go (event 46 from the releaser), else a releaser of the player's faction is thanked (event 13 from the prisoner); in those two
-    /// cases the prisoner gets order 133 (<see cref="FreedPrisoner"/>).
+    /// cases the prisoner gets order 133 (<see cref="FreedPrisoner"/>). With <see cref="World.FreedSlaveFix"/> (Meitou fix) a slave a player-faction
+    /// releaser frees stops obeying its owner.
     /// </summary>
     internal static bool FreeBy(World world, CharacterId releaser, int faction, CharacterId prisoner, CrimeSystem? crimes)
     {
         if (world.Characters.TryResolveNext(prisoner, out int p) && world.Characters.Cold(p) is { } pc) pc.Freed = true;
         if (!world.Fixtures.Release(world, prisoner, faction, crimes, jailer: true)) return false;
+
+        if (faction == world.Player.Faction && world.FreedSlaveFix && world.Characters.Cold(p) is { SlaveState: 1 } slave)
+            Kidnap.ObedientSlave.Disobey(world, slave);
 
         // The release message goes with Create_Character on the interface, for a player-faction prisoner with no slave state.
         if (world.Characters.Cold(p) is { IsPlayer: true, SlaveState: 0 })

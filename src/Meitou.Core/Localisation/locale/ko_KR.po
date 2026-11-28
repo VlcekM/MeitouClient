@@ -5977,3 +5977,11 @@ msgstr "건물 안으로 사격"
 #. machine-translated
 msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
 msgstr "포탑과 석궁병은 보이지 않는 다른 건물 안의 대상을 쏘지 않으며, 석궁병은 대신 더 가까이 다가갑니다. 원래 게임에서는 많은 건물의 벽이 바닥 근처의 사격만 막기 때문에 바깥의 포탑이 벽 너머로 실내의 사람을 계속 맞힙니다."
+
+#. machine-translated
+msgid "Freed slaves stay free"
+msgstr "풀어준 노예는 자유로 남음"
+
+#. machine-translated
+msgid "A slave you set free from a cage stops obeying its owner, so it can run off. In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it."
+msgstr "우리에서 풀어준 노예는 더 이상 주인에게 복종하지 않아 달아날 수 있습니다. 게임에서는 계속 복종하며, 농장 노예는 곧장 자기 우리로 돌아가고 우리는 뒤에서 잠깁니다."

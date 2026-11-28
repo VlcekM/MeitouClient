@@ -661,6 +661,7 @@ sealed partial class GameHost(
         Session.World.BagSearchFix = Config.FixBagSearch;
         Session.World.PickUpTheftFix = Config.FixPickUpTheft;
         Session.World.MissingMaterialsFix = Config.FixMissingMaterials;
+        Session.World.FreedSlaveFix = Config.FixFreedSlaves;
         Session.World.CounterTalk = Config.CounterTalk;
         Session.World.TakeIntoBackpack = Config.TakeIntoBackpack;
         Session.World.DropFromLoot = Config.DropFromLoot;

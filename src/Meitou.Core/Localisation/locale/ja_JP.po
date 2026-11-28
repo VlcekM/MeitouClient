@@ -5977,3 +5977,11 @@ msgstr "建物内への射撃"
 #. machine-translated
 msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
 msgstr "タレットとクロスボウ兵は、見えていない別の建物内の相手を撃ちません。クロスボウ兵は代わりに近づきます。本来のゲームでは多くの建物の壁が床付近の射撃しか防がないため、外のタレットが壁越しに屋内の人に当て続けます。"
+
+#. machine-translated
+msgid "Freed slaves stay free"
+msgstr "解放した奴隷は自由のまま"
+
+#. machine-translated
+msgid "A slave you set free from a cage stops obeying its owner, so it can run off. In the game it still obeys, and a farm slave walks straight back into its cage, which locks behind it."
+msgstr "檻から解放した奴隷は持ち主に従わなくなり、逃げ出せるようになります。ゲームでは従い続け、農場の奴隷はすぐに自分の檻へ戻り、背後で檻が施錠されます。"
