@@ -68,6 +68,8 @@ public sealed class ItemIcons(GameDatabase database, Func<string, string?> resol
         {
             var spec = MaterialOf(database, r, material);
             string dye = ColourOf(database, r, spec, colour)?.StringId ?? "";
+            if (WornWeaponPicture(r, dye) is { } worn) return new(ItemIconSource.File, worn);
+
             // An item with no material of its own is drawn with its first; Meitou's saved pictures are named by that one.
             if (cache.Find(record, material.Length > 0 ? material : spec?.StringId ?? "", dye) is { } saved)
                 return new(ItemIconSource.File, saved);
@@ -75,6 +77,19 @@ public sealed class ItemIcons(GameDatabase database, Func<string, string?> resol
         }
         if (StaticIconOf(r) is { Length: > 0 } icon && resolve(icon) is { } file) return new(ItemIconSource.File, file);
         return resolve("default_icon.png") is { } fallback ? new(ItemIconSource.File, fallback) : default;
+    }
+
+    /// <summary>
+    /// A worn unarmed weapon's picture of its own material (engine extension, docs/characters.md "Worn unarmed weapons"): its look takes the
+    /// record's first <c>material</c> whatever manufacturer's model the instance carries, so a mod ships one <c>&lt;item&gt;.&lt;own material&gt;.png</c>
+    /// for every grade, taken before a picture of the model's name (one Meitou saved when it drew the mesh). Null for any other record, or without
+    /// that picture.
+    /// </summary>
+    string? WornWeaponPicture(GameRecord record, string dye)
+    {
+        if (!Characters.CharacterAppearance.IsWornWeapon(record)) return null;
+
+        return MaterialOf(database, record, "") is { } own ? cache.Find(record.StringId, own.StringId, dye) : null;
     }
 
     /// <summary>

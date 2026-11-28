@@ -42,6 +42,48 @@ public class ItemIconTests
         }
     }
 
+    /// <summary>
+    /// A worn fist weapon (skill category unarmed) shows the picture of its own first material whatever model the instance carries, before a saved
+    /// picture of that model; an ordinary weapon keeps the model's picture.
+    /// </summary>
+    [Fact]
+    public void A_worn_fist_weapon_takes_its_own_materials_picture_at_every_grade()
+    {
+        string dir = Directory.CreateTempSubdirectory("meitou-icons").FullName;
+        try
+        {
+            foreach (string name in new[] { "1-a.mod.10-a.mod.png", "1-a.mod.11-a.mod.png", "2-a.mod.11-a.mod.png" })
+                File.WriteAllBytes(Path.Combine(dir, name), []);
+
+            var file = new Meitou.Data.Fcs.FcsFile();
+            file.Records.Add(Weapon("1-a.mod", 5));
+            file.Records.Add(Weapon("2-a.mod", 0));
+            file.Records.Add(Spec("10-a.mod"));
+            file.Records.Add(Spec("11-a.mod"));
+            var db = new GameDatabase();
+            db.Apply(file, "a.mod");
+            var icons = new ItemIcons(db, _ => null, new ItemIconCache(dir));
+
+            Assert.EndsWith("1-a.mod.10-a.mod.png", icons.Choose("1-a.mod", "11-a.mod").File);
+            Assert.EndsWith("2-a.mod.11-a.mod.png", icons.Choose("2-a.mod", "11-a.mod").File);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+
+        static Meitou.Data.Fcs.FcsRecord Weapon(string id, int category)
+        {
+            var r = new Meitou.Data.Fcs.FcsRecord { StringId = id, Flags = 0x10, Name = id, RecordType = Meitou.Data.Fcs.FcsRecordType.Weapon };
+            r.Ints["skill category"] = category;
+            r.References["material"] = [new Meitou.Data.Fcs.FcsReference("10-a.mod", 100, 0, 0)];
+            return r;
+        }
+
+        static Meitou.Data.Fcs.FcsRecord Spec(string id) =>
+            new() { StringId = id, Flags = 0x10, Name = id, RecordType = Meitou.Data.Fcs.FcsRecordType.MaterialSpecsWeapon };
+    }
+
     [Fact, Slow]
     public void Cached_starter_icons_use_the_original_files_without_rendering_replacements()
     {
