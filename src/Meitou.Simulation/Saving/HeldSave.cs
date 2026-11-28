@@ -69,6 +69,14 @@ public static class HeldSave
     }
 
     /// <summary>
+    /// The held state a saved character's GAMESTATE_CHARACTER records: Meitou's key first, else the original's <c>in something</c>.
+    /// </summary>
+    public static HeldState StateOf(FcsRecord? state) =>
+        state is null ? HeldState.None
+        : state.Ints.TryGetValue(MeitouState, out int meitou) && meitou != 0 ? (HeldState)meitou
+        : (HeldState)state.Ints.GetValueOrDefault("in something");
+
+    /// <summary>
     /// Reads a character's held state and sentence (the Meitou keys first; else <c>in what</c> resolved through <paramref name="handles"/> to a
     /// building key).
     /// </summary>

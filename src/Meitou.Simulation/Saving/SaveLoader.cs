@@ -885,13 +885,16 @@ public static class SaveLoader
     }
 
     /// <summary>
-    /// The state every loaded platoon reads off its saved record, NPC or wild: its imprisoned, dead and intact flags, a code mod's marks (its
-    /// spawn flag, tags and named hold, <see cref="ModPlatoonSave"/>) and its blackboard's town and arrival hour (<see cref="Platoon.SavedTown"/>).
+    /// The state every loaded platoon reads off its saved record, NPC or wild: its imprisoned flag (also set when a saved member is caged: the
+    /// original sets it only at an unload, so a platoon loaded when the game was saved has it clear with its prisoner in a cage), dead and intact
+    /// flags, a code mod's marks (its spawn flag, tags and named hold, <see cref="ModPlatoonSave"/>) and its blackboard's town and arrival hour
+    /// (<see cref="Platoon.SavedTown"/>).
     /// </summary>
-    static void ReadSavedState(Platoon p, SavePlatoon platoon)
+    internal static void ReadSavedState(Platoon p, SavePlatoon platoon)
     {
         var record = platoon.Record;
-        p.Imprisoned = record.Bools.GetValueOrDefault("imprisoned");
+        p.Imprisoned = record.Bools.GetValueOrDefault("imprisoned")
+            || platoon.Characters.Any(c => HeldSave.StateOf(c.GameState) == Locks.HeldState.Imprisoned);
         p.Dead = record.Bools.GetValueOrDefault("dead");
         p.IntactFlag = record.Bools.GetValueOrDefault("intact", true);
         p.ModSpawned = ModPlatoonSave.Spawned(record);

@@ -434,4 +434,29 @@ public class JailSaveTests
 
         Assert.False(locks.IsHouseLocked(a.World, HouseKey));
     }
+
+    /// <summary>
+    /// A saved NPC platoon whose member sits in a cage loads as imprisoned though its own <c>imprisoned</c> flag is clear, by the original's
+    /// <c>in something</c> or Meitou's key: the original sets the flag only when a platoon unloads, so one loaded when the game saved has it clear
+    /// (the #1271 save). A free member leaves it clear. Catches a captive's stand-in taken for a free squad at load, which then travels and fights
+    /// off screen.
+    /// </summary>
+    [Theory]
+    [InlineData("in something", (int)HeldState.Imprisoned, true)]
+    [InlineData(HeldSave.MeitouState, (int)HeldState.Imprisoned, true)]
+    [InlineData("in something", (int)HeldState.None, false)]
+    public void A_saved_platoon_with_a_caged_member_loads_imprisoned_though_its_flag_is_clear(string key, int held, bool imprisoned)
+    {
+        var record = new FcsRecord { Type = (int)FcsRecordType.Platoon, StringId = "Slave Traders_271" };
+        record.Bools["imprisoned"] = false;
+        var platoon = new SavePlatoon(record, null);
+        var state = new FcsRecord();
+        state.Ints[key] = held;
+        platoon.Characters.Add(new SaveCharacter(platoon, new FcsInstance()) { GameState = state });
+        var loaded = new Platoon { Id = 1, Origin = -1, TemplateId = "12-t", Key = 1 };
+
+        SaveLoader.ReadSavedState(loaded, platoon);
+
+        Assert.Equal(imprisoned, loaded.Imprisoned);
+    }
 }
