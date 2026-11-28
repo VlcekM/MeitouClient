@@ -5948,3 +5948,15 @@ msgstr "Die Welt zwischen schwarzen Balken im gewählten Bildformat einrahmen, w
 #. machine-translated
 msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
 msgstr "das Bild des Spiels füllt den Bildschirm; Meitou kann die Welt zwischen schwarzen Balken im Letterbox-Seitenverhältnis einrahmen (2,39:1, das Breitbild des Kinos, sofern nicht geändert), unter der Oberfläche, in jeder Kamera (docs/render-post.md \"Letterbox\")"
+
+#. machine-translated
+msgid "Search buildings"
+msgstr "Gebäude suchen"
+
+#. machine-translated
+msgid "Categories"
+msgstr "Kategorien"
+
+#. machine-translated
+msgid "Subtypes"
+msgstr "Untertypen"

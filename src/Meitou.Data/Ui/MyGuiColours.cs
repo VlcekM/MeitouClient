@@ -145,15 +145,15 @@ public static class MyGuiColours
     }
 
     /// <summary>
-    /// The normal-state <c>colour</c> of the last text part (SimpleText or EditText) of skin <paramref name="skinName"/>; null when the skin is
-    /// unknown or sets none.
+    /// The <c>colour</c> in skin state <paramref name="state"/> (normal by default; <c>normal_checked</c> is a list's selected line) of the last
+    /// text part (SimpleText or EditText) of skin <paramref name="skinName"/>; null when the skin is unknown or sets none.
     /// </summary>
-    static string? SkinText(MyGuiResources resources, string skinName)
+    public static string? SkinText(MyGuiResources resources, string skinName, string state = "normal")
     {
         if (!resources.Skins.TryGetValue(skinName, out var skin)) return null;
         string? colour = null;
         foreach (var part in skin.Parts.Where(p => p.Type is "SimpleText" or "EditText"))
-            colour = part.StateProperties?.GetValueOrDefault("normal")?.GetValueOrDefault("colour") ?? colour;
+            colour = part.StateProperties?.GetValueOrDefault(state)?.GetValueOrDefault("colour") ?? colour;
         return colour;
     }
 

@@ -5945,3 +5945,15 @@ msgstr "모든 카메라에서 선택한 화면비에 맞춰 영화 스크린처
 #. machine-translated
 msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
 msgstr "게임의 화면은 화면 전체를 채웁니다. Meitou는 레터박스 화면비(바꾸지 않으면 2.39:1, 영화의 와이드스크린)에 맞춰 월드를 검은 띠로 감쌀 수 있으며, 인터페이스 아래에 그려지고 모든 카메라에 적용됩니다(docs/render-post.md \"Letterbox\")"
+
+#. machine-translated
+msgid "Search buildings"
+msgstr "건물 검색"
+
+#. machine-translated
+msgid "Categories"
+msgstr "카테고리"
+
+#. machine-translated
+msgid "Subtypes"
+msgstr "하위 유형"

@@ -5945,3 +5945,15 @@ msgstr "すべてのカメラで、選んだ画面比率になるようワール
 #. machine-translated
 msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
 msgstr "ゲームの画面は画面全体に表示されます。Meitou はレターボックスのアスペクト比（変更しない限り 2.39:1、映画のワイドスクリーン）でワールドを黒帯で囲めます。インターフェースの下に描かれ、すべてのカメラで有効です（docs/render-post.md \"Letterbox\"）"
+
+#. machine-translated
+msgid "Search buildings"
+msgstr "建物を検索"
+
+#. machine-translated
+msgid "Categories"
+msgstr "カテゴリー"
+
+#. machine-translated
+msgid "Subtypes"
+msgstr "サブタイプ"

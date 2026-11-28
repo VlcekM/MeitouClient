@@ -5948,3 +5948,15 @@ msgstr "Encadre le monde entre des bandes noires au format d'image choisi, comme
 #. machine-translated
 msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
 msgstr "l'image du jeu remplit l'écran ; Meitou peut encadrer le monde entre des bandes noires au Format des bandes noires (2,39:1, le format large du cinéma, sauf changement), sous l'interface, dans toutes les caméras (docs/render-post.md \"Letterbox\")"
+
+#. machine-translated
+msgid "Search buildings"
+msgstr "Rechercher des bâtiments"
+
+#. machine-translated
+msgid "Categories"
+msgstr "Catégories"
+
+#. machine-translated
+msgid "Subtypes"
+msgstr "Sous-types"

@@ -1617,6 +1617,15 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     (the only one of them that takes the second yaw, and its framing matches) draws near-white: its material's `Severe_C_10.dds` averages 226 grey while the saved picture is dark, so the game tints it somehow. Not done: writing pictures to disk.
 - Build window: categories, groups, research gating and the stats panel are in [buildings-production](buildings-production.md#build-menu);
   placement checks and messages (`FUN_1404e27e0`) and the build-map controls in [placement](buildings-production.md#placement).
+- **Build menu search** (Meitou's, not in the original; `BuildSearchBar`, `BuildMenuSearch`; Meitou interface only, the Faithful one keeps the
+  original's window unfiltered): a row the width of `MainPanel` sits on its top edge, in `Kenshi_FloatingPanelSkin`: a text box (frame
+  `Kenshi_GenericTextBoxFlatSkin`, ink `Kenshi_TextboxStandardText`, hint "Search buildings" in the lists' selected-line ink,
+  `Kenshi_ListBoxItemSkin` `normal_checked`), a clear button (`Kenshi_CloseButtonSkin`, enabled while the box holds text) and ticks (`Kenshi_TickBoxSkin`, labels `Kenshi_TextboxPaintedText`) for
+  Categories, Buildings and Subtypes, all on by default. Every word of the query must appear, ignoring case, in a shown name. A category is listed when
+  its name matches or one of its groups is kept; a group is kept when its category's name matched, its own name matches or one of its members (a group of
+  more than one) does. A kept group lists all its members with the matching ones first, so its default pick and the right arrow's first steps are matches.
+  Changing the query keeps the chosen group while it is listed and goes back to its default pick. Esc in the box empties it, a second Esc leaves it. The
+  query and ticks stay while the game runs. A mod's `ChooseBuild` or a picked-up ghost whose building the search hides empties the query.
 
 ### 7. Tutorials
 

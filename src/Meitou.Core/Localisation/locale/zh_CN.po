@@ -6778,3 +6778,15 @@ msgstr "按所选画面比例用黑边框住世界画面，如同电影银幕，
 #. machine-translated
 msgid "the game's picture fills the screen; Meitou can frame the world between black bars at the Letterbox aspect (2.39 to 1, the cinema's widescreen, unless changed), under the interface, in every camera (docs/render-post.md \"Letterbox\")"
 msgstr "原版游戏的画面铺满屏幕；Meitou 可以按黑边画面比例（默认 2.39:1，电影宽银幕）用黑边框住世界画面，绘制在界面之下，适用于所有相机（docs/render-post.md \"Letterbox\"）"
+
+#. machine-translated
+msgid "Search buildings"
+msgstr "搜索建筑"
+
+#. machine-translated
+msgid "Categories"
+msgstr "类别"
+
+#. machine-translated
+msgid "Subtypes"
+msgstr "子类型"
