@@ -27,7 +27,20 @@ public sealed record EndConversation : SimCommand;
 /// Fires dialogue event <see cref="Event"/> at <see cref="Npc"/> with <see cref="Target"/> as its partner (the original's <c>FUN_140684990</c>, from
 /// the systems that witness it): a line of the NPC's list for the event, or of <see cref="Dialogue"/> when given, said as speech bubbles.
 /// </summary>
-public sealed record DialogueEvent(CharacterId Npc, CharacterId Target, int Event, string? Dialogue = null) : SimCommand;
+public sealed record DialogueEvent(CharacterId Npc, CharacterId Target, int Event, string? Dialogue = null) : SimCommand
+{
+    /// <summary>
+    /// Fired through the cut-in (<c>FUN_140685730</c>, <see cref="DialogueSystem.CutIn(World, int, CharacterId, int, bool)"/>): a conversation of another
+    /// event the NPC is in ends when it has a line for this one. Not with <see cref="Dialogue"/>.
+    /// </summary>
+    public bool CutIn { get; init; }
+
+    /// <summary>
+    /// The NPC was conscious when the event happened, and is taken as such on delivery, as the original fires the event there and then (a lost
+    /// limb's line, said before the leg's collapse knocks the character out). Being caged and asleep are still tested.
+    /// </summary>
+    public bool AwakeAtSource { get; init; }
+}
 
 /// <summary>
 /// The open player conversation as the conversation window shows it (published with the snapshot).
@@ -399,7 +412,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                     {
                         if (_dialogue.Node(id) is { IsRoot: true } root) StartBubbles(world, e.Npc, e.Target, root, e.Event);
                     }
-                    else if (Settings.AmbientEvents) Fire(world, e.Npc, e.Target, e.Event);
+                    else if (Settings.AmbientEvents) FireQueued(world, e);
                     break;
             }
         }

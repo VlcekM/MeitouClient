@@ -68,7 +68,14 @@ public enum DeathCause
 /// <summary>
 /// Something that happened to a character in a tick or a hit, for the caller to act on (XP, drops, messages, the commit phase).
 /// </summary>
-public readonly record struct MedicalEvent(MedicalEventKind Kind, int Part = -1, DeathCause Cause = DeathCause.None);
+public readonly record struct MedicalEvent(MedicalEventKind Kind, int Part = -1, DeathCause Cause = DeathCause.None)
+{
+    /// <summary>
+    /// For <see cref="MedicalEventKind.PartSevered"/>: the character was conscious when the part came off, before the same blow or tick's knock-outs
+    /// (a leg's collapse, the blood rule), which is when the original says the lost-limb line (<see cref="LimbCut"/>).
+    /// </summary>
+    public bool Conscious { get; init; }
+}
 
 /// <summary>
 /// A blow as the medical system takes it, after armour and toughness (docs/game/combat.md "The hit pipeline", step 5).
