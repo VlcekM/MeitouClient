@@ -251,6 +251,7 @@ public sealed class KenshiLuaTests
     /// <c>Script.LoadString</c> (which would grow MoonSharp bytecode and trigger O(N²) <c>SignalByteCodeChange</c> stalls).
     /// </summary>
     [Fact]
+    [Bench]
     public void Tick_DoesNotCompileBytecodePerFrame_AndStaysConstantTime()
     {
         string tmp = Path.Combine(Path.GetTempPath(), "meitou_lua_perf_" + Guid.NewGuid().ToString("N")[..8]);
@@ -272,7 +273,7 @@ public sealed class KenshiLuaTests
             Assert.Equal(1, host.DiscoverEnabledMods([("PerfMod", modDir)]));
             Assert.Contains("PerfMod", host.StartAll());
 
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
             for (int i = 0; i < 600; i++) host.Tick();
             sw.Stop();
 

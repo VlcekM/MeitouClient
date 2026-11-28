@@ -64,7 +64,7 @@ public sealed class LuaSandbox
     public string? FaultReason { get; private set; }
 
     /// <summary>
-    /// Last error message from <see cref="Load"/> or <see cref="Eval"/>.
+    /// Last error message from <see cref="Load"/>, <see cref="Eval"/> or <see cref="Call"/>.
     /// </summary>
     public string? LastError { get; private set; }
 
@@ -113,27 +113,7 @@ public sealed class LuaSandbox
     /// <summary>
     /// Loads and executes a chunk of Lua source under the instruction budget.
     /// </summary>
-    public DynValue Load(string chunkName, string code)
-    {
-        if (Faulted) return DynValue.Nil;
-
-        LastError = null;
-        _debugger.Begin(_limits.InstructionsPerCall);
-        try
-        {
-            return Script.DoString(code, null, chunkName);
-        }
-        catch (BudgetExceededException e)
-        {
-            Fault(e);
-            return DynValue.Nil;
-        }
-        catch (InterpreterException e)
-        {
-            LastError = e.DecoratedMessage ?? e.Message;
-            return DynValue.Nil;
-        }
-    }
+    public DynValue Load(string chunkName, string code) => Faulted ? DynValue.Nil : Budgeted(() => Script.DoString(code, null, chunkName));
 
     /// <summary>
     /// Evaluates a Lua snippet under the instruction budget.
@@ -147,11 +127,26 @@ public sealed class LuaSandbox
     {
         if (Faulted || fn.IsNil()) return DynValue.Nil;
 
+        return Budgeted(() => Script.Call(fn, args));
+    }
+
+    /// <summary>
+    /// Invokes a global Lua function by name under the instruction budget without compiling new bytecode.
+    /// </summary>
+    public DynValue CallGlobal(string funcName, params object[] args) =>
+        Faulted ? DynValue.Nil : Call(Script.Globals.Get(funcName), args);
+
+    /// <summary>
+    /// Runs <paramref name="run"/> under a fresh instruction budget: running out faults the sandbox, a Lua error sets
+    /// <see cref="LastError"/>; both return nil.
+    /// </summary>
+    DynValue Budgeted(Func<DynValue> run)
+    {
         LastError = null;
         _debugger.Begin(_limits.InstructionsPerCall);
         try
         {
-            return Script.Call(fn, args);
+            return run();
         }
         catch (BudgetExceededException e)
         {
@@ -164,12 +159,6 @@ public sealed class LuaSandbox
             return DynValue.Nil;
         }
     }
-
-    /// <summary>
-    /// Invokes a global Lua function by name under the instruction budget without compiling new bytecode.
-    /// </summary>
-    public DynValue CallGlobal(string funcName, params object[] args) =>
-        Faulted ? DynValue.Nil : Call(Script.Globals.Get(funcName), args);
 
     /// <summary>
     /// The MoonSharp modules a mod may use: no io, os, debug or package.

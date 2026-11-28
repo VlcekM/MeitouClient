@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using MoonSharp.Interpreter;
 
 namespace Meitou.Lua;
