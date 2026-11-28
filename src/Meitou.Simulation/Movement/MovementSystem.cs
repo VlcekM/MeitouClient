@@ -2181,8 +2181,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// The end of a path: the walker stops, and its task goes on (the move order leaves the queue, a fighter asks for its next path soon, a
-    /// wanderer waits).
+    /// The end of a path: the walker stops, and its task goes on (the move order leaves the queue, a fighter or a medic asks for its next path
+    /// soon, a wanderer waits).
     /// </summary>
     static void FinishPath(World world, int i, ref CharacterHot n, CharacterCold cold, ref StepState s)
     {
@@ -2201,9 +2201,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             // The move order leaves the queue; a queued move after it (shift + right click) starts: a path to it is asked for next tick.
             if (!PlayerOrders.Arrived(cold, ref n)) TaskStart.Step(world.Characters, i, CharacterTask.Idle);
         }
-        else if (!replaced && n.Task == (byte)CharacterTask.Attack)
+        else if (!replaced && n.Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Treat)
         {
-            // A fighter at the end of its path to a moving target asks for the next one soon (PursuitSystem).
+            // A fighter or a medic at the end of its path to a moving target asks for the next one soon (PursuitSystem, FirstAidSystem.Schedule,
+            // whose re-path timer is TaskTime): the wanderer's wait left a medic standing while its patient was carried off (#1572).
             n.TaskTime = PursuitSystem.RepathSeconds;
         }
         else if (!replaced)
