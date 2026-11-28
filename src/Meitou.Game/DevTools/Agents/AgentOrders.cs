@@ -284,16 +284,18 @@ sealed class AgentOrders(PlayerInterface player)
     }
 
     /// <summary>
-    /// The on-screen rectangle of an entity (JSON), or <c>offscreen</c>; null when the id names nothing. A character reports whether the nearest
-    /// thing under its centre is something else.
+    /// The on-screen rectangle of an entity (JSON, the part on screen, <see cref="ScreenRect"/>), or <c>offscreen</c>; null when the id names
+    /// nothing. A character reports whether the nearest thing under its centre is something else.
     /// </summary>
     public string? ControlEntityScreenJson(string id)
     {
         Vector3[] corners;
+        Vector3? anchor = null;
         CharacterSnapshot? character = null;
         if (id.StartsWith("b:", StringComparison.OrdinalIgnoreCase))
         {
             if (ControlPosition(id) is not { } pos) return null;
+            anchor = pos + new Vector3(0, 6, 0);
             var hull = _controlBuildings.TryGetValue(id, out var known) ? known.Hull : null;
             if (hull is null && player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => "b:" + s.Id == id) is { } site
                 && player.Build.Services is { } host
@@ -333,11 +335,12 @@ sealed class AgentOrders(PlayerInterface player)
             if (!visible) w.WriteString("state", "offscreen");
             else
             {
+                var point = anchor is { } a && player.Project(a) is { } at && OnScreen(at) ? at : (Vector2?)null;
+                var (rect, centre) = ScreenRect(x0, y0, x1, y1, new Vector2(player.Width, player.Height), point);
                 w.WriteString("state", "onscreen");
                 w.WriteStartArray("rect");
-                foreach (float v in new[] { x0, y0, x1 - x0, y1 - y0 }) w.WriteNumberValue((int)MathF.Round(v));
+                foreach (float v in new[] { rect.X, rect.Y, rect.Z, rect.W }) w.WriteNumberValue((int)MathF.Round(v));
                 w.WriteEndArray();
-                var centre = new Vector2(MathF.Round((x0 + x1) / 2), MathF.Round((y0 + y1) / 2));
                 w.WriteStartArray("center");
                 w.WriteNumberValue(centre.X);
                 w.WriteNumberValue(centre.Y);
@@ -355,6 +358,19 @@ sealed class AgentOrders(PlayerInterface player)
             w.WriteEndObject();
         }
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>
+    /// The part on a <paramref name="screen"/>-sized screen of an entity's projected box (x, y, width, height) and the point a click on it takes:
+    /// its own <paramref name="point"/> when on screen, else the middle of that part. A building reaching toward the camera has corners near its
+    /// plane that project tens of thousands of pixels off, so the box's own middle can lie off screen while the building fills it.
+    /// </summary>
+    internal static (Vector4 Rect, Vector2 Centre) ScreenRect(float x0, float y0, float x1, float y1, Vector2 screen, Vector2? point)
+    {
+        (x0, y0, x1, y1) = (MathF.Max(x0, 0), MathF.Max(y0, 0), MathF.Min(x1, screen.X), MathF.Min(y1, screen.Y));
+        var centre = point ?? new Vector2((x0 + x1) / 2, (y0 + y1) / 2);
+
+        return (new Vector4(x0, y0, x1 - x0, y1 - y0), new Vector2(MathF.Round(centre.X), MathF.Round(centre.Y)));
     }
 
     #endregion
