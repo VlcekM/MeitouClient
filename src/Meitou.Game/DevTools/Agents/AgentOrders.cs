@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Data.World;
 using Meitou.Game.Building;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
@@ -29,7 +30,7 @@ sealed class AgentOrders(PlayerInterface player)
     // Entity ids: <c>c:&lt;slot&gt;.&lt;generation&gt;</c> for a character,
     // <c>b:&lt;instance key&gt;</c> for a building (a site of the player's or a level-data building).
     /// <summary>
-    /// A building seen by the control channel, kept by id so a later command can find it again (level buildings have no lookup by key).
+    /// A building seen or looked up by the control channel, kept by id so a later command finds it again (<see cref="KnownBuilding"/>).
     /// </summary>
     sealed record ControlBuilding(string Id, string Name, string? Record, Vector3 Position, Vector2[]? Hull);
 
@@ -73,9 +74,55 @@ sealed class AgentOrders(PlayerInterface player)
             string key = id[2..];
             if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == key) is { } site)
                 return site.Position;
-            return _controlBuildings.TryGetValue(id, out var known) ? known.Position : null;
+            return KnownBuilding(id)?.Position;
         }
         return TryParseCharacter(id, out var cid) && ControlCharacter(cid) is { } c ? player.Where(c) : null;
+    }
+
+    /// <summary>
+    /// A level-data building by its id: one a command saw, else looked up in the zone its key names (<c>b:x.y:instance</c>), so an id from a
+    /// reply, a log or the town command works without a <c>world</c> listing round it first; null when no such building stands.
+    /// </summary>
+    ControlBuilding? KnownBuilding(string id)
+    {
+        if (_controlBuildings.TryGetValue(id, out var known)) return known;
+        if (player.Build.Services is not { } host || ZoneOfKey(id) is not { } zone) return null;
+
+        var (x, z) = WorldLayout.ZoneOrigin(zone);
+        var centre = new Vector2((float)x + WorldLayout.ZoneSize / 2f, (float)z + WorldLayout.ZoneSize / 2f);
+        string key = id[2..];
+        foreach (var p in host.Placement.StaticPlacementsAround(centre, WorldLayout.ZoneSize))
+        {
+            if (p.Key == key && player.LevelEditorPanel.Services?.IsCleared(p.Key) != true) return LevelBuilding(host, p);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The zone a building id's key names (<c>b:x.y:instance</c>); null for any other id.
+    /// </summary>
+    internal static ZoneCoordinate? ZoneOfKey(string id)
+    {
+        int colon = id.IndexOf(':', 2);
+        string[] zone = colon > 2 ? id[2..colon].Split('.') : [];
+        if (zone.Length != 2 || !int.TryParse(zone[0], NumberStyles.None, CultureInfo.InvariantCulture, out int x)
+            || !int.TryParse(zone[1], NumberStyles.None, CultureInfo.InvariantCulture, out int y))
+            return null;
+
+        return new ZoneCoordinate(x, y);
+    }
+
+    /// <summary>
+    /// A level-data building as the control channel keeps it (its place on the ground, name and hull), remembered by its id.
+    /// </summary>
+    ControlBuilding LevelBuilding(BuildServices host, BuildingPlacement p)
+    {
+        float y = p.WorldY ?? player.Ground(p.Position.X, p.Position.Z) + p.Position.Y;
+        var b = new ControlBuilding("b:" + p.Key, host.WorldInfo(p).Name, p.BuildingId, new Vector3(p.Position.X, y, p.Position.Z),
+            host.Placement.Footprint(p.BuildingId)?.Place(p.Position, p.Rotation));
+        _controlBuildings[b.Id] = b;
+        return b;
     }
 
     /// <summary>
@@ -215,14 +262,9 @@ sealed class AgentOrders(PlayerInterface player)
                 foreach (var p in host.Placement.StaticPlacementsAround(flat, radius))
                 {
                     if (player.LevelEditorPanel.Services?.IsCleared(p.Key) == true) continue;
-                    float y = p.WorldY ?? player.Ground(p.Position.X, p.Position.Z) + p.Position.Y;
-                    var at = new Vector3(p.Position.X, y, p.Position.Z);
-                    float d = Vector2.Distance(new Vector2(at.X, at.Z), flat);
+                    float d = Vector2.Distance(new Vector2(p.Position.X, p.Position.Z), flat);
                     if (d > radius) continue;
-                    var info = host.WorldInfo(p);
-                    var b = new ControlBuilding("b:" + p.Key, info.Name, p.BuildingId, at,
-                        host.Placement.Footprint(p.BuildingId)?.Place(p.Position, p.Rotation));
-                    _controlBuildings[b.Id] = b;
+                    var b = LevelBuilding(host, p);
                     items.Add((d, w => WriteBuilding(w, b, near)));
                 }
             }
@@ -294,7 +336,7 @@ sealed class AgentOrders(PlayerInterface player)
         if (id.StartsWith("b:", StringComparison.OrdinalIgnoreCase))
         {
             if (ControlPosition(id) is not { } pos) return null;
-            var hull = _controlBuildings.TryGetValue(id, out var known) ? known.Hull : null;
+            var hull = KnownBuilding(id)?.Hull;
             if (hull is null && player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => "b:" + s.Id == id) is { } site
                 && player.Build.Services is { } host
                 && (host.Placement.Footprint(site.Record) ?? host.Placement.Plot(site.Record)) is { } footprint)
