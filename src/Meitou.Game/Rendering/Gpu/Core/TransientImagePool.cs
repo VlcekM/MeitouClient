@@ -300,6 +300,21 @@ internal sealed unsafe class TransientImagePool : IDisposable
     }
 
     /// <summary>
+    /// Stops <see cref="BeginPhase"/> from emitting further aliasing barriers for <paramref name="img"/> once it has been
+    /// released, while keeping its slot in <see cref="TransientBlock.Slots"/> until deferred <see cref="Free"/> runs after
+    /// in-flight frames complete.
+    /// </summary>
+    public void Retire(ImageAllocation img)
+    {
+        lock (_gate)
+        {
+            if (img.Freed || img.TransientSlot is not { } slot) return;
+
+            _byFirstPhase[(int)slot.Lifetime.First].Remove(slot);
+        }
+    }
+
+    /// <summary>
     /// Destroys an aliased image, removes its slot and frees its block back to the driver on a worker when empty
     /// (keeping up to one empty block per memory type unless <see cref="GpuAllocator.Lean"/> is set).
     /// </summary>
