@@ -58,10 +58,10 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     public const int MaxIterations = 100000;
     /// <summary>
     /// The most polygons a dead end round the start may hold to be left through exits too narrow for the radius (<see cref="SqueezeOut"/>; engine
-    /// choice: the failed searches from #1025's ledge closed 2, #1032's pocket between two generators 4 and 5, those of walkers really shut out
-    /// 143 and 2012).
+    /// choice: the failed searches from #1025's ledge closed 2, #1032's pocket between two generators 4 and 5, #1554's slope band 19, 20 and 22, those of
+    /// walkers really shut out 143 and 2012).
     /// </summary>
-    public const int SqueezeCluster = 8;
+    public const int SqueezeCluster = 32;
 
     /// <summary>
     /// The counters behind <see cref="Stats"/>, updated with <see cref="Interlocked"/>.

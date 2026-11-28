@@ -285,7 +285,7 @@ A start polygon with no exit that clears the radius is left through its narrow e
 in it). **Observed** (zone 39.16, Stoat, scratch probe from ground-level points round its 25 doors): slivers beside door steps
 (Y-House `16-` 35046..35064,−71590..−71582, 4..6 wide, one 6-unit wall-ended exit; Y-House `18-`; Old Storm House `20-`) held
 8 of 1999 starts with no path at all, so a walker stopped or pushed there stayed stuck at the door; with the rule all 1999 path.
-The same holds for a dead end of up to 8 polygons round the start (`NavQuery.SqueezeCluster`, `SqueezeOut`), opened again for each dead end the
+The same holds for a dead end of up to 32 polygons round the start (`NavQuery.SqueezeCluster`, `SqueezeOut`), opened again for each dead end the
 way out leads into while the count holds. A polygon opened again is not entered from one reached through it (`NavQuery.Descends`): the two would be
 each other's parent and the corridor's walk back to the start would not end (**Observed**, #1065 save, `probe walk --stream`: in one run of four a
 path search grew its corridor list until memory ran out; the rule comes from the code, the run was not repeated with it). **Observed** (#1025 save, Cat-Lon's Exile `54.59:4-`, `probe path --nav`): a ledge of the interior mesh
@@ -295,6 +295,10 @@ fight; a walker really shut out closed 143 and 2012), now every start on its thr
 **Observed** (#1032 save, Outpost s-V `49.49:3-` with the interior Skinhouse HQ, `probe path --nav` and `crowd`): the 4 polygons between its two Generator II leave by a
 7.2-wide wall-ended edge into one polygon and from that by a 6-wide one, so a search from there runs dry at 4 and at 5 polygons; with the limit at 4
 four residents saved there (80917..80927, 82690..82699) stood for 28,000 ticks, at 8 they are out by tick 300 and up at their node by tick 800.
+**Observed** (#1554 save, zone 21.31, `probe path --nav` and `squads`): a Black Dragon raid's leader stood at -46288,1491,-784 on a slope band of 19 polygons
+left only through 4..5.5-wide wall-ended edges at x -46080 (-46067..-46091, -644..-650), each leading into one more dead end (searches ran dry at 19, 20, 22);
+with the limit at 8 he and the squad following him stood for good, at 32 he is through by tick 300 and the squad travels on. The original's tile has
+no ground polygon within 130 of the pinch (`navmesh --zone 21,31 --probe`): there the slope is off the mesh.
 A walker off the mesh (engine choices): its path starts at its own position, then the nearest mesh point, which it walks to; if the nearest start polygon gives no path, or
 one whose first 10 units it cannot stand along, up to 4 next-nearest starts are tried, then the nearest start within `StandRise`/`StandDrop` of its height,
 which it walks out of the hole to (start polygons score 4 × plan distance + height gap). **Observed** (#780, the issue's save, a Scrawny Cannibal at
