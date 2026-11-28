@@ -479,6 +479,27 @@ public class ModHookTests
     }
 
     /// <summary>
+    /// A captive's stand-in (<see cref="Platoon.Imprisoned"/>) does not fight off screen: two hostile camps met in one place both stay while one is
+    /// imprisoned. Catches prisoners in neighbouring cages fighting it out after a load and the loser despawned (#1271's save).
+    /// </summary>
+    [Fact]
+    public void An_imprisoned_stand_in_does_not_fight_off_screen()
+    {
+        var at = new Vector2(20000, 20000);
+        var (w, population) = Start(Hostile());
+        using var world = w;
+        int folk = population.Data.FactionIndex(Faction), raiders = population.Data.FactionIndex(Raiders);
+        int a = Camp(w, population, folk, at);
+        int b = Camp(w, population, raiders, at);
+        w.Platoons.Find(a)!.Imprisoned = true;
+
+        w.RunTicks(600);
+
+        Assert.NotNull(w.Platoons.Find(a));
+        Assert.NotNull(w.Platoons.Find(b));
+    }
+
+    /// <summary>
     /// The road map lists the level's junctions and roads with their ids, lengths and points, finds the nearest road point and the roads near a
     /// place, even with a huge distance, and refuses input that is not finite; a road of one point is left out. Catches a junction or road a mod
     /// cannot reach, a share or distance measured from the wrong end, a search that throws on bad input, or one that walks every grid cell a huge

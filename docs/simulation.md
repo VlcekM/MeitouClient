@@ -614,7 +614,7 @@ Eight Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns
   living member lying knocked out inside the loaded zones into a squad of its own, as the original splits a carried one
   (`PopulationSystem.LeftDown` in the [split at unload](game/factions-squads-towns.md#1-object-model)), so a guard carried off and put down
   stays (#1085) and rejoins his squad once up and near it. Faithful (the original): he goes with his squad once no member is on screen.
-- **Fights far away** (`OffscreenFights`). Meitou: every 2 s, an unloaded travelling or wild stand-in (not a town's own, not the player's) met
+- **Fights far away** (`OffscreenFights`). Meitou: every 2 s, an unloaded travelling or wild stand-in (not a town's own, not the player's, not a captive's: `Platoon.Captive`) met
   by an enemy (`AggroSystem.IsEnemy` either way) within 300 fights the first such in id order that no code mod's rule skips
   ([modding](modding.md) "Off-screen fight rules"; a rule may also name the winner); strength per member able to fight is 10 + the
   mean of melee attack, melee defence and toughness (25 for a squad never made); A wins with S_A² / (S_A² + S_B²); the loser is despawned and the

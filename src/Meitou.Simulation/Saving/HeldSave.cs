@@ -69,6 +69,23 @@ public static class HeldSave
     }
 
     /// <summary>
+    /// The held state a saved character's GAMESTATE_CHARACTER records, as <see cref="Read"/> takes it: Meitou's key when <c>meitou in what</c>
+    /// names a fixture, else the original's <c>in something</c>, clamped to 0..2.
+    /// </summary>
+    public static HeldState StateOf(FcsRecord? state)
+    {
+        if (state is null) return HeldState.None;
+
+        string key = MeitouNamed(state) ? MeitouState : "in something";
+        return (HeldState)Math.Clamp(state.Ints.GetValueOrDefault(key), 0, 2);
+    }
+
+    /// <summary>
+    /// Whether Meitou's keys hold the character's held state: <c>meitou in what</c> is set.
+    /// </summary>
+    static bool MeitouNamed(FcsRecord state) => state.Strings.TryGetValue(MeitouWhat, out var what) && what.Length > 0;
+
+    /// <summary>
     /// Reads a character's held state and sentence (the Meitou keys first; else <c>in what</c> resolved through <paramref name="handles"/> to a
     /// building key).
     /// </summary>
@@ -76,14 +93,13 @@ public static class HeldSave
     {
         if (state is null) return;
 
-        if (state.Strings.TryGetValue(MeitouWhat, out var what) && what.Length > 0)
+        cold.InSomething = StateOf(state);
+        if (MeitouNamed(state))
         {
-            cold.InSomething = (HeldState)Math.Clamp(state.Ints.GetValueOrDefault(MeitouState), 0, 2);
-            cold.InWhat = what;
+            cold.InWhat = state.Strings[MeitouWhat];
         }
         else
         {
-            cold.InSomething = (HeldState)Math.Clamp(state.Ints.GetValueOrDefault("in something"), 0, 2);
             cold.InWhat = cold.InSomething != HeldState.None && handles.Building(Hand.Read(state, "in what")) is { } b
                 ? instanceOf.GetValueOrDefault(b)
                 : null;

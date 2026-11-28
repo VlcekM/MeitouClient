@@ -78,6 +78,9 @@ public sealed partial class PopulationSystem
             if (p.State != PlatoonState.Unloaded || p.Pinned || p.Faction < 0 || p.Faction == _data.PlayerFaction || p.Faction == world.Player.Faction)
                 continue;
 
+            // A captive's stand-in does not travel (Platoon.Captive), so it meets nobody: prisoners in neighbouring cages do not fight.
+            if (p.Captive) continue;
+
             _fighters.Add(p);
             var cell = ((int)MathF.Floor(p.Position.X / FightRadius), (int)MathF.Floor(p.Position.Y / FightRadius));
             if (!_fightCells.TryGetValue(cell, out var at)) _fightCells[cell] = at = [];

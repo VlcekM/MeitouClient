@@ -885,13 +885,15 @@ public static class SaveLoader
     }
 
     /// <summary>
-    /// The state every loaded platoon reads off its saved record, NPC or wild: its imprisoned, dead and intact flags, a code mod's marks (its
-    /// spawn flag, tags and named hold, <see cref="ModPlatoonSave"/>) and its blackboard's town and arrival hour (<see cref="Platoon.SavedTown"/>).
+    /// The state every loaded platoon reads off its saved record, NPC or wild: its imprisoned flag (and <see cref="Platoon.CagedAtLoad"/> when every
+    /// saved member is caged), dead and intact flags, a code mod's marks (its spawn flag, tags and named hold, <see cref="ModPlatoonSave"/>) and its
+    /// blackboard's town and arrival hour (<see cref="Platoon.SavedTown"/>).
     /// </summary>
-    static void ReadSavedState(Platoon p, SavePlatoon platoon)
+    internal static void ReadSavedState(Platoon p, SavePlatoon platoon)
     {
         var record = platoon.Record;
         p.Imprisoned = record.Bools.GetValueOrDefault("imprisoned");
+        p.CagedAtLoad = AllCaged(platoon);
         p.Dead = record.Bools.GetValueOrDefault("dead");
         p.IntactFlag = record.Bools.GetValueOrDefault("intact", true);
         p.ModSpawned = ModPlatoonSave.Spawned(record);
@@ -900,6 +902,13 @@ public static class SaveLoader
         ModPlatoonSave.Read(record, p);
         p.SavedTown = CurrentTownSave.Read(record);
     }
+
+    /// <summary>
+    /// Whether every saved member of <paramref name="platoon"/> is caged (<see cref="HeldSave.StateOf"/>). A platoon with a free member is left
+    /// free: the original splits its captives off only when it unloads, and its free members travel and fight on.
+    /// </summary>
+    static bool AllCaged(SavePlatoon platoon) =>
+        platoon.Characters.Count > 0 && platoon.Characters.All(c => HeldSave.StateOf(c.GameState) == Locks.HeldState.Imprisoned);
 
     /// <summary>
     /// A loaded platoon's member key: a code mod's spawn keeps the one it was saved with, any other is keyed by its name.

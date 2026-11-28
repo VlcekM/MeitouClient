@@ -282,8 +282,8 @@ public sealed partial class PopulationSystem
         if (p.Job == PlatoonJob.GoHome) return;
 
         // It stands still (FUN_1407ee790, Verified): a platoon of the player's faction, one off the zone grid, one inside the trimmed box of a loaded
-        // zone (it waits to be made), and a platoon left with a member caged.
-        if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Imprisoned) return;
+        // zone (it waits to be made), and a platoon left with a member caged (or, Meitou, loaded with them all caged: Platoon.CagedAtLoad).
+        if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Captive) return;
 
         // Job 0 of a persistent platoon becomes GOHOME (FUN_1407ee790, Verified): it stands still too, whatever its distance from home (9216 only
         // picks GOHOME over the idle hook); only a non-persistent one takes the engine's travel.
@@ -337,7 +337,7 @@ public sealed partial class PopulationSystem
         if (PlatoonContracts.EmployerGoal(world, p, _data, _settings.RoamArrivalRadius) is not { } contract) return false;
 
         p.Job = contract.Job;
-        if (contract.At is not { } target || p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Imprisoned || WaitsToLoad(p.Position))
+        if (contract.At is not { } target || p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Captive || WaitsToLoad(p.Position))
             return true;
 
         var goal = p.RouteGoal is { } last && Vector2.Distance(last, target) < ModFollowSlack ? last : target;
@@ -721,6 +721,7 @@ public sealed partial class PopulationSystem
         }
 
         p.Imprisoned = squad.Members.Any(m => table.TryResolveNext(m, out int ms) && table.Cold(ms)!.IsImprisoned);
+        p.CagedAtLoad = false;
         if (squad.Ai is { } flagged) p.IntactFlag = flagged.Intact;   // kept as it was at unload (+0x100)
         if (squad.Ai?.Current is { } running) FollowPackage(world, p, running);
 
@@ -784,7 +785,7 @@ public sealed partial class PopulationSystem
             return;
         }
 
-        if (p.Pinned || p.Wild || p.Dead || p.Held) return;
+        if (p.Pinned || p.Wild || p.Dead || p.Captive) return;
         (p.Target, p.WaitLeft, p.Point) = (-1, 0, null);
     }
 

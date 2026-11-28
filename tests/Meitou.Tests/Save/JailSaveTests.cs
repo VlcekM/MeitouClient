@@ -434,4 +434,45 @@ public class JailSaveTests
 
         Assert.False(locks.IsHouseLocked(a.World, HouseKey));
     }
+
+    /// <summary>
+    /// A saved NPC platoon whose members all sit in a cage loads captive (<see cref="Platoon.CagedAtLoad"/>) though its own <c>imprisoned</c> flag is
+    /// clear, by the original's <c>in something</c> or Meitou's keys, and that flag stays clear so a save writes it back unchanged: the original sets
+    /// it only when a platoon unloads, so one loaded when the game saved has it clear (the #1271 save). A free member leaves the platoon free, as the
+    /// original splits its captives off only at unload. Catches a captive's stand-in taken for a free squad at load (it travels and fights off
+    /// screen), a mixed platoon's free members frozen, and a made-up <c>imprisoned</c> written into the save.
+    /// </summary>
+    [Theory]
+    [InlineData("in something", (int)HeldState.Imprisoned, (int)HeldState.Imprisoned, true)]
+    [InlineData(HeldSave.MeitouState, (int)HeldState.Imprisoned, (int)HeldState.Imprisoned, true)]
+    [InlineData("in something", (int)HeldState.None, (int)HeldState.None, false)]
+    [InlineData("in something", (int)HeldState.Imprisoned, (int)HeldState.None, false)]
+    public void A_saved_platoon_with_its_members_caged_loads_captive_though_its_flag_is_clear(string key, int first, int second, bool captive)
+    {
+        var record = new FcsRecord { Type = (int)FcsRecordType.Platoon, StringId = "Slave Traders_271" };
+        record.Bools["imprisoned"] = false;
+        var platoon = new SavePlatoon(record, null);
+        platoon.Characters.Add(SavedMember(platoon, key, first));
+        platoon.Characters.Add(SavedMember(platoon, key, second));
+        var loaded = new Platoon { Id = 1, Origin = -1, TemplateId = "12-t", Key = 1 };
+
+        SaveLoader.ReadSavedState(loaded, platoon);
+
+        Assert.Equal(captive, loaded.CagedAtLoad);
+        Assert.Equal(captive, loaded.Captive);
+        Assert.False(loaded.Imprisoned);
+    }
+
+    /// <summary>
+    /// A saved member of <paramref name="platoon"/> whose held state is <paramref name="held"/> under <paramref name="key"/> (Meitou's key with its
+    /// fixture named).
+    /// </summary>
+    static SaveCharacter SavedMember(SavePlatoon platoon, string key, int held)
+    {
+        var state = new FcsRecord();
+        state.Ints[key] = held;
+        if (key == HeldSave.MeitouState) state.Strings[HeldSave.MeitouWhat] = "cage-1";
+
+        return new SaveCharacter(platoon, new FcsInstance()) { GameState = state };
+    }
 }
