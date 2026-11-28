@@ -29,7 +29,7 @@ public enum LockForce : byte
 /// <summary>
 /// Force the lock of a door, container or cage (<see cref="Fixture.Id"/>): the nearest of the characters (the selection when empty) who may walks to
 /// it and cuts it (Task_CutLock, needs a tool), breaks it by strength (Task_BruteForceLock) or, for a door, bashes it with its weapon
-/// (Task_BashDoor). A prisoner forces its own cage's lock from inside.
+/// (Task_BashDoor). A prisoner forces a cage's lock where it is held: its own, or another in its reach (<c>LockSystem.PrisonerReaches</c>).
 /// </summary>
 public sealed record ForceLockOrder(IReadOnlyList<CharacterId> Characters, string Fixture, LockForce Force) : OrderCommand;
 
@@ -56,7 +56,8 @@ public sealed partial class LockSystem
         foreach (var id in Who(world, order.Characters))
         {
             if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { Medical.Incapacitated: false } c
-                    || c.IsImprisoned && !InCage(c, fixture) || !c.CarriedBy.IsNone || !TaskStart.Eligible(world, c, RowOf(order.Force)))
+                    || c.IsImprisoned && !PrisonerReaches(world, c, fixture, table.Next[s].Position) || !c.CarriedBy.IsNone
+                    || !TaskStart.Eligible(world, c, RowOf(order.Force)))
                 continue;
 
             float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(fixture.Position));
@@ -87,13 +88,6 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// Whether <paramref name="c"/> is the prisoner of the cage <paramref name="f"/> and may work its lock from inside: Task_CutLock and
-    /// Task_BruteForceLock resolve a character target to the cage it is held in (<c>FUN_140352af0</c>, <c>FUN_140353350</c>, <b>Observed</b>) and
-    /// rows 285 / 286 have no imprisoned test, as the pick; one tied to a pole too (the rows are registered for the chained repertoire).
-    /// </summary>
-    static bool InCage(CharacterCold c, Fixture f) => c.IsImprisoned && f.Kind == FixtureKind.Cage && c.InWhat == f.Id;
-
-    /// <summary>
     /// Row 226's own conditions (!70 isObjectMine, !128 isAlly): a door of the smasher's faction or of an ally's is never smashed on an order.
     /// </summary>
     bool SmashRefused(CharacterCold walker, Fixture door) =>
@@ -111,7 +105,8 @@ public sealed partial class LockSystem
         {
             if (!next[s].Alive || table.Cold(s) is not { ForcingLock: { } id } c) continue;
             if (world.Fixtures.Find(id) is not { } f || f.Lock is not { EffectivelyLocked: true } || f.Kind == FixtureKind.Door && f.DoorBroken
-                    || c.Medical is { Incapacitated: true } || !c.CarriedBy.IsNone || c.IsImprisoned && !InCage(c, f))
+                    || c.Medical is { Incapacitated: true } || !c.CarriedBy.IsNone
+                    || c.IsImprisoned && !PrisonerReaches(world, c, f, next[s].Position))
             {
                 c.ForcingLock = null;
                 continue;

@@ -150,19 +150,31 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     }
 
     /// <summary>
-    /// Whether a prisoner standing at <paramref name="at"/> reaches <paramref name="cage"/> to work its lock: its own always, another while it is
-    /// <c>isAtLocation</c> for a character that is not moving (<c>AI::isWithinChoppingRange</c>, <c>FUN_14059c6d0</c>, <b>Verified</b>): the flat
-    /// distance to the cage's position marker nearest it below twice the cage's <c>use range</c>, on the cage's floor. No walk can bring it there:
-    /// the walks that give <c>isAtLocation</c> (1, 29, 67) are not in the imprisoned or chained repertoire (#1594).
+    /// Whether a prisoner held at <paramref name="at"/> reaches <paramref name="cage"/> to work its lock (pick, cut or break): its own always,
+    /// another while it is <c>isAtLocation</c> for a character that is not moving (<c>AI::isWithinChoppingRange</c>, <c>FUN_14059c6d0</c>,
+    /// <b>Verified</b>): the flat distance to the cage's position marker nearest it below twice the cage's <c>use range</c>, on the cage's floor.
+    /// No walk can bring it there: the walks that give <c>isAtLocation</c> (1, 29, 67) are not in the imprisoned or chained repertoire (#1594).
+    /// Task_CutLock and Task_BruteForceLock resolve a character target to the cage it is held in (<c>FUN_140352af0</c>, <c>FUN_140353350</c>,
+    /// <b>Observed</b>) and rows 285 / 286 have no imprisoned test, as the pick, so the same reach holds for them (#1618); for a pole's prisoner
+    /// too (the rows are registered for the chained repertoire).
     /// </summary>
     static bool PrisonerReaches(World world, CharacterCold prisoner, Fixture cage, Vector3 at)
     {
         if (prisoner.InWhat == cage.Id) return true;
+        if (cage.Kind != FixtureKind.Cage) return false;
 
-        var marker = world.Fixtures.PositionMarker(cage.Id, at) ?? cage.Position;
+        var stand = HeldFloor(world, prisoner, at);
+        var marker = world.Fixtures.PositionMarker(cage.Id, stand) ?? cage.Position;
         float reach = cage.UseRange * FixtureRegistry.StillReachFactor;
-        return Vector2.Distance(Flat(at), Flat(marker)) < reach && world.Fixtures.OnCageFloor(cage, at, world.Walkability);
+        return Vector2.Distance(Flat(stand), Flat(marker)) < reach && world.Fixtures.OnCageFloor(cage, stand, world.Walkability);
     }
+
+    /// <summary>
+    /// Where a prisoner held at <paramref name="at"/> stands: on the floor under its own cage's use node nearest it
+    /// (<see cref="FixtureRegistry.FloorMarker"/>), as it is held at the cage's origin, which can stand 17 to 19 over that floor (#1383).
+    /// </summary>
+    static Vector3 HeldFloor(World world, CharacterCold prisoner, Vector3 at) =>
+        prisoner.InWhat is { } own && world.Fixtures.FloorMarker(own, at, world.Walkability) is { } floor ? at with { Y = floor.Y } : at;
 
     /// <summary>
     /// A get-out order: each character listed gets order 207 Escape cage through its queue (<see cref="CageEscape"/>), the queue cleared unless
