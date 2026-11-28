@@ -57,23 +57,49 @@ public sealed partial class ProductionSystem
         // The carried output goes to the storage once a full output was taken, or while the output stays full (no room to take it): not for a
         // stray unit, which sent a miner on a trip for every piece of ore it carried (#388). The 152 order takes any carried output there.
         bool full = m.Output is { Full: true } || m.Craft is { } c && CraftFull(c);
-        string? into = took || full || autoHaul
-            ? CarriedMade(inv, m)
-                .Select(i => StorageFor(world, site, i, cold, at))
-                .FirstOrDefault(s => s is not null)
-            : null;
-        if (into is not null) return Go(cold, into, null);
+        bool unload = took || full || autoHaul;
+        if (unload && OutputStorage(world, site, m, cold, at) is { } into) return Go(cold, into, null);
 
         if (autoHaul || m.Craft is { Queue.Count: 0 }) return false;
 
         // The fill finder's walk with an empty input (Machine.FillOrder): the empty inputs in list order, the first with a source decides.
+        // Without room for the input, unload carried output first so the fetch can pick something up instead of looping empty-handed.
+        bool triedUnload = unload;
         foreach (var input in m.Inputs)
         {
-            if (input.Rate > 0 && input.Count == 0 && NearestSource(world, site, input.Item, cold) is { } from)
-                return Go(cold, from, input.Item);
+            if (input.Rate <= 0 || input.Count > 0 || NearestSource(world, site, input.Item, cold) is not { } from) continue;
+            if (CanFit(inv, input.Item)) return Go(cold, from, input.Item);
+            if (!triedUnload)
+            {
+                triedUnload = true;
+                if (OutputStorage(world, site, m, cold, at) is { } ditch) return Go(cold, ditch, null);
+            }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether one unit of <paramref name="record"/> fits in <paramref name="inv"/> (main grid or worn backpack, state 82).
+    /// </summary>
+    bool CanFit(Inventory inv, string record) => _items.Create(record, 1) is { } unit && inv.HasRoomFor(unit);
+
+    /// <summary>
+    /// A storage or machine that takes something <paramref name="cold"/> carries of what <paramref name="m"/> makes (<see cref="CarriedMade"/>);
+    /// null when nothing carried fits any target.
+    /// </summary>
+    string? OutputStorage(World world, BuildSite site, Machine m, CharacterCold cold, Vector3? at = null)
+    {
+        if (cold.Inventory is not { } inv) return null;
+        ItemInstance? last = null;
+        foreach (var item in CarriedMade(inv, m))
+        {
+            if (last is not null && Inventory.SameStack(last, item) && last.Buyback is null && item.Buyback is null) continue;
+            if (StorageFor(world, site, item, cold, at) is { } store) return store;
+            last = item;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -329,26 +355,25 @@ public sealed partial class ProductionSystem
                 continue;
             }
 
-            // Inventory.Add leaves the units it could not place on the item.
+            // Inventory.Add leaves the units it could not place on the item; keep going in case a smaller finished item fits.
             moved |= item.Quantity < before;
             state.Done.Insert(k, item);
-            break;
         }
 
         return moved;
     }
 
     /// <summary>
-    /// Whether <paramref name="from"/>'s output holds something <paramref name="store"/> takes and has room for: its output slot's item, or a
-    /// bench's finished item.
+    /// Whether <paramref name="from"/>'s output holds something <paramref name="store"/> takes and has room for and <paramref name="inv"/> has room
+    /// to carry: its output slot's item, or a bench's finished item.
     /// </summary>
-    bool Offers(Machine from, Machine store)
+    bool Offers(Machine from, Machine store, Inventory inv)
     {
         if (from.Output is { Count: > 0 } output && _items.Create(output.Recipe.Item, 1) is { } one && store.Data.Accepts(one.Record, one.Type)
-            && Fits(store.Storage!, one))
+            && Fits(store.Storage!, one) && inv.HasRoomFor(one))
             return true;
 
-        return from.Craft is { } craft && craft.Done.Any(i => store.Data.Accepts(i.Record, i.Type) && Fits(store.Storage!, i));
+        return from.Craft is { } craft && craft.Done.Any(i => store.Data.Accepts(i.Record, i.Type) && Fits(store.Storage!, i) && inv.HasRoomFor(i));
     }
 
     /// <summary>
