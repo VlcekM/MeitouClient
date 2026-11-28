@@ -135,6 +135,7 @@ static class SaveProbe
             case ("force", >= 2):
                 Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength, a.Count > 2 ? a[2] : null);
                 return true;
+            case ("release", >= 1): Release(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 40); return true;
             case ("free", >= 1): Free(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 && a[2] == "unlocked"); return true;
             case ("kit", >= 1): Kit(probe, a[0]); return true;
             case ("uniques", _): Uniques(probe, a.Count > 0 ? a[0] : null); return true;
@@ -1230,6 +1231,28 @@ static class SaveProbe
             foreach (int p in Enumerable.Range(0, t.HighWater).Where(i => t.Next[i].Alive && t.Cold(i) is { IsPlayer: true }))
                 Console.WriteLine($"  {probe.Who(p)} row={t.Cold(p)!.Running?.Row} freeing={!t.Cold(p)!.Freeing.IsNone}");
 
+            probe.PrintMessages();
+            probe.Tick(5);
+        }
+    }
+
+    /// <summary>
+    /// The caged character <paramref name="name"/> (a name, or <c>#slot</c>) is let out at once as the player's leader's Set Free lets it out
+    /// (<see cref="LockSystem.FreeBy"/>), then every 5 ticks, <paramref name="rounds"/> times, its task, hold, slave state and obedience (#1575).
+    /// </summary>
+    static void Release(ProbeWorld probe, string name, int rounds)
+    {
+        var t = probe.Characters;
+        int who = name.StartsWith('#') ? int.Parse(name[1..]) : probe.Named(name).First(i => t.Cold(i) is { IsImprisoned: true });
+        var c = t.Cold(who)!;
+        int leader = probe.World.Squads.Find(probe.World.Player.Squad)!.Leader.Slot;
+        bool freed = LockSystem.FreeBy(probe.World, t.IdOf(leader), probe.World.Player.Faction, t.IdOf(who), probe.World.SystemOf<CrimeSystem>());
+        Console.WriteLine($"freed={freed} hours={probe.World.GameHours:F2}");
+
+        for (int round = 0; round <= rounds; round++)
+        {
+            Console.WriteLine($"tick {probe.World.Tick} {probe.Who(who)} in={c.InSomething} inWhat={c.InWhat} slave={c.SlaveState} "
+                + $"lost={c.ObedienceLost} squad={c.SquadId} row={c.Running?.Row}");
             probe.PrintMessages();
             probe.Tick(5);
         }

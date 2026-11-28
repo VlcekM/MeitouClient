@@ -393,6 +393,26 @@ public class TaskStartTests
         Assert.True(rig.World.DeferredCount > 0, "the thanks (event 13) is deferred");
     }
 
+    /// <summary>
+    /// A slave the player sets free stays its owner's obedient slave (<c>FUN_1403570a0</c> never sets the slave state, docs/optional-fixes.md
+    /// #1575), so its master's Slave goals, 172 Getting in my cage among them, still apply out of the cage.
+    /// </summary>
+    [Fact]
+    public void Set_free_keeps_a_slave_enslaved_and_obedient()
+    {
+        using var rig = new Rig(carrying: false);
+        var slave = rig.Cold(rig.Prisoner);
+        (slave.SlaveState, slave.SlaveOwner) = (1, 2);
+
+        bool freed = LockSystem.FreeBy(rig.World, rig.Fighter, 1, rig.Prisoner, null);
+
+        Assert.True(freed);
+        Assert.False(slave.IsImprisoned);
+        Assert.Equal(1, slave.SlaveState);
+        Assert.Equal(2, slave.SlaveOwner);
+        Assert.False(slave.ObedienceLost);
+    }
+
     const int H = Repertoire.Human, I = Repertoire.Imprisoned, Ch = Repertoire.Chained, A = Repertoire.Animal, Cr = Repertoire.Crippled;
 
     /// <summary>
