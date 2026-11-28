@@ -62,6 +62,11 @@ public enum SquadAi : ushort
     /// </summary>
     HealAll = 1024,
     /// <summary>
+    /// The AI tab's Heal Carried line unticked (Meitou-only; off, as in the original, by default): player medics leave alone the characters of
+    /// factions neither their own nor allied that the player's characters carry (<see cref="FirstAid.FirstAidSystem"/> pass 4).
+    /// </summary>
+    SkipCarried = 2048,
+    /// <summary>
     /// A new game's options (<b>Observed</b>: 511 of the owner's saves; heal and help are on in 4, rescue and shoot first in none).
     /// </summary>
     Defaults = Ditch | Sleep | Sit | Share | Feed,
@@ -98,7 +103,7 @@ public static class SquadAiKeys
     /// The Meitou-only options' CAMERA bools, written only while on.
     /// </summary>
     public static readonly (SquadAi Option, string Key)[] MeitouKeys = [(SquadAi.HealNeutrals, "meitou heal neutrals"),
-            (SquadAi.HealAll, "meitou heal all")];
+            (SquadAi.HealAll, "meitou heal all"), (SquadAi.SkipCarried, "meitou skip carried")];
 
     /// <summary>
     /// Writes the options to the CAMERA record: the original's keys always, the Meitou keys only while on (removed while off).

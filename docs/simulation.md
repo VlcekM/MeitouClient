@@ -2221,7 +2221,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   goal 15's finder, their weight squared, [precedence](game/ai-tasks.md#precedence)), Rescue Allies (above), Share Food (`FeedSystem`: a player character with no food takes it from a squad mate's backpack within 200,
   only with the option), Feed Animals (off: the player's animals do not eat), Shoot first (`SquadAiRules.ShootsFirstAt`: with no enemy in its
   sights a player turret gunner also takes dangerous neutrals at weight 0.6); Meitou-only Heal Neutrals and Heal All (player medics also treat downed non-hostile
-  strangers, or any downed character; [squad AI options](game/ai-tasks.md#squad-ai-options)).
+  strangers, or any downed character) and Heal Carried (on: they treat carried non-allies, as the original; [squad AI options](game/ai-tasks.md#squad-ai-options)).
 - **Saves** (`Saving/MachineSave`, `ResearchSave`). Each building's production and farm keys go into its
   GAMESTATE_BUILDING. Items go into the INVENTORY_STATE the building lists first (a new one `<site>-inventory`), in the original's
   [sections](formats/save.md#folder-and-state-mapping) `in<k + 1>`, `out` and `backpack_content` (a furnace's grid `in1`); older Meitou

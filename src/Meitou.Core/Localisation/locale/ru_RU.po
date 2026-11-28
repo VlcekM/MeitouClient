@@ -608,6 +608,9 @@ msgstr "Персонаж {1} из {2} пытался появиться внут
 msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
 msgstr "Персонажи с работой медика будут лечить и упавших персонажей невраждебных фракций"
 
+msgid "Characters with the medic job will also heal non-allied characters that your characters are carrying"
+msgstr "Персонажи с работой медика будут лечить и несоюзных персонажей, которых несут ваши персонажи"
+
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "Персонажи с работой медика будут лечить любого упавшего персонажа, включая врагов"
 
@@ -1387,6 +1390,9 @@ msgstr "Голова поворачивается обратно"
 
 msgid "Heal All"
 msgstr "Лечить всех"
+
+msgid "Heal Carried"
+msgstr "Лечить переносимых"
 
 msgid "Heal Neutrals"
 msgstr "Лечить нейтральных"

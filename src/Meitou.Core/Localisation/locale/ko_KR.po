@@ -608,6 +608,9 @@ msgstr "{2}명 중 {1}번째 캐릭터가 벽 안에 생성되려 했습니다!"
 msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
 msgstr "의무병 작업을 가진 캐릭터는 적대적이지 않은 세력의 쓰러진 캐릭터도 치료합니다"
 
+msgid "Characters with the medic job will also heal non-allied characters that your characters are carrying"
+msgstr "의무병 작업을 가진 캐릭터가 당신의 캐릭터가 운반 중인 비동맹 캐릭터도 치료합니다"
+
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "의무병 작업을 가진 캐릭터는 적을 포함한 모든 쓰러진 캐릭터를 치료합니다"
 
@@ -1387,6 +1390,9 @@ msgstr "고개 되돌리기"
 
 msgid "Heal All"
 msgstr "모두 치료"
+
+msgid "Heal Carried"
+msgstr "운반 중인 자 치료"
 
 msgid "Heal Neutrals"
 msgstr "중립 치료"

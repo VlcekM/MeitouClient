@@ -4642,8 +4642,14 @@ msgstr "Curar neutros"
 msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
 msgstr "Personagens com o trabalho de médico também curam personagens caídos de facções que não são hostis"
 
+msgid "Characters with the medic job will also heal non-allied characters that your characters are carrying"
+msgstr "Personagens com o trabalho de médico também curarão personagens não aliados que seus personagens estiverem carregando"
+
 msgid "Heal All"
 msgstr "Curar todos"
+
+msgid "Heal Carried"
+msgstr "Curar carregados"
 
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "Personagens com o trabalho de médico curam qualquer personagem caído, inclusive inimigos"

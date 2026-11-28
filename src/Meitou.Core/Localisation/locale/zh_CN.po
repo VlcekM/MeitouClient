@@ -2791,8 +2791,14 @@ msgstr "治疗中立者"
 msgid "Heal All"
 msgstr "治疗所有人"
 
+msgid "Heal Carried"
+msgstr "治疗被搬运者"
+
 msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
 msgstr "有医疗工作的角色也会救治非敌对派系中倒下的人"
+
+msgid "Characters with the medic job will also heal non-allied characters that your characters are carrying"
+msgstr "拥有医疗工作的角色也会治疗你的角色正在搬运的非盟友角色"
 
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "有医疗工作的角色会救治任何倒下的人，包括敌人"

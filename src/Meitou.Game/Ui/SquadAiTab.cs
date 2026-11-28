@@ -39,7 +39,13 @@ sealed class SquadAiTab(PlayerInterface player)
         // Meitou-only lines (not in the original's tab).
         (SquadAi.HealNeutrals, "Heal Neutrals", "Characters with the medic job will also heal downed characters of factions that are not hostile"),
         (SquadAi.HealAll, "Heal All", "Characters with the medic job will heal any downed character, enemies included"),
+        (SquadAi.SkipCarried, "Heal Carried", "Characters with the medic job will also heal non-allied characters that your characters are carrying"),
     ];
+
+    /// <summary>
+    /// The options whose line reads ticked while the option is off (Heal Carried, the original's behaviour, is <see cref="SquadAi.SkipCarried"/> clear).
+    /// </summary>
+    const SquadAi InvertedOptions = SquadAi.SkipCarried;
 
     /// <summary>
     /// The Follow Formation items in the original's order (<c>FUN_140494ce0</c>: Random 0, Military 2, Caravan 1).
@@ -92,7 +98,8 @@ sealed class SquadAiTab(PlayerInterface player)
         {
             var (option, caption, tip) = AiOptionRows[i];
             string action = "ai-option:" + i.ToString(CultureInfo.InvariantCulture);
-            controls.Add(OptionButton($"ai-option-{i}", Loc.Tr(caption), action, tip, (on & option) != 0, panel.Bounds, i, line));
+            bool ticked = (on & option) != 0 != ((InvertedOptions & option) != 0);
+            controls.Add(OptionButton($"ai-option-{i}", Loc.Tr(caption), action, tip, ticked, panel.Bounds, i, line));
         }
 
         for (int k = 0; k < _modOptions.Count; k++)

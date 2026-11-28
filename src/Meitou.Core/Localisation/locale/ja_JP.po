@@ -608,6 +608,9 @@ msgstr "{2} 人中 {1} 人目のキャラクターが壁の中に出現しよう
 msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
 msgstr "医療の仕事を持つキャラクターは、敵対していない勢力の倒れたキャラクターも治療します"
 
+msgid "Characters with the medic job will also heal non-allied characters that your characters are carrying"
+msgstr "医療の仕事を持つキャラクターは、あなたのキャラクターが運んでいる同盟以外のキャラクターも治療します"
+
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "医療の仕事を持つキャラクターは、敵を含むあらゆる倒れたキャラクターを治療します"
 
@@ -1387,6 +1390,9 @@ msgstr "頭を戻す"
 
 msgid "Heal All"
 msgstr "全員を治療"
+
+msgid "Heal Carried"
+msgstr "運ばれている者を治療"
 
 msgid "Heal Neutrals"
 msgstr "中立を治療"

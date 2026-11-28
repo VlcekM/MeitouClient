@@ -608,6 +608,9 @@ msgstr "Figur {1} von {2} wollte in Wänden erscheinen!"
 msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
 msgstr "Figuren mit dem Sanitäterjob heilen auch niedergestreckte Figuren nicht feindlicher Fraktionen"
 
+msgid "Characters with the medic job will also heal non-allied characters that your characters are carrying"
+msgstr "Charaktere mit dem Sanitäter-Job heilen auch nicht verbündete Charaktere, die deine Charaktere tragen"
+
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "Figuren mit dem Sanitäterjob heilen jede niedergestreckte Figur, auch Feinde"
 
@@ -1387,6 +1390,9 @@ msgstr "Kopf dreht zurück"
 
 msgid "Heal All"
 msgstr "Alle heilen"
+
+msgid "Heal Carried"
+msgstr "Getragene heilen"
 
 msgid "Heal Neutrals"
 msgstr "Neutrale heilen"

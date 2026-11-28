@@ -1102,6 +1102,10 @@ msgid "Characters with the medic job will also heal downed characters of faction
 msgstr ""
 
 #: src/Meitou.Game/Ui/SquadAiTab.cs
+msgid "Characters with the medic job will also heal non-allied characters that your characters are carrying"
+msgstr ""
+
+#: src/Meitou.Game/Ui/SquadAiTab.cs
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr ""
 
@@ -2363,6 +2367,10 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/SquadAiTab.cs
 msgid "Heal All"
+msgstr ""
+
+#: src/Meitou.Game/Ui/SquadAiTab.cs
+msgid "Heal Carried"
 msgstr ""
 
 #: src/Meitou.Game/Ui/SquadAiTab.cs

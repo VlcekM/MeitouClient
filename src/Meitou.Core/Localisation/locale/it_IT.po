@@ -608,6 +608,9 @@ msgstr "Il personaggio {1} di {2} ha tentato di comparire dentro i muri!"
 msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
 msgstr "I personaggi con il lavoro di medico curano anche i personaggi a terra di fazioni non ostili"
 
+msgid "Characters with the medic job will also heal non-allied characters that your characters are carrying"
+msgstr "I personaggi con il lavoro di medico cureranno anche i personaggi non alleati che i tuoi personaggi stanno trasportando"
+
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "I personaggi con il lavoro di medico curano qualsiasi personaggio a terra, nemici compresi"
 
@@ -1387,6 +1390,9 @@ msgstr "La testa torna dritta"
 
 msgid "Heal All"
 msgstr "Cura tutti"
+
+msgid "Heal Carried"
+msgstr "Cura i trasportati"
 
 msgid "Heal Neutrals"
 msgstr "Cura i neutrali"

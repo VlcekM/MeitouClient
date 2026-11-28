@@ -376,7 +376,8 @@ public sealed partial class FirstAidSystem
     /// chained slave of the medic's faction counts too. Same building and town; a patient another medic works on is skipped. Meitou-only: a player
     /// medic with Heal Neutrals takes any free downed stranger not carried by an enemy, with Heal All enemies too.</item>
     /// <item><b>The squad's chained slaves</b> in sight (<see cref="SquadSlave"/>), <b>carried</b> patients of the medic's faction (outdoors), then
-    /// <b>prisoners in the cages</b> of the medic's faction in its place at a flat 0.25.</item>
+    /// <b>prisoners in the cages</b> of the medic's faction in its place at a flat 0.25. Meitou-only: a player medic with
+    /// <see cref="SquadAi.SkipCarried"/> skips a carried patient of a faction that is neither its own nor allied.</item>
     /// </list>
     /// </summary>
     (int Slot, float Score) FindPatient(World world, int i, SquadGoals taken, bool robotics, bool ordered = false)
@@ -393,6 +394,7 @@ public sealed partial class FirstAidSystem
         bool healAllies = (options & SquadAi.Heal) != 0;
         bool healAll = cold.IsPlayer && (options & SquadAi.HealAll) != 0, healNeutrals = healAll || cold.IsPlayer
                 && (options & SquadAi.HealNeutrals) != 0;
+        bool healCarried = !cold.IsPlayer || (options & SquadAi.SkipCarried) == 0;
         bool heals = Relations is { } rel && rel.Contains(cold.Faction) && rel.Factions[cold.Faction].HealsStrangers;
         float range = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight), range2 = range * range;
 
@@ -422,7 +424,7 @@ public sealed partial class FirstAidSystem
         SquadSlaves(look, taken, ref best, ref bestScore);
 
         // Pass 4: someone of its faction carries a patient, outdoors only.
-        if (best < 0 && world.Sight.PlaceOf(i) < 0) CarriedPatients(look, ref best, ref bestScore);
+        if (best < 0 && world.Sight.PlaceOf(i) < 0) CarriedPatients(look, healCarried, ref best, ref bestScore);
 
         // Pass 5 (FUN_14099f690, Verified): in its squad's home building (its location, on top included), the prisoners in that building's cages,
         // flat weight; no other test on them.
@@ -727,9 +729,10 @@ public sealed partial class FirstAidSystem
     }
 
     /// <summary>
-    /// Pass 4, the patients someone of the medic's faction carries (the caller holds it to outdoors).
+    /// Pass 4, the patients someone of the medic's faction carries (the caller holds it to outdoors); without <paramref name="healCarried"/>
+    /// (Meitou-only, <see cref="SquadAi.SkipCarried"/> set) only those of its own or an allied faction.
     /// </summary>
-    void CarriedPatients(in MedicLook look, ref int best, ref float bestScore)
+    void CarriedPatients(in MedicLook look, bool healCarried, ref int best, ref float bestScore)
     {
         var world = look.World;
         var table = world.Characters;
@@ -754,6 +757,8 @@ public sealed partial class FirstAidSystem
                 continue;
 
             if (!SeenOrHeard(world, i, s)) continue;   // :363-365
+            if (!healCarried && other.Faction != cold.Faction && !Allied(world, i, s)) continue;
+
             float need = Need(world, i, s, organic, robotic);
             if (need <= 0) continue;
             float score = need * Nearness(world, i, cold, s);
