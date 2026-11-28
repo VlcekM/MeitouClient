@@ -53,6 +53,7 @@ c help                                # one usage line per command; `c help <nam
 - A "script" is just a list of commands you send one after the other, stopping at the first error reply; `hold <s>` between lines is pacing only. Do not use `sleep` for waiting on game state: use `wait-for`.
 - `wait-for <key>=<value> [timeout=<s>]`: keys `screen`, `settings-page`, `loaded`, `widget`, `no-widget`, `mode`; replies at once if true, else after the timeout with an error. `step <n>` (paused game only) runs n ticks (30 per game second) synchronously.
 - `screenshot <png path>` saves a frame; use a **absolute** path, shrink it (`magick x.png -resize '1280x1280>' -quality 85 x.jpg`) and look only when the picture is the question.
+- Entity ids: `c:<slot>.<generation>` for a character, `b:<key>` for a building. A level building's key is `<zone x>.<zone y>:<instance id>` as `world` and `town` print it; every command takes it without a `world` listing round the building first.
 - UI clicks go by name: `ui-tree` (list of `{i,label,rect,id,screen}`), then `ui-click --id <id>` / `--label <text>`; indices change per page, run a fresh `ui-tree` first.
 
 ### Player towns

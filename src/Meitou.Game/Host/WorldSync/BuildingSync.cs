@@ -506,6 +506,7 @@ sealed class BuildingSync(GameHost host)
             SnapHostsAround = SnapHostsAround,
             StaticAround = footprints.StaticAround,
             StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
+            StaticPlacementsIn = zone => footprints.PlacementsIn(zone).Where(b => Pickable(b.BuildingId)),
             StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
             FloorAlong = GhostFloorAlong,
             Readout = Readout,
