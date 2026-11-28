@@ -5972,3 +5972,11 @@ msgstr "I costruttori nominano i materiali mancanti"
 #. machine-translated
 msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
 msgstr "Un costruttore a cui si ordina di costruire qualcosa senza averne i materiali dice quali materiali mancano, come le piastre di ferro. Il gioco dice sempre che non ha materiali da costruzione, anche quando porta materiali da costruzione e il cantiere richiede altro."
+
+#. machine-translated
+msgid "Shots into buildings"
+msgstr "Colpi negli edifici"
+
+#. machine-translated
+msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
+msgstr "Torrette e balestrieri non sparano a qualcuno all'interno di un altro edificio che non riescono a vedere; un balestriere invece si avvicina. Nel gioco i muri di molti edifici fermano i colpi solo vicino al pavimento, quindi le torrette all'esterno continuano a colpire attraverso i muri chi è all'interno."

@@ -480,6 +480,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? PunchReachChanged { get; init; }
 
     /// <summary>
+    /// Applies the indoor shots fix (<see cref="UserConfig.FixIndoorShots"/>) to the running combat system.
+    /// </summary>
+    public Action<bool>? IndoorShotsChanged { get; init; }
+
+    /// <summary>
     /// Applies the animal moves fix (<see cref="UserConfig.FixAnimalMoves"/>) to the running combat system.
     /// </summary>
     public Action<bool>? AnimalMovesChanged { get; init; }
@@ -1763,6 +1768,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         GunnerFacingChanged?.Invoke(true);
         Config.FixPunchReach = true;
         PunchReachChanged?.Invoke(true);
+        Config.FixIndoorShots = true;
+        IndoorShotsChanged?.Invoke(true);
         Config.FixAnimalMoves = true;
         AnimalMovesChanged?.Invoke(true);
         Config.FixTurretAssault = true;

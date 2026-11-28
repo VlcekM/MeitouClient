@@ -533,6 +533,7 @@ sealed class GameLoop(GameHost host)
             PunchReachChanged = on => EachSystem<Simulation.Combat.CombatSystem>(combat => combat.PunchReachFix = on),
             AnimalMovesChanged = on => EachSystem<Simulation.Combat.CombatSystem>(combat => combat.AnimalMovesFix = on),
             TurretAssaultChanged = on => EachSystem<Simulation.Combat.CombatSystem>(combat => combat.TurretAssault = on),
+            IndoorShotsChanged = on => EachSystem<Simulation.Combat.CombatSystem>(combat => combat.IndoorTargetsNeedSight = on),
             BenchFacingChanged = on => host.Session.World.BenchFacingFix = on,
             SeatBedsChanged = on => host.Session.World.SeatBedFix = on,
             PrisonPoseChanged = on => host.Session.World.PrisonPoseFix = on,

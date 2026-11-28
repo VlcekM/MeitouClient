@@ -5975,3 +5975,11 @@ msgstr "Строители называют недостающие матери�
 #. machine-translated
 msgid "A builder told to build something it has no materials for says which materials are missing, such as Iron Plates. The game always says it has no building materials, even when it carries Building Materials and the site wants something else."
 msgstr "Строитель, которому велели строить без материалов, называет, каких материалов не хватает, например железных пластин. В игре он всегда говорит, что у него нет стройматериалов, даже когда несёт стройматериалы, а стройке нужно другое."
+
+#. machine-translated
+msgid "Shots into buildings"
+msgstr "Стрельба в здания"
+
+#. machine-translated
+msgid "Turrets and crossbowmen do not shoot at someone inside another building that they cannot see; a crossbowman walks closer instead. In the game many buildings' walls only stop shots near the floor, so turrets outside keep hitting people indoors through the walls."
+msgstr "Турели и арбалетчики не стреляют в того, кто находится в другом здании и кого они не видят; арбалетчик вместо этого подходит ближе. В игре стены многих зданий задерживают выстрелы только у самого пола, поэтому турели снаружи продолжают попадать сквозь стены в тех, кто внутри."

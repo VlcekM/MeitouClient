@@ -595,6 +595,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixPunchReach { get; set; } = true;
     /// <summary>
+    /// Turrets and crossbowmen do not shoot a target inside another building they cannot see (Fixes settings; off: the line of fire alone decides,
+    /// as the game does, and walls without collision above the knee let shots through).
+    /// </summary>
+    public bool FixIndoorShots { get; set; } = true;
+    /// <summary>
     /// An animal fighting with a weapon drawn from its manufacturer (the Swamp Turtle) attacks with the elephant creature moves (Fixes settings;
     /// off: its weapon's moves, which its body cannot play, as the game does).
     /// </summary>

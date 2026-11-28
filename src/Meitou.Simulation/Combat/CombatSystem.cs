@@ -127,6 +127,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         PunchReachFix = Settings.PunchReachFix;
         AnimalMovesFix = Settings.AnimalMovesFix;
         TurretAssault = Settings.TurretAssault;
+        IndoorTargetsNeedSight = Settings.IndoorTargetsNeedSight;
         StuckLimit = Math.Clamp(Settings.StuckLimit, RangedTuning.MinStuckLimit, RangedTuning.MaxStuckLimit);
         _xp = new XpService(constants, options);
     }
@@ -181,6 +182,12 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// cref="CombatOptions.TurretAssault"/>, Meitou fix; docs/game/economy.md "Turret fire"); off: no crime, as the game does.
     /// </summary>
     public bool TurretAssault { get; set; }
+
+    /// <summary>
+    /// A turret or crossbowman leaves alone a target inside another building that it does not see now (<see cref="CombatOptions.IndoorTargetsNeedSight"/>,
+    /// Meitou fix; docs/game/combat.md "Line of fire and the hit shape"); off: the line of fire alone decides, as the game does.
+    /// </summary>
+    public bool IndoorTargetsNeedSight { get; set; }
 
     /// <summary>
     /// A fist attack whose <c>attack distance</c> is negative but above -100 (base data: "ma badpunch", -4, the only punch up to martial arts 20)
