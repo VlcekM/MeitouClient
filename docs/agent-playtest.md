@@ -133,6 +133,7 @@ c help                                # one usage line per command; `c help <nam
 | `quicksave` | `quicksave [name]` |
 | `quit` | `quit` |
 | `ragdoll-dump` | `ragdoll-dump [--id <c:slot.gen>]` (the first selected character's ragdoll: each body's world place and each joint's twist and swing against its limits, degrees) |
+| `relation` | `relation <faction> <other\|all> [value]` (print two factions' relation both ways, or set it both ways, -100 to 100; `player` for the player's faction) |
 | `research` | `research [list \| queue <tech>]` |
 | `resume` | `resume` |
 | `say` | `say <text> [--id <c:slot.gen>]` |
