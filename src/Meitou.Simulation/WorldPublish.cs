@@ -755,13 +755,35 @@ public sealed partial class World
     /// <summary>
     /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to what it stands
     /// on (<see cref="IWalkability.WaterBed"/>: a sunken floor, else the seabed) or, swimming, to <see cref="Bodies.Speed.WadingHeight"/> (the same
-    /// surface test as <see cref="MovementSystem"/>'s water state: within <see cref="Bodies.Speed.WaterSlack"/> of the water level). Not a carried or
-    /// a downed body, nor one lying in a bed: it lies at its lie spot as the original draws it (docs/game/locks.md "Lie spot").
+    /// surface test as <see cref="MovementSystem"/>'s water state: within <see cref="Bodies.Speed.WaterSlack"/> of the water level). Not a downed
+    /// body, nor one lying in a bed: it lies at its lie spot as the original draws it (docs/game/locks.md "Lie spot"). A carried body is lowered as
+    /// its carrier is, so it hangs on the shoulder of a carrier drawn swimming (#1617).
     /// </summary>
     Vector3 DrawnPosition(CharacterCold? cold, Vector3 at)
     {
         if (cold?.InSomething == Locks.HeldState.Bed) return at;
+        if (cold is { CarriedBy.IsNone: false }) return at with { Y = at.Y + CarrierDrop(cold.CarriedBy) };
 
+        return Lowered(cold, at);
+    }
+
+    /// <summary>
+    /// How far <paramref name="carrier"/> is drawn under its simulated height (<see cref="Lowered"/>); 0 when it is gone.
+    /// </summary>
+    float CarrierDrop(CharacterId carrier)
+    {
+        var state = Characters.Previous;
+        if (!Characters.TryResolveNext(carrier, out int slot) || slot >= state.Length) return 0;
+
+        var at = state[slot].Position;
+        return Lowered(Characters.Cold(slot), at).Y - at.Y;
+    }
+
+    /// <summary>
+    /// <see cref="DrawnPosition"/>'s water rule for a character that is neither carried nor in a bed.
+    /// </summary>
+    Vector3 Lowered(CharacterCold? cold, Vector3 at)
+    {
         if (cold is not { Race: { } race, Medical: not { Incapacitated: true } } || !cold.CarriedBy.IsNone
             || at.Y > Data.World.WorldWater.Height + Speed.WaterSlack)
         {

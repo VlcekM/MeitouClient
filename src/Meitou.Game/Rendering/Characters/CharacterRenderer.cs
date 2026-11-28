@@ -1125,7 +1125,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             state.BoneMeshIds = null;
             return;
         }
-        if (l.PortraitOnly || l.Asset.IsIcon || state.Posed < 0 || state.Bones.Length != l.Asset.Rig.BoneCount) return;
+        if (l.PortraitOnly || l.Asset.IsIcon || state.Posed < 0 || state.Bones.Length != l.Asset.PaletteCount) return;
 
         float scale = l.World.ScaleLength();
         var ids = state.BoneMeshIds ??= [];
@@ -1617,7 +1617,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     (Vector3 Position, Quaternion Rotation)? NodeOn(CharState carrier, in CharacterAnchor anchor)
     {
         if (carrier.Seen != _updateStamp || !carrier.InWorld || carrier.Posed < 0 || carrier.Asset is not { IsIcon: false } asset) return null;
-        if (carrier.Bones.Length != asset.Rig.BoneCount) return null;
+
+        // The palette holds the rig's bones first (then their swung copies for a carrier with swaying gear, CharacterAsset.SwayPalette).
+        if (carrier.Bones.Length != asset.PaletteCount) return null;
 
         return BoneAnchor.Node(asset.Rig, carrier.Bones, in carrier.World, in anchor);
     }
