@@ -67,6 +67,18 @@ public sealed class SettingAttribute(string label) : Attribute
     /// chosen (back to its default for a preset that holds none) and count it when it differs.
     /// </summary>
     public bool Look { get; init; }
+
+    /// <summary>
+    /// The Graphics tab the setting is shown on as well, after the game's own rows and under its <see cref="SubGroup"/>, with the mod's name
+    /// beside it (docs/modding.md "Settings"); <see cref="GraphicsTab.None"/>: the object's <see cref="SettingsTabAttribute"/>, else none.
+    /// </summary>
+    public GraphicsTab Tab { get; init; }
+
+    /// <summary>
+    /// Whether the setting (a <c>bool</c> or a list) is its <see cref="SubGroup"/>'s header: its label, hint and control are the header's row,
+    /// the sub-group's other settings fold under it, as a feature of the game's own pages does. One per sub-group.
+    /// </summary>
+    public bool Header { get; init; }
 }
 
 /// <summary>
@@ -148,6 +160,7 @@ public sealed class ModSetting
         SubGroup = about.SubGroup.Trim();
         VisibleWhen = about.VisibleWhen.Trim();
         Look = about.Look;
+        Tab = about.Tab != GraphicsTab.None ? about.Tab : target.GetType().GetCustomAttribute<SettingsTabAttribute>()?.Tab ?? GraphicsTab.None;
         var type = property.PropertyType;
         Kind = KindOf(property, type, about);
         _options = type.IsEnum ? Enum.GetNames(type) : about.Options;
@@ -157,6 +170,10 @@ public sealed class ModSetting
         Default = Get();
         if (Kind == ModSettingKind.List && Choice < 0)
             throw new ArgumentException($"Setting '{property.Name}': its value '{Format(Default)}' is not one of its options.");
+
+        Header = about.Header;
+        if (Header && (SubGroup.Length == 0 || Kind is not (ModSettingKind.Switch or ModSettingKind.List)))
+            throw new ArgumentException($"Setting '{property.Name}': Header needs a SubGroup and a bool or a list.");
     }
 
     /// <summary>
@@ -194,6 +211,17 @@ public sealed class ModSetting
     /// Whether the setting is part of the look: the look presets hold and set it (<see cref="SettingAttribute.Look"/>).
     /// </summary>
     public bool Look { get; }
+
+    /// <summary>
+    /// The Graphics tab the setting is shown on as well (<see cref="SettingAttribute.Tab"/>); <see cref="GraphicsTab.None"/>: none.
+    /// </summary>
+    public GraphicsTab Tab { get; }
+
+    /// <summary>
+    /// Whether the setting is its <see cref="SubGroup"/>'s header row (<see cref="SettingAttribute.Header"/>).
+    /// </summary>
+    public bool Header { get; }
+
     /// <summary>
     /// Whether the page shows the setting now: its <see cref="VisibleWhen"/> property is true, or it has none; a throw from that property is logged
     /// once and the setting stays shown.
@@ -468,6 +496,9 @@ public sealed class ModSettingsGroup
             .OrderBy(p => p.MetadataToken)
             .Select(p => Read(target, p))];
         if (Settings.Count == 0) throw new ArgumentException($"{target.GetType().Name} has no property marked [Setting].");
+
+        var twice = Settings.Where(s => s.Header).GroupBy(s => s.SubGroup).FirstOrDefault(headers => headers.Count() > 1);
+        if (twice is not null) throw new ArgumentException($"Sub-group '{twice.Key}' has more than one Header setting.");
     }
 
     /// <summary>

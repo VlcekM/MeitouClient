@@ -62,6 +62,14 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static readonly string[] GraphicsPages =
         ["Lighting", "Water & reflections", "Terrain", "Vegetation", "Objects", "Characters", "Sky & weather", "Colour", "Post FX", "Interface"];
     /// <summary>
+    /// The name mods give each Graphics tab (<see cref="SettingAttribute.Tab"/>), in <see cref="GraphicsPages"/>' order.
+    /// </summary>
+    internal static readonly GraphicsTab[] GraphicsTabs =
+    [
+        GraphicsTab.Lighting, GraphicsTab.Water, GraphicsTab.Terrain, GraphicsTab.Vegetation, GraphicsTab.Objects, GraphicsTab.Characters,
+        GraphicsTab.Sky, GraphicsTab.Colour, GraphicsTab.PostFx, GraphicsTab.Interface,
+    ];
+    /// <summary>
     /// The Metal-only switch between the two trees of Metal display settings: with it on the upscaler (<see cref="MetalPresetSlider"/>,
     /// <see cref="MetalRenderScaleSlider"/>), off the render resolution (<see cref="MetalRenderResolutionSlider"/>,
     /// <see cref="MetalUiResolutionSlider"/>); catalogue key <c>metalUseUpscaling</c>.
@@ -1034,13 +1042,21 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The rows shown: the search's results while it has a query, else the page's, the Display, Graphics and Advanced ones folded into features
     /// (on Display, the upscaler's and the HDR output's settings under their rows).
     /// </summary>
-    internal List<Entry> Entries()
+    internal List<Entry> Entries() => Search.Active ? Search.Results() : FoldedRows();
+
+    /// <summary>
+    /// The page's rows as it lists them: the Display, Graphics and Advanced ones folded into features, and after a Graphics tab's own the rows
+    /// mods put on it (<see cref="ModSettingsRows.TabRows"/>).
+    /// </summary>
+    List<Entry> FoldedRows()
     {
-        if (Search.Active) return Search.Results();
-
         var rows = PageRows(Page, GraphicsPage);
+        if (Page is not (0 or GraphicsPageIndex or AdvancedPageIndex)) return rows;
 
-        return Page is 0 or GraphicsPageIndex or AdvancedPageIndex ? Grouping.Grouped(rows) : rows;
+        rows = Grouping.Grouped(rows);
+        if (Page == GraphicsPageIndex) rows.AddRange(ModsPage.Settings.TabRows(GraphicsTabs[GraphicsPage]));
+
+        return rows;
     }
 
     /// <summary>
@@ -1999,7 +2015,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     {
         if (Search.Active || Page is not (0 or GraphicsPageIndex)) return;
 
-        var rows = Grouping.Grouped(PageRows(Page, GraphicsPage));
+        var rows = FoldedRows();
         if (!rows.Any(r => r.Open is not null)) return;
 
         Canvas.FoldButtons(() =>
