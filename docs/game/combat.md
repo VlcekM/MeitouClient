@@ -883,7 +883,8 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
 - **Turning** (`TurretBuilding::vfunc_28` `140434b70`, `RotatingEnt::vfunc_2`, **Verified**): `+0x448` = −99, then while `+0x464` > 0 and someone operates, each `rotation function` 5
   part turns toward `+0x4a8` by its error (yaw about Y or pitch) limited to ± `+0x464` × frame time, down the part chain; `+0x448` = the largest error (degrees,
   `FUN_1404cc0d0`). So an unpowered turret does not turn and its error −99 passes the 1° test: it fires where it points. Sounds: [audio.md](../audio.md#other-world-side-events).
-- **Shot** (`FUN_14043a730`): muzzle = barrel node + orientation × (0, `barrel pos Y`, `barrel pos Z`); direction = barrel +Z tilted by `randomDeviant(rand × max(0, lerp(0.005 (skill +
+- **Shot** (`FUN_14043a730`): muzzle = barrel node + orientation × (0, `barrel pos Y`, `barrel pos Z`), past the mount when the line of fire met it
+  ([turret's mount](#line-of-fire-and-the-hit-shape)); direction = barrel +Z tilted by `randomDeviant(rand × max(0, lerp(0.005 (skill +
   perception), deviation, 0)))`; harpoon damage = U[min, max] × P × hM, range = P × range × hM, speed = shot speed × (0.8 P hM + 0.2), h = height factor from the muzzle; friendly
   avoidance min(1, 0.015 FF); `Attack` on the building's object; the target is told it is attacked (`FUN_140999d50`). The harpoon is a bolt of the gunner (hit `FUN_140439c90`, [Bolt visuals](#bolt-visuals)).
 - **Target choice** (`FUN_140437f40`, `FUN_1404374d0`, score `FUN_140435d70`): the preferred/current target is kept if it still scores and equals the order's; else every
@@ -1089,8 +1090,10 @@ fire. The terrain is such a shape (`FUN_1407eaf90`: heightfield, group 2, no use
 (object kind 0) whose handle equals its turret's mounted building (gun slot 11 `GunClassTurret::didThisTraceHitOurMountedBuilding` `FUN_140438050`; the turret is gun `+0x128`,
 `TurretBuilding::getMountedBuilding` returns `+0x478`, the saved `mounted` handle). Then a second ray (`FUN_140434750`, same mask and direction) starts from gun slot 10
 (`FUN_140435040`): barrel node + orientation × unit(gun `+0x90` = (0, `barrel pos Y`, `barrel pos Z`), `FUN_14043baa0`) × 50 (`DAT_141683170`), and what it meets decides
-as above. So a turret on a wall or roof shoots over its own parapet. Meitou: `CombatSystem.TurretLineOfFire`, `TurretRig.RecastFrom`; the mount's collision
-(`IRagdollEnvironment.BuildingTriangles`) tells it apart from other buildings at the hit point.
+as above. The shot (`FUN_14043a730`, **Observed**, decompile) asks slot 11 again of the gun's first ray (`+0x80`) and, when that met the mount, starts the
+harpoon at the same slot 10 point instead of the muzzle, the height factor taken from there; so a turret on a wall or roof shoots over its own parapet, its
+bolt skipping whatever lies between the muzzle and that point. Meitou: `CombatSystem.TurretLineOfFire` (the line and the shot's start), `TurretRig.RecastFrom`;
+the mount's collision (`IRagdollEnvironment.BuildingTriangles`) tells it apart from other buildings at the hit point.
 **Walls without collision above the knee** (**Observed**, headless probe of #1557's save): the base game's Metal Wallhouse has wall collision only in
 `Metal_Wall-House_BASE-COL.xml` (boxes reaching about 15-17 over the base); its exterior and fill wall parts have no `xml collision`, so a line of fire
 at chest height from outside passes in most directions. Collision comes only from `xml collision` ([collision](../formats/collision.md)), so the

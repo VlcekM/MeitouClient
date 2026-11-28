@@ -221,9 +221,9 @@ public sealed partial class CombatSystem
 
         var (from, forward) = TurretRig.Barrel(t.Gun, t.Angles, t.Position, t.Yaw);
         float reach = Vector3.Distance(from, t.Aim ?? prev[target].Position);
-        if (TurretLineOfFire(world, t, g, target, from, forward * reach, cold.Faction) != 1) return;
+        if (TurretLineOfFire(world, t, g, target, from, forward * reach, cold.Faction, out var start) != 1) return;
 
-        FireTurret(world, t, g, cold, target, from, forward);
+        FireTurret(world, t, g, cold, target, start, forward);
         t.Loaded--;
         t.Shots++;
         t.Steady = RangedFormulas.SteadyAim;
@@ -233,16 +233,18 @@ public sealed partial class CombatSystem
     /// A turret's line of fire (<see cref="LineOfFire"/>) from <paramref name="from"/> along <paramref name="seg"/>: when the first thing it meets is
     /// the building the turret is mounted on (gun slot 11 <c>GunClassTurret::didThisTraceHitOurMountedBuilding</c>, <c>FUN_140438050</c>, in the
     /// ray request <c>FUN_140435b40</c>), the ray starts again from <see cref="TurretRig.RecastFrom"/> along the same direction
-    /// (<c>FUN_140434750</c>) and what that one meets decides.
+    /// (<c>FUN_140434750</c>) and what that one meets decides. <paramref name="start"/> is where a shot then leaves: the shot (<c>FUN_14043a730</c>)
+    /// asks slot 11 of the same first ray and starts the harpoon at the recast point when it met the mount, else at <paramref name="from"/>.
     /// </summary>
-    int TurretLineOfFire(World world, TurretState t, int g, int target, Vector3 from, Vector3 seg, int faction)
+    int TurretLineOfFire(World world, TurretState t, int g, int target, Vector3 from, Vector3 seg, int faction, out Vector3 start)
     {
         float range = t.Gun.Gun.Range;
+        start = from;
         var met = FirstMet(world, g, from, from + seg, range);
         if (met.Ready && met.Building && OnMount(t, met))
         {
-            var again = TurretRig.RecastFrom(t.Gun, t.Angles, t.Position, t.Yaw);
-            met = FirstMet(world, g, again, again + seg, range);
+            start = TurretRig.RecastFrom(t.Gun, t.Angles, t.Position, t.Yaw);
+            met = FirstMet(world, g, start, start + seg, range);
         }
 
         return FireDecision(world, g, target, faction, met);
@@ -616,12 +618,13 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// A turret's shot (<c>FUN_14043a730</c> with a <c>GunClassTurret</c>): from the muzzle along the barrel tilted by u x D degrees (D =
-    /// <see cref="RangedFormulas.Deviation"/> of the gun's <c>accuracy deviation at 0 skill</c> with Turrets and perception), a harpoon of
-    /// <see cref="TurretFormulas.Harpoon"/> with the height factor from the muzzle, the gunner's friendly-fire avoidance. The harpoon is the gunner's
-    /// bolt: its hits, XP and crimes are the gunner's (a player gunner's Assault: <see cref="TurretAssault"/>).
+    /// A turret's shot (<c>FUN_14043a730</c> with a <c>GunClassTurret</c>): from <paramref name="start"/> (the muzzle, or past the mount:
+    /// <see cref="TurretLineOfFire"/>) along the barrel tilted by u x D degrees (D = <see cref="RangedFormulas.Deviation"/> of the gun's
+    /// <c>accuracy deviation at 0 skill</c> with Turrets and perception), a harpoon of <see cref="TurretFormulas.Harpoon"/> with the height factor
+    /// from the start, the gunner's friendly-fire avoidance; the shot's sound at the muzzle. The harpoon is the gunner's bolt: its hits, XP and
+    /// crimes are the gunner's (a player gunner's Assault: <see cref="TurretAssault"/>).
     /// </summary>
-    void FireTurret(World world, TurretState t, int g, CharacterCold cold, int target, Vector3 muzzle, Vector3 forward)
+    void FireTurret(World world, TurretState t, int g, CharacterCold cold, int target, Vector3 start, Vector3 forward)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -633,7 +636,7 @@ public sealed partial class CombatSystem
         float deviation = RangedFormulas.Deviation(gun.AccuracyDeviationAtZeroSkill, Eff(cold, StatsEnumerated.Turrets),
             Eff(cold, StatsEnumerated.Perception));
         var dir = RangedFormulas.Deviate(forward, u * deviation, spin);
-        float hm = RangedFormulas.HeightFactor(muzzle.Y, prev[target].Position.Y) * t.Mount;
+        float hm = RangedFormulas.HeightFactor(start.Y, prev[target].Position.Y) * t.Mount;
         var (lo, hi) = TurretFormulas.PierceEnds(t.Gun.Damage * t.DamageMult);
         var (damage, range, speed) = TurretFormulas.Harpoon(lo, hi, gun.Range, gun.ShotSpeed, TurretFormulas.PowerFactor(t.Efficiency), hm, w);
         _projectiles.Add(new Projectile
@@ -647,7 +650,7 @@ public sealed partial class CombatSystem
             ShooterIsPlayer = cold.IsPlayer,
             Turret = true,
             ShooterSkill = Eff(cold, StatsEnumerated.Turrets),
-            Position = muzzle,
+            Position = start,
             Direction = dir,
             Speed = speed,
             RangeLeft = range,
@@ -657,6 +660,7 @@ public sealed partial class CombatSystem
             Mesh = gun.LiveAmmoMesh,
         });
         ShotAt(world, target, cold.Faction);
+        var (muzzle, _) = TurretRig.Barrel(t.Gun, t.Angles, t.Position, t.Yaw);
         Sound(world, SoundKind.TurretShot, g, -1, muzzle, shootSound: gun.ShootSound);
     }
 
