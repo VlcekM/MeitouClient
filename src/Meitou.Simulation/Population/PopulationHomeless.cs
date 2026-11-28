@@ -339,8 +339,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// A town's patrol waypoint (<c>Town::getPositionOutsideTownGates(200)</c>): the first of its gate set (<c>is gateway</c>), in list order, that
     /// is a gate with a door (not a ruin) outside the town walls (gate code 0, or unknown) or another wall with <c>interior</c> references, moved
-    /// <see cref="TownExit.Offset"/> outward from the town's position; the town's position when there is none. The original moves the gate's door
-    /// point and its direction is Observed; the building's origin and the outward direction are engine readings.
+    /// <see cref="TownExit.Offset"/> on as <see cref="TownExit"/> moves it; the town's position when there is none.
     /// </summary>
     Vector2 OutsideTown(World world, TownSite town)
     {
