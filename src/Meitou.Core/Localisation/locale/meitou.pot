@@ -192,6 +192,10 @@ msgid "A builder told to build something it has no materials for says which mate
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow and most at the part that was struck, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard."
 msgstr ""
 
@@ -939,6 +943,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Building outline"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Building window above the information panel"
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs

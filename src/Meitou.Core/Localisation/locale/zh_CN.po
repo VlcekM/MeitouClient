@@ -6840,3 +6840,11 @@ msgstr "建造者取足所需材料"
 #. machine-translated
 msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
 msgstr "从仓库取材料的建造者会拿走建筑仍需要的、且自己装得下的全部材料。游戏中一次只拿两个，因此每两块铁板或作物都要在仓库之间来回跑一趟。"
+
+#. machine-translated
+msgid "Building window above the information panel"
+msgstr "建筑窗口位于信息面板上方"
+
+#. machine-translated
+msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
+msgstr "信息面板展开时，建筑的窗口在其上方打开并随之移动，不会遮住建筑的按钮（如升级）。游戏中它总是放在收起的面板上方。"

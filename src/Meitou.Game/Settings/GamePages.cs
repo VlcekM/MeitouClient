@@ -816,6 +816,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game starts it collapsed every time.",
             Toggle: new("Information panel stays open", () => menu.Config.KeepInfoPanel, v => menu.Config.KeepInfoPanel = v, Remaster: true,
                 OnOff: true)));
+        result.Add(new("Building window above the information panel",
+            "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the "
+            + "building's buttons such as Upgrade. The game always places it above the collapsed panel.",
+            Toggle: new("Building window above the information panel", () => menu.Config.FixBuildingWindowClear,
+                v => menu.Player.FixBuildingWindowClear = menu.Config.FixBuildingWindowClear = v, Remaster: true, OnOff: true)));
         result.Add(new("Lockpick chance on the pointer",
             "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. "
             + "The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%.",

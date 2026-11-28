@@ -992,6 +992,7 @@ stores when it is built (`FUN_14072d3b0`): the collapsed information panel's `Ex
 height (`DAT_141682ad8` = 0.01), so it sits just above the panel and scales with the HUD. **Observed** with the harness (1.0.65): the collapsed
 `ExtendingPanel` is 333 x 363 with its top at 717 at 1920 x 1080, 277 x 302 with its top at 598 at 1600 x 900, its left at 0 in both, so the
 point is (0, 706) and (0, 589).
+Meitou fix: [above the extended panel](../optional-fixes.md#building-window-over-the-extended-information-panel-1544).
 Meitou retains fractional coordinates.
 
 The inventory windows' manager (`DAT_1421337b0`, **Verified**, decompile) keeps one main window (the first living character of the player's

@@ -1822,6 +1822,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.FixArmourClipping = Rendering.Characters.ArmourClipFix.Enabled = false;
         Config.KeepInfoPanel = true;
         Player.FixLockpickLabel = Config.FixLockpickLabel = true;
+        Player.FixBuildingWindowClear = Config.FixBuildingWindowClear = true;
         Config.FixRaidClocks = true;
         Config.FixArrestLifts = true;
         Config.FixArrestChases = true;

@@ -6013,3 +6013,11 @@ msgstr "Строители берут всё нужное"
 #. machine-translated
 msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
 msgstr "Строитель, берущий материалы со склада, забирает всё, что ещё нужно зданию и на что у него есть место. В игре он берёт по два за раз и ходит к складу и обратно за каждыми двумя железными пластинами или урожаем."
+
+#. machine-translated
+msgid "Building window above the information panel"
+msgstr "Окно постройки над панелью сведений"
+
+#. machine-translated
+msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
+msgstr "Окно постройки открывается над панелью сведений, пока она развёрнута, и движется вместе с ней, чтобы не закрывать кнопки постройки, например «Улучшить». В игре оно всегда стоит над свёрнутой панелью."

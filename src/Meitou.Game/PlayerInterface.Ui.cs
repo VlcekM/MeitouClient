@@ -797,28 +797,43 @@ sealed partial class PlayerInterface
     /// </summary>
     void ToggleInfoPanel()
     {
+        var anchor = OwnWindowAnchor();
         InfoExpanded = !InfoExpanded;
         InfoExpandedChanged?.Invoke(InfoExpanded);
+
+        // Meitou fix: a building's window still on the anchor follows the panel's top (FixBuildingWindowClear).
+        if (FixBuildingWindowClear && anchor is { } from) InventoryLayout.FollowOwnWindowAnchor(from);
     }
 
     /// <summary>
     /// The information panel's <c>ExtendingPanel</c> collapsed: its bottom on the panel's bottom; null before the HUD is read.
     /// </summary>
-    UiRect? CollapsedExtendingPanel()
+    UiRect? CollapsedExtendingPanel() => ExtendingPanel(collapsed: true);
+
+    /// <summary>
+    /// The information panel's <c>ExtendingPanel</c>: at its layout place, or <paramref name="collapsed"/> with its bottom on the panel's bottom;
+    /// null before the HUD is read.
+    /// </summary>
+    UiRect? ExtendingPanel(bool collapsed)
     {
         if (FaithfulHud?.Find("InformationPanel") is not { } info || FaithfulHud.Find("ExtendingPanel") is not { } extending) return null;
 
         var infoRect = info.Position.RelativeTo(new(0, 0, Width, Height), true);
         var rect = extending.Position.RelativeTo(infoRect, true);
-        return rect with { Y = infoRect.Y + infoRect.Height - rect.Height };
+        return collapsed ? rect with { Y = infoRect.Y + infoRect.Height - rect.Height } : rect;
     }
 
     /// <summary>
     /// Where a selected building's own window puts its bottom-left corner (<c>FUN_1406e6640</c>, <b>Verified</b>): the point the HUD keeps from
     /// its build (<c>FUN_14072d3b0</c>, <b>Verified</b>): the collapsed <c>ExtendingPanel</c>'s left edge, and its top less 1 % of the screen
-    /// height (<c>DAT_141682ad8</c> = 0.01); null before the HUD is read.
+    /// height (<c>DAT_141682ad8</c> = 0.01); null before the HUD is read. With <see cref="FixBuildingWindowClear"/>, the extended panel's top
+    /// while it is extended.
     /// </summary>
-    internal Vector2? OwnWindowAnchor() => CollapsedExtendingPanel() is { } panel ? new(panel.X, panel.Y - 0.01f * Height) : null;
+    internal Vector2? OwnWindowAnchor()
+    {
+        bool collapsed = !(FixBuildingWindowClear && InfoExpanded);
+        return ExtendingPanel(collapsed) is { } panel ? new(panel.X, panel.Y - 0.01f * Height) : null;
+    }
 
     /// <summary>
     /// The medical bars of the lead or the selected building, with the building's status word in the medical header; whether a building is

@@ -379,6 +379,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public bool FixLockpickLabel { get; set; } = true;
 
     /// <summary>
+    /// A selected building's own window opens above the information panel extended, and follows its ^ button, instead of over its state lines
+    /// (<see cref="UserConfig.FixBuildingWindowClear"/>); off, it sits above the collapsed panel as in the original.
+    /// </summary>
+    public bool FixBuildingWindowClear { get; set; } = true;
+
+    /// <summary>
     /// The button during play (<see cref="UserConfig.FeedbackButton"/>); off, it still shows on the title and with the game menu open.
     /// </summary>
     public bool FeedbackButtonInPlay { get; set; } = true;

@@ -699,6 +699,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixLockpickLabel { get; set; } = true;
     /// <summary>
+    /// A selected building's own window sits above the information panel while it is extended and follows its ^ button (Fixes settings; off: above
+    /// the collapsed panel, over the extended panel's state lines, as the game does; docs/optional-fixes.md).
+    /// </summary>
+    public bool FixBuildingWindowClear { get; set; } = true;
+    /// <summary>
     /// The information panel was last left extended (its ^ button), written at every press; read at start while <see cref="KeepInfoPanel"/> is on.
     /// </summary>
     public bool InfoPanelExtended { get; set; }

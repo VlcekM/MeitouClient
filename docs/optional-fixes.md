@@ -12,6 +12,16 @@ original's behaviour), or is to get one.
 - **Fix**: hide that reply when the speaker's race is not a robot and none of its limbs is replaced, as DC 79 HAS_ROBOT_LIMBS tests. Alternatively,
   hand the conversation to the squad mate the opening line's search found.
 
+## Building window over the extended information panel (#1544)
+
+- **Original** (**Verified**, decompile and the installed layouts): a selected building's own window puts its bottom-left corner on the point the
+  HUD stored at its build, just above the collapsed `ExtendingPanel` ([placement](game/ui-screens.md)), whether the ^ button has extended the
+  panel or not. The windows (`Kenshi_InventoryGeneric*Window.layout`) are on MyGUI's `Window` layer, above the HUD's `Middle`
+  (`Kenshi_MainPanel.layout`, `core_layer.xml`), so the window covers the extended panel's state lines: [UPGRADE], Dismantle.
+- **Fix** (Fixes setting "Building window above the information panel", `UserConfig.FixBuildingWindowClear`, on by default): while the panel is
+  extended the point is the extended panel's top less 1 % of the screen height; each ^ press moves an open building window still on the old point
+  to the new one (a dragged or linked window stays); a window taller than the room keeps its top on the screen.
+
 ## Freed slaves walk back into a cage (#1575)
 
 - **Original** (**Verified**, decompile of 1.0.68 `kenshi_x64.exe` and a headless probe of the #1575 save): Set Free (`Task_ReleasePrisoner`, start

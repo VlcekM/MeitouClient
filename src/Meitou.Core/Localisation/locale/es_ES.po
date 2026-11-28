@@ -6010,3 +6010,11 @@ msgstr "Los constructores llevan todo lo necesario"
 #. machine-translated
 msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
 msgstr "Un constructor que recoge materiales de un almacén toma todo lo que el edificio aún necesita de ellos y para lo que tiene sitio. En el juego toma dos cada vez, así que va y vuelve al almacén por cada dos placas de hierro o cosechas."
+
+#. machine-translated
+msgid "Building window above the information panel"
+msgstr "Ventana del edificio sobre el panel de información"
+
+#. machine-translated
+msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
+msgstr "La ventana de un edificio se abre sobre el panel de información mientras está desplegado y se mueve con él, para no tapar los botones del edificio, como Mejorar. El juego siempre la coloca sobre el panel plegado."

@@ -180,15 +180,47 @@ sealed class InventoryLayout(PlayerInterface player)
 
     /// <summary>
     /// A selected building's own window's place (<c>FUN_1406e6640</c>, <b>Verified</b>): its bottom-left corner on the HUD's anchor above the
-    /// information panel (<see cref="PlayerInterface.OwnWindowAnchor"/>); nothing else moves. Linked beside the looter's inventory, a window is
-    /// placed in the window row instead (<see cref="PlaceWindowRow"/>).
+    /// information panel (<see cref="PlayerInterface.OwnWindowAnchor"/>, above it extended with the Meitou fix); nothing else moves. Linked beside
+    /// the looter's inventory, a window is placed in the window row instead (<see cref="PlaceWindowRow"/>).
     /// </summary>
     internal void PlaceMachineWindow(string id)
     {
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var window) || player.OwnWindowAnchor() is not { } anchor) return;
 
-        var move = new Vector2(anchor.X - window.X, anchor.Y - window.Height - window.Y);
+        MoveToAnchor(id, window, anchor);
+    }
+
+    /// <summary>
+    /// Meitou fix (<see cref="PlayerInterface.FixBuildingWindowClear"/>): after the information panel's ^ button, moves each open building window
+    /// whose bottom-left corner is still on the anchor it had before (<paramref name="from"/>) onto the new one; a window the player dragged away
+    /// or one linked beside the looter's inventory stays.
+    /// </summary>
+    internal void FollowOwnWindowAnchor(Vector2 from)
+    {
+        if (player.OwnWindowAnchor() is not { } anchor || anchor == from) return;
+
+        var roots = WindowRoots();
+        string? linked = player.Production.LinkedScreen();
+        foreach (string id in ProductionWindows.MachineScreens)
+        {
+            if (id == linked || !roots.TryGetValue(id, out var window)) continue;
+
+            var corner = new Vector2(window.X, window.Y + window.Height);
+            if (Vector2.Distance(corner, from) < 1) MoveToAnchor(id, window, anchor);
+        }
+    }
+
+    /// <summary>
+    /// Puts window <paramref name="id"/>'s bottom-left corner on <paramref name="anchor"/>; with the fix, a window taller than the room above the
+    /// anchor keeps its top on the screen.
+    /// </summary>
+    void MoveToAnchor(string id, UiRect window, Vector2 anchor)
+    {
+        float top = anchor.Y - window.Height;
+        if (player.FixBuildingWindowClear) top = Math.Max(0, top);
+
+        var move = new Vector2(anchor.X - window.X, top - window.Y);
         player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + move);
     }
 

@@ -6007,3 +6007,11 @@ msgstr "건설자가 필요한 만큼 모두 가져옴"
 #. machine-translated
 msgid "A builder fetching materials from a storage takes all the building still needs of them that it has room for. The game takes two at a time, so a builder walks back and forth to the storage for every two Iron Plates or crops."
 msgstr "창고에서 자재를 가져오는 건설자는 건물에 아직 필요한 양 중 들 수 있는 만큼 모두 가져갑니다. 게임에서는 한 번에 두 개씩만 가져가므로 철판이나 작물 두 개마다 창고를 오갑니다."
+
+#. machine-translated
+msgid "Building window above the information panel"
+msgstr "건물 창을 정보 패널 위에 표시"
+
+#. machine-translated
+msgid "A building's window opens above the information panel while the panel is extended, and moves with it, so it does not cover the building's buttons such as Upgrade. The game always places it above the collapsed panel."
+msgstr "정보 패널이 펼쳐져 있으면 건물 창이 그 위에 열리고 패널을 따라 움직여 업그레이드 같은 건물 버튼을 가리지 않습니다. 게임에서는 항상 접힌 패널 위에 놓입니다."
