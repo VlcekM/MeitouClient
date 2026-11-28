@@ -636,6 +636,13 @@ public sealed class BuildingFootprints
     }
 
     /// <summary>
+    /// The level data's building placements of <paramref name="zone"/>'s file, wherever in the world each stands (the agent control channel finds a
+    /// building by the zone its key names).
+    /// </summary>
+    public IEnumerable<BuildingPlacement> PlacementsIn(ZoneCoordinate zone) =>
+        Index().TryGetValue(zone, out var list) ? list.Where(b => !b.TargetsZoneRecord && b.Position != Vector3.Zero) : [];
+
+    /// <summary>
     /// The footprints (those already read; the others are being read) of the level data's buildings with a placement within <paramref name="radius"/>
     /// of <paramref name="centre"/> (X, Z).
     /// </summary>

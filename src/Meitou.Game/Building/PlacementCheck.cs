@@ -113,6 +113,10 @@ public sealed class PlacementServices
     /// </summary>
     public Func<Vector2, float, IEnumerable<BuildingPlacement>> StaticPlacementsAround { get; init; } = (_, _) => [];
     /// <summary>
+    /// The level data's building placements of a zone's file, no footprint needed (the agent control channel finds a building by its key).
+    /// </summary>
+    public Func<ZoneCoordinate, IEnumerable<BuildingPlacement>> StaticPlacementsIn { get; init; } = _ => [];
+    /// <summary>
     /// The level data's pickable buildings along a ray (origin, direction, length) with their record footprints; empty without level data.
     /// </summary>
     public Func<Vector3, Vector3, float, IEnumerable<PlacedBuilding>> StaticAlong { get; init; } = (_, _, _) => [];
