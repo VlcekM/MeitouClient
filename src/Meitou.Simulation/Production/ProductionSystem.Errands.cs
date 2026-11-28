@@ -709,15 +709,15 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The finder of job 273 (<c>FUN_14099c250</c>, <b>Observed</b>): the carrier stands in a town of the player's and a downed character, not
-    /// carried or caged, stands in that same town inside its walls (<c>amInsideTownWalls</c>, <see cref="Kidnap.TownDutySystem.AmInsideTownWalls"/>;
-    /// true without that system); no building is needed, so a body in a courtyard counts.
+    /// The finder of job 273 (<c>FUN_14099c250</c>, <b>Observed</b>): the carrier's current town is a town of the player's and a downed character,
+    /// not carried or caged, has that same current town and stands inside its walls (<c>amInsideTownWalls</c>,
+    /// <see cref="Kidnap.TownDutySystem.AmInsideTownWalls"/>; true without that system); no building is needed, so a body in a courtyard counts.
     /// </summary>
     (CharacterId Id, Vector2 Goal)? FindTownIntruder(World world, int slot, CharacterCold cold, LiftedBodies lifted)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
-        if (PlayerTownAt(world, at) is not { } town) return null;
+        if (CurrentPlayerTown(world, at, cold) is not { } town) return null;
         var walls = world.SystemOf<Kidnap.TownDutySystem>();
         CharacterId? best = null;
         float bestD = float.MaxValue;
@@ -726,7 +726,7 @@ public sealed partial class ProductionSystem
             if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Medical: { Unconscious: true, Dead: false } } body) continue;
             var id = table.IdOf(s);
             if (lifted.Contains(id) || body.IsImprisoned || !body.CarriedBy.IsNone || !CarrySystem.CanBeLifted(body)) continue;
-            if (Carry!.Friendly(cold, body) || PlayerTownAt(world, table.Next[s].Position) != town) continue;
+            if (Carry!.Friendly(cold, body) || CurrentPlayerTown(world, table.Next[s].Position, body) != town) continue;
             if (walls is not null && !walls.AmInsideTownWalls(world, table.Next[s].Position)) continue;
             float d = Gap(at, table.Next[s].Position);
             if (d <= ErrandSight && d < bestD) (best, bestD) = (id, d);
@@ -744,8 +744,24 @@ public sealed partial class ProductionSystem
     {
         var at = world.Characters.Next[slot].Position;
         var here = new Vector2(at.X, at.Z);
-        if (kind == ErrandKind.OutOfTown) return PlayerTownAt(world, at) is { } town ? OutsideTownGoal(world, town, at) : here;
+        var cold = world.Characters.Cold(slot)!;
+        if (kind == ErrandKind.OutOfTown) return CurrentPlayerTown(world, at, cold) is { } town ? OutsideTownGoal(world, town, at) : here;
         return EnclosedAt(world, at) is { } site ? OutsideGoal(world, site, at, kind) : here;
+    }
+
+    /// <summary>
+    /// The player's town a character at <paramref name="at"/> is in for 273 (the original's current town, <c>getCurrentTownLocation</c>: the status
+    /// town, <see cref="Ai.AiSystem.StatusTownAt"/> from the one it holds, so a carrier that dropped an intruder past the edge, within 1.5 x the
+    /// radius, is still in it): an outpost of the player's faction, or null. Without population data the town whose radius holds the point.
+    /// </summary>
+    PlayerTown? CurrentPlayerTown(World world, Vector3 at, CharacterCold cold)
+    {
+        if (_towns is not { } data) return PlayerTownAt(world, at);
+
+        var current = AiSystem.StatusTownAt(data, world, at, cold.StatusTown);
+        if (current.PlayerTown <= 0 || world.Buildings.FindTown(current.PlayerTown) is not { } town) return null;
+
+        return town.Owner == world.Player.Faction ? town : null;
     }
 
     /// <summary>
